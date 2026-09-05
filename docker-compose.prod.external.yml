@@ -1,0 +1,67 @@
+# External Postgres + host nginx: pull stable from GHCR, run migrate then server.
+#
+#   cp .env.production.example .env
+#   docker compose -f docker-compose.prod.external.yml pull
+#   docker compose -f docker-compose.prod.external.yml up -d
+#
+# Migrate is a one-shot: server starts only after it exits 0.
+# (Skipping migrate lets new code hit the old schema and 500.) Re-run:
+#   docker compose -f docker-compose.prod.external.yml run --rm migrate
+#
+# No Postgres/MySQL/worker/backup in this file. Static files + :80/:443 are host nginx
+# (deploy/nginx.conf → 127.0.0.1:3010).
+#
+# PG_HOST comes from .env — do not hardcode postgres.
+# Same-host Postgres: PG_HOST=host.docker.internal (must listen on the docker bridge,
+# not only 127.0.0.1). Remote: the real address.
+
+name: vital-ext
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+x-app: &app
+  extra_hosts:
+    - 'host.docker.internal:host-gateway'
+  env_file: .env
+  environment:
+    NODE_ENV: production
+  restart: unless-stopped
+  logging: *logging
+  pull_policy: always
+
+services:
+  # One-shot: success → exit 0; failure → non-zero, server never starts.
+  # External Postgres must already be reachable (nothing here to wait on).
+  migrate:
+    <<: *app
+    image: ghcr.io/ximing/vital-server:${VITAL_IMAGE_TAG:-stable}
+    command: ['node', 'dist/db/migrate.js']
+    restart: 'no'
+
+  server:
+    <<: *app
+    image: ghcr.io/ximing/vital-server:${VITAL_IMAGE_TAG:-stable}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      PORT: '3010'
+    ports:
+      - '${VITAL_API_BIND:-127.0.0.1}:${VITAL_API_PORT:-3010}:3010'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:3010/api/health").then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
