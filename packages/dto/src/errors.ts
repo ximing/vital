@@ -19,6 +19,8 @@ export const ERROR_MESSAGES = {
   ATTACHMENT_NOT_FOUND: '附件不存在',
   MEDIA_TOO_LARGE: '文件过大',
   MEDIA_INVALID_STATE: '上传状态不允许此操作',
+  LIST_NOT_FOUND: '清单不存在',
+  TAG_NOT_FOUND: '标签不存在',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

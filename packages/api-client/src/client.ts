@@ -1,11 +1,33 @@
 import type {
   AuthMode,
   AuthResponse,
+  CalendarQuery,
+  CalendarResponse,
   ChangePasswordInput,
+  CompleteTaskResponse,
+  CreateListInput,
+  CreateTagInput,
+  CreateTaskInput,
+  List,
+  ListCollection,
+  Tag,
   LoginInput,
+  PatchListInput,
+  PatchTagInput,
+  PatchTaskInput,
   RegisterInput,
+  ReorderListsInput,
+  ReorderTasksInput,
+  SearchInput,
+  SearchResponse,
+  TagCollection,
+  Task,
+  TaskCollection,
+  UncompleteTaskInput,
   UpdateMeInput,
   UpdateOnboardingInput,
+  UploadBindInput,
+  UploadBindResponse,
   UploadCompleteResponse,
   UploadPresignInput,
   UploadPresignResponse,
@@ -33,6 +55,27 @@ export interface VitalClient {
   uploadUrl(id: string): string;
   fetchUploadBlob(id: string): Promise<Blob>;
   upload(input: UploadInput): Promise<UploadCompleteResponse>;
+  bindUpload(id: string, input: UploadBindInput): Promise<UploadBindResponse>;
+  listLists(): Promise<ListCollection>;
+  createList(input: CreateListInput): Promise<List>;
+  reorderLists(input: ReorderListsInput): Promise<ListCollection>;
+  patchList(id: string, input: PatchListInput): Promise<List>;
+  deleteList(id: string): Promise<void>;
+  listTasks(query: { listId: string; cursor?: string; limit?: number }): Promise<TaskCollection>;
+  createTask(input: CreateTaskInput): Promise<Task>;
+  getTask(id: string): Promise<Task>;
+  patchTask(id: string, input: PatchTaskInput): Promise<Task>;
+  deleteTask(id: string): Promise<void>;
+  completeTask(id: string): Promise<CompleteTaskResponse>;
+  uncompleteTask(id: string, input: UncompleteTaskInput): Promise<Task>;
+  restoreTask(id: string): Promise<Task>;
+  reorderTasks(input: ReorderTasksInput): Promise<void>;
+  calendar(query: CalendarQuery): Promise<CalendarResponse>;
+  listTags(): Promise<TagCollection>;
+  createTag(input: CreateTagInput): Promise<Tag>;
+  patchTag(id: string, input: PatchTagInput): Promise<Tag>;
+  deleteTag(id: string): Promise<void>;
+  search(input: SearchInput): Promise<SearchResponse>;
 }
 
 async function persistAuth(options: VitalClientOptions, data: unknown): Promise<AuthResponse> {
@@ -106,5 +149,33 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     uploadUrl: (id) => `${baseUrl}/api/v1/uploads/${id}`,
     fetchUploadBlob: (id) => http.requestBlob(`/api/v1/uploads/${id}`),
     upload: (input) => uploadImpl(http, options, input),
+    bindUpload: (id, input) =>
+      http.request(`/api/v1/uploads/${id}/bind`, { method: 'POST', body: input }),
+    listLists: () => http.request('/api/v1/lists'),
+    createList: (input) => http.request('/api/v1/lists', { method: 'POST', body: input }),
+    reorderLists: (input) => http.request('/api/v1/lists/reorder', { method: 'PUT', body: input }),
+    patchList: (id, input) => http.request(`/api/v1/lists/${id}`, { method: 'PATCH', body: input }),
+    deleteList: (id) => http.request(`/api/v1/lists/${id}`, { method: 'DELETE' }),
+    listTasks: (query) => {
+      const q: Record<string, string | number | boolean | undefined> = { listId: query.listId };
+      if (query.cursor !== undefined) q.cursor = query.cursor;
+      if (query.limit !== undefined) q.limit = query.limit;
+      return http.request('/api/v1/tasks', { query: q });
+    },
+    createTask: (input) => http.request('/api/v1/tasks', { method: 'POST', body: input }),
+    getTask: (id) => http.request(`/api/v1/tasks/${id}`),
+    patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),
+    deleteTask: (id) => http.request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),
+    completeTask: (id) => http.request(`/api/v1/tasks/${id}/complete`, { method: 'POST', body: {} }),
+    uncompleteTask: (id, input) =>
+      http.request(`/api/v1/tasks/${id}/uncomplete`, { method: 'POST', body: input }),
+    restoreTask: (id) => http.request(`/api/v1/tasks/${id}/restore`, { method: 'POST', body: {} }),
+    reorderTasks: (input) => http.request('/api/v1/tasks/reorder', { method: 'PUT', body: input }),
+    calendar: (query) => http.request('/api/v1/tasks/calendar', { query: { from: query.from, to: query.to } }),
+    listTags: () => http.request('/api/v1/tags'),
+    createTag: (input) => http.request('/api/v1/tags', { method: 'POST', body: input }),
+    patchTag: (id, input) => http.request(`/api/v1/tags/${id}`, { method: 'PATCH', body: input }),
+    deleteTag: (id) => http.request(`/api/v1/tags/${id}`, { method: 'DELETE' }),
+    search: (input) => http.request('/api/v1/search', { method: 'POST', body: input }),
   };
 }

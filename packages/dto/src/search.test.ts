@@ -1,0 +1,10 @@
+import { describe, expect, it } from 'vitest';
+import { searchInputSchema } from './search.js';
+
+describe('searchInputSchema', () => {
+  it('trims q and caps limit at 50', () => {
+    expect(searchInputSchema.parse({ q: '  牛奶  ' }).q).toBe('牛奶');
+    expect(searchInputSchema.safeParse({ q: 'x', limit: 51 }).success).toBe(false);
+    expect(searchInputSchema.parse({ q: 'task', types: ['task'], limit: 20 }).limit).toBe(20);
+  });
+});

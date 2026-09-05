@@ -16,15 +16,13 @@ import {
 import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
-import { users, type User } from '../db/schema.js';
+import { isUniqueViolation } from '../db/pg.js';
+import { lists, users, type User } from '../db/schema.js';
 import { AppError } from '../errors.js';
+import { inboxListValues } from '../lists/lists.service.js';
 import { logger } from '../utils/logger.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { issueRefreshToken, revokeAllForUser, signAccessToken } from './token.service.js';
-
-function isUniqueViolation(err: unknown): boolean {
-  return typeof err === 'object' && err !== null && 'code' in err && err.code === '23505';
-}
 
 function onboardingOf(value: unknown): OnboardingState {
   const parsed = onboardingStateSchema.safeParse(value ?? {});
@@ -120,7 +118,10 @@ export async function registerUser(
     updatedAt: now,
   };
   try {
-    await getDb().insert(users).values(user);
+    await getDb().transaction(async (tx) => {
+      await tx.insert(users).values(user);
+      await tx.insert(lists).values(inboxListValues(user.id, now));
+    });
   } catch (err) {
     if (isUniqueViolation(err)) throw AppError.of(409, 'EMAIL_ALREADY_REGISTERED');
     throw err;

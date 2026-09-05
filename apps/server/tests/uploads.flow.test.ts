@@ -199,4 +199,56 @@ describe('uploads', () => {
     });
     expect(abort.statusCode).toBe(204);
   });
+
+  it('bind ownerType=task copies tmp key to task prefix', async () => {
+    const alice = await register('alice');
+    const lists = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/lists',
+      token: alice.token,
+    });
+    const inbox = (lists.json().items as { id: string; kind: string }[]).find((l) => l.kind === 'inbox');
+    const task = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'Pic', listId: inbox?.id },
+    });
+    expect(task.statusCode).toBe(201);
+    const presigned = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/uploads/presign',
+      token: alice.token,
+      payload: { mime: 'image/jpeg', size: 1024 },
+    });
+    const id = presigned.json().id as string;
+    storage.headObject.mockResolvedValue({
+      size: 1024,
+      contentType: 'image/jpeg',
+      lastModified: new Date(),
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    const bind = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/bind`,
+      token: alice.token,
+      payload: { ownerType: 'task', ownerId: task.json().id },
+    });
+    expect(bind.statusCode).toBe(200);
+    expect(bind.json()).toMatchObject({
+      id,
+      status: 'ready',
+      ownerType: 'task',
+      ownerId: task.json().id,
+    });
+    expect(storage.copyObject).toHaveBeenCalled();
+    const [row] = await db.select().from(attachments).where(eq(attachments.id, id));
+    expect(row?.ownerType).toBe('task');
+    expect(row?.s3Key).toBe(`task/${alice.id}/${task.json().id}/${id}.jpeg`);
+  });
 });

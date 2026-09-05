@@ -141,4 +141,36 @@ describe('createVitalClient auth + upload methods', () => {
     expect(calls[3]?.body).toEqual({ mime: 'image/jpeg', size: 12 });
     expect(calls[4]?.body).toEqual({});
   });
+
+  it('lists/tasks/tags/search/bind methods hit the spec routes', async () => {
+    const store = memoryStore({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
+    const calls: { method: string; url: string; body: unknown }[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        const u = urlOf(url);
+        calls.push({ method: init?.method ?? 'GET', url: u, body: bodyOf(init) });
+        if (init?.method === 'DELETE' || u.endsWith('/reorder')) return respond204();
+        return respond(200, { items: [] });
+      },
+    });
+    await client.listLists();
+    await client.listTasks({ listId: 'smart:today' });
+    await client.completeTask('t1');
+    await client.uncompleteTask('t1', { completionId: 'c1' });
+    await client.search({ q: '牛奶' });
+    await client.bindUpload('att1', { ownerType: 'task', ownerId: 't1' });
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://x/api/v1/lists',
+      'GET http://x/api/v1/tasks?listId=smart%3Atoday',
+      'POST http://x/api/v1/tasks/t1/complete',
+      'POST http://x/api/v1/tasks/t1/uncomplete',
+      'POST http://x/api/v1/search',
+      'POST http://x/api/v1/uploads/att1/bind',
+    ]);
+    expect(calls[3]?.body).toEqual({ completionId: 'c1' });
+    expect(calls[5]?.body).toEqual({ ownerType: 'task', ownerId: 't1' });
+  });
 });

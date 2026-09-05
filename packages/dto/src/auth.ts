@@ -4,6 +4,22 @@ const emailSchema = z.string().trim().toLowerCase().email().max(255);
 
 export const passwordSchema = z.string().min(8).max(128);
 
+export const ianaTimezoneSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine(
+    (value) => {
+      try {
+        Intl.DateTimeFormat('en-US', { timeZone: value });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: 'INVALID_TIMEZONE' },
+  );
+
 export const themePreferenceSchema = z.enum(['light', 'dark', 'system']);
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;
 
@@ -48,22 +64,7 @@ export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
 export const updateMeInputSchema = z
   .object({
     displayName: z.string().trim().min(1).max(50).optional(),
-    timezone: z
-      .string()
-      .min(1)
-      .max(64)
-      .refine(
-        (value) => {
-          try {
-            Intl.DateTimeFormat('en-US', { timeZone: value });
-            return true;
-          } catch {
-            return false;
-          }
-        },
-        { message: 'INVALID_TIMEZONE' },
-      )
-      .optional(),
+    timezone: ianaTimezoneSchema.optional(),
     locale: z.string().min(2).max(16).optional(),
     themePreference: themePreferenceSchema.optional(),
     weekStartsOn: weekStartsOnSchema.optional(),

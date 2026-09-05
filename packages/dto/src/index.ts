@@ -1,3 +1,7 @@
 export * from './auth.js';
 export * from './uploads.js';
 export * from './errors.js';
+export * from './lists.js';
+export * from './tasks.js';
+export * from './tags.js';
+export * from './search.js';

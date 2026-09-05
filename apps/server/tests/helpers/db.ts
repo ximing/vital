@@ -1,5 +1,14 @@
 import { db, pool } from '../../src/db/index.js';
-import { attachments, refreshTokens, users } from '../../src/db/schema.js';
+import {
+  attachments,
+  lists,
+  refreshTokens,
+  tags,
+  taskCompletions,
+  tasks,
+  taskTags,
+  users,
+} from '../../src/db/schema.js';
 
 const RETRYABLE = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT']);
 
@@ -28,6 +37,11 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 
 export async function resetDb(): Promise<void> {
   await withRetry(async () => {
+    await db.delete(taskTags);
+    await db.delete(taskCompletions);
+    await db.delete(tasks);
+    await db.delete(tags);
+    await db.delete(lists);
     await db.delete(attachments);
     await db.delete(refreshTokens);
     await db.delete(users);

@@ -28,12 +28,15 @@
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.2.1",
     "jsonwebtoken": "^9.0.2",
+    "luxon": "^3.6.1",
     "mime-types": "^2.1.35",
     "pg": "^8.14.1",
+    "rrule": "^2.8.1",
     "zod": "^3.24.2"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.9",
+    "@types/luxon": "^3.6.2",
     "@types/mime-types": "^2.1.4",
     "@types/node": "^22.13.4",
     "@types/pg": "^8.11.11",
