@@ -34,20 +34,6 @@ function EmptyFrame({
   );
 }
 
-export function InboxPage() {
-  return (
-    <EmptyFrame
-      title={t.nav.inbox}
-      body={t.empty.inbox}
-      action={{ to: '/inbox', label: t.empty.actionExtension }}
-    />
-  );
-}
-
-export function InboxReaderPage() {
-  return <EmptyFrame title={t.nav.inbox} body={t.empty.inboxReader} />;
-}
-
 export function ReportsPage() {
   return (
     <EmptyFrame

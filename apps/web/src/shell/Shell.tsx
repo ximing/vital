@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
+import { useInboxUi } from '@/features/inbox';
 import { UserListsNav, useTodosUi } from '@/features/todos';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
@@ -29,6 +30,7 @@ export function Shell() {
   const navigate = useNavigate();
   const location = useLocation();
   const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
+  const requestPaste = useInboxUi((s) => s.requestPaste);
 
   return (
     <div className="min-h-screen bg-canvas text-fg">
@@ -54,6 +56,11 @@ export function Shell() {
             className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center rounded-md bg-accent text-[length:var(--text-body)] text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
             aria-label={t.nav.quickAdd}
             onClick={() => {
+              if (location.pathname.startsWith('/inbox')) {
+                requestPaste();
+                if (location.pathname !== '/inbox') navigate('/inbox');
+                return;
+              }
               requestQuickAdd();
               if (!location.pathname.startsWith('/todos')) navigate(HOME_PATH);
             }}

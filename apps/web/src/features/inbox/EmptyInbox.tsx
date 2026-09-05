@@ -1,0 +1,67 @@
+import { useState } from 'react';
+import { t } from '@/copy';
+import { VitalMark } from '@/shell/VitalMark';
+import { PASTE_URL_ID } from './model';
+import { useInboxUi } from './ui-store';
+
+export function EmptyInbox() {
+  const requestPaste = useInboxUi((s) => s.requestPaste);
+  const [hint, setHint] = useState(false);
+
+  return (
+    <div className="flex flex-col items-start px-3 py-10">
+      <VitalMark className="mb-4 h-10 w-10 text-accent" />
+      <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
+        {t.empty.inbox}
+      </p>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="inline-flex min-h-[var(--touch-min)] items-center rounded-md bg-accent-subtle px-4 text-fg transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
+          onClick={() => setHint(true)}
+        >
+          {t.empty.actionExtension}
+        </button>
+        <button
+          type="button"
+          className="inline-flex min-h-[var(--touch-min)] items-center rounded-md px-4 text-muted transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+          onClick={() => {
+            requestPaste();
+            document.getElementById(PASTE_URL_ID)?.focus();
+          }}
+        >
+          {t.inbox.pasteUrl}
+        </button>
+      </div>
+      {hint ? (
+        <p
+          role="status"
+          className="mt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted"
+        >
+          {t.inbox.installHint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+export function EmptyReader() {
+  return (
+    <div className="flex flex-col items-start px-4 py-16">
+      <VitalMark className="mb-4 h-10 w-10 text-accent" />
+      <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
+        {t.empty.inboxReader}
+      </p>
+    </div>
+  );
+}
+
+export function InboxSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 px-3 py-6" aria-busy="true" aria-label={t.inbox.loading}>
+      {Array.from({ length: 6 }, (_, i) => (
+        <div key={i} className="skeleton-pulse h-14 rounded-md" />
+      ))}
+    </div>
+  );
+}

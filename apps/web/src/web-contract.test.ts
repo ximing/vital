@@ -53,4 +53,18 @@ describe('web shell contract', () => {
     const copy = read('src/copy.ts');
     expect(copy).toContain('今天还没有安排，也没有逾期。按 N 新建。');
   });
+
+  it('inbox lives under features/inbox with reader, convert, and empty copy', () => {
+    const app = read('src/App.tsx');
+    expect(app).toContain('/inbox/:id');
+    expect(app).toContain('InboxWorkspace');
+    expect(app).toContain('InboxReader');
+    const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies.dompurify).toBeTruthy();
+    const copy = read('src/copy.ts');
+    expect(copy).toContain('把稍后读的页先丢进来。');
+    expect(copy).toContain('打开一条稍后再读。');
+    const client = read('src/api/client.ts');
+    expect(client).toContain("authMode: 'cookie'");
+  });
 });
