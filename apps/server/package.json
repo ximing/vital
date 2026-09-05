@@ -2,5 +2,48 @@
   "name": "@vital/server",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "test": "cross-env NODE_ENV=test tsx src/db/migrate.ts && vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/ tests/",
+    "migrate": "tsx src/db/migrate.ts",
+    "migrate:generate": "drizzle-kit generate",
+    "migrate:studio": "drizzle-kit studio",
+    "setup:s3-lifecycle": "tsx scripts/setup-s3-lifecycle.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@aws-sdk/s3-request-presigner": "^3.1111.0",
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.0.1",
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/rate-limit": "^10.3.0",
+    "@vital/dto": "workspace:*",
+    "argon2": "^0.41.1",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.1",
+    "fastify": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "mime-types": "^2.1.35",
+    "pg": "^8.14.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/mime-types": "^2.1.4",
+    "@types/node": "^22.13.4",
+    "@types/pg": "^8.11.11",
+    "@vital/eslint-config": "workspace:*",
+    "@vital/tsconfig": "workspace:*",
+    "cross-env": "^7.0.0",
+    "drizzle-kit": "^0.31.9",
+    "eslint": "^9.19.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  }
 }

@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: vital_test_user
+          POSTGRES_PASSWORD: change-me-test
+          POSTGRES_DB: vital_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U vital_test_user -d vital_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      NODE_ENV: test
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5433
+      PG_USER: vital_test_user
+      PG_PASSWORD: change-me-test
+      PG_DATABASE: vital_test
+      PG_SSL: 'false'
+      JWT_SECRET: ci-jwt-secret-min-32-chars-xxxxxxxx
+      COOKIE_SECRET: ci-cookie-secret-min-32-chars-xxxx
+      ATTACHMENT_S3_BUCKET: vital
+      ATTACHMENT_S3_PREFIX: test/attachments
+      ATTACHMENT_S3_ACCESS_KEY_ID: change-me
+      ATTACHMENT_S3_SECRET_ACCESS_KEY: change-me
+      ATTACHMENT_S3_REGION: cn-beijing
+      ATTACHMENT_S3_ENDPOINT: https://s3.aimo.plus
+      ATTACHMENT_S3_IS_PUBLIC: 'false'
+      WEB_ORIGIN: http://localhost:5180
+      COOKIE_SECURE: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint && pnpm typecheck && pnpm test

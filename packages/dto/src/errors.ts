@@ -1,0 +1,34 @@
+export const ERROR_MESSAGES = {
+  VALIDATION_ERROR: '请求参数不合法',
+  NOT_FOUND: '资源不存在',
+  TASK_NOT_FOUND: '任务不存在',
+  INBOX_NOT_FOUND: '条目不存在',
+  REPORT_NOT_FOUND: '报告不存在',
+  INVALID_CREDENTIALS: '邮箱或密码错误',
+  INVALID_TOKEN: '登录已过期',
+  RATE_LIMITED: '请求过于频繁，请稍后再试',
+  REPORT_REVISION_CONFLICT: '报告已被更新，请先同步',
+  INTERNAL_ERROR: '服务器内部错误',
+  MEDIA_MISMATCH: '上传文件与声明不符',
+  RRULE_TOO_DENSE: '重复规则过密',
+  RRULE_INVALID: '重复规则不支持',
+  RRULE_DUE_REQUIRED: '设置重复需要截止日期',
+  COMPLETION_NOT_LATEST: '只能撤销最近一次完成',
+  EMAIL_ALREADY_REGISTERED: '邮箱已注册',
+  INVALID_OLD_PASSWORD: '原密码错误',
+  ATTACHMENT_NOT_FOUND: '附件不存在',
+  MEDIA_TOO_LARGE: '文件过大',
+  MEDIA_INVALID_STATE: '上传状态不允许此操作',
+} as const;
+
+export type ErrorCode = keyof typeof ERROR_MESSAGES;
+
+export interface ErrorBody {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+export interface ErrorEnvelope {
+  error: ErrorBody;
+}

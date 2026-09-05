@@ -1,0 +1,39 @@
+import { db, pool } from '../../src/db/index.js';
+import { attachments, refreshTokens, users } from '../../src/db/schema.js';
+
+const RETRYABLE = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT']);
+
+function isRetryable(err: unknown): boolean {
+  const e = err as { code?: unknown; cause?: { code?: unknown } } | null;
+  const code =
+    typeof e?.code === 'string'
+      ? e.code
+      : typeof e?.cause?.code === 'string'
+        ? e.cause.code
+        : undefined;
+  return code !== undefined && RETRYABLE.has(code);
+}
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isRetryable(err) || i === attempts - 1) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 200 * (i + 1)));
+    }
+  }
+  throw new Error('unreachable');
+}
+
+export async function resetDb(): Promise<void> {
+  await withRetry(async () => {
+    await db.delete(attachments);
+    await db.delete(refreshTokens);
+    await db.delete(users);
+  });
+}
+
+export async function closeDb(): Promise<void> {
+  await pool.end();
+}
