@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from 'react-router';
-import { t } from '@/copy';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { HOME_PATH, t } from '@/copy';
+import { UserListsNav, useTodosUi } from '@/features/todos';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { useAuthStore } from '@/state/auth-store';
@@ -25,6 +26,9 @@ function SectionLabel({ children }: { children: string }) {
 
 export function Shell() {
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
 
   return (
     <div className="min-h-screen bg-canvas text-fg">
@@ -49,6 +53,10 @@ export function Shell() {
             type="button"
             className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center rounded-md bg-accent text-[length:var(--text-body)] text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
             aria-label={t.nav.quickAdd}
+            onClick={() => {
+              requestQuickAdd();
+              if (!location.pathname.startsWith('/todos')) navigate(HOME_PATH);
+            }}
           >
             {t.nav.quickAdd}
           </button>
@@ -62,6 +70,12 @@ export function Shell() {
           <NavLink to="/todos/lists/smart:upcoming" className={navClass}>
             {t.lists.upcoming}
           </NavLink>
+          <NavLink to="/todos/lists/smart:anytime" className={navClass}>
+            {t.lists.anytime}
+          </NavLink>
+          <NavLink to="/todos/lists/smart:someday" className={navClass}>
+            {t.lists.someday}
+          </NavLink>
 
           <SectionLabel>{t.rail.capture}</SectionLabel>
           <NavLink to="/inbox" className={navClass}>
@@ -72,6 +86,10 @@ export function Shell() {
           </p>
           <NavLink to="/todos/lists/smart:inbox" className={navClass}>
             {t.lists.inbox}
+          </NavLink>
+          <UserListsNav />
+          <NavLink to="/todos/lists/smart:done" className={navClass}>
+            {t.lists.done}
           </NavLink>
 
           <SectionLabel>{t.rail.reflect}</SectionLabel>

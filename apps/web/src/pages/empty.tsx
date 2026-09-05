@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router';
+import { Link } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
 import { VitalMark } from '@/shell/VitalMark';
 
@@ -31,81 +31,6 @@ function EmptyFrame({
         ) : null}
       </div>
     </div>
-  );
-}
-
-export function TodayPage() {
-  return (
-    <EmptyFrame
-      title={t.lists.today}
-      body={t.empty.today}
-      action={{ to: HOME_PATH, label: t.empty.actionNew }}
-    />
-  );
-}
-
-export function UpcomingPage() {
-  return (
-    <EmptyFrame
-      title={t.lists.upcoming}
-      body={t.empty.upcoming}
-      action={{ to: HOME_PATH, label: t.empty.actionNew }}
-    />
-  );
-}
-
-export function TodosPage() {
-  return (
-    <EmptyFrame
-      title={t.nav.todos}
-      body={t.empty.upcoming}
-      action={{ to: HOME_PATH, label: t.empty.actionNew }}
-    />
-  );
-}
-
-export function TodoListPage() {
-  const { listId } = useParams();
-  if (listId === 'smart:today') return <TodayPage />;
-  if (listId === 'smart:upcoming') return <UpcomingPage />;
-  if (listId === 'smart:inbox') {
-    return (
-      <EmptyFrame
-        title={t.lists.inbox}
-        body={t.empty.inboxList}
-        action={{ to: HOME_PATH, label: t.empty.actionNew }}
-      />
-    );
-  }
-  if (listId === 'smart:done') {
-    return <EmptyFrame title={t.lists.done} body={t.empty.done} />;
-  }
-  return (
-    <EmptyFrame
-      title={t.rail.lists}
-      body={t.empty.userList}
-      action={{ to: HOME_PATH, label: t.empty.actionNew }}
-    />
-  );
-}
-
-export function BoardPage() {
-  return (
-    <EmptyFrame
-      title={t.nav.todos}
-      body={t.empty.board}
-      action={{ to: HOME_PATH, label: t.empty.actionNew }}
-    />
-  );
-}
-
-export function CalendarPage() {
-  return (
-    <EmptyFrame
-      title={t.nav.todos}
-      body={t.empty.calendar}
-      action={{ to: HOME_PATH, label: t.empty.actionNew }}
-    />
   );
 }
 

@@ -24,6 +24,7 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --spacing-rail: 220px;
+  --spacing-detail: 360px;
 }
 
 html,
@@ -65,8 +66,24 @@ body {
   animation: pulse-breath 4.8s ease-in-out infinite;
 }
 
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  background-color: var(--bg-surface-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .pulse-mark {
+  .pulse-mark,
+  .skeleton-pulse {
     animation: none;
   }
 }

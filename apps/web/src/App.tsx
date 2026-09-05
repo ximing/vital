@@ -1,9 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { HOME_PATH } from '@/copy';
+import { TodosWorkspace } from '@/features/todos';
 import { LoginPage } from '@/pages/login';
 import {
-  BoardPage,
-  CalendarPage,
   InboxPage,
   InboxReaderPage,
   LibraryPage,
@@ -12,8 +11,6 @@ import {
   ReportEditorPage,
   ReportsPage,
   SearchPage,
-  TodoListPage,
-  TodosPage,
 } from '@/pages/empty';
 import { RegisterPage } from '@/pages/register';
 import { SettingsPage } from '@/pages/settings';
@@ -48,10 +45,10 @@ export function App() {
       >
         <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
-        <Route path="/todos" element={<TodosPage />} />
-        <Route path="/todos/lists/:listId" element={<TodoListPage />} />
-        <Route path="/todos/board" element={<BoardPage />} />
-        <Route path="/todos/calendar" element={<CalendarPage />} />
+        <Route path="/todos" element={<Navigate to={HOME_PATH} replace />} />
+        <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />
+        <Route path="/todos/board" element={<TodosWorkspace view="board" />} />
+        <Route path="/todos/calendar" element={<TodosWorkspace view="week" />} />
         <Route path="/inbox" element={<InboxPage />} />
         <Route path="/inbox/:id" element={<InboxReaderPage />} />
         <Route path="/reports" element={<ReportsPage />} />

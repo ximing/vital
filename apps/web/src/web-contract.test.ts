@@ -41,4 +41,16 @@ describe('web shell contract', () => {
     expect(client).toContain('vital:auth-cleared');
     expect(client).not.toContain('localStorage');
   });
+
+  it('todos live under features/todos with smart:today and keyboard keys', () => {
+    const app = read('src/App.tsx');
+    expect(app).toContain('/todos/lists/:listId');
+    expect(app).toContain('TodosWorkspace');
+    const kb = read('src/features/todos/keyboard.ts');
+    for (const key of ["'n'", "'j'", "'k'", "'Enter'", "'e'", "'/'", "'t'", "'1'"]) {
+      expect(kb).toContain(key);
+    }
+    const copy = read('src/copy.ts');
+    expect(copy).toContain('今天还没有安排，也没有逾期。按 N 新建。');
+  });
 });
