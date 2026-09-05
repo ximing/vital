@@ -1,0 +1,12 @@
+dist
+node_modules
+drizzle
+.turbo
+pnpm-lock.yaml
+apps/mobile/android
+apps/desktop/src-tauri/target
+docs/superpowers/specs
+*.png
+*.ico
+*.icns
+*.woff2
