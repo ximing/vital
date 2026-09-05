@@ -115,6 +115,28 @@ importers:
 
   apps/web: {}
 
+  packages/api-client:
+    dependencies:
+      '@vital/dto':
+        specifier: workspace:*
+        version: link:../dto
+    devDependencies:
+      '@vital/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@vital/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      eslint:
+        specifier: ^9.19.0
+        version: 9.39.5
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.5)(vite@8.2.2(@types/node@25.9.5)(esbuild@0.28.2)(tsx@4.23.13))
+
   packages/dto:
     dependencies:
       zod:
