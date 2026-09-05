@@ -12,6 +12,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
+COPY packages/markdown/package.json packages/markdown/
 COPY packages/tokens/package.json packages/tokens/
 COPY packages/api-client/package.json packages/api-client/
 COPY apps/server/package.json apps/server/
@@ -25,8 +26,9 @@ FROM deps AS build
 COPY packages/tsconfig packages/tsconfig
 COPY packages/eslint-config packages/eslint-config
 COPY packages/dto packages/dto
+COPY packages/markdown packages/markdown
 COPY apps/server apps/server
-RUN pnpm --filter @vital/dto build && pnpm --filter @vital/server build
+RUN pnpm --filter @vital/dto build && pnpm --filter @vital/markdown build && pnpm --filter @vital/server build
 
 FROM base AS prod-deps
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
@@ -35,6 +37,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
+COPY packages/markdown/package.json packages/markdown/
 COPY packages/tokens/package.json packages/tokens/
 COPY packages/api-client/package.json packages/api-client/
 COPY apps/server/package.json apps/server/
@@ -50,8 +53,10 @@ WORKDIR /app
 COPY --from=prod-deps /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=prod-deps /app/packages/dto ./packages/dto
+COPY --from=prod-deps /app/packages/markdown ./packages/markdown
 COPY --from=prod-deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/packages/dto/dist ./packages/dto/dist
+COPY --from=build /app/packages/markdown/dist ./packages/markdown/dist
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/server/package.json ./apps/server/package.json
