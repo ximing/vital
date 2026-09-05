@@ -41,4 +41,15 @@ describe('web shell contract', () => {
     expect(client).toContain('vital:auth-cleared');
     expect(client).not.toContain('localStorage');
   });
+
+  it('Tauri runtime uses bearer plugin-http + plugin-store and an absolute baseUrl', () => {
+    const client = read('src/api/client.ts');
+    expect(client).toContain('__TAURI_INTERNALS__');
+    expect(client).toContain("authMode: 'bearer'");
+    expect(client).toContain('@tauri-apps/plugin-http');
+    expect(client).toContain('@tauri-apps/plugin-store');
+    expect(client).toContain('http://127.0.0.1:3010');
+    expect(client).toContain('VITE_TAURI_API_URL');
+    expect(client).toContain('tauriFetch');
+  });
 });

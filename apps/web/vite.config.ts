@@ -25,6 +25,8 @@ export default defineConfig({
   optimizeDeps: {
     include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
   },
+  // Keep rust compiler output visible when `tauri dev` owns the terminal.
+  clearScreen: false,
   server: {
     port: 5180,
     strictPort: true,

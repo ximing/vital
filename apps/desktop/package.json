@@ -2,5 +2,22 @@
   "name": "@vital/desktop",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "description": "Tauri 2 shell around @vital/web. Bearer via plugin-http + plugin-store. Production builds require VITE_TAURI_API_URL.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri",
+    "test": "node --test tauri.contract.test.mjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-http": "^2.5.0",
+    "@tauri-apps/plugin-store": "^2.4.0",
+    "@tauri-apps/plugin-window-state": "^2.4.0",
+    "@vital/web": "workspace:*"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0"
+  }
 }
