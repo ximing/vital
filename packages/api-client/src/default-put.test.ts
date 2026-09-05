@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './types.js';
-import { barePutInit, fetchPut, xhrPut } from './default-put.js';
+import { bareGetInit, barePutInit, fetchPut, xhrPut } from './default-put.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -8,6 +8,13 @@ afterEach(() => {
 });
 
 describe('bare S3 PUT', () => {
+  it('bareGetInit is credentials omit with no Authorization', () => {
+    const init = bareGetInit();
+    expect(init.method).toBe('GET');
+    expect(init.credentials).toBe('omit');
+    expect(init.headers).toBeUndefined();
+  });
+
   it('barePutInit is Content-Type only with credentials omit', () => {
     const body = new Blob(['x']);
     const init = barePutInit(body, 'image/png');
@@ -46,7 +53,7 @@ describe('bare S3 PUT', () => {
     const seen: { withCredentials: boolean; headers: Record<string, string> }[] = [];
     class FakeXHR {
       status = 200;
-      withCredentials = false;
+      withCredentials = true;
       upload: { onprogress: ((e: ProgressEvent) => void) | null } = { onprogress: null };
       onload: (() => void) | null = null;
       onerror: (() => void) | null = null;

@@ -11,7 +11,7 @@ import type {
   UploadPresignResponse,
   UserProfile,
 } from '@vital/dto';
-import { Http, isAuthResponse } from './http.js';
+import { Http, isAuthResponse, tokensForStore } from './http.js';
 import { ApiError, type VitalClientOptions } from './types.js';
 import { uploadImpl, type UploadInput } from './upload.js';
 
@@ -35,15 +35,13 @@ export interface VitalClient {
   upload(input: UploadInput): Promise<UploadCompleteResponse>;
 }
 
-async function persistAuth(
-  store: VitalClientOptions['tokenStore'],
-  data: unknown,
-): Promise<AuthResponse> {
+async function persistAuth(options: VitalClientOptions, data: unknown): Promise<AuthResponse> {
   if (!isAuthResponse(data)) {
     throw new ApiError(0, 'INVALID_RESPONSE', '响应格式错误');
   }
-  await store.setTokens(data.tokens);
-  return data;
+  const tokens = tokensForStore(options.authMode, data.tokens);
+  await options.tokenStore.setTokens(tokens);
+  return { user: data.user, tokens };
 }
 
 export function createVitalClient(options: VitalClientOptions): VitalClient {
@@ -60,12 +58,12 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     boot: () => http.boot(),
     register: async (input) =>
       persistAuth(
-        options.tokenStore,
+        options,
         await http.request<unknown>('/api/v1/auth/register', { ...skipAuth, body: input }),
       ),
     login: async (input) =>
       persistAuth(
-        options.tokenStore,
+        options,
         await http.request<unknown>('/api/v1/auth/login', { ...skipAuth, body: input }),
       ),
     refresh: () => http.refresh(),

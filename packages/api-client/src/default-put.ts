@@ -8,6 +8,18 @@ function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError';
 }
 
+/** GET a presigned S3 URL: never cookies or Authorization (upload 302 hop). */
+export function bareGetInit(signal?: AbortSignal): RequestInit {
+  const init: RequestInit = {
+    method: 'GET',
+    credentials: 'omit',
+  };
+  if (signal !== undefined) {
+    init.signal = signal;
+  }
+  return init;
+}
+
 /** PUT init for a presigned S3 URL: Content-Type only — never cookies or Authorization. */
 export function barePutInit(body: Blob, contentType: string, signal?: AbortSignal): RequestInit {
   const init: RequestInit = {
@@ -44,6 +56,7 @@ export const xhrPut: PutFn = (url, body, contentType, onProgress, signal) =>
     }
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', url);
+    xhr.withCredentials = false;
     xhr.setRequestHeader('Content-Type', contentType);
     xhr.upload.onprogress = (e) => {
       onProgress?.(e.loaded, e.total);

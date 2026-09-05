@@ -63,6 +63,24 @@ describe('createVitalClient auth + upload methods', () => {
     expect(calls[2]?.body).toEqual({});
   });
 
+  it('cookie login does not persist a leaked refreshToken string', async () => {
+    const store = memoryStore();
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'cookie',
+      tokenStore: store,
+      fetchImpl: () =>
+        respond(200, {
+          user,
+          tokens: { accessToken: 'a1', refreshToken: 'leak', expiresIn: 900 },
+        }),
+    });
+    const res = await client.login({ email: 'a@b.c', password: 'secret123' });
+    expect(store.tokens).toEqual({ accessToken: 'a1', expiresIn: 900 });
+    expect(store.tokens?.refreshToken).toBeUndefined();
+    expect(res.tokens.refreshToken).toBeUndefined();
+  });
+
   it('bearer logout sends refreshToken JSON; changePassword clears', async () => {
     const store = memoryStore({ accessToken: 'a', refreshToken: 'r1', expiresIn: 900 });
     const calls: { url: string; body: unknown; credentials: RequestCredentials | undefined }[] = [];

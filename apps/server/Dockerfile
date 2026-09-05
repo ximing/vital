@@ -13,6 +13,7 @@ COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
 COPY packages/tokens/package.json packages/tokens/
+COPY packages/api-client/package.json packages/api-client/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
@@ -35,6 +36,7 @@ COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
 COPY packages/tokens/package.json packages/tokens/
+COPY packages/api-client/package.json packages/api-client/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/

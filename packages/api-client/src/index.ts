@@ -5,7 +5,7 @@ export {
   type TokenStore,
   type VitalClientOptions,
 } from './types.js';
-export { Http, isAuthResponse, type RequestOptions } from './http.js';
+export { Http, isAuthResponse, tokensForStore, type RequestOptions } from './http.js';
 export { createVitalClient, type VitalClient } from './client.js';
 export { uploadImpl, type UploadInput } from './upload.js';
-export { barePutInit, fetchPut, xhrPut } from './default-put.js';
+export { bareGetInit, barePutInit, fetchPut, xhrPut } from './default-put.js';

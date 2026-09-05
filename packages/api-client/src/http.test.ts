@@ -144,6 +144,87 @@ describe('Http cookie mode', () => {
     await Promise.all([http.request('/api/v1/lists'), http.request('/api/v1/auth/me')]);
     expect(refreshCount).toBe(1);
   });
+
+  it('cookie refresh drops refreshToken before setTokens', async () => {
+    const store = memoryStore();
+    const http = makeHttp('cookie', store, (url) => {
+      if (urlOf(url).endsWith('/api/v1/auth/refresh')) {
+        return respond(
+          200,
+          authResponse({ accessToken: 'a1', refreshToken: 'leak', expiresIn: 900 }),
+        );
+      }
+      return respond(500, {});
+    });
+    const data = await http.refresh();
+    expect(store.tokens).toEqual({ accessToken: 'a1', expiresIn: 900 });
+    expect(store.tokens?.refreshToken).toBeUndefined();
+    expect(data.tokens.refreshToken).toBeUndefined();
+  });
+
+  it('requestBlob 302 to S3 is followed without Authorization or cookies', async () => {
+    const store = memoryStore({ accessToken: 'a1', expiresIn: 900 });
+    const calls: { url: string; init: RequestInit }[] = [];
+    const http = makeHttp('cookie', store, (url, init) => {
+      const u = urlOf(url);
+      calls.push({ url: u, init: init ?? {} });
+      if (u.includes('/api/v1/uploads/')) {
+        return Promise.resolve(
+          new Response(null, { status: 302, headers: { Location: 'https://s3/obj' } }),
+        );
+      }
+      if (u.startsWith('https://s3/')) {
+        return Promise.resolve(new Response(new Blob(['img']), { status: 200 }));
+      }
+      return respond(500, {});
+    });
+    const blob = await http.requestBlob('/api/v1/uploads/att1');
+    expect(await blob.text()).toBe('img');
+    expect(calls.map((c) => c.url)).toEqual(['http://x/api/v1/uploads/att1', 'https://s3/obj']);
+    expect(calls[0]?.init.redirect).toBe('manual');
+    expect(calls[0]?.init.credentials).toBe('include');
+    expect(authorizationOf(calls[0]?.init)).toBe('Bearer a1');
+    expect(calls[1]?.init.credentials).toBe('omit');
+    expect(calls[1]?.init.redirect).toBeUndefined();
+    expect(authorizationOf(calls[1]?.init)).toBe('');
+    const s3Headers = calls[1]?.init.headers;
+    if (s3Headers !== undefined && !Array.isArray(s3Headers) && !(s3Headers instanceof Headers)) {
+      expect(s3Headers.Authorization).toBeUndefined();
+      expect(s3Headers.Cookie).toBeUndefined();
+    }
+  });
+
+  it('requestBlob 401 then 302 still uses a bare S3 GET', async () => {
+    const store = memoryStore({ accessToken: 'expired', expiresIn: 900 });
+    const calls: { url: string; init: RequestInit }[] = [];
+    const http = makeHttp('cookie', store, (url, init) => {
+      const u = urlOf(url);
+      calls.push({ url: u, init: init ?? {} });
+      if (u.endsWith('/api/v1/auth/refresh')) {
+        return respond(200, authResponse({ accessToken: 'new', expiresIn: 900 }));
+      }
+      if (u.includes('/api/v1/uploads/') && authorizationOf(init) === 'Bearer expired') {
+        return respond(401, { error: { code: 'INVALID_TOKEN', message: 'x' } });
+      }
+      if (u.includes('/api/v1/uploads/')) {
+        return Promise.resolve(
+          new Response(null, { status: 302, headers: { Location: 'https://s3/obj' } }),
+        );
+      }
+      return Promise.resolve(new Response(new Blob(['img']), { status: 200 }));
+    });
+    const blob = await http.requestBlob('/api/v1/uploads/att1');
+    expect(await blob.text()).toBe('img');
+    expect(calls.map((c) => c.url)).toEqual([
+      'http://x/api/v1/uploads/att1',
+      'http://x/api/v1/auth/refresh',
+      'http://x/api/v1/uploads/att1',
+      'https://s3/obj',
+    ]);
+    const s3 = calls[3];
+    expect(s3?.init.credentials).toBe('omit');
+    expect(authorizationOf(s3?.init)).toBe('');
+  });
 });
 
 describe('Http bearer mode', () => {

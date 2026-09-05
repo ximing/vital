@@ -1,4 +1,5 @@
 import type { AuthMode, AuthResponse, AuthTokens, ErrorEnvelope } from '@vital/dto';
+import { bareGetInit } from './default-put.js';
 import { ApiError, type TokenStore, type VitalClientOptions } from './types.js';
 
 export { ApiError };
@@ -13,6 +14,8 @@ export interface RequestOptions {
   /** true = 401 does not trigger refresh (auth endpoints; prevents loops). */
   skipAuthRefresh?: boolean;
   signal?: AbortSignal;
+  /** `requestBlob` uses `manual` so the S3 hop is a separate credentials-omit GET. */
+  redirect?: RequestRedirect;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -32,6 +35,18 @@ function isAuthTokens(value: unknown): value is AuthTokens {
 
 export function isAuthResponse(value: unknown): value is AuthResponse {
   return isRecord(value) && isAuthTokens(value.tokens) && isRecord(value.user);
+}
+
+/** Cookie TokenStore is memory-only access; never persist a refresh-token string. */
+export function tokensForStore(authMode: AuthMode, tokens: AuthTokens): AuthTokens {
+  if (authMode === 'cookie') {
+    return { accessToken: tokens.accessToken, expiresIn: tokens.expiresIn };
+  }
+  return tokens;
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
 function buildUrl(baseUrl: string, path: string, query?: RequestOptions['query']): string {
@@ -152,20 +167,25 @@ export class Http {
   }
 
   async requestBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
-    const first = await this.doFetch(path, options);
+    const blobOpts: RequestOptions = { ...options, redirect: 'manual' };
+    const first = await this.doFetch(path, blobOpts);
+    let apiRes = first;
     if (first.status === 401 && (await this.shouldAttemptRefresh(options))) {
       const refreshed = await this.refresh();
-      const second = await this.doFetch(path, options, refreshed.tokens.accessToken);
-      if (!second.ok) {
-        if (second.status === 401) {
-          await settle(this.tokenStore.clear());
-        }
-        throw await toApiError(second);
+      apiRes = await this.doFetch(path, blobOpts, refreshed.tokens.accessToken);
+      if (apiRes.status === 401) {
+        await settle(this.tokenStore.clear());
+        throw await toApiError(apiRes);
       }
-      return second.blob();
     }
-    if (!first.ok) throw await toApiError(first);
-    return first.blob();
+    if (apiRes.type === 'opaqueredirect') {
+      throw new ApiError(0, 'UPLOAD_REDIRECT_OPAQUE', '直传跳转被浏览器隐藏');
+    }
+    if (isRedirectStatus(apiRes.status)) {
+      return this.fetchBareRedirect(apiRes, path, blobOpts);
+    }
+    if (!apiRes.ok) throw await toApiError(apiRes);
+    return apiRes.blob();
   }
 
   /** Single-flight: concurrent 401s share one refresh. Failure clears the store. */
@@ -220,8 +240,42 @@ export class Http {
     if (options.signal !== undefined) {
       init.signal = options.signal;
     }
+    if (options.redirect !== undefined) {
+      init.redirect = options.redirect;
+    }
     try {
       return await this.fetchImpl(buildUrl(this.baseUrl, path, options.query), init);
+    } catch (err) {
+      throw wrapNetwork(err);
+    }
+  }
+
+  /**
+   * GET /uploads/:id is 302 to S3. Do not follow that hop with session credentials
+   * (cookie `include` would make S3 a credentialed CORS request).
+   */
+  private async fetchBareRedirect(
+    res: Response,
+    path: string,
+    options: RequestOptions,
+  ): Promise<Blob> {
+    const location = res.headers.get('Location');
+    if (location === null || location === '') {
+      throw new ApiError(res.status, 'UPLOAD_REDIRECT_MISSING', '直传跳转缺少 Location');
+    }
+    let target: string;
+    try {
+      target = new URL(location, buildUrl(this.baseUrl, path, options.query)).href;
+    } catch {
+      throw new ApiError(0, 'UPLOAD_REDIRECT_INVALID', '直传跳转地址无效');
+    }
+    try {
+      const getInit = options.signal !== undefined ? bareGetInit(options.signal) : bareGetInit();
+      const s3 = await this.fetchImpl(target, getInit);
+      if (!s3.ok) {
+        throw new ApiError(s3.status, 'UPLOAD_FAILED', `直传失败（${String(s3.status)}）`);
+      }
+      return await s3.blob();
     } catch (err) {
       throw wrapNetwork(err);
     }
@@ -253,7 +307,8 @@ export class Http {
       await settle(this.tokenStore.clear());
       throw new ApiError(0, 'INVALID_RESPONSE', '响应格式错误');
     }
-    await this.tokenStore.setTokens(data.tokens);
-    return data;
+    const tokens = tokensForStore(this.authMode, data.tokens);
+    await this.tokenStore.setTokens(tokens);
+    return { user: data.user, tokens };
   }
 }

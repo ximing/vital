@@ -55,8 +55,9 @@ if [[ ! -f apps/server/.env ]]; then
   exit 1
 fi
 
-echo "构建 dto…"
+echo "构建 dto + api-client…"
 pnpm --filter @vital/dto build
+pnpm --filter @vital/api-client build
 
 echo "数据库迁移…"
 pnpm --filter @vital/server migrate
