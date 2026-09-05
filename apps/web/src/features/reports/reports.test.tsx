@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { useAuthStore } from '@/state/auth-store';
+import { SAVE_DEBOUNCE_MS } from './model';
 import { ReportsWorkspace } from './ReportsWorkspace';
 import { resetReportUi } from './ui-store';
 
@@ -221,6 +222,40 @@ describe('reports workspace', () => {
       );
     });
     expect(await screen.findByText('一篇')).toBeInTheDocument();
+  });
+
+  it('fill after a dirty edit PATCHes first, fills with the bumped revision, and cancels autosave', async () => {
+    vi.mocked(client.fillReport).mockImplementation(async (id, input) => ({
+      ...daily,
+      id,
+      revision: input.revision + 1,
+      title: '本地标题',
+      bodyMd: `${daily.bodyMd}[[inbox:${INBOX_ID}]]\n`,
+      embeds: {
+        ...daily.embeds,
+        inbox: { [INBOX_ID]: { id: INBOX_ID, title: '一篇', status: 'unread', deletedAt: null } },
+      },
+    }));
+    const user = userEvent.setup();
+    renderAt('/reports/r-daily');
+    const title = await screen.findByLabelText(t.reports.title);
+    fireEvent.change(title, { target: { value: '本地标题' } });
+    await user.click(screen.getByRole('button', { name: t.reports.fill }));
+    await waitFor(() => {
+      expect(client.patchReport).toHaveBeenCalledWith(
+        'r-daily',
+        expect.objectContaining({ revision: 1, title: '本地标题' }),
+      );
+    });
+    await waitFor(() => {
+      expect(client.fillReport).toHaveBeenCalledWith('r-daily', { revision: 2 });
+    });
+    expect(await screen.findByText('一篇')).toBeInTheDocument();
+    expect(screen.queryByText(t.reports.conflict)).not.toBeInTheDocument();
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, SAVE_DEBOUNCE_MS + 50);
+    });
+    expect(client.patchReport).toHaveBeenCalledTimes(1);
   });
 
   it('toggles a task chip via complete, not a markdown patch', async () => {

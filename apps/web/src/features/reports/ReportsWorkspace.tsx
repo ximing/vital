@@ -39,6 +39,7 @@ type Session = {
   editorKey: number;
   conflict: boolean;
   blockSave: boolean;
+  filling: boolean;
   remoteToast: boolean;
   saveError: string | null;
   saveState: 'idle' | 'saving' | 'saved';
@@ -56,6 +57,7 @@ function sessionFrom(report: Report, prev?: Session | null): Session {
     editorKey: (prev?.editorKey ?? 0) + 1,
     conflict: false,
     blockSave: false,
+    filling: false,
     remoteToast: false,
     saveError: null,
     saveState: 'idle',
@@ -96,13 +98,41 @@ export function ReportsWorkspace() {
   const draftMdRef = useRef('');
   const idRef = useRef(id);
   const sessionRef = useRef(session);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef<Promise<Report> | null>(null);
+  const fillingRef = useRef(false);
+  const saveFnRef = useRef(actions.save);
+  const runSaveTrackedRef = useRef<((live: Session) => Promise<Report>) | undefined>(undefined);
 
   useEffect(() => {
     dirtyRef.current = dirty;
     draftMdRef.current = session?.draftMd ?? '';
     idRef.current = id;
     sessionRef.current = session;
+    saveFnRef.current = actions.save;
   });
+
+  function commitSession(next: Session | null): void {
+    sessionRef.current = next;
+    dirtyRef.current = next ? sessionDirty(next) : false;
+    draftMdRef.current = next?.draftMd ?? '';
+    fillingRef.current = next?.filling === true;
+    if (next) idRef.current = next.id;
+    setSession(next);
+  }
+
+  function patchLive(fn: (s: Session) => Session): void {
+    const live = sessionRef.current;
+    if (!live) return;
+    commitSession(fn(live));
+  }
+
+  function cancelSaveTimer(): void {
+    if (saveTimerRef.current !== null) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }
 
   useEffect(() => {
     if (id !== '') return;
@@ -114,7 +144,12 @@ export function ReportsWorkspace() {
     function onKey(event: KeyboardEvent): void {
       if ((event.metaKey || event.ctrlKey) && event.key === '/') {
         event.preventDefault();
-        setSession((s) => (s ? { ...s, sourceMode: !s.sourceMode } : s));
+        if (fillingRef.current) return;
+        const live = sessionRef.current;
+        if (!live) return;
+        const next = { ...live, sourceMode: !live.sourceMode };
+        sessionRef.current = next;
+        setSession(next);
       }
     }
     window.addEventListener('keydown', onKey);
@@ -137,20 +172,30 @@ export function ReportsWorkspace() {
         if (reportId === '') return;
         if (action.reloadBody) {
           const remote = await client.getReport(reportId);
-          if (cancelled || dirtyRef.current) return;
+          if (cancelled || dirtyRef.current || fillingRef.current) return;
           const body = applyRemoteBody(dirtyRef.current, draftMdRef.current, remote.bodyMd);
           if (body !== remote.bodyMd) return;
-          setSession((s) => sessionFrom(remote, s));
+          const next = sessionFrom(remote, sessionRef.current);
+          sessionRef.current = next;
+          dirtyRef.current = false;
+          draftMdRef.current = next.draftMd;
+          fillingRef.current = false;
+          setSession(next);
           useReportUi.getState().setEmbeds(remote.embeds);
           return;
         }
         if (action.fetchEmbeds) {
           const res = await client.getReportEmbeds(reportId);
-          if (cancelled) return;
+          if (cancelled || fillingRef.current) return;
           useReportUi.getState().mergeEmbeds(res.embeds);
         }
-        if (action.toastRemote) {
-          setSession((s) => (s ? { ...s, remoteToast: true } : s));
+        if (action.toastRemote && !fillingRef.current) {
+          const live = sessionRef.current;
+          if (live) {
+            const next = { ...live, remoteToast: true };
+            sessionRef.current = next;
+            setSession(next);
+          }
         }
       } catch {
         // Poll is best-effort.
@@ -165,51 +210,80 @@ export function ReportsWorkspace() {
     };
   }, [id, online]);
 
+  async function runSave(live: Session): Promise<Report> {
+    const bodyChanged = isDirty(live.draftMd, live.serverMd);
+    const titleChanged = live.draftTitle.trim() !== live.serverTitle.trim();
+    patchLive((s) => ({ ...s, saveState: 'saving', saveError: null }));
+    try {
+      const saved = await saveFnRef.current(live.id, {
+        revision: live.revision,
+        ...(bodyChanged ? { bodyMd: live.draftMd } : {}),
+        ...(titleChanged ? { title: live.draftTitle.trim() } : {}),
+      });
+      const current = sessionRef.current;
+      if (current && current.id === live.id) {
+        commitSession({
+          ...current,
+          revision: saved.revision,
+          serverMd:
+            bodyChanged && !isDirty(current.draftMd, live.draftMd)
+              ? live.draftMd
+              : current.serverMd,
+          serverTitle: titleChanged ? live.draftTitle.trim() : current.serverTitle,
+          saveState: 'saved',
+        });
+      }
+      useReportUi.getState().mergeEmbeds(saved.embeds);
+      return saved;
+    } catch (err) {
+      if (isRevisionConflict(err)) {
+        patchLive((s) => ({
+          ...s,
+          conflict: true,
+          blockSave: true,
+          filling: false,
+          saveState: 'idle',
+        }));
+        fillingRef.current = false;
+      } else {
+        patchLive((s) => ({ ...s, saveError: humanError(err), saveState: 'idle' }));
+      }
+      throw err;
+    }
+  }
+
+  async function runSaveTracked(live: Session): Promise<Report> {
+    const existing = saveInFlightRef.current;
+    if (existing) return existing;
+    const promise = runSave(live).finally(() => {
+      if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
+    });
+    saveInFlightRef.current = promise;
+    return promise;
+  }
+
+  useEffect(() => {
+    runSaveTrackedRef.current = runSaveTracked;
+  });
+
   useEffect(() => {
     const live = sessionRef.current;
     if (!live || live.id !== id || !online || live.conflict || live.blockSave) return;
+    if (fillingRef.current || live.filling) return;
     if (!sessionDirty(live)) return;
-    const bodyChanged = isDirty(live.draftMd, live.serverMd);
-    const titleChanged = live.draftTitle.trim() !== live.serverTitle.trim();
-    if (!bodyChanged && !titleChanged) return;
-    const bodySnap = live.draftMd;
-    const titleSnap = live.draftTitle.trim();
-    const rev = live.revision;
-    const reportId = live.id;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        setSession((s) => (s ? { ...s, saveState: 'saving', saveError: null } : s));
-        try {
-          const saved = await actions.save(reportId, {
-            revision: rev,
-            ...(bodyChanged ? { bodyMd: bodySnap } : {}),
-            ...(titleChanged ? { title: titleSnap } : {}),
-          });
-          setSession((s) => {
-            if (!s || s.id !== reportId) return s;
-            return {
-              ...s,
-              revision: saved.revision,
-              serverMd: bodyChanged && !isDirty(s.draftMd, bodySnap) ? bodySnap : s.serverMd,
-              serverTitle: titleChanged ? titleSnap : s.serverTitle,
-              saveState: 'saved',
-            };
-          });
-          useReportUi.getState().mergeEmbeds(saved.embeds);
-        } catch (err) {
-          if (isRevisionConflict(err)) {
-            setSession((s) =>
-              s ? { ...s, conflict: true, blockSave: true, saveState: 'idle' } : s,
-            );
-            return;
-          }
-          setSession((s) => (s ? { ...s, saveError: humanError(err), saveState: 'idle' } : s));
-        }
-      })();
+    const timer = setTimeout(() => {
+      if (saveTimerRef.current === timer) saveTimerRef.current = null;
+      if (fillingRef.current) return;
+      const now = sessionRef.current;
+      if (!now || now.id !== id || now.conflict || now.blockSave || !sessionDirty(now)) return;
+      void runSaveTrackedRef.current?.(now).catch(() => undefined);
     }, SAVE_DEBOUNCE_MS);
-    return () => window.clearTimeout(timer);
+    saveTimerRef.current = timer;
+    return () => {
+      clearTimeout(timer);
+      if (saveTimerRef.current === timer) saveTimerRef.current = null;
+    };
   }, [
-    actions,
     id,
     online,
     session?.id,
@@ -220,66 +294,74 @@ export function ReportsWorkspace() {
     session?.revision,
     session?.conflict,
     session?.blockSave,
+    session?.filling,
   ]);
 
   async function switchType(next: ReportType): Promise<void> {
-    const live = sessionRef.current;
+    cancelSaveTimer();
     try {
+      if (saveInFlightRef.current) await saveInFlightRef.current;
+      const live = sessionRef.current;
       if (live && live.id === id && sessionDirty(live) && !live.conflict && !live.blockSave) {
-        const bodyChanged = isDirty(live.draftMd, live.serverMd);
-        const titleChanged = live.draftTitle.trim() !== live.serverTitle.trim();
-        if (bodyChanged || titleChanged) {
-          const saved = await actions.save(live.id, {
-            revision: live.revision,
-            ...(bodyChanged ? { bodyMd: live.draftMd } : {}),
-            ...(titleChanged ? { title: live.draftTitle.trim() } : {}),
-          });
-          setSession((s) =>
-            s
-              ? {
-                  ...s,
-                  revision: saved.revision,
-                  serverMd: live.draftMd,
-                  serverTitle: live.draftTitle.trim(),
-                }
-              : s,
-          );
-        }
+        await runSaveTracked(live);
       }
       const current = await actions.loadCurrent(next);
       navigate(reportHref(current.id, current.type));
     } catch (err) {
       if (isRevisionConflict(err)) {
-        setSession((s) => (s ? { ...s, conflict: true, blockSave: true } : s));
+        patchLive((s) => ({ ...s, conflict: true, blockSave: true }));
       } else {
-        setSession((s) => (s ? { ...s, saveError: humanError(err) } : s));
+        patchLive((s) => ({ ...s, saveError: humanError(err) }));
       }
     }
   }
 
   async function onFill(): Promise<void> {
     const live = sessionRef.current;
-    if (!live || live.id !== id || live.conflict || live.blockSave) return;
+    if (
+      !live ||
+      live.id !== id ||
+      live.conflict ||
+      live.blockSave ||
+      live.filling ||
+      fillingRef.current
+    ) {
+      return;
+    }
+    fillingRef.current = true;
+    cancelSaveTimer();
+    commitSession({ ...live, filling: true, blockSave: true, saveError: null });
     try {
-      let rev = live.revision;
-      if (sessionDirty(live)) {
-        const bodyChanged = isDirty(live.draftMd, live.serverMd);
-        const titleChanged = live.draftTitle.trim() !== live.serverTitle.trim();
-        const saved = await actions.save(live.id, {
-          revision: live.revision,
-          ...(bodyChanged ? { bodyMd: live.draftMd } : {}),
-          ...(titleChanged ? { title: live.draftTitle.trim() } : {}),
-        });
+      if (saveInFlightRef.current) await saveInFlightRef.current;
+      const after = sessionRef.current;
+      if (!after || after.id !== id) return;
+      let rev = after.revision;
+      if (sessionDirty(after)) {
+        const saved = await runSaveTracked(after);
         rev = saved.revision;
       }
-      const filled = await actions.fill.mutateAsync({ id: live.id, revision: rev });
-      setSession(sessionFrom(filled, live));
+      const filled = await actions.fill.mutateAsync({ id: after.id, revision: rev });
+      fillingRef.current = false;
+      commitSession(sessionFrom(filled, sessionRef.current));
       useReportUi.getState().setEmbeds(filled.embeds);
     } catch (err) {
+      fillingRef.current = false;
       if (isRevisionConflict(err)) {
-        setSession((s) => (s ? { ...s, conflict: true, blockSave: true } : s));
+        patchLive((s) => ({
+          ...s,
+          filling: false,
+          conflict: true,
+          blockSave: true,
+          saveState: 'idle',
+        }));
       } else {
-        setSession((s) => (s ? { ...s, saveError: humanError(err) } : s));
+        patchLive((s) => ({
+          ...s,
+          filling: false,
+          blockSave: false,
+          saveError: humanError(err),
+          saveState: 'idle',
+        }));
       }
     }
   }
@@ -288,10 +370,11 @@ export function ReportsWorkspace() {
     if (id === '') return;
     try {
       const remote = await actions.loadReport(id);
-      setSession(sessionFrom(remote, sessionRef.current));
+      fillingRef.current = false;
+      commitSession(sessionFrom(remote, sessionRef.current));
       useReportUi.getState().setEmbeds(remote.embeds);
     } catch (err) {
-      setSession((s) => (s ? { ...s, saveError: humanError(err) } : s));
+      patchLive((s) => ({ ...s, saveError: humanError(err) }));
     }
   }
 
@@ -312,13 +395,12 @@ export function ReportsWorkspace() {
         useReportUi.getState().mergeEmbeds(res.embeds);
       }
     } catch (err) {
-      setSession((s) => (s ? { ...s, saveError: humanError(err) } : s));
+      patchLive((s) => ({ ...s, saveError: humanError(err) }));
     }
   }
 
   function handleHydrate(md: string): void {
-    setSession((s) => {
-      if (!s) return s;
+    patchLive((s) => {
       const wasDirty = sessionDirty(s);
       return { ...s, draftMd: md, serverMd: wasDirty ? s.serverMd : md };
     });
@@ -363,9 +445,11 @@ export function ReportsWorkspace() {
                 !session ||
                 session.conflict ||
                 session.blockSave ||
+                session.filling ||
+                session.saveState === 'saving' ||
                 actions.fill.isPending
               }
-              loading={actions.fill.isPending}
+              loading={actions.fill.isPending || session?.filling === true}
               onClick={() => void onFill()}
             >
               {actions.fill.isPending ? t.reports.filling : t.reports.fill}
@@ -374,7 +458,8 @@ export function ReportsWorkspace() {
               variant="quiet"
               aria-pressed={session?.sourceMode === true}
               aria-label={t.reports.sourceToggle}
-              onClick={() => setSession((s) => (s ? { ...s, sourceMode: !s.sourceMode } : s))}
+              disabled={session?.filling === true}
+              onClick={() => patchLive((s) => ({ ...s, sourceMode: !s.sourceMode }))}
             >
               {session?.sourceMode ? t.reports.wysiwyg : t.reports.source}
             </Button>
@@ -424,7 +509,7 @@ export function ReportsWorkspace() {
           </Button>
           <Button
             variant="quiet"
-            onClick={() => setSession((s) => (s ? { ...s, conflict: false, blockSave: true } : s))}
+            onClick={() => patchLive((s) => ({ ...s, conflict: false, blockSave: true }))}
           >
             {t.reports.keepLocal}
           </Button>
@@ -456,24 +541,22 @@ export function ReportsWorkspace() {
           <input
             aria-label={t.reports.title}
             value={session.draftTitle}
-            disabled={!online}
-            onChange={(event) =>
-              setSession((s) => (s ? { ...s, draftTitle: event.target.value } : s))
-            }
+            disabled={!online || session.filling}
+            onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
             className="mb-6 w-full bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em] text-fg outline-none"
           />
           {session.sourceMode ? (
             <SourceEditor
               value={session.draftMd}
-              editable={online}
-              onChange={(md) => setSession((s) => (s ? { ...s, draftMd: md } : s))}
+              editable={online && !session.filling}
+              onChange={(md) => patchLive((s) => ({ ...s, draftMd: md }))}
             />
           ) : (
             <WysiwygEditor
               key={`${session.id}:${session.editorKey}`}
               bodyMd={session.draftMd}
-              editable={online}
-              onChange={(md) => setSession((s) => (s ? { ...s, draftMd: md } : s))}
+              editable={online && !session.filling}
+              onChange={(md) => patchLive((s) => ({ ...s, draftMd: md }))}
               onHydrate={handleHydrate}
               onToggleTask={(taskId) => void toggleTask(taskId)}
             />
