@@ -12,8 +12,13 @@
 # (deploy/nginx.conf → 127.0.0.1:3010).
 #
 # PG_HOST comes from .env — do not hardcode postgres.
-# Same-host Postgres: PG_HOST=host.docker.internal (must listen on the docker bridge,
-# not only 127.0.0.1). Remote: the real address.
+# Same-host Postgres: PG_HOST=host.docker.internal (must listen on the docker bridge
+# + pg_hba 172.16.0.0/12, not only 127.0.0.1). Remote: the real address.
+#
+# Host nginx → 127.0.0.1:3010; Docker's userland proxy makes the container peer the
+# bridge gateway (172.16.0.0/12), not loopback. Fastify trustProxy allows that hop
+# so nginx X-Forwarded-* drive req.ip / rate-limit keys. Do not use trustProxy: true.
+# Alternative not used: network_mode: host + Node listen 127.0.0.1 (real loopback).
 
 name: vital-ext
 
