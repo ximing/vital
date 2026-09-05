@@ -226,3 +226,29 @@ describe('createVitalClient auth + upload methods', () => {
     expect(calls[1]?.idem).toBe('a'.repeat(64));
   });
 });
+
+describe('createVitalClient reports + sync', () => {
+  it('hits current, embeds, fill, and sync/head', async () => {
+    const store = memoryStore();
+    const urls: string[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        urls.push(`${init?.method ?? 'GET'} ${urlOf(url)}`);
+        return respond(200, { id: 'r1', revision: 1, embeds: { tasks: {}, inbox: {} } });
+      },
+    });
+    await client.getCurrentReport('daily');
+    await client.getReportEmbeds('r1');
+    await client.fillReport('r1', { revision: 1 });
+    await client.syncHead();
+    expect(urls).toEqual([
+      'GET http://x/api/v1/reports/current?type=daily',
+      'GET http://x/api/v1/reports/r1/embeds',
+      'POST http://x/api/v1/reports/r1/fill',
+      'GET http://x/api/v1/sync/head',
+    ]);
+  });
+});

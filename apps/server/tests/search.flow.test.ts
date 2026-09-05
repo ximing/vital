@@ -90,4 +90,23 @@ describe('search', () => {
     expect(page2.json().items).toHaveLength(1);
     expect(page2.json().items[0].task.id).toBe(fullIds[1]);
   });
+
+  it('POST /search finds reports by title', async () => {
+    const alice = await registerUser(app);
+    const current = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/current?type=daily',
+      token: alice.token,
+    });
+    expect(current.statusCode).toBe(200);
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/search',
+      token: alice.token,
+      payload: { q: '日报', types: ['report'] },
+    });
+    expect(res.statusCode).toBe(200);
+    const titles = (res.json().items as { report: { title: string } }[]).map((h) => h.report.title);
+    expect(titles.some((t) => t.includes('日报'))).toBe(true);
+  });
 });

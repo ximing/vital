@@ -7,5 +7,6 @@ describe('searchInputSchema', () => {
     expect(searchInputSchema.safeParse({ q: 'x', limit: 51 }).success).toBe(false);
     expect(searchInputSchema.parse({ q: 'task', types: ['task'], limit: 20 }).limit).toBe(20);
     expect(searchInputSchema.parse({ q: '稍后', types: ['inbox'] }).types).toEqual(['inbox']);
+    expect(searchInputSchema.parse({ q: '日报', types: ['report'] }).types).toEqual(['report']);
   });
 });

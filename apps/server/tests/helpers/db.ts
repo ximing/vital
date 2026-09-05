@@ -5,6 +5,7 @@ import {
   inboxAssets,
   inboxItems,
   lists,
+  reports,
   refreshTokens,
   tags,
   taskCompletions,
@@ -49,6 +50,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(tags);
     await db.delete(lists);
     await db.delete(attachments);
+    await db.delete(reports);
     await db.delete(refreshTokens);
     await db.delete(users);
   });

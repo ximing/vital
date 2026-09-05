@@ -1,8 +1,24 @@
-import type { InboxItem, SearchHit, SearchInput, SearchResponse, Task } from '@vital/dto';
+import type {
+  InboxItem,
+  ReportListItem,
+  SearchHit,
+  SearchInput,
+  SearchResponse,
+  Task,
+} from '@vital/dto';
 import { and, desc, eq, inArray, isNull, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
-import { inboxItems, taskTags, tasks, type InboxItemRow, type TaskRow } from '../db/schema.js';
+import {
+  inboxItems,
+  reports,
+  taskTags,
+  tasks,
+  type InboxItemRow,
+  type ReportRow,
+  type TaskRow,
+} from '../db/schema.js';
 import { loadAssetsByItemIds, toInboxDto } from '../inbox/inbox.service.js';
+import { toReportListItem } from '../reports/reports.service.js';
 import { decodeSearchCursor, encodeSearchCursor } from '../utils/cursor.js';
 
 function asStatus(value: string): Task['status'] {
@@ -79,7 +95,8 @@ function cursorFilter(
 
 type Ranked =
   | { type: 'task'; rank: number; updatedAt: Date; id: string; row: TaskRow }
-  | { type: 'inbox'; rank: number; updatedAt: Date; id: string; row: InboxItemRow };
+  | { type: 'inbox'; rank: number; updatedAt: Date; id: string; row: InboxItemRow }
+  | { type: 'report'; rank: number; updatedAt: Date; id: string; row: ReportRow };
 
 function cmpRanked(a: Ranked, b: Ranked): number {
   if (a.rank !== b.rank) return b.rank - a.rank;
@@ -90,10 +107,11 @@ function cmpRanked(a: Ranked, b: Ranked): number {
 }
 
 export async function searchTasks(userId: string, input: SearchInput): Promise<SearchResponse> {
-  const types = input.types ?? ['task', 'inbox'];
+  const types = input.types ?? ['task', 'inbox', 'report'];
   const wantTask = types.includes('task');
   const wantInbox = types.includes('inbox');
-  if (!wantTask && !wantInbox) {
+  const wantReport = types.includes('report');
+  if (!wantTask && !wantInbox && !wantReport) {
     return { items: [], nextCursor: null };
   }
   const q = input.q;
@@ -159,6 +177,33 @@ export async function searchTasks(userId: string, input: SearchInput): Promise<S
     }
   }
 
+  if (wantReport) {
+    const match = or(
+      sql`${reports.searchTsv} @@ plainto_tsquery('simple', ${q})`,
+      sql`${reports.title} % ${q}`,
+      sql`(char_length(${q}) <= 8 AND ${reports.title} ILIKE ${like} ESCAPE '\\')`,
+    );
+    const rankExpr = sql<number>`round(ts_rank(${reports.searchTsv}, plainto_tsquery('simple', ${q}))::numeric, 6)`;
+    let where: SQL | undefined = and(eq(reports.userId, userId), match);
+    const extra = cursorFilter(rankExpr, reports.updatedAt, reports.id, input.cursor);
+    if (extra) where = and(where, extra);
+    const rows = await getDb()
+      .select({ report: reports, rank: rankExpr })
+      .from(reports)
+      .where(where)
+      .orderBy(sql`${rankExpr} DESC`, desc(reports.updatedAt), desc(reports.id))
+      .limit(limit + 1);
+    for (const row of rows) {
+      ranked.push({
+        type: 'report',
+        rank: asRank(row.rank),
+        updatedAt: row.report.updatedAt,
+        id: row.report.id,
+        row: row.report,
+      });
+    }
+  }
+
   ranked.sort(cmpRanked);
   const page = ranked.slice(0, limit);
   const taskIds = page.filter((r) => r.type === 'task').map((r) => r.id);
@@ -177,6 +222,10 @@ export async function searchTasks(userId: string, input: SearchInput): Promise<S
   const items: SearchHit[] = page.map((row) => {
     if (row.type === 'task') {
       return { type: 'task' as const, task: toTaskDto(row.row, tagMap.get(row.id) ?? []) };
+    }
+    if (row.type === 'report') {
+      const report: ReportListItem = toReportListItem(row.row);
+      return { type: 'report' as const, report };
     }
     const inbox: InboxItem = toInboxDto(row.row, assetMap.get(row.id) ?? []);
     return { type: 'inbox' as const, inbox };
