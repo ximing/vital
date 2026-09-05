@@ -16,5 +16,6 @@ describe('ERROR_MESSAGES', () => {
     expect(ERROR_MESSAGES.RRULE_DUE_REQUIRED).toBe('设置重复需要截止日期');
     expect(ERROR_MESSAGES.LIST_NOT_FOUND).toBe('清单不存在');
     expect(ERROR_MESSAGES.TAG_NOT_FOUND).toBe('标签不存在');
+    expect(ERROR_MESSAGES.INBOX_NOT_FOUND).toBe('条目不存在');
   });
 });

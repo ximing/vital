@@ -1,7 +1,8 @@
-import type { SearchInput, SearchResponse, Task } from '@vital/dto';
-import { and, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import type { InboxItem, SearchHit, SearchInput, SearchResponse, Task } from '@vital/dto';
+import { and, desc, eq, inArray, isNull, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
-import { tasks, taskTags, type TaskRow } from '../db/schema.js';
+import { inboxItems, taskTags, tasks, type InboxItemRow, type TaskRow } from '../db/schema.js';
+import { loadAssetsByItemIds, toInboxDto } from '../inbox/inbox.service.js';
 import { decodeSearchCursor, encodeSearchCursor } from '../utils/cursor.js';
 
 function asStatus(value: string): Task['status'] {
@@ -60,67 +61,132 @@ function asRank(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function cursorFilter(
+  rankExpr: SQL,
+  updatedAt: SQLWrapper,
+  idCol: SQLWrapper,
+  cursor: string | undefined,
+): SQL | undefined {
+  if (cursor === undefined) return undefined;
+  const cur = decodeSearchCursor(cursor);
+  const t = new Date(cur.t);
+  return or(
+    sql`${rankExpr} < ${cur.rank}`,
+    and(sql`${rankExpr} = ${cur.rank}`, sql`${updatedAt} < ${t}`),
+    and(sql`${rankExpr} = ${cur.rank}`, sql`${updatedAt} = ${t}`, sql`${idCol} < ${cur.id}`),
+  );
+}
+
+type Ranked =
+  | { type: 'task'; rank: number; updatedAt: Date; id: string; row: TaskRow }
+  | { type: 'inbox'; rank: number; updatedAt: Date; id: string; row: InboxItemRow };
+
+function cmpRanked(a: Ranked, b: Ranked): number {
+  if (a.rank !== b.rank) return b.rank - a.rank;
+  const ta = a.updatedAt.getTime();
+  const tb = b.updatedAt.getTime();
+  if (ta !== tb) return tb - ta;
+  return b.id.localeCompare(a.id);
+}
+
 export async function searchTasks(userId: string, input: SearchInput): Promise<SearchResponse> {
-  const types = input.types ?? ['task'];
-  if (!types.includes('task')) {
+  const types = input.types ?? ['task', 'inbox'];
+  const wantTask = types.includes('task');
+  const wantInbox = types.includes('inbox');
+  if (!wantTask && !wantInbox) {
     return { items: [], nextCursor: null };
   }
   const q = input.q;
   const limit = input.limit ?? 20;
   const like = `%${escapeLike(q)}%`;
-  const match = or(
-    sql`${tasks.searchTsv} @@ plainto_tsquery('simple', ${q})`,
-    sql`${tasks.title} % ${q}`,
-    sql`(char_length(${q}) <= 8 AND ${tasks.title} ILIKE ${like} ESCAPE '\\')`,
-  );
-  // Same expression in SELECT / ORDER BY / keyset so pages follow rank, not recency.
-  const rankExpr = sql<number>`round(ts_rank(${tasks.searchTsv}, plainto_tsquery('simple', ${q}))::numeric, 6)`;
-  let where: SQL | undefined = and(eq(tasks.userId, userId), isNull(tasks.deletedAt), match);
-  if (input.cursor !== undefined) {
-    const cur = decodeSearchCursor(input.cursor);
-    const t = new Date(cur.t);
-    where = and(
-      where,
-      or(
-        sql`${rankExpr} < ${cur.rank}`,
-        and(sql`${rankExpr} = ${cur.rank}`, sql`${tasks.updatedAt} < ${t}`),
-        and(sql`${rankExpr} = ${cur.rank}`, eq(tasks.updatedAt, t), sql`${tasks.id} < ${cur.id}`),
-      ),
+  const ranked: Ranked[] = [];
+
+  if (wantTask) {
+    const match = or(
+      sql`${tasks.searchTsv} @@ plainto_tsquery('simple', ${q})`,
+      sql`${tasks.title} % ${q}`,
+      sql`(char_length(${q}) <= 8 AND ${tasks.title} ILIKE ${like} ESCAPE '\\')`,
     );
+    const rankExpr = sql<number>`round(ts_rank(${tasks.searchTsv}, plainto_tsquery('simple', ${q}))::numeric, 6)`;
+    let where: SQL | undefined = and(eq(tasks.userId, userId), isNull(tasks.deletedAt), match);
+    const extra = cursorFilter(rankExpr, tasks.updatedAt, tasks.id, input.cursor);
+    if (extra) where = and(where, extra);
+    const rows = await getDb()
+      .select({ task: tasks, rank: rankExpr })
+      .from(tasks)
+      .where(where)
+      .orderBy(sql`${rankExpr} DESC`, desc(tasks.updatedAt), desc(tasks.id))
+      .limit(limit + 1);
+    for (const row of rows) {
+      ranked.push({
+        type: 'task',
+        rank: asRank(row.rank),
+        updatedAt: row.task.updatedAt,
+        id: row.task.id,
+        row: row.task,
+      });
+    }
   }
 
-  const rows = await getDb()
-    .select({
-      task: tasks,
-      rank: rankExpr,
-    })
-    .from(tasks)
-    .where(where)
-    .orderBy(sql`${rankExpr} DESC`, desc(tasks.updatedAt), desc(tasks.id))
-    .limit(limit + 1);
+  if (wantInbox) {
+    const match = or(
+      sql`${inboxItems.searchTsv} @@ plainto_tsquery('simple', ${q})`,
+      sql`${inboxItems.title} % ${q}`,
+      sql`(char_length(${q}) <= 8 AND ${inboxItems.title} ILIKE ${like} ESCAPE '\\')`,
+    );
+    const rankExpr = sql<number>`round(ts_rank(${inboxItems.searchTsv}, plainto_tsquery('simple', ${q}))::numeric, 6)`;
+    let where: SQL | undefined = and(
+      eq(inboxItems.userId, userId),
+      isNull(inboxItems.deletedAt),
+      match,
+    );
+    const extra = cursorFilter(rankExpr, inboxItems.updatedAt, inboxItems.id, input.cursor);
+    if (extra) where = and(where, extra);
+    const rows = await getDb()
+      .select({ item: inboxItems, rank: rankExpr })
+      .from(inboxItems)
+      .where(where)
+      .orderBy(sql`${rankExpr} DESC`, desc(inboxItems.updatedAt), desc(inboxItems.id))
+      .limit(limit + 1);
+    for (const row of rows) {
+      ranked.push({
+        type: 'inbox',
+        rank: asRank(row.rank),
+        updatedAt: row.item.updatedAt,
+        id: row.item.id,
+        row: row.item,
+      });
+    }
+  }
 
-  const page = rows.slice(0, limit);
+  ranked.sort(cmpRanked);
+  const page = ranked.slice(0, limit);
+  const taskIds = page.filter((r) => r.type === 'task').map((r) => r.id);
+  const inboxIds = page.filter((r) => r.type === 'inbox').map((r) => r.id);
   const tagMap = new Map<string, string[]>();
-  for (const row of page) tagMap.set(row.task.id, []);
-  if (page.length > 0) {
-    const links = await getDb()
-      .select()
-      .from(taskTags)
-      .where(inArray(taskTags.taskId, page.map((r) => r.task.id)));
+  for (const id of taskIds) tagMap.set(id, []);
+  if (taskIds.length > 0) {
+    const links = await getDb().select().from(taskTags).where(inArray(taskTags.taskId, taskIds));
     for (const link of links) {
       const list = tagMap.get(link.taskId);
       if (list) list.push(link.tagId);
     }
   }
-  const items = page.map((row) => ({
-    type: 'task' as const,
-    task: toTaskDto(row.task, tagMap.get(row.task.id) ?? []),
-  }));
+  const assetMap = await loadAssetsByItemIds(inboxIds);
+
+  const items: SearchHit[] = page.map((row) => {
+    if (row.type === 'task') {
+      return { type: 'task' as const, task: toTaskDto(row.row, tagMap.get(row.id) ?? []) };
+    }
+    const inbox: InboxItem = toInboxDto(row.row, assetMap.get(row.id) ?? []);
+    return { type: 'inbox' as const, inbox };
+  });
+
   let nextCursor: string | null = null;
-  if (rows.length > limit) {
+  if (ranked.length > limit) {
     const last = page[page.length - 1];
     if (last) {
-      nextCursor = encodeSearchCursor(asRank(last.rank), last.task.updatedAt.toISOString(), last.task.id);
+      nextCursor = encodeSearchCursor(last.rank, last.updatedAt.toISOString(), last.id);
     }
   }
   return { items, nextCursor };

@@ -7,6 +7,7 @@ import { registerAuthRoutes } from './auth/auth.routes.js';
 import { config } from './config.js';
 import { getDb, setDb, type Database } from './db/index.js';
 import { registerHealthRoutes } from './health/health.routes.js';
+import { registerInboxRoutes } from './inbox/inbox.routes.js';
 import { registerListRoutes } from './lists/lists.routes.js';
 import { populateUser } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
@@ -73,6 +74,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   registerListRoutes(app);
   registerTaskRoutes(app);
   registerTagRoutes(app);
+  registerInboxRoutes(app);
   registerSearchRoutes(app);
 
   return app;

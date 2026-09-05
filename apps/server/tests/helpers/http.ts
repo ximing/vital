@@ -34,12 +34,14 @@ export async function injectJson(
     origin?: string;
     token?: string;
     cookie?: string;
+    headers?: Record<string, string>;
   },
 ): Promise<LightMyRequestResponse> {
   const headers: Record<string, string> = {};
   if (opts.origin) headers.origin = opts.origin;
   if (opts.token) headers.authorization = `Bearer ${opts.token}`;
   if (opts.cookie) headers.cookie = opts.cookie;
+  if (opts.headers) Object.assign(headers, opts.headers);
   const injectOpts: InjectOptions = {
     method: opts.method,
     url: opts.url,

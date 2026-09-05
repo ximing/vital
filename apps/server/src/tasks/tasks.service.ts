@@ -36,6 +36,7 @@ import { getUserEntity } from '../auth/auth.service.js';
 import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
 import {
+  inboxItems,
   taskCompletions,
   tasks,
   taskTags,
@@ -530,6 +531,7 @@ export async function completeTask(userId: string, id: string): Promise<Complete
   const task = await getOwnedTaskOr404(userId, id);
   if (task.status === 'canceled') throw AppError.of(400, 'VALIDATION_ERROR');
   if (task.status === 'done' && !task.recurrenceRrule) throw AppError.of(409, 'VALIDATION_ERROR');
+  const user = await getUserEntity(userId);
 
   const now = new Date();
   const dueWasNull = task.dueAt === null;
@@ -574,6 +576,18 @@ export async function completeTask(userId: string, id: string): Promise<Complete
           updatedAt: now,
         })
         .where(eq(tasks.id, task.id));
+      if (user.convertArchiveOnComplete) {
+        await tx
+          .update(inboxItems)
+          .set({ status: 'archived', updatedAt: now })
+          .where(
+            and(
+              eq(inboxItems.userId, userId),
+              eq(inboxItems.convertedTaskId, task.id),
+              eq(inboxItems.status, 'converted'),
+            ),
+          );
+      }
     });
   } catch (err) {
     if (isUniqueViolation(err)) throw AppError.of(409, 'VALIDATION_ERROR');
