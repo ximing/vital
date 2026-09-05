@@ -12,7 +12,9 @@ import { registerListRoutes } from './lists/lists.routes.js';
 import { populateUser } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { globalRateLimit } from './plugins/rate-limit.js';
+import { registerReportRoutes } from './reports/reports.routes.js';
 import { registerSearchRoutes } from './search/search.routes.js';
+import { registerSyncRoutes } from './sync/sync.routes.js';
 import { setStorageAdapter, type UnifiedStorageAdapter } from './storage/factory.js';
 import { registerTagRoutes } from './tags/tags.routes.js';
 import { registerTaskRoutes } from './tasks/tasks.routes.js';
@@ -75,7 +77,9 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   registerTaskRoutes(app);
   registerTagRoutes(app);
   registerInboxRoutes(app);
+  registerReportRoutes(app);
   registerSearchRoutes(app);
+  registerSyncRoutes(app);
 
   return app;
 }

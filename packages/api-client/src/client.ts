@@ -8,6 +8,9 @@ import type {
   ConvertInboxInput,
   ConvertInboxResponse,
   CreateInboxInput,
+  CurrentReportQuery,
+  FillReportInput,
+  GetReportQuery,
   CreateListInput,
   CreateTagInput,
   CreateTaskInput,
@@ -21,14 +24,20 @@ import type {
   LoginInput,
   PatchInboxAssetsInput,
   PatchInboxInput,
+  PatchReportInput,
   PatchListInput,
   PatchTagInput,
   PatchTaskInput,
   RegisterInput,
+  Report,
+  ReportCollection,
+  ReportEmbedsResponse,
+  ReportType,
   ReorderListsInput,
   ReorderTasksInput,
   SearchInput,
   SearchResponse,
+  SyncHead,
   TagCollection,
   Task,
   TaskCollection,
@@ -93,6 +102,13 @@ export interface VitalClient {
   patchInboxAssets(id: string, input: PatchInboxAssetsInput): Promise<InboxItem>;
   deleteInbox(id: string): Promise<void>;
   convertInbox(id: string, input?: ConvertInboxInput): Promise<ConvertInboxResponse>;
+  listReports(query?: { type?: ReportType; cursor?: string; limit?: number }): Promise<ReportCollection>;
+  getCurrentReport(type: ReportType): Promise<Report>;
+  getReport(id: string, query?: GetReportQuery): Promise<Report>;
+  getReportEmbeds(id: string): Promise<ReportEmbedsResponse>;
+  patchReport(id: string, input: PatchReportInput): Promise<Report>;
+  fillReport(id: string, input: FillReportInput): Promise<Report>;
+  syncHead(): Promise<SyncHead>;
 }
 
 async function persistAuth(options: VitalClientOptions, data: unknown): Promise<AuthResponse> {
@@ -219,5 +235,27 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     deleteInbox: (id) => http.request(`/api/v1/inbox/${id}`, { method: 'DELETE' }),
     convertInbox: (id, input = {}) =>
       http.request(`/api/v1/inbox/${id}/convert`, { method: 'POST', body: input }),
+    listReports: (query = {}) => {
+      const q: Record<string, string | number | boolean | undefined> = {};
+      if (query.type !== undefined) q.type = query.type;
+      if (query.cursor !== undefined) q.cursor = query.cursor;
+      if (query.limit !== undefined) q.limit = query.limit;
+      return http.request('/api/v1/reports', { query: q });
+    },
+    getCurrentReport: (type) => {
+      const query: CurrentReportQuery = { type };
+      return http.request('/api/v1/reports/current', { query });
+    },
+    getReport: (id, query = {}) => {
+      const q: Record<string, string | number | boolean | undefined> = {};
+      if (query.asOf !== undefined) q.asOf = query.asOf;
+      return http.request(`/api/v1/reports/${id}`, { query: q });
+    },
+    getReportEmbeds: (id) => http.request(`/api/v1/reports/${id}/embeds`),
+    patchReport: (id, input) =>
+      http.request(`/api/v1/reports/${id}`, { method: 'PATCH', body: input }),
+    fillReport: (id, input) =>
+      http.request(`/api/v1/reports/${id}/fill`, { method: 'POST', body: input }),
+    syncHead: () => http.request('/api/v1/sync/head'),
   };
 }

@@ -1,0 +1,39 @@
+{
+  "name": "@vital/markdown",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "^2.0.2",
+    "mdast-util-to-markdown": "^2.1.2",
+    "micromark-util-types": "^2.0.2",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "unified": "^11.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "@types/mdast": "^4.0.4",
+    "@vital/eslint-config": "workspace:*",
+    "@vital/tsconfig": "workspace:*",
+    "eslint": "^9.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  }
+}

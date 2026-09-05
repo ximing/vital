@@ -12,6 +12,7 @@ import { and, eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { attachments, inboxItems, type Attachment } from '../db/schema.js';
+import { getOwnedReportOr404 } from '../reports/reports.service.js';
 import { AppError } from '../errors.js';
 import { currentStorageMeta, getStorage } from '../storage/factory.js';
 import { getOwnedTaskOr404 } from '../tasks/tasks.service.js';
@@ -147,7 +148,7 @@ export async function bindUpload(
       throw AppError.of(404, 'INBOX_NOT_FOUND');
     }
   } else {
-    throw AppError.of(400, 'VALIDATION_ERROR');
+    await getOwnedReportOr404(userId, input.ownerId);
   }
 
   const ext = mime.extension(row.mime) || 'bin';

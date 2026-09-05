@@ -17,5 +17,7 @@ describe('ERROR_MESSAGES', () => {
     expect(ERROR_MESSAGES.LIST_NOT_FOUND).toBe('清单不存在');
     expect(ERROR_MESSAGES.TAG_NOT_FOUND).toBe('标签不存在');
     expect(ERROR_MESSAGES.INBOX_NOT_FOUND).toBe('条目不存在');
+    expect(ERROR_MESSAGES.REPORT_NOT_FOUND).toBe('报告不存在');
+    expect(ERROR_MESSAGES.REPORT_REVISION_CONFLICT).toBe('报告已被更新，请先同步');
   });
 });

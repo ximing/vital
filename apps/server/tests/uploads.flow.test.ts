@@ -252,8 +252,15 @@ describe('uploads', () => {
     expect(row?.s3Key).toBe(`task/${alice.id}/${task.json().id}/${id}.jpeg`);
   });
 
-  it('bind ownerType=report is 400 until reports exist', async () => {
+  it('bind ownerType=report copies tmp key to report prefix', async () => {
     const alice = await register('alice');
+    const current = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/current?type=daily',
+      token: alice.token,
+    });
+    expect(current.statusCode).toBe(200);
+    const reportId = current.json().id as string;
     const presigned = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/uploads/presign',
@@ -272,12 +279,28 @@ describe('uploads', () => {
       token: alice.token,
       payload: {},
     });
-    const bind = await injectJson(app, {
+    const missing = await injectJson(app, {
       method: 'POST',
       url: `/api/v1/uploads/${id}/bind`,
       token: alice.token,
       payload: { ownerType: 'report', ownerId: '11111111-1111-4111-8111-111111111111' },
     });
-    expect(bind.statusCode).toBe(400);
+    expect(missing.statusCode).toBe(404);
+    const bind = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/bind`,
+      token: alice.token,
+      payload: { ownerType: 'report', ownerId: reportId },
+    });
+    expect(bind.statusCode).toBe(200);
+    expect(bind.json()).toMatchObject({
+      id,
+      status: 'ready',
+      ownerType: 'report',
+      ownerId: reportId,
+    });
+    const [row] = await db.select().from(attachments).where(eq(attachments.id, id));
+    expect(row?.ownerType).toBe('report');
+    expect(row?.s3Key).toBe(`report/${alice.id}/${reportId}/${id}.jpeg`);
   });
 });

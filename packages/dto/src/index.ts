@@ -6,3 +6,6 @@ export * from './tasks.js';
 export * from './tags.js';
 export * from './search.js';
 export * from './inbox.js';
+export * from './reportTemplates.js';
+export * from './reports.js';
+export * from './sync.js';
