@@ -4,3 +4,5 @@ export * from './schema/attachments.js';
 export * from './schema/lists.js';
 export * from './schema/tasks.js';
 export * from './schema/tags.js';
+export * from './schema/inbox.js';
+export * from './schema/entity-links.js';

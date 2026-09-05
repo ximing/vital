@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { InboxItem } from './inbox.js';
 import type { Task } from './tasks.js';
 
 export const searchTypeSchema = z.enum(['task', 'inbox', 'report']);
@@ -17,7 +18,12 @@ export interface TaskSearchHit {
   task: Task;
 }
 
-export type SearchHit = TaskSearchHit;
+export interface InboxSearchHit {
+  type: 'inbox';
+  inbox: InboxItem;
+}
+
+export type SearchHit = TaskSearchHit | InboxSearchHit;
 
 export interface SearchResponse {
   items: SearchHit[];

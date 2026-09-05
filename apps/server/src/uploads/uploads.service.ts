@@ -11,7 +11,7 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
-import { attachments, type Attachment } from '../db/schema.js';
+import { attachments, inboxItems, type Attachment } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { currentStorageMeta, getStorage } from '../storage/factory.js';
 import { getOwnedTaskOr404 } from '../tasks/tasks.service.js';
@@ -135,19 +135,29 @@ export async function bindUpload(
   if (row.status !== 'ready' || row.ownerType !== 'tmp') {
     throw AppError.of(409, 'MEDIA_INVALID_STATE');
   }
-  if (input.ownerType !== 'task') {
+  if (input.ownerType === 'task') {
+    await getOwnedTaskOr404(userId, input.ownerId);
+  } else if (input.ownerType === 'inbox') {
+    const [owner] = await getDb()
+      .select({ id: inboxItems.id, userId: inboxItems.userId, deletedAt: inboxItems.deletedAt })
+      .from(inboxItems)
+      .where(eq(inboxItems.id, input.ownerId))
+      .limit(1);
+    if (!owner || owner.userId !== userId || owner.deletedAt) {
+      throw AppError.of(404, 'INBOX_NOT_FOUND');
+    }
+  } else {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
-  await getOwnedTaskOr404(userId, input.ownerId);
 
   const ext = mime.extension(row.mime) || 'bin';
-  const destKey = `task/${userId}/${input.ownerId}/${id}.${ext}`;
+  const destKey = `${input.ownerType}/${userId}/${input.ownerId}/${id}.${ext}`;
   const storage = getStorage();
   await storage.copyObject(row.s3Key, destKey, row.storageMeta);
   await storage.deleteFile(row.s3Key, row.storageMeta);
   await getDb()
     .update(attachments)
-    .set({ s3Key: destKey, ownerType: 'task', ownerId: input.ownerId })
+    .set({ s3Key: destKey, ownerType: input.ownerType, ownerId: input.ownerId })
     .where(eq(attachments.id, id));
-  return { id, status: 'ready', ownerType: 'task', ownerId: input.ownerId };
+  return { id, status: 'ready', ownerType: input.ownerType, ownerId: input.ownerId };
 }

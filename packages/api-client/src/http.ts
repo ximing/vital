@@ -15,6 +15,7 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Override; `requestBlob` forces `omit` so a followed S3 302 never gets cookies. */
   credentials?: RequestCredentials;
+  headers?: Record<string, string>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -219,6 +220,11 @@ export class Http {
       }
     }
     const headers: Record<string, string> = {};
+    if (options.headers !== undefined) {
+      for (const [key, value] of Object.entries(options.headers)) {
+        headers[key] = value;
+      }
+    }
     if (token !== undefined) {
       headers.Authorization = `Bearer ${token}`;
     }

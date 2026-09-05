@@ -173,4 +173,56 @@ describe('createVitalClient auth + upload methods', () => {
     expect(calls[3]?.body).toEqual({ completionId: 'c1' });
     expect(calls[5]?.body).toEqual({ ownerType: 'task', ownerId: 't1' });
   });
+
+  it('inbox extract/create/assets/convert methods hit the spec routes', async () => {
+    const store = memoryStore({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
+    const calls: { method: string; url: string; body: unknown; idem?: string }[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        const u = urlOf(url);
+        const headers = init?.headers;
+        let idem: string | undefined;
+        if (headers instanceof Headers) {
+          const value = headers.get('Idempotency-Key');
+          idem = value === null ? undefined : value;
+        } else if (headers && !Array.isArray(headers)) {
+          idem = headers['Idempotency-Key'];
+        }
+        const rec: { method: string; url: string; body: unknown; idem?: string } = {
+          method: init?.method ?? 'GET',
+          url: u,
+          body: bodyOf(init),
+        };
+        if (idem !== undefined) rec.idem = idem;
+        calls.push(rec);
+        if (init?.method === 'DELETE') return respond204();
+        return respond(200, { id: 'i1' });
+      },
+    });
+    await client.extractInbox({ url: 'https://example.com/a' });
+    await client.createInbox(
+      { title: 'A', originalUrl: 'https://example.com/a', source: 'extension' },
+      'a'.repeat(64),
+    );
+    await client.patchInboxAssets('i1', {
+      assets: [
+        {
+          attachmentId: '11111111-1111-4111-8111-111111111111',
+          originalSrc: 'https://example.com/x.png',
+          sortOrder: 0,
+        },
+      ],
+    });
+    await client.convertInbox('i1');
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'POST http://x/api/v1/inbox/extract',
+      'POST http://x/api/v1/inbox',
+      'PATCH http://x/api/v1/inbox/i1/assets',
+      'POST http://x/api/v1/inbox/i1/convert',
+    ]);
+    expect(calls[1]?.idem).toBe('a'.repeat(64));
+  });
 });

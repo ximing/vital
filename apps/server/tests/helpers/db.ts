@@ -1,6 +1,9 @@
 import { db, pool } from '../../src/db/index.js';
 import {
   attachments,
+  entityLinks,
+  inboxAssets,
+  inboxItems,
   lists,
   refreshTokens,
   tags,
@@ -37,6 +40,9 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 
 export async function resetDb(): Promise<void> {
   await withRetry(async () => {
+    await db.delete(inboxAssets);
+    await db.delete(entityLinks);
+    await db.delete(inboxItems);
     await db.delete(taskTags);
     await db.delete(taskCompletions);
     await db.delete(tasks);

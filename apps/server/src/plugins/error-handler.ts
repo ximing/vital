@@ -32,8 +32,12 @@ export function registerErrorHandler(app: FastifyInstance): void {
       send(reply, 429, 'RATE_LIMITED', ERROR_MESSAGES.RATE_LIMITED);
       return;
     }
+    const code = 'code' in error ? error.code : undefined;
+    if (statusCode === 413 || code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+      send(reply, 413, 'VALIDATION_ERROR', ERROR_MESSAGES.VALIDATION_ERROR);
+      return;
+    }
     if (statusCode === 400 || error.name === 'FastifyError') {
-      const code = 'code' in error ? error.code : undefined;
       if (code === 'FST_ERR_CTP_INVALID_JSON' || code === 'FST_ERR_VALIDATION') {
         send(reply, 400, 'VALIDATION_ERROR', ERROR_MESSAGES.VALIDATION_ERROR);
         return;

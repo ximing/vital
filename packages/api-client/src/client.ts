@@ -5,13 +5,22 @@ import type {
   CalendarResponse,
   ChangePasswordInput,
   CompleteTaskResponse,
+  ConvertInboxInput,
+  ConvertInboxResponse,
+  CreateInboxInput,
   CreateListInput,
   CreateTagInput,
   CreateTaskInput,
+  ExtractInboxInput,
+  InboxCollection,
+  InboxItem,
+  InboxPreview,
   List,
   ListCollection,
   Tag,
   LoginInput,
+  PatchInboxAssetsInput,
+  PatchInboxInput,
   PatchListInput,
   PatchTagInput,
   PatchTaskInput,
@@ -76,6 +85,14 @@ export interface VitalClient {
   patchTag(id: string, input: PatchTagInput): Promise<Tag>;
   deleteTag(id: string): Promise<void>;
   search(input: SearchInput): Promise<SearchResponse>;
+  extractInbox(input: ExtractInboxInput): Promise<InboxPreview>;
+  listInbox(query?: { status?: string; cursor?: string; limit?: number }): Promise<InboxCollection>;
+  createInbox(input: CreateInboxInput, idempotencyKey?: string): Promise<InboxItem>;
+  getInbox(id: string): Promise<InboxItem>;
+  patchInbox(id: string, input: PatchInboxInput): Promise<InboxItem>;
+  patchInboxAssets(id: string, input: PatchInboxAssetsInput): Promise<InboxItem>;
+  deleteInbox(id: string): Promise<void>;
+  convertInbox(id: string, input?: ConvertInboxInput): Promise<ConvertInboxResponse>;
 }
 
 async function persistAuth(options: VitalClientOptions, data: unknown): Promise<AuthResponse> {
@@ -177,5 +194,30 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     patchTag: (id, input) => http.request(`/api/v1/tags/${id}`, { method: 'PATCH', body: input }),
     deleteTag: (id) => http.request(`/api/v1/tags/${id}`, { method: 'DELETE' }),
     search: (input) => http.request('/api/v1/search', { method: 'POST', body: input }),
+    extractInbox: (input) =>
+      http.request('/api/v1/inbox/extract', { method: 'POST', body: input }),
+    listInbox: (query = {}) => {
+      const q: Record<string, string | number | boolean | undefined> = {};
+      if (query.status !== undefined) q.status = query.status;
+      if (query.cursor !== undefined) q.cursor = query.cursor;
+      if (query.limit !== undefined) q.limit = query.limit;
+      return http.request('/api/v1/inbox', { query: q });
+    },
+    createInbox: (input, idempotencyKey) => {
+      const headers: Record<string, string> = {};
+      if (idempotencyKey !== undefined) headers['Idempotency-Key'] = idempotencyKey;
+      return http.request('/api/v1/inbox', {
+        method: 'POST',
+        body: input,
+        ...(idempotencyKey !== undefined ? { headers } : {}),
+      });
+    },
+    getInbox: (id) => http.request(`/api/v1/inbox/${id}`),
+    patchInbox: (id, input) => http.request(`/api/v1/inbox/${id}`, { method: 'PATCH', body: input }),
+    patchInboxAssets: (id, input) =>
+      http.request(`/api/v1/inbox/${id}/assets`, { method: 'PATCH', body: input }),
+    deleteInbox: (id) => http.request(`/api/v1/inbox/${id}`, { method: 'DELETE' }),
+    convertInbox: (id, input = {}) =>
+      http.request(`/api/v1/inbox/${id}/convert`, { method: 'POST', body: input }),
   };
 }

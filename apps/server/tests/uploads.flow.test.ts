@@ -251,4 +251,33 @@ describe('uploads', () => {
     expect(row?.ownerType).toBe('task');
     expect(row?.s3Key).toBe(`task/${alice.id}/${task.json().id}/${id}.jpeg`);
   });
+
+  it('bind ownerType=report is 400 until reports exist', async () => {
+    const alice = await register('alice');
+    const presigned = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/uploads/presign',
+      token: alice.token,
+      payload: { mime: 'image/jpeg', size: 1024 },
+    });
+    const id = presigned.json().id as string;
+    storage.headObject.mockResolvedValue({
+      size: 1024,
+      contentType: 'image/jpeg',
+      lastModified: new Date(),
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    const bind = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/bind`,
+      token: alice.token,
+      payload: { ownerType: 'report', ownerId: '11111111-1111-4111-8111-111111111111' },
+    });
+    expect(bind.statusCode).toBe(400);
+  });
 });
