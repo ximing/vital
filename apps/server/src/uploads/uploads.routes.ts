@@ -1,10 +1,11 @@
-import { uploadPresignInputSchema } from '@vital/dto';
+import { uploadBindInputSchema, uploadPresignInputSchema } from '@vital/dto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import {
   abortUpload,
+  bindUpload,
   completeUpload,
   discardUpload,
   presignUpload,
@@ -43,6 +44,13 @@ export function registerUploadRoutes(app: FastifyInstance): void {
     const { id } = idParams.parse(req.params);
     await discardUpload(user.id, id);
     return reply.code(204).send();
+  });
+
+  app.post('/api/v1/uploads/:id/bind', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    return bindUpload(user.id, id, uploadBindInputSchema.parse(req.body));
   });
 
   app.get('/api/v1/uploads/:id', { preHandler: [requireAuth] }, async (req, reply) => {

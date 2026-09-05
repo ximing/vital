@@ -57,3 +57,16 @@ export interface UploadCompleteResponse {
   size: number;
   ownerType: 'tmp';
 }
+
+export const uploadBindInputSchema = z.object({
+  ownerType: z.enum(['task', 'inbox', 'report']),
+  ownerId: z.string().uuid(),
+});
+export type UploadBindInput = z.infer<typeof uploadBindInputSchema>;
+
+export interface UploadBindResponse {
+  id: string;
+  status: 'ready';
+  ownerType: 'task' | 'inbox' | 'report';
+  ownerId: string;
+}

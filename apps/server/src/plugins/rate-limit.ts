@@ -73,6 +73,7 @@ const defaults = {
   login: isTest ? 1000 : 5,
   changePassword: isTest ? 1000 : 10,
   refresh: isTest ? 1000 : 30,
+  search: isTest ? 1000 : 20,
 };
 
 const authMax = { ...defaults };
@@ -114,6 +115,12 @@ export function limitChangePassword(req: FastifyRequest): Promise<void> {
 
 export function limitRefresh(req: FastifyRequest): Promise<void> {
   hit('refresh', ipFrom(req));
+  return Promise.resolve();
+}
+
+export function limitSearch(req: FastifyRequest): Promise<void> {
+  const userId = req.user?.id ?? '';
+  hit('search', `${ipFrom(req)}:${userId}`);
   return Promise.resolve();
 }
 
