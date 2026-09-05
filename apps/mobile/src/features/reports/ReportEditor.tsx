@@ -18,12 +18,7 @@ import { ReportMarkdown } from '../../components/ReportMarkdown';
 import { Screen } from '../../components/Screen';
 import { toast, UNDO_MS } from '../../components/toast';
 import { InsertPicker } from './InsertPicker';
-
-function insertToken(md: string, token: string): string {
-  if (md.includes(token)) return md;
-  const sep = md === '' || md.endsWith('\n') ? '' : '\n';
-  return `${md}${sep}${token}\n`;
-}
+import { insertToken, runReportFocusSync } from './report-sync';
 
 export function ReportEditor({ reportId }: { reportId: string }) {
   const t = useTheme();
@@ -50,36 +45,36 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     setEmbeds(next.embeds);
   }, []);
 
+  const writeBody = useCallback((next: string) => {
+    bodyRef.current = next;
+    setBodyMd(next);
+  }, []);
+
   const load = useCallback(async () => {
     try {
-      const head = await client.syncHead().catch(() => null);
-      const prev = headRef.current;
-      if (head) headRef.current = head;
       const current = reportRef.current;
       const dirty = current !== null && bodyRef.current !== savedBody.current;
-
-      if (current !== null && prev && head) {
-        const taskMoved = head.tasksMaxUpdatedAt !== prev.tasksMaxUpdatedAt;
-        const inboxMoved = head.inboxMaxUpdatedAt !== prev.inboxMaxUpdatedAt;
-        const reportsMoved = head.reportsMaxUpdatedAt !== prev.reportsMaxUpdatedAt;
-        if (taskMoved || inboxMoved) {
-          const next = await client.getReportEmbeds(reportId);
-          setEmbeds(next.embeds);
-          if (next.revision !== current.revision && !dirty) {
-            applyReport(await client.getReport(reportId));
-          }
-        }
-        if (reportsMoved && dirty) {
-          toast(copy.toast.remoteUpdated);
-        }
-        if (reportsMoved && !dirty) {
-          applyReport(await client.getReport(reportId));
-        }
-        setError(null);
-        return;
+      const result = await runReportFocusSync(
+        {
+          syncHead: () => client.syncHead(),
+          getReport: (id) => client.getReport(id),
+          getEmbeds: (id) => client.getReportEmbeds(id),
+        },
+        {
+          reportId,
+          hasReport: current !== null,
+          dirty,
+          prevHead: headRef.current,
+        },
+      );
+      if (result.head !== null) headRef.current = result.head;
+      if (result.report !== undefined) {
+        if (bodyRef.current !== savedBody.current) return;
+        applyReport(result.report);
+      } else if (result.embeds !== undefined) {
+        setEmbeds(result.embeds);
       }
-
-      applyReport(await client.getReport(reportId));
+      if (result.toastRemote) toast(copy.toast.remoteUpdated);
       setError(null);
     } catch (err) {
       setError(humanError(err));
@@ -103,13 +98,15 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     if (report === null) return;
     setBusy(true);
     try {
-      const next = await client.patchReport(report.id, { revision: report.revision, bodyMd });
+      const next = await client.patchReport(report.id, {
+        revision: report.revision,
+        bodyMd: bodyRef.current,
+      });
       applyReport(next);
       toast(copy.toast.saved);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'REPORT_REVISION_CONFLICT') {
         toast(copy.toast.revisionConflict);
-        applyReport(await client.getReport(reportId));
       } else {
         toast(humanError(err));
       }
@@ -127,7 +124,6 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     } catch (err) {
       if (err instanceof ApiError && err.code === 'REPORT_REVISION_CONFLICT') {
         toast(copy.toast.revisionConflict);
-        applyReport(await client.getReport(reportId));
       } else {
         toast(humanError(err));
       }
@@ -198,10 +194,7 @@ export function ReportEditor({ reportId }: { reportId: string }) {
       <Field
         label={copy.fields.markdown}
         value={bodyMd}
-        onChangeText={(value) => {
-          bodyRef.current = value;
-          setBodyMd(value);
-        }}
+        onChangeText={writeBody}
         multiline
         autoCapitalize="none"
         autoCorrect={false}
@@ -217,7 +210,7 @@ export function ReportEditor({ reportId }: { reportId: string }) {
       {insertKind ? (
         <InsertPicker
           kind={insertKind}
-          onInsert={(token) => setBodyMd((prev) => insertToken(prev, token))}
+          onInsert={(token) => writeBody(insertToken(bodyRef.current, token))}
           onClose={() => setInsertKind(null)}
         />
       ) : null}
