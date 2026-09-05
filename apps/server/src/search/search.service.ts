@@ -2,7 +2,7 @@ import type { SearchInput, SearchResponse, Task } from '@vital/dto';
 import { and, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { tasks, taskTags, type TaskRow } from '../db/schema.js';
-import { decodeCursor, encodeCursor } from '../utils/cursor.js';
+import { decodeSearchCursor, encodeSearchCursor } from '../utils/cursor.js';
 
 function asStatus(value: string): Task['status'] {
   if (value === 'todo' || value === 'doing' || value === 'done' || value === 'canceled') {
@@ -55,6 +55,11 @@ function escapeLike(q: string): string {
   return q.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
 }
 
+function asRank(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export async function searchTasks(userId: string, input: SearchInput): Promise<SearchResponse> {
   const types = input.types ?? ['task'];
   if (!types.includes('task')) {
@@ -68,38 +73,40 @@ export async function searchTasks(userId: string, input: SearchInput): Promise<S
     sql`${tasks.title} % ${q}`,
     sql`(char_length(${q}) <= 8 AND ${tasks.title} ILIKE ${like} ESCAPE '\\')`,
   );
+  // Same expression in SELECT / ORDER BY / keyset so pages follow rank, not recency.
+  const rankExpr = sql<number>`round(ts_rank(${tasks.searchTsv}, plainto_tsquery('simple', ${q}))::numeric, 6)`;
   let where: SQL | undefined = and(eq(tasks.userId, userId), isNull(tasks.deletedAt), match);
   if (input.cursor !== undefined) {
-    const cur = decodeCursor(input.cursor);
+    const cur = decodeSearchCursor(input.cursor);
     const t = new Date(cur.t);
     where = and(
       where,
       or(
-        sql`${tasks.updatedAt} < ${t}`,
-        and(eq(tasks.updatedAt, t), sql`${tasks.id} < ${cur.id}`),
+        sql`${rankExpr} < ${cur.rank}`,
+        and(sql`${rankExpr} = ${cur.rank}`, sql`${tasks.updatedAt} < ${t}`),
+        and(sql`${rankExpr} = ${cur.rank}`, eq(tasks.updatedAt, t), sql`${tasks.id} < ${cur.id}`),
       ),
     );
   }
 
   const rows = await getDb()
-    .select()
+    .select({
+      task: tasks,
+      rank: rankExpr,
+    })
     .from(tasks)
     .where(where)
-    .orderBy(
-      sql`ts_rank(${tasks.searchTsv}, plainto_tsquery('simple', ${q})) DESC`,
-      desc(tasks.updatedAt),
-      desc(tasks.id),
-    )
+    .orderBy(sql`${rankExpr} DESC`, desc(tasks.updatedAt), desc(tasks.id))
     .limit(limit + 1);
 
   const page = rows.slice(0, limit);
   const tagMap = new Map<string, string[]>();
-  for (const row of page) tagMap.set(row.id, []);
+  for (const row of page) tagMap.set(row.task.id, []);
   if (page.length > 0) {
     const links = await getDb()
       .select()
       .from(taskTags)
-      .where(inArray(taskTags.taskId, page.map((r) => r.id)));
+      .where(inArray(taskTags.taskId, page.map((r) => r.task.id)));
     for (const link of links) {
       const list = tagMap.get(link.taskId);
       if (list) list.push(link.tagId);
@@ -107,12 +114,14 @@ export async function searchTasks(userId: string, input: SearchInput): Promise<S
   }
   const items = page.map((row) => ({
     type: 'task' as const,
-    task: toTaskDto(row, tagMap.get(row.id) ?? []),
+    task: toTaskDto(row.task, tagMap.get(row.task.id) ?? []),
   }));
   let nextCursor: string | null = null;
   if (rows.length > limit) {
     const last = page[page.length - 1];
-    if (last) nextCursor = encodeCursor(last.updatedAt.toISOString(), last.id);
+    if (last) {
+      nextCursor = encodeSearchCursor(asRank(last.rank), last.task.updatedAt.toISOString(), last.task.id);
+    }
   }
   return { items, nextCursor };
 }

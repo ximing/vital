@@ -97,4 +97,38 @@ describe('recurrence flow', () => {
     expect(due.toISODate()).toBe('2026-03-11');
     expect(patched.json().recurrenceDtstart).toBe(dtstart);
   });
+
+  it('second complete of a COUNT-ended series is 409 not 500', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: 'Once',
+        listId: inbox,
+        isAllDay: true,
+        dueAt: shanghai('2026-03-09'),
+        recurrence: 'FREQ=DAILY;COUNT=1',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const first = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${created.json().id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().task.status).toBe('done');
+    const second = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${created.json().id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error.code).toBe('VALIDATION_ERROR');
+  });
 });
