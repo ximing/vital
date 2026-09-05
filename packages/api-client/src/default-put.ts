@@ -8,7 +8,7 @@ function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError';
 }
 
-/** GET a presigned S3 URL: never cookies or Authorization (upload 302 hop). */
+/** GET a presigned S3 URL: never cookies or Authorization. */
 export function bareGetInit(signal?: AbortSignal): RequestInit {
   const init: RequestInit = {
     method: 'GET',

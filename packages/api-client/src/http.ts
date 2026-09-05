@@ -1,5 +1,4 @@
 import type { AuthMode, AuthResponse, AuthTokens, ErrorEnvelope } from '@vital/dto';
-import { bareGetInit } from './default-put.js';
 import { ApiError, type TokenStore, type VitalClientOptions } from './types.js';
 
 export { ApiError };
@@ -14,8 +13,8 @@ export interface RequestOptions {
   /** true = 401 does not trigger refresh (auth endpoints; prevents loops). */
   skipAuthRefresh?: boolean;
   signal?: AbortSignal;
-  /** `requestBlob` uses `manual` so the S3 hop is a separate credentials-omit GET. */
-  redirect?: RequestRedirect;
+  /** Override; `requestBlob` forces `omit` so a followed S3 302 never gets cookies. */
+  credentials?: RequestCredentials;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -43,10 +42,6 @@ export function tokensForStore(authMode: AuthMode, tokens: AuthTokens): AuthToke
     return { accessToken: tokens.accessToken, expiresIn: tokens.expiresIn };
   }
   return tokens;
-}
-
-function isRedirectStatus(status: number): boolean {
-  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
 }
 
 function buildUrl(baseUrl: string, path: string, query?: RequestOptions['query']): string {
@@ -166,26 +161,27 @@ export class Http {
     return parseBody<T>(first);
   }
 
+  /**
+   * GET /uploads/:id → 302 S3. Always `credentials: 'omit'` (default follow).
+   * API hop is Bearer only; the cross-origin S3 hop then has no cookies and
+   * browsers strip Authorization. Do not use `redirect: 'manual'` (opaque).
+   */
   async requestBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
-    const blobOpts: RequestOptions = { ...options, redirect: 'manual' };
+    const blobOpts: RequestOptions = { ...options, credentials: 'omit' };
     const first = await this.doFetch(path, blobOpts);
-    let apiRes = first;
     if (first.status === 401 && (await this.shouldAttemptRefresh(options))) {
       const refreshed = await this.refresh();
-      apiRes = await this.doFetch(path, blobOpts, refreshed.tokens.accessToken);
-      if (apiRes.status === 401) {
-        await settle(this.tokenStore.clear());
-        throw await toApiError(apiRes);
+      const second = await this.doFetch(path, blobOpts, refreshed.tokens.accessToken);
+      if (!second.ok) {
+        if (second.status === 401) {
+          await settle(this.tokenStore.clear());
+        }
+        throw await toApiError(second);
       }
+      return second.blob();
     }
-    if (apiRes.type === 'opaqueredirect') {
-      throw new ApiError(0, 'UPLOAD_REDIRECT_OPAQUE', '直传跳转被浏览器隐藏');
-    }
-    if (isRedirectStatus(apiRes.status)) {
-      return this.fetchBareRedirect(apiRes, path, blobOpts);
-    }
-    if (!apiRes.ok) throw await toApiError(apiRes);
-    return apiRes.blob();
+    if (!first.ok) throw await toApiError(first);
+    return first.blob();
   }
 
   /** Single-flight: concurrent 401s share one refresh. Failure clears the store. */
@@ -232,7 +228,7 @@ export class Http {
     const init: RequestInit = {
       method: options.method ?? 'GET',
       headers,
-      credentials: this.authMode === 'cookie' ? 'include' : 'omit',
+      credentials: options.credentials ?? (this.authMode === 'cookie' ? 'include' : 'omit'),
     };
     if (options.body !== undefined) {
       init.body = JSON.stringify(options.body);
@@ -240,42 +236,8 @@ export class Http {
     if (options.signal !== undefined) {
       init.signal = options.signal;
     }
-    if (options.redirect !== undefined) {
-      init.redirect = options.redirect;
-    }
     try {
       return await this.fetchImpl(buildUrl(this.baseUrl, path, options.query), init);
-    } catch (err) {
-      throw wrapNetwork(err);
-    }
-  }
-
-  /**
-   * GET /uploads/:id is 302 to S3. Do not follow that hop with session credentials
-   * (cookie `include` would make S3 a credentialed CORS request).
-   */
-  private async fetchBareRedirect(
-    res: Response,
-    path: string,
-    options: RequestOptions,
-  ): Promise<Blob> {
-    const location = res.headers.get('Location');
-    if (location === null || location === '') {
-      throw new ApiError(res.status, 'UPLOAD_REDIRECT_MISSING', '直传跳转缺少 Location');
-    }
-    let target: string;
-    try {
-      target = new URL(location, buildUrl(this.baseUrl, path, options.query)).href;
-    } catch {
-      throw new ApiError(0, 'UPLOAD_REDIRECT_INVALID', '直传跳转地址无效');
-    }
-    try {
-      const getInit = options.signal !== undefined ? bareGetInit(options.signal) : bareGetInit();
-      const s3 = await this.fetchImpl(target, getInit);
-      if (!s3.ok) {
-        throw new ApiError(s3.status, 'UPLOAD_FAILED', `直传失败（${String(s3.status)}）`);
-      }
-      return await s3.blob();
     } catch (err) {
       throw wrapNetwork(err);
     }

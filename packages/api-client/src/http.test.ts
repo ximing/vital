@@ -162,39 +162,22 @@ describe('Http cookie mode', () => {
     expect(data.tokens.refreshToken).toBeUndefined();
   });
 
-  it('requestBlob 302 to S3 is followed without Authorization or cookies', async () => {
+  it('requestBlob uses credentials omit and Bearer; never redirect manual', async () => {
     const store = memoryStore({ accessToken: 'a1', expiresIn: 900 });
-    const calls: { url: string; init: RequestInit }[] = [];
-    const http = makeHttp('cookie', store, (url, init) => {
-      const u = urlOf(url);
-      calls.push({ url: u, init: init ?? {} });
-      if (u.includes('/api/v1/uploads/')) {
-        return Promise.resolve(
-          new Response(null, { status: 302, headers: { Location: 'https://s3/obj' } }),
-        );
-      }
-      if (u.startsWith('https://s3/')) {
-        return Promise.resolve(new Response(new Blob(['img']), { status: 200 }));
-      }
-      return respond(500, {});
+    const calls: RequestInit[] = [];
+    const http = makeHttp('cookie', store, (_url, init) => {
+      calls.push(init ?? {});
+      return Promise.resolve(new Response(new Blob(['img']), { status: 200 }));
     });
     const blob = await http.requestBlob('/api/v1/uploads/att1');
     expect(await blob.text()).toBe('img');
-    expect(calls.map((c) => c.url)).toEqual(['http://x/api/v1/uploads/att1', 'https://s3/obj']);
-    expect(calls[0]?.init.redirect).toBe('manual');
-    expect(calls[0]?.init.credentials).toBe('include');
-    expect(authorizationOf(calls[0]?.init)).toBe('Bearer a1');
-    expect(calls[1]?.init.credentials).toBe('omit');
-    expect(calls[1]?.init.redirect).toBeUndefined();
-    expect(authorizationOf(calls[1]?.init)).toBe('');
-    const s3Headers = calls[1]?.init.headers;
-    if (s3Headers !== undefined && !Array.isArray(s3Headers) && !(s3Headers instanceof Headers)) {
-      expect(s3Headers.Authorization).toBeUndefined();
-      expect(s3Headers.Cookie).toBeUndefined();
-    }
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.credentials).toBe('omit');
+    expect(calls[0]?.redirect).toBeUndefined();
+    expect(authorizationOf(calls[0])).toBe('Bearer a1');
   });
 
-  it('requestBlob 401 then 302 still uses a bare S3 GET', async () => {
+  it('requestBlob 401 refresh (cookie include) then replay still omits cookies', async () => {
     const store = memoryStore({ accessToken: 'expired', expiresIn: 900 });
     const calls: { url: string; init: RequestInit }[] = [];
     const http = makeHttp('cookie', store, (url, init) => {
@@ -203,13 +186,8 @@ describe('Http cookie mode', () => {
       if (u.endsWith('/api/v1/auth/refresh')) {
         return respond(200, authResponse({ accessToken: 'new', expiresIn: 900 }));
       }
-      if (u.includes('/api/v1/uploads/') && authorizationOf(init) === 'Bearer expired') {
+      if (authorizationOf(init) === 'Bearer expired') {
         return respond(401, { error: { code: 'INVALID_TOKEN', message: 'x' } });
-      }
-      if (u.includes('/api/v1/uploads/')) {
-        return Promise.resolve(
-          new Response(null, { status: 302, headers: { Location: 'https://s3/obj' } }),
-        );
       }
       return Promise.resolve(new Response(new Blob(['img']), { status: 200 }));
     });
@@ -219,11 +197,13 @@ describe('Http cookie mode', () => {
       'http://x/api/v1/uploads/att1',
       'http://x/api/v1/auth/refresh',
       'http://x/api/v1/uploads/att1',
-      'https://s3/obj',
     ]);
-    const s3 = calls[3];
-    expect(s3?.init.credentials).toBe('omit');
-    expect(authorizationOf(s3?.init)).toBe('');
+    expect(calls[0]?.init.credentials).toBe('omit');
+    expect(calls[0]?.init.redirect).toBeUndefined();
+    expect(calls[1]?.init.credentials).toBe('include');
+    expect(calls[2]?.init.credentials).toBe('omit');
+    expect(calls[2]?.init.redirect).toBeUndefined();
+    expect(authorizationOf(calls[2]?.init)).toBe('Bearer new');
   });
 });
 
