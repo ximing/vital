@@ -1,0 +1,21 @@
+/** Chinese-first UI copy. Spec §12 / empty states. */
+export const copy = {
+  actionTitle: '保存到 Vital',
+  menuPage: '保存到 Vital',
+  menuLink: '保存链接到 Vital',
+  menuSelection: '保存所选文字',
+  menuImage: '保存图片到 Vital',
+  menuRecent: '最近保存',
+  toastSaved: '已保存到 Vital',
+  toastLogin: '请先登录 Vital',
+  toastRestricted: '无法保存此页',
+  toastFailed: '保存失败',
+  popupEmpty: '还没有保存。点击工具栏把这一页收进来。',
+  openWeb: '打开网页版',
+  login: '登录',
+  logout: '退出',
+  email: '邮箱',
+  password: '密码',
+  brand: 'Vital',
+  recent: '最近保存',
+} as const;

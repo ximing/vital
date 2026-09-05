@@ -2,5 +2,29 @@
   "name": "@vital/extension",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "postinstall": "wxt prepare",
+    "lint": "wxt prepare && eslint .",
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist .wxt"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@vital/api-client": "workspace:*",
+    "@vital/dto": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.24",
+    "@vital/eslint-config": "workspace:*",
+    "@vital/tsconfig": "workspace:*",
+    "eslint": "^9.19.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11",
+    "wxt": "^0.20.18"
+  }
 }
