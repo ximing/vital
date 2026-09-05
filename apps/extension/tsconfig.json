@@ -1,0 +1,9 @@
+{
+  "extends": "@vital/tsconfig/app.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true
+  },
+  "include": ["src", "entrypoints", "wxt.config.ts", "vitest.config.ts", "eslint.config.js"]
+}

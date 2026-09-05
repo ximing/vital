@@ -2,6 +2,7 @@ dist
 node_modules
 drizzle
 .turbo
+.wxt
 pnpm-lock.yaml
 apps/mobile/android
 apps/desktop/src-tauri/target
