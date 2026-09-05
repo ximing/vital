@@ -28,6 +28,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
     }
     const statusCode = 'statusCode' in error ? error.statusCode : undefined;
     if (statusCode === 429) {
+      logger.info('rate_limited_total');
       send(reply, 429, 'RATE_LIMITED', ERROR_MESSAGES.RATE_LIMITED);
       return;
     }

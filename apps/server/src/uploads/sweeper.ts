@@ -38,6 +38,7 @@ export async function sweepStaleUploadingAttachments(
       continue;
     }
     if (!(await destroyObject(row))) continue;
+    result.deletedObjects += 1;
     await getDb()
       .update(attachments)
       .set({ status: 'orphaned', orphanedAt: now })

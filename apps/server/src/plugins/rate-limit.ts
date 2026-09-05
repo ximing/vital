@@ -1,5 +1,7 @@
 import { isIP } from 'node:net';
 import type { FastifyRequest } from 'fastify';
+import { AppError } from '../errors.js';
+import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 
 export const isTest = config.NODE_ENV === 'test';
@@ -36,46 +38,92 @@ export function ipFrom(req: FastifyRequest): string {
   return ipKey(req.ip || '0.0.0.0');
 }
 
-function emailFromBody(body: unknown): string {
+/** Same normalization as dto email schemas (trim + lower). */
+export function emailFromBody(body: unknown): string {
   if (
     typeof body === 'object' &&
     body !== null &&
     'email' in body &&
     typeof body.email === 'string'
   ) {
-    return body.email.toLowerCase();
+    return body.email.trim().toLowerCase();
   }
   return '';
 }
 
+/** Plugin throws this; error-handler maps statusCode 429 → RATE_LIMITED envelope. */
+export function rateLimitError(): Error {
+  const err = new Error(RATE_LIMIT_MESSAGE.error.message);
+  err.name = 'RateLimitError';
+  Object.assign(err, { statusCode: 429, code: 'RATE_LIMITED' });
+  return err;
+}
+
 export const globalRateLimit = {
   hook: 'preHandler' as const,
+  global: true,
   max: isTest ? 1000 : 120,
   timeWindow: 60_000,
   keyGenerator: (req: FastifyRequest) => ipFrom(req),
-  errorResponseBuilder: () => RATE_LIMIT_MESSAGE,
+  errorResponseBuilder: () => rateLimitError(),
 };
 
-export const registerRateLimit = {
-  max: isTest ? 1000 : 10,
-  timeWindow: 60_000,
-  keyGenerator: (req: FastifyRequest) => ipFrom(req),
+const defaults = {
+  register: isTest ? 1000 : 10,
+  login: isTest ? 1000 : 5,
+  changePassword: isTest ? 1000 : 10,
+  refresh: isTest ? 1000 : 30,
 };
 
-export const loginRateLimit = {
-  max: isTest ? 1000 : 5,
-  timeWindow: 60_000,
-  keyGenerator: (req: FastifyRequest) => `${ipFrom(req)}:${emailFromBody(req.body)}`,
-};
+const authMax = { ...defaults };
 
-export const changePasswordRateLimit = {
-  max: isTest ? 1000 : 10,
-  timeWindow: 60_000,
-  keyGenerator: (req: FastifyRequest) => ipFrom(req),
-};
+type AuthKind = keyof typeof authMax;
 
-export const refreshRateLimit = {
-  max: isTest ? 1000 : 30,
-  timeWindow: 60_000,
-  keyGenerator: (req: FastifyRequest) => ipFrom(req),
-};
+const hits = new Map<string, { count: number; resetAt: number }>();
+
+function hit(kind: AuthKind, key: string): void {
+  const now = Date.now();
+  const bucketKey = `${kind}:${key}`;
+  let bucket = hits.get(bucketKey);
+  if (!bucket || bucket.resetAt <= now) {
+    bucket = { count: 0, resetAt: now + 60_000 };
+    hits.set(bucketKey, bucket);
+  }
+  bucket.count += 1;
+  if (bucket.count > authMax[kind]) {
+    logger.info('rate_limited_total', { kind });
+    throw AppError.of(429, 'RATE_LIMITED');
+  }
+}
+
+/** Auth caps stacked on the global 120/min/IP (route config.rateLimit would replace it). */
+export function limitRegister(req: FastifyRequest): Promise<void> {
+  hit('register', ipFrom(req));
+  return Promise.resolve();
+}
+
+export function limitLogin(req: FastifyRequest): Promise<void> {
+  hit('login', `${ipFrom(req)}:${emailFromBody(req.body)}`);
+  return Promise.resolve();
+}
+
+export function limitChangePassword(req: FastifyRequest): Promise<void> {
+  hit('changePassword', ipFrom(req));
+  return Promise.resolve();
+}
+
+export function limitRefresh(req: FastifyRequest): Promise<void> {
+  hit('refresh', ipFrom(req));
+  return Promise.resolve();
+}
+
+/** Test seam. Do not call from product code. */
+export function setAuthRateLimits(partial: Partial<typeof authMax>): void {
+  Object.assign(authMax, partial);
+}
+
+/** Test seam. Do not call from product code. */
+export function resetAuthRateLimits(): void {
+  Object.assign(authMax, defaults);
+  hits.clear();
+}

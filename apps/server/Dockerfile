@@ -4,7 +4,7 @@ RUN corepack enable
 WORKDIR /app
 
 # pnpm leaves dangling workspace symlinks if a depended-on package.json is missing
-# from this COPY list. Keep deps and prod-deps manifests in sync.
+# from this COPY list. Keep deps and prod-deps manifests in sync with pnpm-workspace.yaml.
 FROM base AS deps
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
@@ -12,7 +12,12 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
+COPY packages/tokens/package.json packages/tokens/
 COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+COPY apps/desktop/package.json apps/desktop/
+COPY apps/mobile/package.json apps/mobile/
+COPY apps/extension/package.json apps/extension/
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
@@ -29,7 +34,12 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
+COPY packages/tokens/package.json packages/tokens/
 COPY apps/server/package.json apps/server/
+COPY apps/web/package.json apps/web/
+COPY apps/desktop/package.json apps/desktop/
+COPY apps/mobile/package.json apps/mobile/
+COPY apps/extension/package.json apps/extension/
 RUN pnpm install --frozen-lockfile --prod
 
 FROM base AS runtime

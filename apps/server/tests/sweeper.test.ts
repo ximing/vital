@@ -51,6 +51,7 @@ describe('sweeper', () => {
     const result = await sweepStaleUploadingAttachments(new Date(), { dryRun: false });
     expect(result.scanned).toBe(1);
     expect(result.markedOrphaned).toBe(1);
+    expect(result.deletedObjects).toBe(1);
     expect(storage.deleteFile).toHaveBeenCalled();
 
     const [row] = await db.select().from(attachments).where(eq(attachments.id, id));

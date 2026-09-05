@@ -11,8 +11,12 @@ export async function populateUser(req: FastifyRequest): Promise<void> {
     const user = await getUserEntity(userId);
     if (user.passwordChangedAt && user.passwordChangedAt.getTime() > iat * 1000) return;
     req.user = toProfile(user);
-  } catch {
-    // invalid/missing token: stay anonymous
+  } catch (err) {
+    // Invalid JWT or deleted user: stay anonymous. Operational errors (DB down) must 500.
+    if (err instanceof AppError && (err.code === 'INVALID_TOKEN' || err.code === 'NOT_FOUND')) {
+      return;
+    }
+    throw err;
   }
 }
 

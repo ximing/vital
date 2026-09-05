@@ -39,6 +39,10 @@ CREATE ROLE vital_prod_user WITH
   LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT
   PASSWORD 'change-me-generate-locally';
 
+CREATE ROLE vital_test_user WITH
+  LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT
+  PASSWORD 'change-me-generate-locally';
+
 CREATE DATABASE vital_dev
   OWNER vital_dev_user
   ENCODING 'UTF8'
@@ -53,9 +57,9 @@ CREATE DATABASE vital_prod
   LC_CTYPE 'C.UTF-8'
   TEMPLATE template0;
 
--- CI / tests
+-- CI / tests (compose uses vital_test_user / change-me-test)
 CREATE DATABASE vital_test
-  OWNER vital_dev_user
+  OWNER vital_test_user
   ENCODING 'UTF8'
   LC_COLLATE 'C.UTF-8'
   LC_CTYPE 'C.UTF-8'
@@ -85,7 +89,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO vital_dev_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO vital_dev_user;
 ```
 
-Repeat for `vital_prod` / `vital_prod_user` and `vital_test`. Then `pnpm --filter @vital/server migrate` as `vital_dev_user`.
+Repeat for `vital_prod` / `vital_prod_user` and `vital_test` / `vital_test_user`. Then `pnpm --filter @vital/server migrate` as `vital_dev_user`.
 
 ## S3
 

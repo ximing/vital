@@ -147,15 +147,19 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
   if (!(await verifyPassword(input.oldPassword, user.passwordHash))) {
     throw AppError.of(400, 'INVALID_OLD_PASSWORD');
   }
-  await getDb()
-    .update(users)
-    .set({
-      passwordHash: await hashPassword(input.newPassword),
-      passwordChangedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(users.id, user.id));
-  await revokeAllForUser(userId);
+  const passwordHash = await hashPassword(input.newPassword);
+  const changedAt = new Date();
+  await getDb().transaction(async (tx) => {
+    await tx
+      .update(users)
+      .set({
+        passwordHash,
+        passwordChangedAt: changedAt,
+        updatedAt: changedAt,
+      })
+      .where(eq(users.id, user.id));
+    await revokeAllForUser(userId, tx);
+  });
 }
 
 export async function updateMe(userId: string, input: UpdateMeInput): Promise<UserProfile> {

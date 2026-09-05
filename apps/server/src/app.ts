@@ -26,7 +26,8 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
 
   const app = Fastify({
     logger: false,
-    trustProxy: true,
+    // Only trust loopback proxies (nginx / compose). `true` honors any spoofed X-Forwarded-For.
+    trustProxy: (address: string) => address === '127.0.0.1' || address === '::1',
     bodyLimit: 1024 * 1024,
     requestIdHeader: 'x-request-id',
   });

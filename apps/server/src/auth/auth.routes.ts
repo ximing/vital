@@ -12,10 +12,10 @@ import { config } from '../config.js';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import {
-  changePasswordRateLimit,
-  loginRateLimit,
-  refreshRateLimit,
-  registerRateLimit,
+  limitChangePassword,
+  limitLogin,
+  limitRefresh,
+  limitRegister,
 } from '../plugins/rate-limit.js';
 import {
   changePassword,
@@ -51,19 +51,15 @@ function resolveRefreshRaw(
 }
 
 export function registerAuthRoutes(app: FastifyInstance): void {
-  app.post(
-    '/api/v1/auth/register',
-    { config: { rateLimit: registerRateLimit } },
-    async (req, reply) => {
-      const input = registerInputSchema.parse(req.body);
-      const mode = modeOf(req);
-      const { response, refreshToken } = await registerUser(input, mode, deviceInfoFrom(req));
-      if (mode === 'cookie') setRefreshCookie(reply, refreshToken);
-      return reply.code(201).send(response);
-    },
-  );
+  app.post('/api/v1/auth/register', { preHandler: [limitRegister] }, async (req, reply) => {
+    const input = registerInputSchema.parse(req.body);
+    const mode = modeOf(req);
+    const { response, refreshToken } = await registerUser(input, mode, deviceInfoFrom(req));
+    if (mode === 'cookie') setRefreshCookie(reply, refreshToken);
+    return reply.code(201).send(response);
+  });
 
-  app.post('/api/v1/auth/login', { config: { rateLimit: loginRateLimit } }, async (req, reply) => {
+  app.post('/api/v1/auth/login', { preHandler: [limitLogin] }, async (req, reply) => {
     const input = loginInputSchema.parse(req.body);
     const mode = modeOf(req);
     const { response, refreshToken } = await loginUser(input, mode, deviceInfoFrom(req));
@@ -71,37 +67,33 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     return reply.send(response);
   });
 
-  app.post(
-    '/api/v1/auth/refresh',
-    { config: { rateLimit: refreshRateLimit } },
-    async (req, reply) => {
-      const resolved = resolveRefreshRaw(req);
-      if (!resolved) throw AppError.of(401, 'INVALID_TOKEN');
-      try {
-        const rotated = await rotateRefreshToken(resolved.raw, resolved.expectedMode);
-        const user = await getProfile(rotated.userId);
-        const accessToken = signAccessToken(rotated.userId);
-        if (resolved.expectedMode === 'cookie') {
-          setRefreshCookie(reply, rotated.refreshToken);
-          return await reply.send({
-            user,
-            tokens: { accessToken, expiresIn: config.ACCESS_TOKEN_TTL_SECONDS },
-          });
-        }
+  app.post('/api/v1/auth/refresh', { preHandler: [limitRefresh] }, async (req, reply) => {
+    const resolved = resolveRefreshRaw(req);
+    if (!resolved) throw AppError.of(401, 'INVALID_TOKEN');
+    try {
+      const rotated = await rotateRefreshToken(resolved.raw, resolved.expectedMode);
+      const user = await getProfile(rotated.userId);
+      const accessToken = signAccessToken(rotated.userId);
+      if (resolved.expectedMode === 'cookie') {
+        setRefreshCookie(reply, rotated.refreshToken);
         return await reply.send({
           user,
-          tokens: {
-            accessToken,
-            refreshToken: rotated.refreshToken,
-            expiresIn: config.ACCESS_TOKEN_TTL_SECONDS,
-          },
+          tokens: { accessToken, expiresIn: config.ACCESS_TOKEN_TTL_SECONDS },
         });
-      } catch (err) {
-        clearRefreshCookie(reply);
-        throw err;
       }
-    },
-  );
+      return await reply.send({
+        user,
+        tokens: {
+          accessToken,
+          refreshToken: rotated.refreshToken,
+          expiresIn: config.ACCESS_TOKEN_TTL_SECONDS,
+        },
+      });
+    } catch (err) {
+      clearRefreshCookie(reply);
+      throw err;
+    }
+  });
 
   app.post('/api/v1/auth/logout', async (req: FastifyRequest, reply: FastifyReply) => {
     const resolved = resolveRefreshRaw(req);
@@ -131,7 +123,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
 
   app.post(
     '/api/v1/auth/change-password',
-    { preHandler: [requireAuth], config: { rateLimit: changePasswordRateLimit } },
+    { preHandler: [limitChangePassword, requireAuth] },
     async (req, reply) => {
       const user = req.user;
       if (!user) throw AppError.of(401, 'INVALID_TOKEN');
