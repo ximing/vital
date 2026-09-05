@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start local dev: migrate + API :3010 (web :5180 when the app exists)
+# Start local dev: migrate + API :3010 + web :5180
 # Usage:
 #   ./dev.sh          start (already running → print addresses)
 #   ./dev.sh stop     stop processes this script started
@@ -55,9 +55,10 @@ if [[ ! -f apps/server/.env ]]; then
   exit 1
 fi
 
-echo "构建 dto + api-client…"
+echo "构建 dto + api-client + tokens…"
 pnpm --filter @vital/dto build
 pnpm --filter @vital/api-client build
+pnpm --filter @vital/tokens build
 
 echo "数据库迁移…"
 pnpm --filter @vital/server migrate
@@ -96,9 +97,19 @@ if grep -q '"dev"' apps/web/package.json 2>/dev/null; then
 fi
 
 api_ok=0
+web_ok=0
 for _ in $(seq 1 60); do
   if healthy http://localhost:3010/api/health; then
     api_ok=1
+  fi
+  if grep -q '"dev"' apps/web/package.json 2>/dev/null; then
+    if healthy http://localhost:5180/; then
+      web_ok=1
+    fi
+  else
+    web_ok=1
+  fi
+  if [[ "$api_ok" == 1 && "$web_ok" == 1 ]]; then
     break
   fi
   sleep 1
@@ -109,10 +120,16 @@ if [[ "$api_ok" != 1 ]]; then
   tail -n 40 "$LOG_DIR/server.log" 2>/dev/null || true
   exit 1
 fi
+if [[ "$web_ok" != 1 ]]; then
+  echo "Web 未就绪。日志：$LOG_DIR/web.log" >&2
+  tail -n 40 "$LOG_DIR/web.log" 2>/dev/null || true
+  exit 1
+fi
 
 cat <<EOF
 
 开发环境已就绪
+  Web   http://localhost:5180
   API   http://localhost:3010/api/health
   日志  $LOG_DIR
   停止  $ROOT/dev.sh stop

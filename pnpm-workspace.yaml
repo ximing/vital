@@ -5,6 +5,8 @@ packages:
 onlyBuiltDependencies:
   - esbuild
   - argon2
+  - '@tailwindcss/oxide'
+  - lightningcss
 
 supportedArchitectures:
   os: [current, linux, darwin]

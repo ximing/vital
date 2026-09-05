@@ -1,0 +1,109 @@
+import { NavLink, Outlet } from 'react-router';
+import { t } from '@/copy';
+import { ThemeToggle } from '@/shell/ThemeToggle';
+import { VitalMark } from '@/shell/VitalMark';
+import { useAuthStore } from '@/state/auth-store';
+
+const NAV_BASE =
+  'relative flex min-h-[var(--touch-min)] items-center px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
+
+function navClass({ isActive }: { isActive: boolean }): string {
+  return `${NAV_BASE} ${
+    isActive
+      ? "bg-accent-subtle text-fg before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-accent before:content-['']"
+      : 'text-muted hover:bg-surface-muted hover:text-fg'
+  }`;
+}
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <p className="px-3 pb-1 pt-4 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+      {children}
+    </p>
+  );
+}
+
+export function Shell() {
+  const user = useAuthStore((s) => s.user);
+
+  return (
+    <div className="min-h-screen bg-canvas text-fg">
+      <aside
+        className="fixed inset-y-0 left-0 z-[var(--z-sticky)] flex w-rail flex-col border-r border-border bg-surface"
+        aria-label="主导航"
+      >
+        <div className="relative overflow-hidden px-4 pb-3 pt-5">
+          <span className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 text-accent opacity-30">
+            <VitalMark className="pulse-mark h-full w-full" />
+          </span>
+          <NavLink to="/todos/lists/smart:today" className="relative flex items-center gap-2">
+            <VitalMark className="h-8 w-8 shrink-0 text-accent" />
+            <span className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em] text-fg">
+              {t.brand.wordmark}
+            </span>
+          </NavLink>
+        </div>
+
+        <div className="px-3 pb-2">
+          <button
+            type="button"
+            className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center rounded-md bg-accent text-[length:var(--text-body)] text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
+            aria-label={t.nav.quickAdd}
+          >
+            {t.nav.quickAdd}
+          </button>
+        </div>
+
+        <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3">
+          <SectionLabel>{t.rail.rhythm}</SectionLabel>
+          <NavLink to="/todos/lists/smart:today" className={navClass}>
+            {t.lists.today}
+          </NavLink>
+          <NavLink to="/todos/lists/smart:upcoming" className={navClass}>
+            {t.lists.upcoming}
+          </NavLink>
+
+          <SectionLabel>{t.rail.capture}</SectionLabel>
+          <NavLink to="/inbox" className={navClass}>
+            {t.nav.inbox}
+          </NavLink>
+          <p className="px-3 pt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+            {t.rail.lists}
+          </p>
+          <NavLink to="/todos/lists/smart:inbox" className={navClass}>
+            {t.lists.inbox}
+          </NavLink>
+
+          <SectionLabel>{t.rail.reflect}</SectionLabel>
+          <NavLink to="/reports" className={navClass}>
+            {t.nav.reports}
+          </NavLink>
+
+          <div className="mt-4">
+            <NavLink to="/library" className={navClass}>
+              {t.nav.library}
+            </NavLink>
+            <NavLink to="/settings" className={navClass}>
+              {t.nav.settings}
+            </NavLink>
+          </div>
+        </nav>
+
+        <div className="shrink-0 px-3 py-3">
+          <ThemeToggle compact />
+          {user ? (
+            <p className="mt-2 truncate px-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              {user.displayName}
+            </p>
+          ) : null}
+        </div>
+      </aside>
+
+      <div className="pl-rail">
+        <main id="main" className="min-h-screen">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
