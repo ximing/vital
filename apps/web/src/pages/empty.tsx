@@ -34,20 +34,6 @@ function EmptyFrame({
   );
 }
 
-export function ReportsPage() {
-  return (
-    <EmptyFrame
-      title={t.nav.reports}
-      body={t.empty.reports}
-      action={{ to: '/reports', label: t.empty.actionDaily }}
-    />
-  );
-}
-
-export function ReportEditorPage() {
-  return <EmptyFrame title={t.nav.reports} body={t.empty.reportEditor} />;
-}
-
 export function SearchPage() {
   return <EmptyFrame title={t.nav.search} body={t.empty.search} />;
 }

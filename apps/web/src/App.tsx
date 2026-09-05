@@ -1,16 +1,10 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { HOME_PATH } from '@/copy';
 import { InboxReader, InboxWorkspace } from '@/features/inbox';
+import { ReportsWorkspace } from '@/features/reports';
 import { TodosWorkspace } from '@/features/todos';
 import { LoginPage } from '@/pages/login';
-import {
-  LibraryPage,
-  NotFoundPage,
-  OnboardingPage,
-  ReportEditorPage,
-  ReportsPage,
-  SearchPage,
-} from '@/pages/empty';
+import { LibraryPage, NotFoundPage, OnboardingPage, SearchPage } from '@/pages/empty';
 import { RegisterPage } from '@/pages/register';
 import { SettingsPage } from '@/pages/settings';
 import { GuestOnly, RequireAuth } from '@/shell/require-auth';
@@ -50,8 +44,8 @@ export function App() {
         <Route path="/todos/calendar" element={<TodosWorkspace view="week" />} />
         <Route path="/inbox" element={<InboxWorkspace />} />
         <Route path="/inbox/:id" element={<InboxReader />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/reports/:id" element={<ReportEditorPage />} />
+        <Route path="/reports" element={<ReportsWorkspace />} />
+        <Route path="/reports/:id" element={<ReportsWorkspace />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/settings" element={<SettingsPage />} />

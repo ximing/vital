@@ -171,3 +171,119 @@ body {
   border-radius: var(--radius-md);
   background: var(--bg-surface-muted);
 }
+
+.report-doc,
+.report-source {
+  max-width: 65ch;
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.7;
+  letter-spacing: -0.011em;
+}
+
+.report-doc {
+  min-height: 28rem;
+  outline: none;
+}
+
+.report-source {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  line-height: var(--text-body-lh);
+}
+
+.report-doc h1,
+.report-doc h2,
+.report-doc h3 {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  margin: 1.1em 0 0.45em;
+}
+
+.report-doc h1 {
+  font-size: var(--text-display);
+  line-height: var(--text-display-lh);
+}
+
+.report-doc h2,
+.report-doc h3 {
+  font-size: var(--text-title);
+  line-height: var(--text-title-lh);
+}
+
+.report-doc p {
+  margin: 0 0 0.85em;
+}
+
+.report-doc ul,
+.report-doc ol {
+  margin: 0 0 0.85em;
+  padding-left: var(--space-6);
+}
+
+.report-doc blockquote {
+  margin: 0 0 0.85em;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--accent-primary);
+  color: var(--fg-muted);
+}
+
+.report-doc pre,
+.report-doc code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.report-doc pre {
+  overflow-x: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-muted);
+}
+
+.report-doc a {
+  color: var(--accent-primary);
+  text-underline-offset: 3px;
+}
+
+.report-doc p.is-editor-empty:first-child::before {
+  color: var(--fg-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.vital-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0.12em;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-accent-subtle);
+  font-size: var(--text-meta);
+  line-height: var(--text-meta-lh);
+  vertical-align: baseline;
+  user-select: none;
+}
+
+.vital-chip-check {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--border-subtle);
+  background: transparent;
+  padding: 0;
+}
+
+.vital-chip-check.is-done {
+  border-color: var(--status-done);
+  background: var(--status-done);
+}
+
+.vital-chip-done .vital-chip-label,
+.vital-chip-deleted .vital-chip-label {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}

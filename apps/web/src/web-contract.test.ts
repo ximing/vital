@@ -67,4 +67,23 @@ describe('web shell contract', () => {
     const client = read('src/api/client.ts');
     expect(client).toContain("authMode: 'cookie'");
   });
+
+  it('reports live under features/reports with TipTap, source toggle, and empty copy', () => {
+    const app = read('src/App.tsx');
+    expect(app).toContain('/reports/:id');
+    expect(app).toContain('ReportsWorkspace');
+    const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@tiptap/starter-kit']).toContain('^2');
+    expect(pkg.dependencies['@vital/markdown']).toBe('workspace:*');
+    const copy = read('src/copy.ts');
+    expect(copy).toContain('写今天的日报，把完成的事留下痕迹。');
+    expect(copy).toContain('用 / 插入任务或稍后读。');
+    expect(copy).toContain('从本周期填充');
+    const ws = read('src/features/reports/ReportsWorkspace.tsx');
+    const model = read('src/features/reports/model.ts');
+    expect(ws).toContain('syncHead');
+    expect(ws).toContain('getReportEmbeds');
+    expect(model).toContain('REPORT_REVISION_CONFLICT');
+    expect(ws).not.toContain("authMode: 'bearer'");
+  });
 });

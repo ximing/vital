@@ -100,8 +100,28 @@ export function Shell() {
           </NavLink>
 
           <SectionLabel>{t.rail.reflect}</SectionLabel>
-          <NavLink to="/reports" className={navClass}>
-            {t.nav.reports}
+          <NavLink
+            to="/reports"
+            className={() => {
+              const type = new URLSearchParams(location.search).get('type');
+              const onReports = location.pathname.startsWith('/reports');
+              const daily =
+                onReports && type !== 'weekly' && type !== 'monthly' && type !== 'yearly';
+              return navClass({ isActive: daily });
+            }}
+          >
+            {t.reports.daily}
+          </NavLink>
+          <NavLink
+            to="/reports?type=weekly"
+            className={() => {
+              const type = new URLSearchParams(location.search).get('type');
+              return navClass({
+                isActive: location.pathname.startsWith('/reports') && type === 'weekly',
+              });
+            }}
+          >
+            {t.reports.weekly}
           </NavLink>
 
           <div className="mt-4">

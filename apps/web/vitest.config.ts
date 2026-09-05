@@ -13,7 +13,15 @@ export default mergeConfig(
         optimizer: {
           client: {
             enabled: true,
-            include: ['react-dom', 'react-dom/client', '@testing-library/react', 'react-router'],
+            include: [
+              'react-dom',
+              'react-dom/client',
+              '@testing-library/react',
+              'react-router',
+              '@tiptap/react',
+              '@tiptap/core',
+              '@tiptap/starter-kit',
+            ],
           },
         },
       },
