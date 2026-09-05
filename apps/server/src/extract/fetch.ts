@@ -27,12 +27,45 @@ export interface PinnedHttpResponse {
 }
 
 export interface ExtractTransport {
-  lookup(hostname: string): Promise<ResolvedAddress>;
+  lookup(hostname: string, signal?: AbortSignal): Promise<ResolvedAddress>;
   request(
     url: URL,
     pinned: ResolvedAddress,
     signal: AbortSignal,
   ): Promise<PinnedHttpResponse>;
+}
+
+function abortError(): AppError {
+  return AppError.of(400, 'VALIDATION_ERROR');
+}
+
+/** DNS/connect work must die with the extract AbortSignal, not the OS resolver timeout. */
+function raceAbort<T>(signal: AbortSignal, work: Promise<T>): Promise<T> {
+  if (signal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      reject(abortError());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    void work.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        if (signal.aborted) {
+          reject(abortError());
+          return;
+        }
+        resolve(value);
+      },
+      (err: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        if (signal.aborted) {
+          reject(abortError());
+          return;
+        }
+        reject(err instanceof Error ? err : abortError());
+      },
+    );
+  });
 }
 
 const REDIRECT = new Set([301, 302, 303, 307, 308]);
@@ -48,7 +81,7 @@ function headerValue(value: string | string[] | undefined): string | undefined {
 }
 
 const defaultTransport: ExtractTransport = {
-  async lookup(hostname: string): Promise<ResolvedAddress> {
+  async lookup(hostname: string, _signal?: AbortSignal): Promise<ResolvedAddress> {
     const result = await dnsLookup(hostname, { verbatim: true });
     const family: 4 | 6 = result.family === 6 ? 6 : 4;
     return { address: result.address, family };
@@ -112,12 +145,16 @@ export function setExtractTransport(next: ExtractTransport | null): void {
   transport = next ?? defaultTransport;
 }
 
-export async function lookupPinned(hostname: string): Promise<ResolvedAddress> {
+export async function lookupPinned(
+  hostname: string,
+  signal: AbortSignal,
+): Promise<ResolvedAddress> {
+  if (signal.aborted) throw abortError();
   if (isIP(hostname) !== 0) {
     assertPublicAddress(hostname);
     return { address: hostname, family: familyOf(hostname) };
   }
-  const resolved = await transport.lookup(hostname);
+  const resolved = await raceAbort(signal, transport.lookup(hostname, signal));
   assertPublicAddress(resolved.address);
   return resolved;
 }
@@ -141,7 +178,8 @@ export async function fetchHtml(rawUrl: string, timeoutMs = EXTRACT_TIMEOUT_MS):
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
       assertSafeUrl(url);
-      const pinned = await lookupPinned(hostnameOf(url));
+      const pinned = await lookupPinned(hostnameOf(url), ac.signal);
+      if (ac.signal.aborted) throw abortError();
       const res = await transport.request(url, pinned, ac.signal);
       if (REDIRECT.has(res.statusCode)) {
         if (hop === MAX_REDIRECTS || res.location === undefined || res.location === '') {

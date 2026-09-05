@@ -4,6 +4,8 @@ import type { Task } from './tasks.js';
 
 /** Request-thread extract HTML cap (v1). */
 export const MAX_EXTRACT_HTML_BYTES = 2 * 1024 * 1024;
+/** POST/PATCH inbox JSON so confirm can send back a 2MB extract preview. */
+export const INBOX_JSON_BODY_LIMIT_BYTES = Math.ceil(2.5 * 1024 * 1024);
 /** Server-side extract image cap (v1, 2MB × 10). */
 export const MAX_EXTRACT_IMAGE_BYTES = 2 * 1024 * 1024;
 export const MAX_INBOX_ASSETS = 10;

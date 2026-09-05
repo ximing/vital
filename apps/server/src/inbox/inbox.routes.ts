@@ -3,6 +3,7 @@ import {
   createInboxInputSchema,
   extractInboxInputSchema,
   idempotencyKeySchema,
+  INBOX_JSON_BODY_LIMIT_BYTES,
   listInboxQuerySchema,
   patchInboxAssetsInputSchema,
   patchInboxInputSchema,
@@ -51,16 +52,20 @@ export function registerInboxRoutes(app: FastifyInstance): void {
     return listInbox(user.id, listInboxQuerySchema.parse(req.query));
   });
 
-  app.post('/api/v1/inbox', { preHandler: [requireAuth, limitInbox] }, async (req, reply) => {
-    const user = req.user;
-    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
-    const created = await createInbox(
-      user.id,
-      createInboxInputSchema.parse(req.body),
-      idempotencyHeader(req.headers['idempotency-key']),
-    );
-    return reply.code(created.status).send(created.item);
-  });
+  app.post(
+    '/api/v1/inbox',
+    { preHandler: [requireAuth, limitInbox], bodyLimit: INBOX_JSON_BODY_LIMIT_BYTES },
+    async (req, reply) => {
+      const user = req.user;
+      if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+      const created = await createInbox(
+        user.id,
+        createInboxInputSchema.parse(req.body),
+        idempotencyHeader(req.headers['idempotency-key']),
+      );
+      return reply.code(created.status).send(created.item);
+    },
+  );
 
   app.get('/api/v1/inbox/:id', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;
@@ -69,12 +74,16 @@ export function registerInboxRoutes(app: FastifyInstance): void {
     return getInbox(user.id, id);
   });
 
-  app.patch('/api/v1/inbox/:id', { preHandler: [requireAuth] }, async (req) => {
-    const user = req.user;
-    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
-    const { id } = idParams.parse(req.params);
-    return patchInbox(user.id, id, patchInboxInputSchema.parse(req.body));
-  });
+  app.patch(
+    '/api/v1/inbox/:id',
+    { preHandler: [requireAuth], bodyLimit: INBOX_JSON_BODY_LIMIT_BYTES },
+    async (req) => {
+      const user = req.user;
+      if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+      const { id } = idParams.parse(req.params);
+      return patchInbox(user.id, id, patchInboxInputSchema.parse(req.body));
+    },
+  );
 
   app.patch('/api/v1/inbox/:id/assets', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;

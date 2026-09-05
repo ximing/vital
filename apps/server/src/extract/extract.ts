@@ -51,18 +51,17 @@ function parseArticle(html: string, url: URL): {
  * request thread, capped at 10s / 2MB and a process semaphore of 2.
  */
 export async function extractUrl(rawUrl: string): Promise<InboxPreview> {
-  const started = Date.now();
   let host = '';
   try {
     host = new URL(rawUrl).hostname;
   } catch {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
-  const remaining = () => EXTRACT_TIMEOUT_MS - (Date.now() - started);
   await extractSemaphore.acquire();
+  // 10s is ingest time; queued wait for the semaphore must not burn the budget.
+  const started = Date.now();
   try {
-    if (remaining() <= 0) throw AppError.of(400, 'VALIDATION_ERROR');
-    const fetched = await fetchHtml(rawUrl, remaining());
+    const fetched = await fetchHtml(rawUrl, EXTRACT_TIMEOUT_MS);
     const article = parseArticle(fetched.html, fetched.url);
     const { canonicalUrl } = idempotencyKeyForUrl(fetched.url.href);
     return {

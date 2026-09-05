@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { INBOX_JSON_BODY_LIMIT_BYTES } from '@vital/dto';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -6,6 +7,8 @@ import { buildFastify } from '../src/app.js';
 import { db } from '../src/db/index.js';
 import { attachments, entityLinks, inboxItems } from '../src/db/schema.js';
 import { setExtractTransport, type ExtractTransport } from '../src/extract/fetch.js';
+import { extractSemaphore } from '../src/extract/semaphore.js';
+import { EXTRACT_TIMEOUT_MS } from '../src/extract/ssrf.js';
 import { canonicalizeUrl } from '../src/inbox/canonical.js';
 import { setStorageAdapter } from '../src/storage/factory.js';
 import { resetDb } from './helpers/db.js';
@@ -375,6 +378,64 @@ describe('inbox', () => {
       expect(res.statusCode).toBe(400);
     }
   });
+
+  it('1.2MB extract preview POSTs back as persist 201', async () => {
+    const alice = await registerUser(app);
+    const html = `<p>${'x'.repeat(1_200_000)}</p>`;
+    const persist = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: 'Long', extractedHtml: html, source: 'web' },
+    });
+    expect(persist.statusCode).toBe(201);
+    expect((persist.json().extractedHtml as string).length).toBeGreaterThan(1_000_000);
+  });
+
+  it('JSON over inbox bodyLimit is 413 VALIDATION_ERROR not 500', async () => {
+    const alice = await registerUser(app);
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: 'Huge', extractedHtml: 'x'.repeat(INBOX_JSON_BODY_LIMIT_BYTES) },
+    });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it(
+    'hung DNS extract is 400 within the 10s cap and releases the semaphore',
+    async () => {
+      const alice = await registerUser(app);
+      setExtractTransport({
+        lookup: () => new Promise(() => undefined),
+        request: () => Promise.reject(new Error('must not fetch after hung DNS')),
+      });
+      const started = Date.now();
+      const res = await injectJson(app, {
+        method: 'POST',
+        url: '/api/v1/inbox/extract',
+        token: alice.token,
+        payload: { url: 'https://hang.example/article' },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error.code).toBe('VALIDATION_ERROR');
+      expect(Date.now() - started).toBeLessThan(EXTRACT_TIMEOUT_MS + 2000);
+      expect(extractSemaphore.running).toBe(0);
+
+      setExtractTransport(mockPublicHtml());
+      const ok = await injectJson(app, {
+        method: 'POST',
+        url: '/api/v1/inbox/extract',
+        token: alice.token,
+        payload: { url: 'https://news.example.com/a' },
+      });
+      expect(ok.statusCode).toBe(200);
+      expect(ok.json().title).toBeTruthy();
+    },
+    EXTRACT_TIMEOUT_MS + 15_000,
+  );
 
   it('soft delete hides the item', async () => {
     const alice = await registerUser(app);

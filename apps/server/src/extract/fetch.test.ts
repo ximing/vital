@@ -98,4 +98,20 @@ describe('pinned extract fetch', () => {
     setExtractTransport(transport);
     await expect(fetchHtml('https://evil.example/')).rejects.toBeInstanceOf(AppError);
   });
+
+  it('aborts a hung DNS lookup without calling request', async () => {
+    let requested = false;
+    const transport: ExtractTransport = {
+      lookup: () => new Promise(() => undefined),
+      request: () => {
+        requested = true;
+        return Promise.resolve(htmlRes('<html></html>'));
+      },
+    };
+    setExtractTransport(transport);
+    const started = Date.now();
+    await expect(fetchHtml('https://hang.example/', 50)).rejects.toBeInstanceOf(AppError);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(requested).toBe(false);
+  });
 });

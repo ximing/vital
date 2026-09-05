@@ -3,6 +3,8 @@ import {
   createInboxInputSchema,
   extractInboxInputSchema,
   idempotencyKeySchema,
+  INBOX_JSON_BODY_LIMIT_BYTES,
+  MAX_EXTRACT_HTML_BYTES,
   MAX_INBOX_ASSETS,
   patchInboxAssetsInputSchema,
   patchInboxInputSchema,
@@ -15,6 +17,13 @@ describe('extractInboxInputSchema', () => {
     );
     expect(extractInboxInputSchema.safeParse({ url: 'file:///etc/passwd' }).success).toBe(false);
     expect(extractInboxInputSchema.safeParse({ url: 'gopher://x' }).success).toBe(false);
+  });
+});
+
+describe('inbox size caps', () => {
+  it('persist JSON limit is at least 2.5MB and above extract HTML cap', () => {
+    expect(INBOX_JSON_BODY_LIMIT_BYTES).toBeGreaterThanOrEqual(Math.ceil(2.5 * 1024 * 1024));
+    expect(INBOX_JSON_BODY_LIMIT_BYTES).toBeGreaterThan(MAX_EXTRACT_HTML_BYTES);
   });
 });
 
