@@ -183,6 +183,43 @@ describe('todos workspace', () => {
     expect(todayHeads.length).toBeGreaterThan(0);
   });
 
+  it('j selects the overdue row when it is painted above today', async () => {
+    vi.mocked(client.listTasks).mockResolvedValue({
+      items: [
+        makeTask({
+          id: 'now',
+          title: '今天要做',
+          dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+          sortOrder: 1,
+        }),
+        makeTask({
+          id: 'over',
+          title: '昨天没做完',
+          dueAt: zonedLocalMidnightIso('2026-09-05', TZ),
+          sortOrder: 2,
+        }),
+      ],
+      nextCursor: null,
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/todos/lists/smart:today');
+    expect(await screen.findByText('昨天没做完')).toBeInTheDocument();
+    await user.keyboard('j');
+    expect(screen.getByRole('option', { name: '昨天没做完' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('option', { name: '今天要做' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    await user.keyboard('j');
+    expect(screen.getByRole('option', { name: '今天要做' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
   it('completes optimistically and undoes from the 5s toast', async () => {
     const open = makeTask({
       id: 'task-1',

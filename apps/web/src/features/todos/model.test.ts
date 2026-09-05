@@ -8,6 +8,7 @@ import {
   formatYmd,
   isDueSoon,
   isOverdue,
+  listVisibleIds,
   nestTasks,
   orderedAfterDrop,
   partitionToday,
@@ -91,6 +92,25 @@ describe('todo model', () => {
     const { overdue, today } = partitionToday(nodes, TZ, NOW);
     expect(overdue.map((n) => n.task.id)).toEqual(['a']);
     expect(today.map((n) => n.task.id)).toEqual(['b']);
+  });
+
+  it('listVisibleIds walks overdue then today even when today has lower sortOrder', () => {
+    const todayTask = makeTask({
+      id: 'now',
+      title: '今天要做',
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+      sortOrder: 1,
+    });
+    const overdueTask = makeTask({
+      id: 'over',
+      title: '昨天没做完',
+      dueAt: zonedLocalMidnightIso('2026-09-05', TZ),
+      sortOrder: 2,
+    });
+    expect(listVisibleIds('smart:today', [todayTask, overdueTask], TZ, NOW)).toEqual([
+      'over',
+      'now',
+    ]);
   });
 
   it('starts the week on Monday when weekStartsOn is 1', () => {

@@ -12,14 +12,14 @@ import { LIST_FILTER_ID, useTodosKeyboard } from './keyboard';
 import { ListView } from './ListView';
 import {
   applyOptimisticComplete,
+  boardVisibleIds,
   circadianSlot,
   createPayload,
   filterTasks,
-  flattenNodes,
   hourInZone,
   inboxList,
   listTitle,
-  nestTasks,
+  listVisibleIds,
   todayYmd,
   weekRangeIso,
   type TodoView,
@@ -89,6 +89,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const filterFocusNonce = useTodosUi((s) => s.filterFocusNonce);
   const completingIds = useTodosUi((s) => s.completingIds);
   const completeUndo = useTodosUi((s) => s.completeUndo);
+  const boardMode = useTodosUi((s) => s.boardMode);
 
   useEffect(() => {
     if (filterFocusNonce > 0) document.getElementById(LIST_FILTER_ID)?.focus();
@@ -100,7 +101,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const showId = completeUndo?.wantUndo ? completeUndo.taskId : null;
   const rawTasks = applyOptimisticComplete(tasksQuery.data ?? [], new Set(completingIds), showId);
   const tasks = filterTasks(rawTasks, listFilter);
-  const visibleIds = flattenNodes(nestTasks(tasks)).map((item) => item.task.id);
+  const visibleIds =
+    view === 'board' ? boardVisibleIds(tasks, boardMode) : listVisibleIds(listId, tasks, timeZone);
   const selected =
     tasks.find((task) => task.id === selectedId) ??
     (tasksQuery.data ?? []).find((task) => task.id === selectedId);

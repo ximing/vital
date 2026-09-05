@@ -5,11 +5,10 @@ import { EmptyTasks } from './EmptyTasks';
 import {
   flattenNodes,
   formatHumanDay,
-  groupByDay,
-  nestTasks,
+  listSections,
   orderedAfterDrop,
-  partitionToday,
   siblingIds,
+  type ListSection,
 } from './model';
 import { TaskRow } from './TaskRow';
 import { useTodosUi } from './ui-store';
@@ -24,6 +23,15 @@ function GroupHeading({ children, tone }: { children: string; tone?: 'overdue' |
       {children}
     </h2>
   );
+}
+
+function sectionTitle(section: ListSection, timeZone: string): string | null {
+  if (section.heading === 'overdue') return t.todos.overdue;
+  if (section.heading === 'today') return t.lists.today;
+  if (section.heading === 'done') return t.lists.done;
+  if (section.heading === 'anytime') return t.lists.anytime;
+  if (section.heading === 'day' && section.ymd) return formatHumanDay(section.ymd, timeZone);
+  return null;
 }
 
 export function ListView({
@@ -44,12 +52,6 @@ export function ListView({
   const selectedId = useTodosUi((s) => s.selectedId);
   const setSelected = useTodosUi((s) => s.setSelected);
   const openDetail = useTodosUi((s) => s.openDetail);
-
-  const nodes = nestTasks(tasks);
-  const openNodes = nestTasks(
-    tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled'),
-  );
-  const doneNodes = nestTasks(tasks.filter((task) => task.status === 'done'));
 
   function handleDragStart(event: DragEvent<HTMLDivElement>, task: Task) {
     event.dataTransfer.setData('text/plain', task.id);
@@ -74,7 +76,7 @@ export function ListView({
     onReorder({ listId: target.listId, parentId: target.parentId, orderedIds: next });
   }
 
-  function renderNodeList(list: ReturnType<typeof nestTasks>) {
+  function renderNodeList(list: ListSection['nodes']) {
     return flattenNodes(list).map(({ task, depth }) => (
       <TaskRow
         key={task.id}
@@ -95,54 +97,29 @@ export function ListView({
 
   if (tasks.length === 0) return <EmptyTasks listId={listId} kind="list" />;
 
-  if (listId === 'smart:today') {
-    const { overdue, today } = partitionToday(openNodes, timeZone);
-    return (
-      <div role="listbox" aria-label={t.lists.today}>
-        {overdue.length > 0 ? (
-          <section>
-            <GroupHeading tone="overdue">{t.todos.overdue}</GroupHeading>
-            {renderNodeList(overdue)}
-          </section>
-        ) : null}
-        {today.length > 0 ? (
-          <section>
-            <GroupHeading>{t.lists.today}</GroupHeading>
-            {renderNodeList(today)}
-          </section>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (listId === 'smart:upcoming') {
-    const groups = groupByDay(openNodes, timeZone);
-    return (
-      <div role="listbox" aria-label={t.lists.upcoming}>
-        {groups.map((group) => (
-          <section key={group.ymd || 'undated'}>
-            <GroupHeading>
-              {group.ymd === '' ? t.lists.anytime : formatHumanDay(group.ymd, timeZone)}
-            </GroupHeading>
-            {renderNodeList(group.nodes)}
-          </section>
-        ))}
-      </div>
-    );
-  }
+  const sections = listSections(listId, tasks, timeZone);
+  const boxLabel =
+    listId === 'smart:today'
+      ? t.lists.today
+      : listId === 'smart:upcoming'
+        ? t.lists.upcoming
+        : t.nav.todos;
 
   return (
-    <div role="listbox" aria-label={t.nav.todos}>
-      {renderNodeList(
-        listId.startsWith('smart:') ? openNodes : nodes.filter((n) => n.task.status !== 'done'),
-      )}
-      {doneNodes.length > 0 && !listId.startsWith('smart:') ? (
-        <section>
-          <GroupHeading>{t.lists.done}</GroupHeading>
-          {renderNodeList(doneNodes)}
-        </section>
-      ) : null}
-      {listId === 'smart:done' ? renderNodeList(doneNodes) : null}
+    <div role="listbox" aria-label={boxLabel}>
+      {sections.map((section) => {
+        const heading = sectionTitle(section, timeZone);
+        return (
+          <section key={section.key}>
+            {heading ? (
+              <GroupHeading tone={section.heading === 'overdue' ? 'overdue' : 'muted'}>
+                {heading}
+              </GroupHeading>
+            ) : null}
+            {renderNodeList(section.nodes)}
+          </section>
+        );
+      })}
     </div>
   );
 }

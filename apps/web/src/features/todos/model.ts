@@ -296,6 +296,77 @@ export function groupByDay(
   return groups;
 }
 
+/** Same grouping ListView paints — j/k must walk this order, not raw sortOrder. */
+export type ListSection = {
+  key: string;
+  heading: 'overdue' | 'today' | 'done' | 'anytime' | 'day' | null;
+  ymd?: string;
+  nodes: TaskNode[];
+};
+
+export function listSections(
+  listId: string,
+  tasks: Task[],
+  timeZone: string,
+  now = new Date(),
+): ListSection[] {
+  const nodes = nestTasks(tasks);
+  const openNodes = nestTasks(
+    tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled'),
+  );
+  const doneNodes = nestTasks(tasks.filter((task) => task.status === 'done'));
+  const nonempty = (sections: ListSection[]): ListSection[] =>
+    sections.filter((section) => section.nodes.length > 0);
+
+  if (listId === 'smart:today') {
+    const { overdue, today } = partitionToday(openNodes, timeZone, now);
+    return nonempty([
+      { key: 'overdue', heading: 'overdue', nodes: overdue },
+      { key: 'today', heading: 'today', nodes: today },
+    ]);
+  }
+  if (listId === 'smart:upcoming') {
+    return nonempty(
+      groupByDay(openNodes, timeZone).map((group) => ({
+        key: group.ymd || 'undated',
+        heading: group.ymd === '' ? ('anytime' as const) : ('day' as const),
+        ymd: group.ymd,
+        nodes: group.nodes,
+      })),
+    );
+  }
+  if (listId === 'smart:done') {
+    return nonempty([{ key: 'done', heading: null, nodes: doneNodes }]);
+  }
+  if (listId.startsWith('smart:')) {
+    return nonempty([{ key: 'open', heading: null, nodes: openNodes }]);
+  }
+  return nonempty([
+    { key: 'open', heading: null, nodes: nodes.filter((node) => node.task.status !== 'done') },
+    { key: 'done', heading: 'done', nodes: doneNodes },
+  ]);
+}
+
+export function listVisibleIds(
+  listId: string,
+  tasks: Task[],
+  timeZone: string,
+  now = new Date(),
+): string[] {
+  return listSections(listId, tasks, timeZone, now).flatMap((section) =>
+    flattenNodes(section.nodes).map((row) => row.task.id),
+  );
+}
+
+export function boardVisibleIds(tasks: Task[], mode: BoardMode): string[] {
+  if (mode === 'status') {
+    const by = splitByStatus(tasks);
+    return [...by.todo, ...by.doing, ...by.done].map((task) => task.id);
+  }
+  const by = splitByPriority(tasks);
+  return [...by[0], ...by[1], ...by[2], ...by[3]].map((task) => task.id);
+}
+
 export function splitByStatus(tasks: Task[]): Record<'todo' | 'doing' | 'done', Task[]> {
   return {
     todo: tasks.filter((task) => task.status === 'todo'),
