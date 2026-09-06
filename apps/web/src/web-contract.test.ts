@@ -50,6 +50,7 @@ describe('web shell contract', () => {
     for (const key of ["'n'", "'j'", "'k'", "'Enter'", "'e'", "'/'", "'t'", "'1'"]) {
       expect(kb).toContain(key);
     }
+    expect(kb).toContain('if (event.metaKey || event.ctrlKey || event.altKey) return');
     const copy = read('src/copy.ts');
     expect(copy).toContain('今天还没有安排，也没有逾期。按 N 新建。');
   });
@@ -85,5 +86,25 @@ describe('web shell contract', () => {
     expect(ws).toContain('getReportEmbeds');
     expect(model).toContain('REPORT_REVISION_CONFLICT');
     expect(ws).not.toContain("authMode: 'bearer'");
+  });
+
+  it('onboarding, search UI, ⌘K palette, and no coming-soon nav', () => {
+    const app = read('src/App.tsx');
+    expect(app).toContain('/onboarding');
+    expect(app).toContain('OnboardingPage');
+    expect(app).toContain('SearchPage');
+    expect(app).not.toContain('LibraryPage');
+    const shell = read('src/shell/Shell.tsx');
+    expect(shell).toContain('CommandPalette');
+    expect(shell).toContain('/search');
+    expect(shell).not.toContain('to="/library"');
+    expect(shell).not.toContain('即将推出');
+    const palette = read('src/features/palette/model.ts');
+    expect(palette).toContain('isPaletteToggle');
+    expect(palette).toContain("event.key === 'k'");
+    const search = read('src/features/search/SearchPage.tsx');
+    expect(search).toContain(".search({ q, limit: 20 })");
+    const copy = read('src/copy.ts');
+    expect(copy).toContain('输入关键词搜任务、稍后读和报告。');
   });
 });

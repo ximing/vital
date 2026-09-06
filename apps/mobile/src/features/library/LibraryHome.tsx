@@ -1,8 +1,8 @@
+import { ONBOARDING_CHECKLIST_KEYS, type List } from '@vital/dto';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import type { List } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { Banner } from '../../components/Banner';
@@ -12,6 +12,7 @@ import { ThemeToggle } from '../../components/ThemeToggle';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
+import { checklistHref, markOnboarding, showChecklist } from '../../lib/onboarding';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
 
@@ -62,13 +63,51 @@ export function LibraryHome() {
 
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
-      <TabHeader title={copy.nav.library} />
+      <TabHeader
+        title={copy.nav.library}
+        right={
+          <Button variant="secondary" onPress={() => router.push('/search')}>
+            {copy.nav.search}
+          </Button>
+        }
+      />
       {error ? (
         <Banner tone="error" action={{ label: copy.actions.retry, onPress: load }}>
           {error}
         </Banner>
       ) : null}
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {showChecklist(auth.user?.onboarding) ? (
+          <>
+            <Text style={styles.section}>{copy.checklist.title}</Text>
+            {ONBOARDING_CHECKLIST_KEYS.map((key) => {
+              const done = auth.user?.onboarding[key] === true;
+              return (
+                <Pressable
+                  key={key}
+                  style={styles.row}
+                  onPress={() => {
+                    if (key === 'openedWeekly') {
+                      void markOnboarding(auth.user, auth.refreshUser, { openedWeekly: true });
+                    }
+                    router.push(checklistHref(key));
+                  }}
+                >
+                  <Text style={[styles.rowTitle, done && styles.done]}>
+                    {done ? '✓ ' : '○ '}
+                    {copy.checklist.items[key]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Button
+              variant="quiet"
+              onPress={() => void markOnboarding(auth.user, auth.refreshUser, { dismissed: true })}
+            >
+              {copy.checklist.dismiss}
+            </Button>
+          </>
+        ) : null}
         <Text style={styles.section}>{copy.nav.todos}</Text>
         {[...smart, ...(inboxList && !smart.some((s) => s.id === inboxList.id) ? [inboxList] : [])].map(
           (list) => (
@@ -120,5 +159,6 @@ const createStyles = (t: Theme) =>
       borderBottomColor: t.borderSubtle,
     },
     rowTitle: { fontSize: t.type.body.fontSize, color: t.fgPrimary },
+    done: { color: t.fgMuted, textDecorationLine: 'line-through' },
     hint: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
   });

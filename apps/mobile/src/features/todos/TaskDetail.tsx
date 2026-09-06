@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import type { Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
@@ -20,6 +21,7 @@ import { toggleComplete } from './complete';
 export function TaskDetail({ taskId }: { taskId: string }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const auth = useAuth();
   const [task, setTask] = useState<Task | null>(null);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
@@ -85,7 +87,12 @@ export function TaskDetail({ taskId }: { taskId: string }) {
           {copy.actions.save}
         </Button>
         {task.status !== 'done' ? (
-          <Button variant="secondary" onPress={() => void toggleComplete(task, setTask)}>
+          <Button
+            variant="secondary"
+            onPress={() =>
+              void toggleComplete(task, setTask, { user: auth.user, refreshUser: auth.refreshUser })
+            }
+          >
             {copy.actions.completed}
           </Button>
         ) : null}

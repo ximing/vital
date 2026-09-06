@@ -2,6 +2,7 @@ import { loginInputSchema } from '@vital/dto';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
+import { needsOnboarding } from '@/features/onboarding';
 import { humanError } from '@/lib/errors';
 import { AuthLayout } from '@/pages/auth-layout';
 import { useAuthStore } from '@/state/auth-store';
@@ -40,7 +41,17 @@ export function LoginPage() {
     setFormError(null);
     setSubmitting(true);
     void login(parsed.data)
-      .then(() => navigate(location.state?.from ?? HOME_PATH, { replace: true }))
+      .then(() => {
+        const from = location.state?.from;
+        const user = useAuthStore.getState().user;
+        const dest =
+          from && from !== '/login' && from !== '/register'
+            ? from
+            : needsOnboarding(user)
+              ? '/onboarding'
+              : HOME_PATH;
+        navigate(dest, { replace: true });
+      })
       .catch((err: unknown) => setFormError(humanError(err)))
       .finally(() => setSubmitting(false));
   }

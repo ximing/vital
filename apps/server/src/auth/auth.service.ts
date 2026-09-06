@@ -182,11 +182,7 @@ export async function updateOnboarding(
   input: UpdateOnboardingInput,
 ): Promise<UserProfile> {
   const user = await getUserEntity(userId);
-  const next: OnboardingState = { ...onboardingOf(user.onboarding) };
-  if (input.createdTask !== undefined) next.createdTask = input.createdTask;
-  if (input.capturedInbox !== undefined) next.capturedInbox = input.capturedInbox;
-  if (input.wroteDaily !== undefined) next.wroteDaily = input.wroteDaily;
-  if (input.dismissed !== undefined) next.dismissed = input.dismissed;
+  const next: OnboardingState = { ...onboardingOf(user.onboarding), ...input };
   await getDb()
     .update(users)
     .set({ onboarding: next, updatedAt: new Date() })

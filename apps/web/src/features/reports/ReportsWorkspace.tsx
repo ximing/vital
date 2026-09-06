@@ -4,10 +4,11 @@ import { NavLink, useNavigate, useParams, useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { useOnline } from '@/features/inbox/online';
+import { markOnboarding } from '@/features/onboarding/mark';
 import { humanError } from '@/lib/errors';
-import { VitalMark } from '@/shell/VitalMark';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
+import { EmptyArt } from '@/ui/empty-art';
 import {
   applyRemoteBody,
   decidePoll,
@@ -81,6 +82,10 @@ export function ReportsWorkspace() {
   const reportQuery = useReportQuery(id, id !== '');
   const liveType: ReportType = reportQuery.data?.type ?? typeParam;
   const listQuery = useReportListQuery(liveType);
+
+  useEffect(() => {
+    if (liveType === 'weekly') void markOnboarding({ openedWeekly: true });
+  }, [liveType]);
 
   const [session, setSession] = useState<Session | null>(null);
   const report = reportQuery.data && reportQuery.data.id === id ? reportQuery.data : undefined;
@@ -594,7 +599,7 @@ export function ReportsWorkspace() {
 function EmptyReports({ onOpen }: { onOpen: () => void }) {
   return (
     <div className="flex flex-col items-start px-4 py-16">
-      <VitalMark className="mb-4 h-10 w-10 text-accent" />
+      <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {t.empty.reports}
       </p>

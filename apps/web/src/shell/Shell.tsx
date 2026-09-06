@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
 import { useInboxUi } from '@/features/inbox';
+import { ActivationChecklist } from '@/features/onboarding';
+import { CommandPalette } from '@/features/palette/CommandPalette';
 import { UserListsNav, useTodosUi } from '@/features/todos';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
@@ -125,8 +127,8 @@ export function Shell() {
           </NavLink>
 
           <div className="mt-4">
-            <NavLink to="/library" className={navClass}>
-              {t.nav.library}
+            <NavLink to="/search" className={navClass}>
+              {t.nav.searchHint}
             </NavLink>
             <NavLink to="/settings" className={navClass}>
               {t.nav.settings}
@@ -149,6 +151,8 @@ export function Shell() {
           <Outlet />
         </main>
       </div>
+      <CommandPalette />
+      <ActivationChecklist />
     </div>
   );
 }

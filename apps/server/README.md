@@ -9,6 +9,8 @@ cp .env.example .env   # then replace change-me values; never commit .env
 pnpm --filter @vital/dto build
 pnpm --filter @vital/server migrate
 pnpm --filter @vital/server dev
+# development only: three inbox tasks tagged #sample
+NODE_ENV=development pnpm --filter @vital/server seed you@example.com
 ```
 
 Health: `GET /api/health`. Ready: `GET /api/v1/health/ready` (`SELECT 1`).

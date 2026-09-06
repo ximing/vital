@@ -5,8 +5,10 @@ import { ApiError } from '@vital/api-client';
 import type { EntityKind } from '@vital/markdown';
 import type { Report, ReportEmbeds, SyncHead, TaskStatus } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
+import { markOnboarding } from '../../lib/onboarding';
 import { humanError } from '../../lib/errors';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
@@ -23,6 +25,7 @@ import { insertToken, runReportFocusSync } from './report-sync';
 export function ReportEditor({ reportId }: { reportId: string }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const auth = useAuth();
   const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
   const [bodyMd, setBodyMd] = useState('');
@@ -104,6 +107,12 @@ export function ReportEditor({ reportId }: { reportId: string }) {
       });
       applyReport(next);
       toast(copy.toast.saved);
+      if (next.type === 'daily') {
+        await markOnboarding(auth.user, auth.refreshUser, { wroteDaily: true });
+      }
+      if (next.type === 'weekly') {
+        await markOnboarding(auth.user, auth.refreshUser, { openedWeekly: true });
+      }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'REPORT_REVISION_CONFLICT') {
         toast(copy.toast.revisionConflict);

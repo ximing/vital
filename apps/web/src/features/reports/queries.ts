@@ -8,7 +8,7 @@ import type {
 } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
-import { useAuthStore } from '@/state/auth-store';
+import { markOnboarding } from '@/features/onboarding/mark';
 import type { SlashHit } from './model';
 
 export const reportKeys = {
@@ -73,16 +73,9 @@ export function useReportActions() {
   });
 
   async function markWroteDaily(type: ReportType): Promise<void> {
+    if (type === 'weekly') await markOnboarding({ openedWeekly: true });
     if (type !== 'daily') return;
-    const user = useAuthStore.getState().user;
-    if (user && user.onboarding.wroteDaily !== true) {
-      try {
-        const next = await client.updateOnboarding({ wroteDaily: true });
-        useAuthStore.getState().setUser(next);
-      } catch {
-        // Checklist is best-effort.
-      }
-    }
+    await markOnboarding({ wroteDaily: true });
   }
 
   async function save(id: string, input: { revision: number; bodyMd?: string; title?: string }) {

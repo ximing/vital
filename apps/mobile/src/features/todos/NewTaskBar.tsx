@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { CreateTaskInput, Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
+import { markOnboarding } from '../../lib/onboarding';
 import { useTheme } from '../../theme/use-theme';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
@@ -21,6 +23,7 @@ export function NewTaskBar({
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const auth = useAuth();
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -32,6 +35,7 @@ export function NewTaskBar({
       const task = await client.createTask({ title: trimmed, listId, ...extra });
       setTitle('');
       onCreated(task);
+      await markOnboarding(auth.user, auth.refreshUser, { createdTask: true });
     } catch (err) {
       toast(humanError(err));
     } finally {

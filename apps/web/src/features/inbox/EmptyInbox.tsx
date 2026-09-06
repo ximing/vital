@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { t } from '@/copy';
-import { VitalMark } from '@/shell/VitalMark';
+import { EmptyArt } from '@/ui/empty-art';
 import { PASTE_URL_ID } from './model';
 import { useInboxUi } from './ui-store';
 
@@ -10,7 +10,7 @@ export function EmptyInbox() {
 
   return (
     <div className="flex flex-col items-start px-3 py-10">
-      <VitalMark className="mb-4 h-10 w-10 text-accent" />
+      <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {t.empty.inbox}
       </p>
@@ -48,7 +48,7 @@ export function EmptyInbox() {
 export function EmptyReader() {
   return (
     <div className="flex flex-col items-start px-4 py-16">
-      <VitalMark className="mb-4 h-10 w-10 text-accent" />
+      <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {t.empty.inboxReader}
       </p>

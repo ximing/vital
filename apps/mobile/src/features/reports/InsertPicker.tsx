@@ -2,8 +2,10 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { renderToken, type EntityKind } from '@vital/markdown';
 import type { Theme } from '@vital/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
+import { markOnboarding } from '../../lib/onboarding';
 import { humanError } from '../../lib/errors';
 import { useTheme } from '../../theme/use-theme';
 import { Button } from '../../components/Button';
@@ -21,6 +23,7 @@ export function InsertPicker({
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const auth = useAuth();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<{ id: string; title: string }[]>([]);
   const [busy, setBusy] = useState(false);
@@ -69,6 +72,9 @@ export function InsertPicker({
           style={styles.hit}
           onPress={() => {
             onInsert(renderToken(kind, hit.id));
+            if (kind === 'task') {
+              void markOnboarding(auth.user, auth.refreshUser, { pinnedTask: true });
+            }
             onClose();
           }}
         >

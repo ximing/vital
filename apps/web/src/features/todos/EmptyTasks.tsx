@@ -1,5 +1,5 @@
-import { VitalMark } from '@/shell/VitalMark';
 import { t } from '@/copy';
+import { EmptyArt } from '@/ui/empty-art';
 import { emptyCopyKey } from './model';
 import { useTodosUi } from './ui-store';
 import { QUICK_ADD_ID, focusById } from './keyboard';
@@ -16,7 +16,7 @@ export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'b
 
   return (
     <div className="flex flex-col items-start px-4 py-16">
-      <VitalMark className="mb-4 h-10 w-10 text-accent" />
+      <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {copy}
       </p>

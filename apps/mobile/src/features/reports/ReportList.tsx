@@ -4,8 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import type { ReportListItem, ReportType } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
+import { markOnboarding } from '../../lib/onboarding';
 import { humanError, isNetworkError } from '../../lib/errors';
 import { formatDay } from '../../lib/format';
 import { useFocusReload } from '../../hooks/use-focus-reload';
@@ -21,6 +23,7 @@ const TYPES: ReportType[] = ['daily', 'weekly', 'monthly', 'yearly'];
 export function ReportList() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const auth = useAuth();
   const [items, setItems] = useState<ReportListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
@@ -53,6 +56,9 @@ export function ReportList() {
     setOpening(type);
     try {
       const report = await client.getCurrentReport(type);
+      if (type === 'weekly') {
+        await markOnboarding(auth.user, auth.refreshUser, { openedWeekly: true });
+      }
       router.push(`/reports/${report.id}`);
     } catch (err) {
       setError(humanError(err));

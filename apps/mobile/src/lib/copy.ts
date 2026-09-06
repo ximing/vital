@@ -34,6 +34,42 @@ export const copy = {
     inboxReader: '打开一条稍后再读。',
     reports: '写今天的日报，把完成的事留下痕迹。',
     reportBody: '用 / 插入任务或稍后读。',
+    search: '输入关键词搜任务、稍后读和报告。',
+    searchNone: '没有匹配的任务、稍后读或报告。',
+    tags: '还没有标签。',
+  },
+  onboarding: {
+    skipAll: '跳过引导',
+    next: '下一步',
+    start: '开始使用',
+    steps: [
+      {
+        title: '把一页收进来',
+        body: '稍后读是口袋。粘贴链接，先把想读的页丢进来。',
+        action: '去稍后读',
+      },
+      {
+        title: '建一条今天的任务',
+        body: '从今天下手。完成后可以撤销。',
+        action: '去今天',
+      },
+      {
+        title: '打开周报，钉上任务',
+        body: '周报会留下这一周的痕迹。把完成的任务钉进去。',
+        action: '打开报告',
+      },
+    ],
+  },
+  checklist: {
+    title: '开始使用',
+    dismiss: '完成引导',
+    items: {
+      createdTask: '建一条任务',
+      completedTask: '完成一条任务',
+      capturedInbox: '保存一页稍后读',
+      openedWeekly: '打开周报',
+      pinnedTask: '把任务钉进报告',
+    },
   },
   actions: {
     create: '新建',

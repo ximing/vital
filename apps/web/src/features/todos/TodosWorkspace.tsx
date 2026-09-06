@@ -95,6 +95,11 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
     if (filterFocusNonce > 0) document.getElementById(LIST_FILTER_ID)?.focus();
   }, [filterFocusNonce]);
 
+  const taskParam = search.get('task');
+  useEffect(() => {
+    if (taskParam) openDetail(taskParam);
+  }, [openDetail, taskParam]);
+
   const lists = listsQuery.data ?? [];
   const tags = tagsQuery.data ?? [];
   const inbox = inboxList(lists);

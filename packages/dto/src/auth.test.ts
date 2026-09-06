@@ -91,4 +91,17 @@ describe('updateOnboardingInputSchema', () => {
     const ok = updateOnboardingInputSchema.parse({ dismissed: true });
     expect(ok.dismissed).toBe(true);
   });
+
+  it('accepts activation checklist flags and omits unset keys', () => {
+    const ok = updateOnboardingInputSchema.parse({
+      completedTask: true,
+      openedWeekly: true,
+      pinnedTask: true,
+    });
+    expect(ok.completedTask).toBe(true);
+    expect(ok.openedWeekly).toBe(true);
+    expect(ok.pinnedTask).toBe(true);
+    expect(ok.createdTask).toBeUndefined();
+    expect(ok.dismissed).toBeUndefined();
+  });
 });

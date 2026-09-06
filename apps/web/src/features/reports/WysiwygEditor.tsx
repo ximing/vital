@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { parseMarkdownToPmJSON, serializePmJSONToMarkdown, type PmNode } from '@vital/markdown';
 import { useEffect, useRef, type MouseEvent } from 'react';
 import { t } from '@/copy';
+import { markOnboarding } from '@/features/onboarding/mark';
 import { VitalEntity } from './entity-extension';
 import { withStubEmbed, type SlashHit } from './model';
 import { insertChip, slashFromEditor } from './slash';
@@ -100,6 +101,7 @@ export function WysiwygEditor({
       .getState()
       .mergeEmbeds(withStubEmbed({ tasks: {}, inbox: {} }, hit.kind, hit.id, hit.title));
     setSlash(null);
+    if (hit.kind === 'task') void markOnboarding({ pinnedTask: true });
   }
 
   function onClick(event: MouseEvent<HTMLDivElement>): void {

@@ -9,6 +9,7 @@ import { ErrorText } from '../../components/ErrorText';
 import { Field } from '../../components/Field';
 import { Screen } from '../../components/Screen';
 import { copy } from '../../lib/copy';
+import { needsOnboarding } from '../../lib/onboarding';
 import { humanError } from '../../lib/errors';
 import { useTheme } from '../../theme/use-theme';
 
@@ -31,8 +32,8 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await auth.login(parsed.data);
-      router.replace('/');
+      const user = await auth.login(parsed.data);
+      router.replace(needsOnboarding(user) ? '/onboarding' : '/');
     } catch (err) {
       setError(humanError(err));
     } finally {

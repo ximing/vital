@@ -1,12 +1,14 @@
-import type { Task } from '@vital/dto';
+import type { Task, UserProfile } from '@vital/dto';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { toast, UNDO_MS } from '../../components/toast';
 import { humanError } from '../../lib/errors';
+import { markOnboarding } from '../../lib/onboarding';
 
 export async function toggleComplete(
   task: Task,
   onTask: (next: Task) => void,
+  onboarding?: { user: UserProfile | null; refreshUser: (next: UserProfile) => void },
 ): Promise<void> {
   try {
     if (task.status === 'done') {
@@ -14,6 +16,9 @@ export async function toggleComplete(
     }
     const res = await client.completeTask(task.id);
     onTask(res.task);
+    if (onboarding) {
+      await markOnboarding(onboarding.user, onboarding.refreshUser, { completedTask: true });
+    }
     toast({
       message: copy.actions.completed,
       durationMs: UNDO_MS,

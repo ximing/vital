@@ -1,10 +1,12 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { HOME_PATH } from '@/copy';
 import { InboxReader, InboxWorkspace } from '@/features/inbox';
+import { OnboardingPage } from '@/features/onboarding';
 import { ReportsWorkspace } from '@/features/reports';
+import { SearchPage } from '@/features/search/SearchPage';
 import { TodosWorkspace } from '@/features/todos';
 import { LoginPage } from '@/pages/login';
-import { LibraryPage, NotFoundPage, OnboardingPage, SearchPage } from '@/pages/empty';
+import { NotFoundPage } from '@/pages/empty';
 import { RegisterPage } from '@/pages/register';
 import { SettingsPage } from '@/pages/settings';
 import { GuestOnly, RequireAuth } from '@/shell/require-auth';
@@ -30,6 +32,14 @@ export function App() {
         }
       />
       <Route
+        path="/onboarding"
+        element={
+          <RequireAuth>
+            <OnboardingPage />
+          </RequireAuth>
+        }
+      />
+      <Route
         element={
           <RequireAuth>
             <Shell />
@@ -37,7 +47,6 @@ export function App() {
         }
       >
         <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
-        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/todos" element={<Navigate to={HOME_PATH} replace />} />
         <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />
         <Route path="/todos/board" element={<TodosWorkspace view="board" />} />
@@ -47,7 +56,7 @@ export function App() {
         <Route path="/reports" element={<ReportsWorkspace />} />
         <Route path="/reports/:id" element={<ReportsWorkspace />} />
         <Route path="/search" element={<SearchPage />} />
-        <Route path="/library" element={<LibraryPage />} />
+        <Route path="/library" element={<Navigate to="/search" replace />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -15,6 +15,7 @@ export function EmptyState({
   const styles = useMemo(() => createStyles(t), [t]);
   return (
     <View style={styles.wrap}>
+      <View style={styles.art} />
       <Text style={styles.title}>{title}</Text>
       {action ? (
         <Button variant="primary" style={styles.action} onPress={action.onPress}>
@@ -32,6 +33,14 @@ const createStyles = (t: Theme) =>
       paddingHorizontal: t.space[6],
       paddingVertical: t.space[10],
       gap: t.space[4],
+    },
+    art: {
+      width: t.space[12],
+      height: t.space[12],
+      borderRadius: t.radius.pill,
+      backgroundColor: t.bgAccentSubtle,
+      borderWidth: 2,
+      borderColor: t.accentPrimary,
     },
     title: {
       fontSize: t.type.body.fontSize,

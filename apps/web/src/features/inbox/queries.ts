@@ -7,9 +7,9 @@ import type {
 } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
+import { markOnboarding } from '@/features/onboarding/mark';
 import { todoKeys } from '@/features/todos/queries';
 import { humanError } from '@/lib/errors';
-import { useAuthStore } from '@/state/auth-store';
 import { createInputFromPreview, pendingIdForUrl, type PendingSave } from './model';
 import { useInboxUi } from './ui-store';
 
@@ -47,15 +47,7 @@ export function useInboxItemQuery(id: string, enabled = true) {
 }
 
 async function markCaptured(): Promise<void> {
-  const user = useAuthStore.getState().user;
-  if (user && user.onboarding.capturedInbox !== true) {
-    try {
-      const next = await client.updateOnboarding({ capturedInbox: true });
-      useAuthStore.getState().setUser(next);
-    } catch {
-      // Checklist is best-effort.
-    }
-  }
+  await markOnboarding({ capturedInbox: true });
 }
 
 export function useInboxActions() {

@@ -8,6 +8,8 @@ export const t = {
     library: '资料库',
     logout: '退出登录',
     quickAdd: '新建',
+    palette: '命令面板',
+    searchHint: '搜索 ⌘K',
   },
   lists: zhCN.lists,
   reports: {
@@ -93,6 +95,58 @@ export const t = {
     actionExtension: '安装扩展',
     actionDaily: '打开今日日报',
     actionHome: '回到今天',
+    searchNone: '没有匹配的任务、稍后读或报告。',
+  },
+  onboarding: {
+    skip: '跳过',
+    skipAll: '跳过引导',
+    next: '下一步',
+    start: '开始使用',
+    stepOf: '第 {n} 步，共 3 步',
+    steps: [
+      {
+        title: '把一页收进来',
+        body: '稍后读是口袋。粘贴链接，或用扩展保存当前页。',
+        action: '去稍后读',
+      },
+      {
+        title: '建一条今天的任务',
+        body: '按 N 新建，按 E 完成。今天 = 逾期和今日到期。',
+        action: '去今天',
+      },
+      {
+        title: '打开周报，钉上任务',
+        body: '用 / 插入任务。随时按 ⌘K 跳转到列表、稍后读和报告。',
+        action: '打开周报',
+      },
+    ],
+  },
+  checklist: {
+    title: '开始使用',
+    dismiss: '完成引导',
+    remaining: '还差 {n} 项',
+    items: {
+      createdTask: '建一条任务',
+      completedTask: '完成一条任务',
+      capturedInbox: '保存一页稍后读',
+      openedWeekly: '打开周报',
+      pinnedTask: '把任务钉进报告',
+    },
+  },
+  palette: {
+    placeholder: '跳转到列表、任务、稍后读或报告',
+    empty: '没有匹配的跳转。',
+    goto: '跳转',
+    list: '列表',
+    task: '任务',
+    inbox: '稍后读',
+    report: '报告',
+    board: '看板',
+    calendar: '周视图',
+  },
+  search: {
+    placeholder: '搜任务、稍后读和报告',
+    loading: '搜索中…',
   },
   todos: {
     overdue: '逾期',

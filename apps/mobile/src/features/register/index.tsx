@@ -33,7 +33,7 @@ export function RegisterPage() {
     setBusy(true);
     try {
       await auth.register(parsed.data);
-      router.replace('/');
+      router.replace('/onboarding');
     } catch (err) {
       setError(humanError(err));
     } finally {

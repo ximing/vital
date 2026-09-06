@@ -263,4 +263,56 @@ describe('auth flow', () => {
     const me = await injectJson(app, { method: 'GET', url: '/api/v1/auth/me' });
     expect(me.statusCode).toBe(401);
   });
+
+  it('PATCH /auth/onboarding merges flags and leaves omitted keys unchanged', async () => {
+    const reg = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: alice,
+    });
+    const token = reg.json().tokens.accessToken;
+    expect(reg.json().user.onboarding).toEqual({});
+
+    const empty = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/onboarding',
+      token,
+      payload: {},
+    });
+    expect(empty.statusCode).toBe(400);
+
+    const first = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/onboarding',
+      token,
+      payload: { createdTask: true, completedTask: true },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().onboarding).toEqual({ createdTask: true, completedTask: true });
+
+    const second = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/onboarding',
+      token,
+      payload: { capturedInbox: true, openedWeekly: true, pinnedTask: true },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().onboarding).toEqual({
+      createdTask: true,
+      completedTask: true,
+      capturedInbox: true,
+      openedWeekly: true,
+      pinnedTask: true,
+    });
+
+    const skip = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/onboarding',
+      token,
+      payload: { dismissed: true },
+    });
+    expect(skip.statusCode).toBe(200);
+    expect(skip.json().onboarding.dismissed).toBe(true);
+    expect(skip.json().onboarding.createdTask).toBe(true);
+  });
 });

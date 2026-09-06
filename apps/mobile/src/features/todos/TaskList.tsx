@@ -3,6 +3,7 @@ import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import type { ListId, Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError, isNetworkError } from '../../lib/errors';
@@ -31,6 +32,7 @@ export function TaskList({
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const auth = useAuth();
   const [items, setItems] = useState<Task[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,12 @@ export function TaskList({
           <View>
             <TaskRow
               task={item.task}
-              onToggle={(task) => void toggleComplete(task, applyTask)}
+              onToggle={(task) =>
+                void toggleComplete(task, applyTask, {
+                  user: auth.user,
+                  refreshUser: auth.refreshUser,
+                })
+              }
               onPress={(task) => router.push(`/todos/task/${task.id}`)}
             />
             {item.children.map((child) => (
@@ -119,7 +126,12 @@ export function TaskList({
                 key={child.id}
                 task={child}
                 indent
-                onToggle={(task) => void toggleComplete(task, applyTask)}
+                onToggle={(task) =>
+                void toggleComplete(task, applyTask, {
+                  user: auth.user,
+                  refreshUser: auth.refreshUser,
+                })
+              }
                 onPress={(task) => router.push(`/todos/task/${task.id}`)}
               />
             ))}

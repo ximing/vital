@@ -3,9 +3,11 @@ import { StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import type { InboxPreview } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
+import { markOnboarding } from '../../lib/onboarding';
 import { useTheme } from '../../theme/use-theme';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
@@ -16,6 +18,7 @@ import { toast } from '../../components/toast';
 export function InboxCompose() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
+  const auth = useAuth();
   const router = useRouter();
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
@@ -60,6 +63,7 @@ export function InboxCompose() {
         source: href === '' ? 'manual' : 'mobile',
       });
       toast(copy.toast.saved);
+      await markOnboarding(auth.user, auth.refreshUser, { capturedInbox: true });
       router.replace(`/inbox/${item.id}`);
     } catch (err) {
       setError(humanError(err));

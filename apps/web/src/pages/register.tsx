@@ -1,7 +1,7 @@
 import { registerInputSchema } from '@vital/dto';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { HOME_PATH, t } from '@/copy';
+import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { AuthLayout } from '@/pages/auth-layout';
 import { useAuthStore } from '@/state/auth-store';
@@ -48,7 +48,7 @@ export function RegisterPage() {
     setFormError(null);
     setSubmitting(true);
     void register(parsed.data)
-      .then(() => navigate(location.state?.from ?? HOME_PATH, { replace: true }))
+      .then(() => navigate('/onboarding', { replace: true }))
       .catch((err: unknown) => setFormError(humanError(err)))
       .finally(() => setSubmitting(false));
   }

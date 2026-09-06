@@ -33,9 +33,21 @@ export const onboardingStateSchema = z.object({
   createdTask: z.boolean().optional(),
   capturedInbox: z.boolean().optional(),
   wroteDaily: z.boolean().optional(),
+  completedTask: z.boolean().optional(),
+  openedWeekly: z.boolean().optional(),
+  pinnedTask: z.boolean().optional(),
   dismissed: z.boolean().optional(),
 });
 export type OnboardingState = z.infer<typeof onboardingStateSchema>;
+
+export const ONBOARDING_CHECKLIST_KEYS = [
+  'createdTask',
+  'completedTask',
+  'capturedInbox',
+  'openedWeekly',
+  'pinnedTask',
+] as const satisfies readonly (keyof OnboardingState)[];
+export type OnboardingChecklistKey = (typeof ONBOARDING_CHECKLIST_KEYS)[number];
 
 export const registerInputSchema = z.object({
   email: emailSchema,

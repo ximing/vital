@@ -15,8 +15,8 @@ import { loadUser, onAuthCleared, saveUser, secureTokenStore } from '../lib/toke
 type AuthContextValue = {
   ready: boolean;
   user: UserProfile | null;
-  login: (input: LoginInput) => Promise<void>;
-  register: (input: RegisterInput) => Promise<void>;
+  login: (input: LoginInput) => Promise<UserProfile>;
+  register: (input: RegisterInput) => Promise<UserProfile>;
   logout: () => Promise<void>;
   refreshUser: (next: UserProfile) => void;
 };
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: LoginInput) => {
       const res = await client.login(input);
       await applyUser(res.user);
+      return res.user;
     },
     [applyUser],
   );
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: RegisterInput) => {
       const res = await client.register(input);
       await applyUser(res.user);
+      return res.user;
     },
     [applyUser],
   );

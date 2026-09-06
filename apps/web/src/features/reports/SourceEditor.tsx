@@ -1,6 +1,7 @@
 import { renderToken } from '@vital/markdown';
 import { useEffect, useRef, useState } from 'react';
 import { t } from '@/copy';
+import { markOnboarding } from '@/features/onboarding/mark';
 import {
   insertEntityToken,
   slashFromText,
@@ -34,6 +35,7 @@ export function SourceEditor({
     const next = insertEntityToken(value, slash.from, slash.to, hit.kind, hit.id);
     onChange(next);
     mergeEmbedsStore(withStubEmbed({ tasks: {}, inbox: {} }, hit.kind, hit.id, hit.title));
+    if (hit.kind === 'task') void markOnboarding({ pinnedTask: true });
     const cursor = slash.from + renderToken(hit.kind, hit.id).length;
     setSlash(null);
     requestAnimationFrame(() => {

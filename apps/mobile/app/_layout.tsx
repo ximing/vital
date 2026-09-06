@@ -31,6 +31,8 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ title: copy.auth.login }} />
             <Stack.Screen name="register" options={{ title: copy.auth.register }} />
+            <Stack.Screen name="onboarding" options={{ title: copy.nav.onboarding }} />
+            <Stack.Screen name="search" options={{ title: copy.nav.search }} />
           </Stack>
           <ToastHost />
         </View>

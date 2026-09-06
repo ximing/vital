@@ -10,7 +10,7 @@ import type {
 } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
-import { useAuthStore } from '@/state/auth-store';
+import { markOnboarding } from '@/features/onboarding/mark';
 import { useTodosUi } from './ui-store';
 
 export const todoKeys = {
@@ -80,15 +80,7 @@ export function useTodoActions() {
     mutationFn: (input: CreateTaskInput) => client.createTask(input),
     onSuccess: async (task) => {
       await invalidate();
-      const user = useAuthStore.getState().user;
-      if (user && user.onboarding.createdTask !== true) {
-        try {
-          const next = await client.updateOnboarding({ createdTask: true });
-          useAuthStore.getState().setUser(next);
-        } catch {
-          // Checklist is best-effort.
-        }
-      }
+      await markOnboarding({ createdTask: true });
       useTodosUi.getState().setSelected(task.id);
     },
   });
@@ -141,6 +133,7 @@ export function useTodoActions() {
         useTodosUi.getState().finishUndo();
       }
       await invalidate();
+      await markOnboarding({ completedTask: true });
     } catch (err) {
       useTodosUi.getState().failComplete();
       throw err;
