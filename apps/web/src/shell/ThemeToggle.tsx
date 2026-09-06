@@ -1,7 +1,7 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import type { ThemeChoice } from '@/lib/theme';
+import { resolveTheme, type ThemeChoice } from '@/lib/theme';
 import { useAuth } from '@/services/auth.service';
 import { useThemeService } from '@/services/theme.service';
 import { Icon } from '@/ui/icon';
@@ -11,6 +11,48 @@ const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'light', label: t.theme.light, icon: Sun },
   { value: 'dark', label: t.theme.dark, icon: Moon },
 ];
+
+export function ThemeSwitch() {
+  const choice = useThemeService((s) => s.choice);
+  const setChoice = useThemeService((s) => s.setChoice);
+  const user = useAuth((s) => s.user);
+  const dark = resolveTheme(choice) === 'dark';
+
+  function toggle() {
+    const next = dark ? 'light' : 'dark';
+    setChoice(next);
+    if (user) {
+      void client.updateMe({ themePreference: next }).catch(() => undefined);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={dark}
+      aria-label={t.theme.switch}
+      onClick={toggle}
+      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg hover:bg-surface-muted"
+    >
+      <span className="flex items-center gap-2">
+        <Icon icon={dark ? Moon : Sun} size={16} />
+        {dark ? t.theme.dark : t.theme.light}
+      </span>
+      <span
+        className={`relative h-5 w-9 shrink-0 rounded-full transition-[background-color] duration-[var(--ease-out)] ${
+          dark ? 'bg-accent' : 'bg-surface-muted'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-[left] duration-[var(--ease-out)] ${
+            dark ? 'left-4' : 'left-0.5'
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
 
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const choice = useThemeService((s) => s.choice);

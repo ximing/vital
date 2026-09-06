@@ -327,7 +327,16 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           }}
           onCreateTag={async (name) => actions.createTag.mutateAsync(name)}
         />
-      ) : null}
+      ) : (
+        <aside
+          className="flex h-screen w-detail shrink-0 flex-col border-l border-border bg-surface"
+          aria-label={t.todos.pickTask}
+        >
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+            {t.todos.pickTask}
+          </div>
+        </aside>
+      )}
 
       <UndoToast onUndo={() => void actions.undoComplete()} />
     </div>

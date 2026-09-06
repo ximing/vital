@@ -50,7 +50,6 @@ export function ListView({
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
 }) {
   const selectedId = useTodosUi((s) => s.selectedId);
-  const setSelected = useTodosUi((s) => s.setSelected);
   const openDetail = useTodosUi((s) => s.openDetail);
 
   function handleDragStart(event: DragEvent<HTMLDivElement>, task: Task) {
@@ -85,7 +84,7 @@ export function ListView({
         selected={selectedId === task.id}
         timeZone={timeZone}
         tags={tags}
-        onSelect={() => setSelected(task.id)}
+        onSelect={() => openDetail(task.id)}
         onOpen={() => openDetail(task.id)}
         onComplete={() => onComplete(task)}
         onDragStart={(event) => handleDragStart(event, task)}

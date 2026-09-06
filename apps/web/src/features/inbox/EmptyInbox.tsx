@@ -9,22 +9,22 @@ export function EmptyInbox() {
   const [hint, setHint] = useState(false);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
+    <div className="flex flex-1 flex-col items-center px-3 py-8 text-center">
       <EmptyArt />
-      <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
+      <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {t.empty.inbox}
       </p>
-      <div className="mt-5 flex flex-wrap justify-center gap-2">
+      <div className="mt-4 flex w-full flex-col gap-2">
         <button
           type="button"
-          className="inline-flex min-h-[var(--touch-min)] items-center rounded-md bg-accent-subtle px-4 text-fg transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
+          className="inline-flex min-h-9 w-full items-center justify-center bg-accent-subtle px-3 text-[length:var(--text-meta)] text-fg transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
           onClick={() => setHint(true)}
         >
           {t.empty.actionExtension}
         </button>
         <button
           type="button"
-          className="inline-flex min-h-[var(--touch-min)] items-center rounded-md px-4 text-muted transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+          className="inline-flex min-h-9 w-full items-center justify-center px-3 text-[length:var(--text-meta)] text-muted transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
           onClick={() => {
             requestPaste();
             document.getElementById(PASTE_URL_ID)?.focus();

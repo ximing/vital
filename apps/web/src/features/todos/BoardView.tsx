@@ -28,7 +28,6 @@ export function BoardView({
 }) {
   const boardMode = useTodosUi((s) => s.boardMode);
   const selectedId = useTodosUi((s) => s.selectedId);
-  const setSelected = useTodosUi((s) => s.setSelected);
   const openDetail = useTodosUi((s) => s.openDetail);
   const setBoardMode = useTodosUi((s) => s.setBoardMode);
 
@@ -53,7 +52,7 @@ export function BoardView({
         selected={selectedId === task.id}
         timeZone={timeZone}
         tags={tags}
-        onSelect={() => setSelected(task.id)}
+        onSelect={() => openDetail(task.id)}
         onOpen={() => openDetail(task.id)}
         onComplete={() => onComplete(task)}
         onDragStart={(event) => dragStart(event, task)}

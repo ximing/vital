@@ -1,18 +1,25 @@
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, Calendar, Folder, Plus, Search, Settings, Sun } from 'lucide-react';
+import { BookOpen, Calendar, Folder, PanelLeftClose, PanelLeftOpen, Plus, Search, Sun } from 'lucide-react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
 import { useInboxUi } from '@/features/inbox';
 import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { useTodosUi } from '@/features/todos';
-import { useAuth } from '@/services/auth.service';
-import { initialsOf } from '@/shell/rail-nav';
+import { AccountMenu } from '@/shell/AccountMenu';
+import {
+  loadPaneWidth,
+  loadRailCollapsed,
+  RAIL_COLLAPSED,
+  RAIL_EXPANDED,
+  savePaneWidth,
+  saveRailCollapsed,
+} from '@/shell/chrome';
 import { SecondaryPane } from '@/shell/SecondaryPane';
 import { sectionOf, showsPane, type AppSection } from '@/shell/section';
-import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { Icon } from '@/ui/icon';
+import { useState } from 'react';
 
 const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
   { id: 'rhythm', to: HOME_PATH, icon: Sun, label: t.rail.rhythm },
@@ -22,7 +29,6 @@ const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[]
 ];
 
 export function Shell() {
-  const user = useAuth((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
   const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
@@ -30,42 +36,57 @@ export function Shell() {
   const section = sectionOf(location.pathname, location.search);
   const pane = showsPane(section);
   const onSearch = section === 'search';
-  const onSettings = section === 'settings';
-  const initials = initialsOf(user?.displayName ?? '');
+  const [collapsed, setCollapsed] = useState(loadRailCollapsed);
+  const [paneWidth, setPaneWidth] = useState(loadPaneWidth);
+  const railW = collapsed ? RAIL_COLLAPSED : RAIL_EXPANDED;
+  const chromeLeft = railW + (pane ? paneWidth : 0);
+
+  function toggleRail() {
+    const next = !collapsed;
+    setCollapsed(next);
+    saveRailCollapsed(next);
+  }
 
   return (
     <div className="min-h-screen bg-canvas text-fg">
       <aside
-        className="fixed inset-y-0 left-0 z-[var(--z-sticky)] flex w-rail flex-col border-r border-border bg-surface"
+        className="fixed inset-y-0 left-0 z-[var(--z-sticky)] flex flex-col border-r border-border bg-surface"
+        style={{ width: railW }}
         aria-label="主导航"
       >
-        <div className="px-3 pb-2 pt-5">
-          <NavLink to={HOME_PATH} className="flex items-center gap-2 px-0.5">
-            <VitalMark className="h-7 w-7 shrink-0 text-accent" />
-            <span className="truncate text-[length:var(--text-meta)] font-semibold tracking-[-0.03em]">
-              {t.brand.wordmark}
-            </span>
+        <div className={`flex shrink-0 items-center ${collapsed ? 'justify-center px-1 pt-4' : 'px-3 pt-5'} pb-2`}>
+          <NavLink to={HOME_PATH} className="flex items-center gap-2" title={t.brand.wordmark}>
+            <VitalMark className="h-8 w-8 shrink-0 text-accent" />
+            {collapsed ? null : (
+              <span className="truncate text-[length:var(--text-meta)] font-semibold tracking-[-0.03em]">
+                {t.brand.wordmark}
+              </span>
+            )}
           </NavLink>
         </div>
 
-        <div className="px-2 pb-2">
+        <div className={`pb-2 ${collapsed ? 'px-1' : 'px-2'}`}>
           <NavLink
             to="/search"
+            title={t.nav.search}
             aria-label={t.nav.search}
-            className={`flex h-9 items-center gap-2 px-2 text-[length:var(--text-meta)] ${
-              onSearch ? 'bg-surface-muted text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
-            }`}
+            className={`flex h-9 items-center gap-2 text-[length:var(--text-meta)] ${
+              collapsed ? 'justify-center' : 'px-2'
+            } ${onSearch ? 'bg-surface-muted text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'}`}
           >
-            <Icon icon={Search} size={14} className="shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{t.nav.search}</span>
+            <Icon icon={Search} size={16} className="shrink-0" />
+            {collapsed ? null : <span className="min-w-0 truncate">{t.nav.search}</span>}
           </NavLink>
         </div>
 
-        <div className="px-2 pb-3">
+        <div className={`pb-3 ${collapsed ? 'px-1' : 'px-2'}`}>
           <button
             type="button"
-            className="flex min-h-[var(--control-h)] w-full items-center justify-center gap-1.5 rounded-2xl bg-accent text-[length:var(--text-meta)] font-medium text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
+            className={`flex min-h-[var(--control-h)] w-full items-center justify-center gap-1.5 rounded-2xl bg-accent font-medium text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover ${
+              collapsed ? '' : 'text-[length:var(--text-meta)]'
+            }`}
             aria-label={t.nav.quickAdd}
+            title={t.nav.quickAdd}
             onClick={() => {
               if (section === 'capture') {
                 requestPaste();
@@ -77,7 +98,7 @@ export function Shell() {
             }}
           >
             <Icon icon={Plus} size={16} />
-            {t.nav.quickAdd}
+            {collapsed ? null : t.nav.quickAdd}
           </button>
         </div>
 
@@ -88,51 +109,50 @@ export function Shell() {
               <NavLink
                 key={item.id}
                 to={item.to}
-                className={`relative flex min-h-[var(--touch-min)] items-center gap-2 px-3 text-[length:var(--text-meta)] ${
+                title={item.label}
+                className={`relative flex min-h-[var(--touch-min)] items-center gap-2 text-[length:var(--text-meta)] ${
+                  collapsed ? 'justify-center px-0' : 'px-3'
+                } ${
                   active
                     ? "bg-surface-muted text-fg before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-accent before:content-['']"
                     : 'text-muted hover:bg-surface-muted hover:text-fg'
                 }`}
               >
                 <Icon icon={item.icon} className="shrink-0 opacity-80" />
-                <span className="truncate">{item.label}</span>
+                {collapsed ? null : <span className="truncate">{item.label}</span>}
               </NavLink>
             );
           })}
         </nav>
 
-        <div className="shrink-0 border-t border-border">
-          <NavLink
-            to="/settings"
-            className={`flex items-center gap-2 px-3 py-2.5 ${
-              onSettings ? 'bg-surface-muted text-fg' : 'text-fg hover:bg-surface-muted'
-            }`}
+        <div className={`px-1 pb-1 ${collapsed ? '' : 'px-2'}`}>
+          <button
+            type="button"
+            className="flex h-9 w-full items-center justify-center text-muted hover:bg-surface-muted hover:text-fg"
+            aria-pressed={collapsed}
+            title={collapsed ? t.rail.expand : t.rail.collapse}
+            aria-label={collapsed ? t.rail.expand : t.rail.collapse}
+            onClick={toggleRail}
           >
-            <span
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-[length:var(--text-caption)] font-semibold leading-none"
-              aria-hidden
-            >
-              {initials}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
-                {user?.displayName ?? ''}
-              </span>
-              <span className="block text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-                {t.nav.settings}
-              </span>
-            </span>
-            <Icon icon={Settings} size={14} className="shrink-0 text-muted" />
-          </NavLink>
-          <div className="px-2 pb-3">
-            <ThemeToggle compact />
-          </div>
+            <Icon icon={collapsed ? PanelLeftOpen : PanelLeftClose} size={16} />
+          </button>
         </div>
+        <AccountMenu collapsed={collapsed} railWidth={railW} />
       </aside>
 
-      {pane ? <SecondaryPane section={section} /> : null}
+      {pane ? (
+        <SecondaryPane
+          section={section}
+          left={railW}
+          width={paneWidth}
+          onResize={(next) => {
+            setPaneWidth(next);
+            savePaneWidth(next);
+          }}
+        />
+      ) : null}
 
-      <div className={pane ? 'pl-chrome' : 'pl-rail'}>
+      <div style={{ paddingLeft: chromeLeft }}>
         <main id="main" className="min-h-screen">
           <Outlet />
         </main>

@@ -69,8 +69,8 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
   const site = preview ? (preview.siteName ?? hostLabel(preview.originalUrl)) : null;
 
   return (
-    <div className="px-4 pb-3 pt-1">
-      <form onSubmit={onSubmit} className="flex flex-wrap items-center gap-2">
+    <div className="min-w-0 px-3 pb-3 pt-1">
+      <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-2">
         <input
           id={PASTE_URL_ID}
           ref={inputRef}
@@ -87,9 +87,9 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
           }}
           placeholder={t.inbox.pastePlaceholder}
           aria-label={t.inbox.pasteUrl}
-          className="h-[var(--field-h)] min-w-[16rem] flex-1 rounded-md border border-border bg-surface px-3 text-fg placeholder:text-muted"
+          className="h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
         />
-        <Button type="submit" variant="ghost" loading={extracting} disabled={disabled || busy}>
+        <Button type="submit" variant="ghost" loading={extracting} disabled={disabled || busy} className="w-full">
           {extracting ? t.inbox.extracting : t.inbox.extract}
         </Button>
       </form>
@@ -99,7 +99,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
         </div>
       ) : null}
       {preview ? (
-        <div className="mt-3 rounded-md border border-border bg-surface px-4 py-3">
+        <div className="mt-3 min-w-0 rounded-md border border-border bg-surface px-3 py-3">
           <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
             {t.inbox.preview}
           </p>

@@ -12,6 +12,7 @@ import {
   Plus,
   Sun,
 } from 'lucide-react';
+import { useRef, type PointerEvent } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { t } from '@/copy';
 import { REPORT_TYPES } from '@/features/reports/model';
@@ -25,6 +26,7 @@ import {
   RHYTHM_LIST_IDS,
   type AppSection,
 } from '@/shell/section';
+import { clampPaneWidth } from '@/shell/chrome';
 import { Icon } from '@/ui/icon';
 
 const RHYTHM_ITEMS: { id: (typeof RHYTHM_LIST_IDS)[number]; icon: typeof Sun; label: string }[] = [
@@ -42,8 +44,19 @@ const REPORT_ICONS = {
   yearly: CalendarFold,
 } as const;
 
-export function SecondaryPane({ section }: { section: AppSection }) {
+export function SecondaryPane({
+  section,
+  left,
+  width,
+  onResize,
+}: {
+  section: AppSection;
+  left: number;
+  width: number;
+  onResize: (width: number) => void;
+}) {
   const location = useLocation();
+  const drag = useRef<{ startX: number; startW: number } | null>(null);
   const title =
     section === 'rhythm'
       ? t.rail.rhythm
@@ -53,9 +66,28 @@ export function SecondaryPane({ section }: { section: AppSection }) {
           ? t.rail.lists
           : t.rail.reflect;
 
+  function onPointerDown(event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = { startX: event.clientX, startW: width };
+  }
+
+  function onPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (!drag.current) return;
+    onResize(clampPaneWidth(drag.current.startW + event.clientX - drag.current.startX));
+  }
+
+  function onPointerUp(event: PointerEvent<HTMLDivElement>) {
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
   return (
     <aside
-      className="fixed inset-y-0 left-rail z-[var(--z-sticky)] flex w-pane flex-col border-r border-border bg-canvas"
+      className="fixed inset-y-0 z-[var(--z-sticky)] flex flex-col border-r border-border bg-canvas"
+      style={{ left, width }}
       aria-label={title}
     >
       <div className="shrink-0 px-4 pb-2 pt-5">
@@ -74,6 +106,16 @@ export function SecondaryPane({ section }: { section: AppSection }) {
           {section === 'reflect' ? <ReflectNav search={location.search} /> : null}
         </nav>
       )}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t.rail.resize}
+        className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize hover:bg-accent/40"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      />
     </aside>
   );
 }

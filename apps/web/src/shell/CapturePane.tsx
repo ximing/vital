@@ -24,7 +24,7 @@ export function CapturePane() {
   const empty = items.length === 0 && pending.length === 0 && !inboxQuery.isLoading;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
       <PasteUrl disabled={!online} />
       {inboxQuery.error ? (
         <div className="flex items-center gap-2 px-3 py-2">
