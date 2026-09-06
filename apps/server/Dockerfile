@@ -20,7 +20,7 @@ COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/mobile/package.json apps/mobile/
 COPY apps/extension/package.json apps/extension/
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --filter=@vital/server...
 
 FROM deps AS build
 COPY packages/tsconfig packages/tsconfig
@@ -45,7 +45,7 @@ COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/mobile/package.json apps/mobile/
 COPY apps/extension/package.json apps/extension/
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --filter=@vital/server...
 
 FROM base AS runtime
 ENV NODE_ENV=production
