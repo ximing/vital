@@ -78,12 +78,13 @@ describe('web shell contract', () => {
     expect(pkg.dependencies['@vital/markdown']).toBe('workspace:*');
     const copy = read('src/copy.ts');
     expect(copy).toContain('写今天的日报，把完成的事留下痕迹。');
-    expect(copy).toContain('用 / 插入任务或稍后读。');
+    expect(copy).toContain('格子深浅是完成多少');
     expect(copy).toContain('从本周期填充');
     const ws = read('src/features/reports/ReportsWorkspace.tsx');
     const model = read('src/features/reports/model.ts');
     expect(ws).toContain('syncHead');
     expect(ws).toContain('getReportEmbeds');
+    expect(ws).toContain('ReportsOverview');
     expect(model).toContain('REPORT_REVISION_CONFLICT');
     expect(ws).not.toContain("authMode: 'bearer'");
   });

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { InboxStatus } from './inbox.js';
 import { uuidSchema } from './lists.js';
 import { reportTypeSchema, type ReportType } from './reportTemplates.js';
-import type { TaskStatus } from './tasks.js';
+import type { TaskPriority, TaskStatus } from './tasks.js';
 
 export interface ReportTaskEmbed {
   id: string;
@@ -103,3 +103,81 @@ export type FillReportInput = z.infer<typeof fillReportInputSchema>;
 export const reportIdParamsSchema = z.object({
   id: uuidSchema,
 });
+
+export const reportOverviewQuerySchema = currentReportQuerySchema;
+export type ReportOverviewQuery = CurrentReportQuery;
+
+export interface ReportPeriodRef {
+  start: string;
+  end: string;
+  label: string;
+}
+
+export interface ReportHeatCell {
+  date: string;
+  completed: number;
+  wrote: boolean;
+}
+
+export interface ReportRecentDone {
+  taskId: string;
+  title: string;
+  completedAt: string;
+  priority: TaskPriority;
+}
+
+export interface ReportListStat {
+  listId: string;
+  name: string;
+  count: number;
+}
+
+export interface ReportOverviewTotals {
+  completed: number;
+  wrote: number;
+  carried: number;
+  captured: number;
+  completedDelta: number;
+  wroteDelta: number;
+}
+
+export interface ReportOverview {
+  type: ReportType;
+  period: ReportPeriodRef;
+  previousPeriod: ReportPeriodRef;
+  totals: ReportOverviewTotals;
+  streaks: { completedDays: number; wroteDays: number };
+  heatmap: ReportHeatCell[];
+  heatmapGrain: 'day' | 'month' | 'year';
+  recentDone: ReportRecentDone[];
+  byPriority: { 0: number; 1: number; 2: number; 3: number };
+  byList: ReportListStat[];
+}
+
+export interface ReportReviewTask {
+  taskId: string;
+  title: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  dueAt: string | null;
+  completedAt: string | null;
+  completionId: string | null;
+  listId: string;
+}
+
+export interface ReportReviewInbox {
+  inboxId: string;
+  title: string;
+  status: InboxStatus;
+  capturedAt: string;
+}
+
+export interface ReportReview {
+  reportId: string;
+  type: ReportType;
+  periodStart: string;
+  periodEnd: string;
+  completed: ReportReviewTask[];
+  carried: ReportReviewTask[];
+  captured: ReportReviewInbox[];
+}

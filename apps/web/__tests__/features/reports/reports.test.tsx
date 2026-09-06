@@ -1,14 +1,20 @@
-import { DEFAULT_NOTIFICATION_PREFS, type Report, type ReportListItem, type UserProfile } from '@vital/dto';
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  type Report,
+  type ReportListItem,
+  type ReportOverview,
+  type ReportReview,
+  type UserProfile,
+} from '@vital/dto';
 import { ApiError } from '@vital/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { setAuthForTest } from '@/services/auth.service';
-import { SAVE_DEBOUNCE_MS } from '../../../src/features/reports/model';
 import { ReportsWorkspace } from '../../../src/features/reports/ReportsWorkspace';
 import { resetReportUi } from '../../../src/features/reports/report-ui.service';
 import { RabRoot } from '../../helpers/rab-root';
@@ -20,7 +26,9 @@ vi.mock('@/api/client', async (importOriginal) => {
     client: {
       listReports: vi.fn(),
       getCurrentReport: vi.fn(),
+      getReportOverview: vi.fn(),
       getReport: vi.fn(),
+      getReportReview: vi.fn(),
       getReportEmbeds: vi.fn(),
       patchReport: vi.fn(),
       fillReport: vi.fn(),
@@ -96,6 +104,54 @@ function asListItem(report: Report): ReportListItem {
   return item;
 }
 
+function makeOverview(over: Partial<ReportOverview> = {}): ReportOverview {
+  const heatmap = Array.from({ length: 30 }, (_, i) => {
+    const date = `2026-09-${String(i + 1).padStart(2, '0')}`;
+    return {
+      date,
+      completed: date === '2026-09-05' ? 2 : 0,
+      wrote: date === '2026-09-05',
+    };
+  });
+  return {
+    type: 'daily',
+    period: { start: '2026-09-06', end: '2026-09-07', label: '2026年9月6日' },
+    previousPeriod: { start: '2026-09-05', end: '2026-09-06', label: '2026年9月5日' },
+    totals: { completed: 1, wrote: 0, carried: 1, captured: 0, completedDelta: 1, wroteDelta: 0 },
+    streaks: { completedDays: 1, wroteDays: 0 },
+    heatmap,
+    heatmapGrain: 'day',
+    recentDone: [{ taskId: TASK_ID, title: '写纪要', completedAt: '2026-09-06T00:01:00.000Z', priority: 1 }],
+    byPriority: { 0: 0, 1: 1, 2: 0, 3: 0 },
+    byList: [],
+    ...over,
+  };
+}
+
+function makeReview(over: Partial<ReportReview> = {}): ReportReview {
+  return {
+    reportId: 'r-daily',
+    type: 'daily',
+    periodStart: '2026-09-06',
+    periodEnd: '2026-09-07',
+    completed: [],
+    carried: [
+      {
+        taskId: TASK_ID,
+        title: '写纪要',
+        priority: 1,
+        status: 'todo',
+        dueAt: null,
+        completedAt: null,
+        completionId: null,
+        listId: 'inbox-1',
+      },
+    ],
+    captured: [],
+    ...over,
+  };
+}
+
 function renderAt(path: string) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -145,6 +201,8 @@ describe('reports workspace', () => {
       reportsMaxUpdatedAt: 'r1',
       revision: 1,
     });
+    vi.mocked(client.getReportOverview).mockResolvedValue(makeOverview());
+    vi.mocked(client.getReportReview).mockResolvedValue(makeReview());
     vi.mocked(client.getReportEmbeds).mockResolvedValue({
       revision: 1,
       embeds: daily.embeds,
@@ -180,16 +238,21 @@ describe('reports workspace', () => {
     resetReportUi();
   });
 
-  it('opens current daily and keeps ## out of WYSIWYG', async () => {
+  it('shows overview stats and heatmap on /reports', async () => {
     renderAt('/reports');
-    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
-    expect(await screen.findByText('今日完成')).toBeInTheDocument();
-    expect(screen.queryByTestId('report-source')).not.toBeInTheDocument();
-    expect(screen.getByTestId('report-wysiwyg').textContent).not.toContain('##');
-    expect(screen.getByRole('checkbox', { name: t.reports.complete })).toBeInTheDocument();
+    expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
+    expect(screen.getByText(t.reports.completed)).toBeInTheDocument();
+    expect(screen.getByText(t.reports.wrote)).toBeInTheDocument();
     expect(screen.getByText('写纪要')).toBeInTheDocument();
-    expect(screen.getByTestId('streak-calendar')).toBeInTheDocument();
+    expect(screen.queryByLabelText(t.reports.title)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: t.reports.sourceToggle })).not.toBeInTheDocument();
+  });
+
+  it('opens the period review without leaking heading markers', async () => {
+    renderAt('/reports/r-daily');
+    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
+    expect(await screen.findByText('写纪要')).toBeInTheDocument();
+    expect(screen.getByTestId('report-wysiwyg').textContent).not.toContain('##');
     expect(screen.queryByTestId('report-source')).not.toBeInTheDocument();
   });
 
@@ -216,8 +279,8 @@ describe('reports workspace', () => {
       nextCursor: null,
     });
     const user = userEvent.setup();
-    renderAt('/reports/r-daily');
-    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
+    renderAt('/reports');
+    expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: `9月5日 · ${t.reports.wrote}` }));
     await waitFor(() => {
       expect(client.getCurrentReport).toHaveBeenCalledWith('daily', '2026-09-05');
@@ -225,66 +288,18 @@ describe('reports workspace', () => {
     expect(await screen.findByDisplayValue(past.title)).toBeInTheDocument();
   });
 
-  it('switches day/week/month/year via current get-or-create', async () => {
+  it('switches type on overview without opening a document', async () => {
     const user = userEvent.setup();
-    renderAt('/reports/r-daily');
-    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
+    renderAt('/reports');
+    expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: t.reports.weekly }));
     await waitFor(() => {
-      expect(client.getCurrentReport).toHaveBeenCalledWith('weekly', undefined);
+      expect(client.getReportOverview).toHaveBeenCalledWith('weekly', undefined);
     });
-    expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
+    expect(screen.queryByLabelText(t.reports.title)).not.toBeInTheDocument();
   });
 
-  it('fills the period and applies the returned body', async () => {
-    const user = userEvent.setup();
-    renderAt('/reports/r-daily');
-    expect(await screen.findByText('写纪要')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: t.reports.fill }));
-    await waitFor(() => {
-      expect(client.fillReport).toHaveBeenCalledWith(
-        'r-daily',
-        expect.objectContaining({ revision: expect.any(Number) }),
-      );
-    });
-    expect(await screen.findByText('一篇')).toBeInTheDocument();
-  });
-
-  it('fill after a dirty edit PATCHes first, fills with the bumped revision, and cancels autosave', async () => {
-    vi.mocked(client.fillReport).mockImplementation(async (id, input) => ({
-      ...daily,
-      id,
-      revision: input.revision + 1,
-      title: '本地标题',
-      bodyMd: `${daily.bodyMd}[[inbox:${INBOX_ID}]]\n`,
-      embeds: {
-        ...daily.embeds,
-        inbox: { [INBOX_ID]: { id: INBOX_ID, title: '一篇', status: 'unread', deletedAt: null } },
-      },
-    }));
-    const user = userEvent.setup();
-    renderAt('/reports/r-daily');
-    const title = await screen.findByLabelText(t.reports.title);
-    fireEvent.change(title, { target: { value: '本地标题' } });
-    await user.click(screen.getByRole('button', { name: t.reports.fill }));
-    await waitFor(() => {
-      expect(client.patchReport).toHaveBeenCalledWith(
-        'r-daily',
-        expect.objectContaining({ revision: 1, title: '本地标题' }),
-      );
-    });
-    await waitFor(() => {
-      expect(client.fillReport).toHaveBeenCalledWith('r-daily', { revision: 2 });
-    });
-    expect(await screen.findByText('一篇')).toBeInTheDocument();
-    expect(screen.queryByText(t.reports.conflict)).not.toBeInTheDocument();
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, SAVE_DEBOUNCE_MS + 50);
-    });
-    expect(client.patchReport).toHaveBeenCalledTimes(1);
-  });
-
-  it('toggles a task chip via complete, not a markdown patch', async () => {
+  it('toggles a carried task via complete, not a markdown patch', async () => {
     vi.mocked(client.completeTask).mockResolvedValue({
       task: {
         id: TASK_ID,
@@ -370,13 +385,12 @@ describe('reports workspace', () => {
     expect(screen.getByLabelText(t.reports.title)).toHaveValue(`${daily.title}改`);
   });
 
-  it('shows list empty copy when current cannot be opened', async () => {
-    vi.mocked(client.getCurrentReport).mockRejectedValue(
+  it('shows overview error when stats cannot load', async () => {
+    vi.mocked(client.getReportOverview).mockRejectedValue(
       new ApiError(500, 'INTERNAL_ERROR', '服务器内部错误'),
     );
-    vi.mocked(client.listReports).mockResolvedValue({ items: [], nextCursor: null });
     renderAt('/reports');
-    expect(await screen.findByText(t.empty.reports)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: t.empty.actionDaily })).toBeInTheDocument();
+    expect(await screen.findByText('服务器内部错误')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.reports.retry })).toBeInTheDocument();
   });
 });

@@ -3,6 +3,8 @@ import type {
   ReportCollection,
   ReportEmbeds,
   ReportListItem,
+  ReportOverview,
+  ReportReview,
   ReportType,
   SearchHit,
 } from '@vital/dto';
@@ -15,7 +17,9 @@ export const reportKeys = {
   all: ['reports'] as const,
   list: (type: ReportType) => ['reports', 'list', type] as const,
   current: (type: ReportType) => ['reports', 'current', type] as const,
+  overview: (type: ReportType, at = '') => ['reports', 'overview', type, at] as const,
   item: (id: string) => ['reports', 'item', id] as const,
+  review: (id: string) => ['reports', 'review', id] as const,
 };
 
 async function fetchAllReports(type: ReportType): Promise<ReportListItem[]> {
@@ -37,11 +41,27 @@ export function useReportListQuery(type: ReportType) {
   });
 }
 
+export function useReportOverviewQuery(type: ReportType, at?: string, enabled = true) {
+  return useQuery({
+    queryKey: reportKeys.overview(type, at ?? ''),
+    queryFn: (): Promise<ReportOverview> => client.getReportOverview(type, at),
+    enabled,
+  });
+}
+
 export function useCurrentReportQuery(type: ReportType, enabled = true) {
   return useQuery({
     queryKey: reportKeys.current(type),
     queryFn: () => client.getCurrentReport(type),
     enabled,
+  });
+}
+
+export function useReportReviewQuery(id: string, enabled = true) {
+  return useQuery({
+    queryKey: reportKeys.review(id),
+    queryFn: (): Promise<ReportReview> => client.getReportReview(id),
+    enabled: enabled && id !== '',
   });
 }
 
@@ -70,6 +90,8 @@ export function useReportActions() {
       cacheReport(report);
       void qc.invalidateQueries({ queryKey: reportKeys.list(report.type) });
       void qc.invalidateQueries({ queryKey: reportKeys.current(report.type) });
+      void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
+      void qc.invalidateQueries({ queryKey: reportKeys.review(report.id) });
     },
   });
 
@@ -83,6 +105,8 @@ export function useReportActions() {
     const report = await client.patchReport(id, input);
     cacheReport(report);
     void qc.invalidateQueries({ queryKey: reportKeys.list(report.type) });
+    void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
+    void qc.invalidateQueries({ queryKey: reportKeys.review(id) });
     await markWroteDaily(report.type);
     return report;
   }
@@ -103,7 +127,12 @@ export function useReportActions() {
     return client.getReportEmbeds(id);
   }
 
-  return { fill, save, loadCurrent, loadReport, loadEmbeds, cacheReport };
+  function refreshStats(type: ReportType, id?: string): void {
+    void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
+    if (id) void qc.invalidateQueries({ queryKey: reportKeys.review(id) });
+  }
+
+  return { fill, save, loadCurrent, loadReport, loadEmbeds, cacheReport, refreshStats };
 }
 
 function hitsFromSearch(items: SearchHit[]): SlashHit[] {

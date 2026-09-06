@@ -1,9 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ApiError } from '@vital/api-client';
 import type { EntityKind } from '@vital/markdown';
-import type { Report, ReportEmbeds, SyncHead, TaskStatus } from '@vital/dto';
+import {
+  extractNotes,
+  replaceNotes,
+  type Report,
+  type ReportReview,
+  type ReportReviewTask,
+  type SyncHead,
+} from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
@@ -16,9 +23,8 @@ import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
 import { Loading } from '../../components/Loading';
-import { ReportMarkdown } from '../../components/ReportMarkdown';
 import { Screen } from '../../components/Screen';
-import { toast, UNDO_MS } from '../../components/toast';
+import { toast } from '../../components/toast';
 import { InsertPicker } from './InsertPicker';
 import { insertToken, runReportFocusSync } from './report-sync';
 
@@ -29,16 +35,15 @@ export function ReportEditor({ reportId }: { reportId: string }) {
   const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
   const [bodyMd, setBodyMd] = useState('');
-  const [embeds, setEmbeds] = useState<ReportEmbeds>({ tasks: {}, inbox: {} });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [insertKind, setInsertKind] = useState<EntityKind | null>(null);
   const [editing, setEditing] = useState(false);
+  const [review, setReview] = useState<ReportReview | null>(null);
   const savedBody = useRef('');
   const bodyRef = useRef('');
   const reportRef = useRef<Report | null>(null);
   const headRef = useRef<SyncHead | null>(null);
-  const completionIds = useRef(new Map<string, string>());
 
   const applyReport = useCallback((next: Report) => {
     reportRef.current = next;
@@ -46,7 +51,6 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     savedBody.current = next.bodyMd;
     setReport(next);
     setBodyMd(next.bodyMd);
-    setEmbeds(next.embeds);
   }, []);
 
   const writeBody = useCallback((next: string) => {
@@ -75,10 +79,10 @@ export function ReportEditor({ reportId }: { reportId: string }) {
       if (result.report !== undefined) {
         if (bodyRef.current !== savedBody.current) return;
         applyReport(result.report);
-      } else if (result.embeds !== undefined) {
-        setEmbeds(result.embeds);
       }
       if (result.toastRemote) toast(copy.toast.remoteUpdated);
+      const nextReview = await client.getReportReview(reportId);
+      setReview(nextReview);
       setError(null);
     } catch (err) {
       setError(humanError(err));
@@ -142,45 +146,15 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     }
   }
 
-  async function onToggleTask(id: string, status: TaskStatus): Promise<void> {
-    if (status === 'done') {
-      const completionId = completionIds.current.get(id);
-      if (completionId === undefined) return;
-      try {
-        await client.uncompleteTask(id, { completionId });
-        const next = await client.getReportEmbeds(reportId);
-        setEmbeds(next.embeds);
-      } catch (err) {
-        toast(humanError(err));
-      }
-      return;
-    }
+  async function toggleReviewTask(item: ReportReviewTask): Promise<void> {
     try {
-      const res = await client.completeTask(id);
-      completionIds.current.set(id, res.undo.completionId);
-      const existing = embeds.tasks[id];
-      setEmbeds((prev) => ({
-        ...prev,
-        tasks: {
-          ...prev.tasks,
-          [id]: {
-            id,
-            title: existing?.title ?? copy.chipTask,
-            deletedAt: existing?.deletedAt ?? null,
-            status: 'done',
-          },
-        },
-      }));
-      toast({
-        message: copy.actions.completed,
-        durationMs: UNDO_MS,
-        action: {
-          label: copy.actions.undo,
-          onPress: () => {
-            void onToggleTask(id, 'done');
-          },
-        },
-      });
+      if (item.completionId) {
+        await client.uncompleteTask(item.taskId, { completionId: item.completionId });
+      } else {
+        await client.completeTask(item.taskId);
+      }
+      const nextReview = await client.getReportReview(reportId);
+      setReview(nextReview);
     } catch (err) {
       toast(humanError(err));
     }
@@ -194,23 +168,61 @@ export function ReportEditor({ reportId }: { reportId: string }) {
           {error}
         </Banner>
       ) : null}
-      <Text style={styles.hint}>{copy.empty.reportBody}</Text>
-      <ReportMarkdown
-        bodyMd={bodyMd}
-        embeds={embeds}
-        onToggleTask={(id, status) => void onToggleTask(id, status)}
-        onOpenInbox={(id) => router.push(`/inbox/${id}`)}
-      />
+      {review ? (
+        <View style={styles.review}>
+          <Text style={styles.section}>
+            {copy.reports.completed} {review.completed.length}
+          </Text>
+          {review.completed.length === 0 ? (
+            <Text style={styles.hint}>{copy.reports.emptyDone}</Text>
+          ) : (
+            review.completed.map((item) => (
+              <Text key={`${item.taskId}-${item.completionId ?? ''}`} style={styles.doneItem}>
+                {item.title}
+              </Text>
+            ))
+          )}
+          <Text style={styles.section}>
+            {copy.reports.carried} {review.carried.length}
+          </Text>
+          {review.carried.map((item) => (
+            <Pressable
+              key={item.taskId}
+              onPress={() => void toggleReviewTask(item)}
+              style={styles.carry}
+            >
+              <Text style={styles.carryTitle}>{item.title}</Text>
+            </Pressable>
+          ))}
+          <Text style={styles.section}>
+            {copy.reports.captured} {review.captured.length}
+          </Text>
+          {review.captured.map((item) => (
+            <Pressable key={item.inboxId} onPress={() => router.push(`/inbox/${item.inboxId}`)}>
+              <Text style={styles.carryTitle}>{item.title}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {editing ? (
         <Field
           label={copy.reports.write}
-          value={bodyMd}
-          onChangeText={writeBody}
+          value={report ? extractNotes(bodyMd, report.type) : ''}
+          onChangeText={(next) => {
+            if (!report) return;
+            writeBody(replaceNotes(bodyRef.current, report.type, next));
+          }}
           multiline
           autoCapitalize="sentences"
           autoCorrect
         />
-      ) : null}
+      ) : (
+        <Text style={styles.hint}>
+          {report && extractNotes(bodyMd, report.type).trim() !== ''
+            ? extractNotes(bodyMd, report.type)
+            : copy.empty.reportBody}
+        </Text>
+      )}
       <View style={styles.row}>
         <Button variant="secondary" onPress={() => setInsertKind('task')}>
           {copy.actions.insertTask}
@@ -245,4 +257,13 @@ const createStyles = (t: Theme) =>
   StyleSheet.create({
     hint: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
     row: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
+    review: { gap: t.space[2] },
+    section: { fontSize: t.type.caption.fontSize, color: t.fgMuted, marginTop: t.space[2] },
+    doneItem: {
+      fontSize: t.type.body.fontSize,
+      color: t.fgMuted,
+      textDecorationLine: 'line-through',
+    },
+    carry: { paddingVertical: t.space[2] },
+    carryTitle: { fontSize: t.type.body.fontSize, color: t.fgPrimary },
   });

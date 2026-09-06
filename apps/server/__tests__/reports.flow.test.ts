@@ -317,4 +317,94 @@ describe('reports', () => {
     expect(current.json().bodyMd).toContain('## 未完成 / 结转');
     expect(current.json().title).toContain('周报');
   });
+
+  it('overview counts completions and review lists done vs carried', async () => {
+    const alice = await registerUser(app);
+    const list = await inboxId(app, alice.token);
+    const tz = 'Asia/Shanghai';
+    const todayNoon = DateTime.now().setZone(tz).startOf('day').plus({ hours: 12 }).toISO();
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '写纪要', listId: list, dueAt: todayNoon, timezone: tz, priority: 1 },
+    });
+    expect(created.statusCode).toBe(201);
+    const done = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${created.json().id}/complete`,
+      token: alice.token,
+    });
+    expect(done.statusCode).toBe(200);
+    const open = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '还没做', listId: list, dueAt: todayNoon, timezone: tz },
+    });
+    expect(open.statusCode).toBe(201);
+
+    const overview = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/overview?type=daily',
+      token: alice.token,
+    });
+    expect(overview.statusCode).toBe(200);
+    expect(overview.json().totals.completed).toBe(1);
+    expect(overview.json().totals.carried).toBeGreaterThanOrEqual(1);
+    expect(overview.json().recentDone[0]?.title).toBe('写纪要');
+    expect(overview.json().heatmap.length).toBeGreaterThan(0);
+
+    const current = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/current?type=daily',
+      token: alice.token,
+    });
+    const review = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/reports/${current.json().id}/review`,
+      token: alice.token,
+    });
+    expect(review.statusCode).toBe(200);
+    expect(review.json().completed.map((row: { title: string }) => row.title)).toContain('写纪要');
+    expect(review.json().carried.map((row: { title: string }) => row.title)).toContain('还没做');
+  });
+
+  it('fill does not count as wrote on overview', async () => {
+    const alice = await registerUser(app);
+    const current = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/current?type=daily',
+      token: alice.token,
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/reports/${current.json().id}/fill`,
+      token: alice.token,
+      payload: { revision: current.json().revision },
+    });
+    const overview = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/overview?type=daily',
+      token: alice.token,
+    });
+    expect(overview.json().totals.wrote).toBe(0);
+
+    const patched = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/reports/${current.json().id}`,
+      token: alice.token,
+      payload: {
+        revision: current.json().revision + 1,
+        bodyMd: `${current.json().bodyMd}留下一句。\n`,
+      },
+    });
+    expect(patched.statusCode).toBe(200);
+    const after = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/overview?type=daily',
+      token: alice.token,
+    });
+    expect(after.json().totals.wrote).toBe(1);
+  });
 });

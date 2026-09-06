@@ -1,5 +1,6 @@
-import type { Report, ReportType, SyncHead } from '@vital/dto';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Report, ReportReviewTask, ReportType, SyncHead } from '@vital/dto';
+import { extractNotes, replaceNotes } from '@vital/dto';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -8,7 +9,6 @@ import { markOnboarding } from '@/features/onboarding/mark';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
-import { EmptyArt } from '@/ui/empty-art';
 import {
   applyRemoteBody,
   decidePoll,
@@ -20,14 +20,10 @@ import {
   REPORT_TYPES,
   SAVE_DEBOUNCE_MS,
 } from './model';
-import {
-  useCurrentReportQuery,
-  useReportActions,
-  useReportListQuery,
-  useReportQuery,
-} from './queries';
+import { useReportActions, useReportQuery, useReportReviewQuery } from './queries';
 import { useAuth } from '@/services/auth.service';
-import { StreakCalendar } from './StreakCalendar';
+import { ReportsOverview } from './Overview';
+import { ReviewLists } from './ReviewLists';
 import { reportUi } from './report-ui.service';
 import { WysiwygEditor } from './WysiwygEditor';
 
@@ -80,10 +76,9 @@ export function ReportsWorkspace() {
   const timeZone = user?.timezone ?? 'UTC';
   const weekStartsOn = user?.weekStartsOn === 0 ? 0 : 1;
 
-  const currentQuery = useCurrentReportQuery(typeParam, id === '');
   const reportQuery = useReportQuery(id, id !== '');
+  const reviewQuery = useReportReviewQuery(id, id !== '');
   const liveType: ReportType = reportQuery.data?.type ?? typeParam;
-  const listQuery = useReportListQuery(liveType);
 
   useEffect(() => {
     if (liveType === 'weekly') void markOnboarding({ openedWeekly: true });
@@ -140,12 +135,6 @@ export function ReportsWorkspace() {
       saveTimerRef.current = null;
     }
   }
-
-  useEffect(() => {
-    if (id !== '') return;
-    const current = currentQuery.data;
-    if (current) navigate(reportHref(current.id, current.type), { replace: true });
-  }, [id, currentQuery.data, navigate]);
 
   useEffect(() => {
     if (id === '' || !online) return;
@@ -308,57 +297,11 @@ export function ReportsWorkspace() {
   }
 
   async function switchType(next: ReportType): Promise<void> {
-    await openPeriod(next);
-  }
-
-  async function onFill(): Promise<void> {
-    const live = sessionRef.current;
-    if (
-      !live ||
-      live.id !== id ||
-      live.conflict ||
-      live.blockSave ||
-      live.filling ||
-      fillingRef.current
-    ) {
+    if (id === '') {
+      navigate(`/reports?type=${next}`);
       return;
     }
-    fillingRef.current = true;
-    cancelSaveTimer();
-    commitSession({ ...live, filling: true, blockSave: true, saveError: null });
-    try {
-      if (saveInFlightRef.current) await saveInFlightRef.current;
-      const after = sessionRef.current;
-      if (!after || after.id !== id) return;
-      let rev = after.revision;
-      if (sessionDirty(after)) {
-        const saved = await runSaveTracked(after);
-        rev = saved.revision;
-      }
-      const filled = await actions.fill.mutateAsync({ id: after.id, revision: rev });
-      fillingRef.current = false;
-      commitSession(sessionFrom(filled, sessionRef.current));
-      reportUi().setEmbeds(filled.embeds);
-    } catch (err) {
-      fillingRef.current = false;
-      if (isRevisionConflict(err)) {
-        patchLive((s) => ({
-          ...s,
-          filling: false,
-          conflict: true,
-          blockSave: true,
-          saveState: 'idle',
-        }));
-      } else {
-        patchLive((s) => ({
-          ...s,
-          filling: false,
-          blockSave: false,
-          saveError: humanError(err),
-          saveState: 'idle',
-        }));
-      }
-    }
+    await openPeriod(next);
   }
 
   async function reloadRemote(): Promise<void> {
@@ -389,6 +332,7 @@ export function ReportsWorkspace() {
         const res = await actions.loadEmbeds(id);
         reportUi().mergeEmbeds(res.embeds);
       }
+      actions.refreshStats(liveType, id);
     } catch (err) {
       patchLive((s) => ({ ...s, saveError: humanError(err) }));
     }
@@ -396,14 +340,31 @@ export function ReportsWorkspace() {
 
   function handleHydrate(md: string): void {
     patchLive((s) => {
-      const wasDirty = sessionDirty(s);
-      return { ...s, draftMd: md, serverMd: wasDirty ? s.serverMd : md };
+      const draftMd = replaceNotes(s.draftMd, liveType, md);
+      const wasDirty = sessionDirty({ ...s, draftMd });
+      return { ...s, draftMd, serverMd: wasDirty ? s.serverMd : draftMd };
     });
   }
 
-  const history = useMemo(() => listQuery.data ?? [], [listQuery.data]);
-  const loading = id === '' ? currentQuery.isLoading : reportQuery.isLoading && session?.id !== id;
-  const error = id === '' ? currentQuery.error : reportQuery.error;
+  async function toggleReviewTask(task: ReportReviewTask): Promise<void> {
+    try {
+      if (task.completionId) {
+        await client.uncompleteTask(task.taskId, { completionId: task.completionId });
+      } else {
+        await client.completeTask(task.taskId);
+      }
+      if (id !== '') {
+        const res = await actions.loadEmbeds(id);
+        reportUi().mergeEmbeds(res.embeds);
+      }
+      actions.refreshStats(liveType, id);
+    } catch (err) {
+      patchLive((s) => ({ ...s, saveError: humanError(err) }));
+    }
+  }
+
+  const loading = id !== '' && reportQuery.isLoading && session?.id !== id;
+  const error = id === '' ? null : reportQuery.error;
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
@@ -454,8 +415,8 @@ export function ReportsWorkspace() {
           <Button
             variant="ghost"
             onClick={() => {
-              void currentQuery.refetch();
               void reportQuery.refetch();
+              void reviewQuery.refetch();
             }}
           >
             {t.reports.retry}
@@ -493,83 +454,54 @@ export function ReportsWorkspace() {
         </div>
       ) : null}
 
-      {loading ? (
+      {id === '' ? (
+        <ReportsOverview
+          type={typeParam}
+          weekStartsOn={weekStartsOn}
+          timeZone={timeZone}
+          onPick={(ymd) => void openPeriod(typeParam, ymd)}
+        />
+      ) : loading || !session || session.id !== id ? (
         <div
-          className="mx-auto grid w-full max-w-[88rem] flex-1 gap-6 px-4 py-10 lg:grid-cols-[19rem_minmax(0,1fr)]"
+          className="mx-auto w-full max-w-[65ch] px-4 py-10"
           aria-busy="true"
           aria-label={t.reports.loading}
         >
-          <div className="skeleton-pulse h-72 rounded-2xl" />
-          <div className="skeleton-pulse h-96 rounded-2xl" />
+          <div className="skeleton-pulse mb-4 h-10 rounded-md" />
+          <div className="skeleton-pulse h-64 rounded-md" />
         </div>
-      ) : id === '' || !session || session.id !== id ? (
-        <EmptyReports onOpen={() => void switchType(typeParam)} />
       ) : (
-        <div className="mx-auto grid w-full max-w-[88rem] flex-1 gap-6 px-4 pb-16 pt-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
-          <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
-            <StreakCalendar
-              type={liveType}
-              items={history}
-              selectedStart={report?.periodStart}
-              weekStartsOn={weekStartsOn}
-              timeZone={timeZone}
-              onPick={(ymd) => void openPeriod(liveType, ymd)}
+        <div className="mx-auto flex w-full max-w-[65ch] flex-1 flex-col px-4 pb-16 pt-4">
+          <input
+            aria-label={t.reports.title}
+            value={session.draftTitle}
+            disabled={!online || session.filling}
+            onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
+            className="mb-4 w-full bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em] text-fg outline-none"
+          />
+          {reviewQuery.data ? (
+            <ReviewLists
+              review={reviewQuery.data}
+              onToggleTask={(task) => void toggleReviewTask(task)}
+              onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
+              onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
             />
-          </aside>
-          <div className="min-w-0 rounded-2xl bg-surface px-5 py-6 shadow-[inset_0_0_0_1px_var(--border-subtle)] sm:px-8">
-            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-              <input
-                aria-label={t.reports.title}
-                value={session.draftTitle}
-                disabled={!online || session.filling}
-                onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
-                className="min-w-0 flex-1 bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em] text-fg outline-none"
-              />
-              <Button
-                variant="ghost"
-                disabled={
-                  !online ||
-                  session.conflict ||
-                  session.blockSave ||
-                  session.filling ||
-                  session.saveState === 'saving' ||
-                  actions.fill.isPending
-                }
-                loading={actions.fill.isPending || session.filling}
-                onClick={() => void onFill()}
-              >
-                {actions.fill.isPending ? t.reports.filling : t.reports.fill}
-              </Button>
-            </div>
+          ) : null}
+          <div className="mt-8 min-w-0 rounded-2xl bg-surface px-5 py-5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
+            <p className="mb-2 text-[length:var(--text-caption)] text-muted">{t.reports.writeToday}</p>
             <WysiwygEditor
               key={`${session.id}:${session.editorKey}`}
-              bodyMd={session.draftMd}
+              bodyMd={extractNotes(session.draftMd, liveType)}
               editable={online && !session.filling}
-              onChange={(md) => patchLive((s) => ({ ...s, draftMd: md }))}
+              onChange={(md) =>
+                patchLive((s) => ({ ...s, draftMd: replaceNotes(s.draftMd, liveType, md) }))
+              }
               onHydrate={handleHydrate}
               onToggleTask={(taskId) => void toggleTask(taskId)}
             />
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function EmptyReports({ onOpen }: { onOpen: () => void }) {
-  return (
-    <div className="flex flex-col items-start px-4 py-16">
-      <EmptyArt />
-      <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
-        {t.empty.reports}
-      </p>
-      <button
-        type="button"
-        className="mt-5 inline-flex min-h-[var(--touch-min)] items-center rounded-md bg-accent-subtle px-4 text-fg transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
-        onClick={onOpen}
-      >
-        {t.empty.actionDaily}
-      </button>
     </div>
   );
 }

@@ -2,60 +2,37 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import type { ReportListItem, ReportType } from '@vital/dto';
+import type { ReportOverview, ReportType } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { markOnboarding } from '../../lib/onboarding';
 import { humanError, isNetworkError } from '../../lib/errors';
-import { localDateStamp } from '../../lib/format';
-import {
-  addDaysYmd,
-  addMonthsYmd,
-  monthGrid,
-  startOfWeekYmd,
-  ymdParts,
-} from '../../lib/calendar-grid';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
 import { Banner } from '../../components/Banner';
-import { EmptyState } from '../../components/EmptyState';
 import { Loading } from '../../components/Loading';
 import { TabHeader } from '../../components/TabHeader';
-import { Icon } from '../../ui/icon';
 
 const TYPES: ReportType[] = ['daily', 'weekly', 'monthly', 'yearly'];
-
-function periodStartOf(type: ReportType, ymd: string, weekStartsOn: 0 | 1): string {
-  if (type === 'daily') return ymd;
-  if (type === 'weekly') return startOfWeekYmd(ymd, weekStartsOn);
-  if (type === 'monthly') return `${ymd.slice(0, 7)}-01`;
-  return `${ymd.slice(0, 4)}-01-01`;
-}
 
 export function ReportList() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const auth = useAuth();
-  const tz = auth.user?.timezone ?? 'UTC';
-  const weekStartsOn = auth.user?.weekStartsOn === 0 ? 0 : 1;
-  const today = localDateStamp(tz);
   const [type, setType] = useState<ReportType>('daily');
-  const [items, setItems] = useState<ReportListItem[]>([]);
+  const [data, setData] = useState<ReportOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
-  const [cursor, setCursor] = useState(today.slice(0, 7) + '-01');
-  const [selected, setSelected] = useState<string | undefined>(undefined);
 
   const load = useCallback(async (nextType: ReportType) => {
     setLoading(true);
     try {
-      const page = await client.listReports({ type: nextType, limit: 100 });
-      setItems(page.items);
+      const overview = await client.getReportOverview(nextType);
+      setData(overview);
       setError(null);
       setOffline(false);
     } catch (err) {
@@ -64,7 +41,7 @@ export function ReportList() {
     } finally {
       setLoading(false);
     }
-  }, [setError, setItems, setLoading, setOffline]);
+  }, []);
 
   useFocusReload(
     useCallback(async () => {
@@ -73,14 +50,6 @@ export function ReportList() {
     }, [load, type]),
   );
 
-  const wrote = useMemo(() => {
-    const set = new Set<string>();
-    for (const item of items) {
-      if (item.revision > 1) set.add(item.periodStart);
-    }
-    return set;
-  }, [items]);
-
   async function openPeriod(at?: string): Promise<void> {
     setOpening(true);
     try {
@@ -88,7 +57,6 @@ export function ReportList() {
       if (type === 'weekly') {
         await markOnboarding(auth.user, auth.refreshUser, { openedWeekly: true });
       }
-      setSelected(report.periodStart);
       router.push(`/reports/${report.id}`);
     } catch (err) {
       setError(humanError(err));
@@ -97,14 +65,9 @@ export function ReportList() {
     }
   }
 
-  const { y, m } = ymdParts(cursor);
-  const cells = monthGrid(y, m, weekStartsOn);
-  const labels =
-    weekStartsOn === 1
-      ? copy.todos.weekday.slice(1).concat(copy.todos.weekday[0])
-      : copy.todos.weekday;
+  if (loading && data === null) return <Loading />;
 
-  if (loading && items.length === 0) return <Loading />;
+  const maxCompleted = Math.max(1, ...(data?.heatmap.map((cell) => cell.completed) ?? [1]));
 
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
@@ -137,128 +100,87 @@ export function ReportList() {
         })}
       </View>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {type === 'yearly' ? (
-          <View style={styles.cal}>
-            {Array.from({ length: 6 }, (_, i) => y - 4 + i).map((year) => {
-              const start = `${year}-01-01`;
-              const lit = wrote.has(start);
-              const sel = selected === start;
-              return (
-                <Pressable
-                  key={year}
-                  onPress={() => void openPeriod(start)}
-                  style={[styles.yearRow, sel && styles.dayOn]}
-                >
-                  <Text style={[styles.yearText, sel && styles.dayNumOn]}>{year}年</Text>
-                  {lit ? <View style={[styles.dot, sel && styles.dotOn]} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : type === 'monthly' ? (
-          <View style={styles.cal}>
-            <View style={styles.calNav}>
-              <Pressable onPress={() => setCursor(padYear(y - 1))} hitSlop={8}>
-                <Icon icon={ChevronLeft} size={18} color={t.fgMuted} />
-              </Pressable>
-              <Text style={styles.calTitle}>{y}年</Text>
-              <Pressable onPress={() => setCursor(padYear(y + 1))} hitSlop={8}>
-                <Icon icon={ChevronRight} size={18} color={t.fgMuted} />
-              </Pressable>
+        {data ? (
+          <>
+            <Text style={styles.period}>{data.period.label}</Text>
+            <View style={styles.stats}>
+              <Stat styles={styles} label={copy.reports.completed} value={data.totals.completed} />
+              <Stat styles={styles} label={copy.reports.wrote} value={data.totals.wrote} />
+              <Stat styles={styles} label={copy.reports.carried} value={data.totals.carried} />
             </View>
-            <View style={styles.monthGrid}>
-              {Array.from({ length: 12 }, (_, i) => {
-                const start = `${y}-${String(i + 1).padStart(2, '0')}-01`;
-                const lit = wrote.has(start);
-                const sel = selected === start;
-                return (
-                  <Pressable
-                    key={start}
-                    onPress={() => void openPeriod(start)}
-                    style={[styles.monthCell, lit && styles.wrote, sel && styles.dayOn]}
-                  >
-                    <Text style={[styles.monthLabel, sel && styles.dayNumOn]}>{i + 1}月</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.cal}>
-            <View style={styles.calNav}>
-              <Pressable onPress={() => setCursor(addMonthsYmd(cursor, -1))} hitSlop={8}>
-                <Icon icon={ChevronLeft} size={18} color={t.fgMuted} />
-              </Pressable>
-              <Text style={styles.calTitle}>
-                {y}年{m}月
+            {data.streaks.completedDays > 0 ? (
+              <Text style={styles.hint}>
+                {copy.reports.streakCompleted.replace('{n}', String(data.streaks.completedDays))}
               </Text>
-              <Pressable onPress={() => setCursor(addMonthsYmd(cursor, 1))} hitSlop={8}>
-                <Icon icon={ChevronRight} size={18} color={t.fgMuted} />
-              </Pressable>
-            </View>
-            <View style={styles.grid}>
-              {labels.map((label) => (
-                <Text key={label} style={styles.dow}>
-                  {label}
-                </Text>
-              ))}
-              {cells.map((ymd, i) => {
-                if (ymd === null) return <View key={`e-${i}`} style={styles.day} />;
-                const start = periodStartOf(type, ymd, weekStartsOn);
-                const lit = wrote.has(start);
-                const isToday = ymd === today;
-                const inWeek =
-                  type === 'weekly' && selected
-                    ? ymd >= selected && ymd < addDaysYmd(selected, 7)
-                    : selected === start;
-                const future = ymd > today;
-                return (
-                  <Pressable
-                    key={ymd}
-                    disabled={future || opening}
-                    onPress={() => void openPeriod(ymd)}
-                    style={styles.day}
-                  >
-                    <View
+            ) : null}
+            <View style={styles.cal}>
+              <View style={styles.grid}>
+                {data.heatmap.map((cell) => {
+                  const fill = cell.completed / maxCompleted;
+                  return (
+                    <Pressable
+                      key={cell.date}
+                      disabled={opening}
+                      onPress={() => void openPeriod(cell.date)}
                       style={[
-                        styles.dayNum,
-                        inWeek && styles.wrote,
-                        selected === start && styles.dayOn,
-                        isToday && !inWeek && styles.todayRing,
+                        styles.day,
+                        cell.completed > 0 && { opacity: 0.35 + fill * 0.65 },
+                        cell.completed > 0 && styles.dayLit,
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.dayNumText,
-                          future && styles.future,
-                          (selected === start || (type === 'weekly' && ymd === selected)) &&
-                            styles.dayNumOn,
-                        ]}
-                      >
-                        {Number(ymd.slice(8))}
+                      <Text style={styles.dayNum}>
+                        {data.heatmapGrain === 'year'
+                          ? cell.date.slice(0, 4)
+                          : data.heatmapGrain === 'month'
+                            ? `${Number(cell.date.slice(5, 7))}月`
+                            : String(Number(cell.date.slice(8)))}
                       </Text>
-                    </View>
-                    {lit && !inWeek ? <View style={styles.dot} /> : <View style={styles.dotSpacer} />}
-                  </Pressable>
-                );
-              })}
+                      {cell.wrote ? <View style={styles.dot} /> : <View style={styles.dotSpacer} />}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text style={styles.hint}>{copy.reports.streakHint}</Text>
             </View>
-            <Text style={styles.hint}>{copy.reports.streakHint}</Text>
-          </View>
-        )}
-        {items.length === 0 ? (
-          <EmptyState
-            title={copy.empty.reports}
-            action={{ label: copy.actions.openDaily, onPress: () => void openPeriod() }}
-          />
+            <Text style={styles.kicker}>{copy.reports.recentDone}</Text>
+            {data.recentDone.length === 0 ? (
+              <Text style={styles.hint}>{copy.reports.emptyRecent}</Text>
+            ) : (
+              data.recentDone.map((item) => (
+                <Pressable
+                  key={`${item.taskId}-${item.completedAt}`}
+                  style={styles.recent}
+                  onPress={() => void openPeriod(data.period.start)}
+                >
+                  <Text style={styles.recentTitle}>{item.title}</Text>
+                </Pressable>
+              ))
+            )}
+            <Pressable style={styles.open} onPress={() => void openPeriod(data.period.start)}>
+              <Text style={styles.openLabel}>{copy.reports.openPeriod}</Text>
+            </Pressable>
+          </>
         ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function padYear(y: number): string {
-  return `${y}-01-01`;
+function Stat({
+  styles,
+  label,
+  value,
+}: {
+  styles: ReturnType<typeof createStyles>;
+  label: string;
+  value: number;
+}) {
+  return (
+    <View style={styles.stat}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
+    </View>
+  );
 }
 
 const createStyles = (t: Theme) =>
@@ -284,40 +206,26 @@ const createStyles = (t: Theme) =>
     chipActive: { backgroundColor: t.bgAccentSubtle },
     chipLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
     chipLabelActive: { color: t.fgPrimary, fontWeight: '600' },
+    period: { fontSize: t.type.meta.fontSize, fontWeight: '600', color: t.fgPrimary },
+    stats: { flexDirection: 'row', gap: t.space[2] },
+    stat: {
+      flex: 1,
+      borderRadius: t.radius.lg,
+      backgroundColor: t.bgSurface,
+      padding: t.space[3],
+    },
+    statLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    statValue: { fontSize: t.type.title.fontSize, fontWeight: '700', color: t.fgPrimary },
     cal: {
       backgroundColor: t.bgSurface,
       borderRadius: t.radius.lg,
       padding: t.space[4],
       gap: t.space[3],
     },
-    calNav: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    calTitle: { fontSize: t.type.meta.fontSize, fontWeight: '600', color: t.fgPrimary },
     grid: { flexDirection: 'row', flexWrap: 'wrap' },
-    dow: {
-      width: '14.28%',
-      textAlign: 'center',
-      fontSize: t.type.caption.fontSize,
-      color: t.fgMuted,
-      marginBottom: t.space[1],
-    },
-    day: { width: '14.28%', alignItems: 'center', paddingVertical: 2 },
-    dayNum: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    dayOn: { backgroundColor: t.accentPrimary },
-    wrote: { backgroundColor: t.bgAccentSubtle },
-    todayRing: { borderWidth: StyleSheet.hairlineWidth, borderColor: t.accentPrimary },
-    dayNumText: { fontSize: t.type.caption.fontSize, color: t.fgPrimary },
-    dayNumOn: { color: t.fgOnAccent, fontWeight: '600' },
-    future: { color: t.fgMuted, opacity: 0.4 },
+    day: { width: '14.28%', alignItems: 'center', paddingVertical: 4 },
+    dayLit: { backgroundColor: t.bgAccentSubtle, borderRadius: 16 },
+    dayNum: { fontSize: t.type.caption.fontSize, color: t.fgPrimary },
     dot: {
       width: 5,
       height: 5,
@@ -325,28 +233,23 @@ const createStyles = (t: Theme) =>
       backgroundColor: t.accentPrimary,
       marginTop: 2,
     },
-    dotOn: { backgroundColor: t.fgOnAccent },
     dotSpacer: { width: 5, height: 5, marginTop: 2 },
     hint: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
-    monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
-    monthCell: {
-      width: '30%',
-      flexGrow: 1,
-      height: 48,
+    kicker: { fontSize: t.type.caption.fontSize, color: t.fgMuted, marginTop: t.space[2] },
+    recent: {
+      paddingVertical: t.space[3],
+      borderRadius: t.radius.md,
+      backgroundColor: t.bgSurface,
+      paddingHorizontal: t.space[3],
+    },
+    recentTitle: { fontSize: t.type.body.fontSize, color: t.fgPrimary },
+    open: {
+      marginTop: t.space[4],
+      minHeight: t.space[10],
       borderRadius: t.radius.lg,
-      backgroundColor: t.bgCanvas,
+      backgroundColor: t.bgAccentSubtle,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    monthLabel: { fontSize: t.type.caption.fontSize, color: t.fgPrimary },
-    yearRow: {
-      minHeight: t.space[10],
-      borderRadius: t.radius.lg,
-      backgroundColor: t.bgCanvas,
-      paddingHorizontal: t.space[3],
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    yearText: { fontSize: t.type.meta.fontSize, color: t.fgPrimary },
+    openLabel: { fontSize: t.type.body.fontSize, fontWeight: '600', color: t.fgPrimary },
   });

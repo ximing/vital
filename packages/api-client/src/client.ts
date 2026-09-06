@@ -12,6 +12,9 @@ import type {
   CurrentReportQuery,
   FillReportInput,
   GetReportQuery,
+  ReportOverview,
+  ReportOverviewQuery,
+  ReportReview,
   CreateListInput,
   NotificationChannel,
   NotificationChannelCollection,
@@ -116,7 +119,9 @@ export interface VitalClient {
   convertInbox(id: string, input?: ConvertInboxInput): Promise<ConvertInboxResponse>;
   listReports(query?: { type?: ReportType; cursor?: string; limit?: number }): Promise<ReportCollection>;
   getCurrentReport(type: ReportType, at?: string): Promise<Report>;
+  getReportOverview(type: ReportType, at?: string): Promise<ReportOverview>;
   getReport(id: string, query?: GetReportQuery): Promise<Report>;
+  getReportReview(id: string): Promise<ReportReview>;
   getReportEmbeds(id: string): Promise<ReportEmbedsResponse>;
   patchReport(id: string, input: PatchReportInput): Promise<Report>;
   fillReport(id: string, input: FillReportInput): Promise<Report>;
@@ -267,11 +272,16 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       const query: CurrentReportQuery = { type, ...(at ? { at } : {}) };
       return http.request('/api/v1/reports/current', { query });
     },
+    getReportOverview: (type, at) => {
+      const query: ReportOverviewQuery = { type, ...(at ? { at } : {}) };
+      return http.request('/api/v1/reports/overview', { query });
+    },
     getReport: (id, query = {}) => {
       const q: Record<string, string | number | boolean | undefined> = {};
       if (query.asOf !== undefined) q.asOf = query.asOf;
       return http.request(`/api/v1/reports/${id}`, { query: q });
     },
+    getReportReview: (id) => http.request(`/api/v1/reports/${id}/review`),
     getReportEmbeds: (id) => http.request(`/api/v1/reports/${id}/embeds`),
     patchReport: (id, input) =>
       http.request(`/api/v1/reports/${id}`, { method: 'PATCH', body: input }),

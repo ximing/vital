@@ -247,11 +247,15 @@ describe('createVitalClient reports + sync', () => {
       },
     });
     await client.getCurrentReport('daily');
+    await client.getReportOverview('daily');
+    await client.getReportReview('r1');
     await client.getReportEmbeds('r1');
     await client.fillReport('r1', { revision: 1 });
     await client.syncHead();
     expect(urls).toEqual([
       'GET http://x/api/v1/reports/current?type=daily',
+      'GET http://x/api/v1/reports/overview?type=daily',
+      'GET http://x/api/v1/reports/r1/review',
       'GET http://x/api/v1/reports/r1/embeds',
       'POST http://x/api/v1/reports/r1/fill',
       'GET http://x/api/v1/sync/head',
