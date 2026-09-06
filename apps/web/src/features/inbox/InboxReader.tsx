@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { todosUi } from '@/features/todos/todos-ui.service';
@@ -15,7 +15,6 @@ import { useInboxUi } from './inbox-ui.service';
 
 export function InboxReader() {
   const { id = '' } = useParams();
-  const navigate = useNavigate();
   const online = useOnline();
   const query = useInboxItemQuery(id);
   const actions = useInboxActions();
@@ -88,9 +87,6 @@ export function InboxReader() {
     <div className="flex min-h-screen flex-col bg-canvas">
       <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-canvas/95 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="quiet" className="px-2" onClick={() => navigate('/inbox')}>
-            {t.inbox.back}
-          </Button>
           <div className="flex flex-wrap items-center gap-1">
             <Button
               variant="quiet"

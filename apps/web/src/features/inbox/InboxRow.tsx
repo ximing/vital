@@ -30,14 +30,24 @@ export function UnprocessedRow({
   );
 }
 
-export function SaveRow({ item, timeZone }: { item: InboxItem; timeZone: string }) {
+export function SaveRow({
+  item,
+  timeZone,
+  selected = false,
+}: {
+  item: InboxItem;
+  timeZone: string;
+  selected?: boolean;
+}) {
   const host = hostLabel(item.originalUrl) ?? item.siteName;
   const when = formatCapturedAt(item.capturedAt, timeZone);
   const status = statusLabelKey(item.status);
   return (
     <Link
       to={`/inbox/${item.id}`}
-      className="flex min-h-[var(--touch-min)] flex-col rounded-md px-3 py-2 transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
+      className={`flex min-h-[var(--touch-min)] flex-col px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
+        selected ? 'bg-surface-muted' : 'hover:bg-surface-muted'
+      }`}
     >
       <span className="truncate text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-fg">
         {item.title}

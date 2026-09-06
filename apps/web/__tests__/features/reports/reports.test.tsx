@@ -289,10 +289,8 @@ describe('reports workspace', () => {
   });
 
   it('switches type on overview without opening a document', async () => {
-    const user = userEvent.setup();
-    renderAt('/reports');
+    renderAt('/reports?type=weekly');
     expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: t.reports.weekly }));
     await waitFor(() => {
       expect(client.getReportOverview).toHaveBeenCalledWith('weekly', undefined);
     });

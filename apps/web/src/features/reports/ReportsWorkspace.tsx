@@ -17,7 +17,6 @@ import {
   parseReportType,
   POLL_MS,
   reportHref,
-  REPORT_TYPES,
   SAVE_DEBOUNCE_MS,
 } from './model';
 import { useReportActions, useReportQuery, useReportReviewQuery } from './queries';
@@ -296,14 +295,6 @@ export function ReportsWorkspace() {
     }
   }
 
-  async function switchType(next: ReportType): Promise<void> {
-    if (id === '') {
-      navigate(`/reports?type=${next}`);
-      return;
-    }
-    await openPeriod(next);
-  }
-
   async function reloadRemote(): Promise<void> {
     if (id === '') return;
     try {
@@ -369,39 +360,17 @@ export function ReportsWorkspace() {
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
       <div className="flex min-h-0 w-full flex-1 flex-col px-8 pt-8 xl:px-10">
-        <header className="shrink-0 pb-2">
+        <header className="flex shrink-0 items-end justify-between gap-3 pb-2">
           <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
             {t.reports.kicker}
           </p>
-          <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-            <div
-              className="flex rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]"
-              role="tablist"
-              aria-label={t.nav.reports}
-            >
-              {REPORT_TYPES.map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  role="tab"
-                  aria-selected={liveType === type}
-                  className={`h-9 rounded-xl px-3.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
-                    liveType === type ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
-                  }`}
-                  onClick={() => void switchType(type)}
-                >
-                  {t.reports[type]}
-                </button>
-              ))}
-            </div>
-            <span className="text-[length:var(--text-caption)] text-muted" role="status">
-              {session?.saveState === 'saving'
-                ? t.reports.saving
-                : session?.saveState === 'saved' && !dirty
-                  ? t.reports.saved
-                  : null}
-            </span>
-          </div>
+          <span className="text-[length:var(--text-caption)] text-muted" role="status">
+            {session?.saveState === 'saving'
+              ? t.reports.saving
+              : session?.saveState === 'saved' && !dirty
+                ? t.reports.saved
+                : null}
+          </span>
         </header>
 
         {!online ? (

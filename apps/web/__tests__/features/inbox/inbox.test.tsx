@@ -10,7 +10,7 @@ import { ApiError } from '@vital/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -18,6 +18,7 @@ import { setAuthForTest } from '@/services/auth.service';
 import { InboxReader } from '../../../src/features/inbox/InboxReader';
 import { InboxWorkspace } from '../../../src/features/inbox/InboxWorkspace';
 import { resetInboxUi } from '../../../src/features/inbox/inbox-ui.service';
+import { CapturePane } from '../../../src/shell/CapturePane';
 import { RabRoot } from '../../helpers/rab-root';
 
 const TZ = 'Asia/Shanghai';
@@ -144,8 +145,17 @@ function renderAt(path: string) {
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[path]}>
           <Routes>
-            <Route path="/inbox" element={<InboxWorkspace />} />
-            <Route path="/inbox/:id" element={<InboxReader />} />
+            <Route
+              element={
+                <>
+                  <CapturePane />
+                  <Outlet />
+                </>
+              }
+            >
+              <Route path="/inbox" element={<InboxWorkspace />} />
+              <Route path="/inbox/:id" element={<InboxReader />} />
+            </Route>
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -176,15 +186,15 @@ describe('inbox workspace', () => {
     resetInboxUi();
   });
 
-  it('shows two sections and zh-CN empty copy', async () => {
+  it('shows later-read empty copy in the capture pane', async () => {
     renderAt('/inbox');
     expect(await screen.findByText(t.empty.inbox)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: t.inbox.unprocessed })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: t.inbox.saves })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.empty.actionExtension })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: t.inbox.unprocessed })).not.toBeInTheDocument();
+    expect(screen.getByText(t.empty.inboxReader)).toBeInTheDocument();
   });
 
-  it('lists unprocessed todos above unread saves', async () => {
+  it('lists unread saves in the capture pane, not unprocessed todos', async () => {
     vi.mocked(client.listTasks).mockResolvedValue({
       items: [makeTask({ id: 't1', title: '未整理的任务' })],
       nextCursor: null,
@@ -194,21 +204,8 @@ describe('inbox workspace', () => {
       nextCursor: null,
     });
     renderAt('/inbox');
-    expect(await screen.findByText('未整理的任务')).toBeInTheDocument();
-    expect(screen.getByText('未读文章')).toBeInTheDocument();
-    const tasksHead = screen.getByRole('heading', { name: t.inbox.unprocessed });
-    const savesHead = screen.getByRole('heading', { name: t.inbox.saves });
-    expect(
-      tasksHead.compareDocumentPosition(screen.getByText('未整理的任务')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      savesHead.compareDocumentPosition(screen.getByText('未读文章')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      tasksHead.compareDocumentPosition(savesHead) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(await screen.findByText('未读文章')).toBeInTheDocument();
+    expect(screen.queryByText('未整理的任务')).not.toBeInTheDocument();
   });
 
   it('previews a pasted URL then creates with originalUrl', async () => {
