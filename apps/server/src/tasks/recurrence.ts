@@ -1,6 +1,14 @@
+import { createRequire } from 'node:module';
 import { DateTime } from 'luxon';
-import { RRule, type Options } from 'rrule';
+import type { Options, RRule as RRuleInstance } from 'rrule';
 import { AppError } from '../errors.js';
+
+const { RRule } = createRequire(import.meta.url)('rrule') as {
+  RRule: {
+    new (opts: Partial<Options>): RRuleInstance;
+    parseString(value: string): Partial<Options>;
+  };
+};
 
 export type Freq = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
 
@@ -309,7 +317,7 @@ export function nextAllDayOnOrAfter(task: RecurrenceTask, fromDue: Date): Date |
   return null;
 }
 
-export function makeTimedRule(task: RecurrenceTask): RRule {
+export function makeTimedRule(task: RecurrenceTask): RRuleInstance {
   if (!task.recurrenceRrule || !task.recurrenceDtstart) invalid();
   parseRrule(task.recurrenceRrule);
   const parsed: Partial<Options> = RRule.parseString(task.recurrenceRrule.replace(/^RRULE:/i, ''));
@@ -401,7 +409,7 @@ export function expandTask(
     ? allDayDates(task, fromUtc, toUtc)
     : makeTimedRule(task)
         .between(fromUtc, toUtc, true)
-        .map((d) => DateTime.fromJSDate(d, { zone }));
+        .map((d: Date) => DateTime.fromJSDate(d, { zone }));
   if (!task.isAllDay && instants.length > 400) {
     throw AppError.of(400, 'RRULE_TOO_DENSE');
   }

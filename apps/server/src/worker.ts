@@ -28,12 +28,10 @@ async function heal(): Promise<void> {
 const poll = setInterval(() => {
   void tick();
 }, config.WORKER_POLL_MS);
-poll.unref();
 
 const healTimer = setInterval(() => {
   void heal();
 }, config.WORKER_HEAL_INTERVAL_MS);
-healTimer.unref();
 
 logger.info('worker started', {
   pollMs: config.WORKER_POLL_MS,
