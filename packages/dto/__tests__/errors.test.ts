@@ -19,5 +19,8 @@ describe('ERROR_MESSAGES', () => {
     expect(ERROR_MESSAGES.INBOX_NOT_FOUND).toBe('条目不存在');
     expect(ERROR_MESSAGES.REPORT_NOT_FOUND).toBe('报告不存在');
     expect(ERROR_MESSAGES.REPORT_REVISION_CONFLICT).toBe('报告已被更新，请先同步');
+    expect(ERROR_MESSAGES.CHANNEL_NOT_FOUND).toBe('通知渠道不存在');
+    expect(ERROR_MESSAGES.CHANNEL_DELIVERY_FAILED).toBe('通知发送失败');
+    expect(ERROR_MESSAGES.MEOW_NICKNAME_INVALID).toBe('MeoW 昵称不合法');
   });
 });

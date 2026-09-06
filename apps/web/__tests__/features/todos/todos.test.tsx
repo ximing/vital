@@ -1,4 +1,4 @@
-import type { List, Task, UserProfile } from '@vital/dto';
+import { DEFAULT_NOTIFICATION_PREFS, type List, type Task, type UserProfile } from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -46,6 +46,7 @@ const mockUser: UserProfile = {
   themePreference: 'system',
   weekStartsOn: 1,
   convertArchiveOnComplete: false,
+  notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',

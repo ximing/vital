@@ -1,4 +1,4 @@
-import type { UserProfile } from '@vital/dto';
+import { DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import { createVitalClient } from '../src/client.js';
 import { bodyOf, memoryStore, respond, respond204, urlOf } from './test-helpers.js';
@@ -12,6 +12,7 @@ const user: UserProfile = {
   themePreference: 'system',
   weekStartsOn: 1,
   convertArchiveOnComplete: true,
+  notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -123,6 +124,8 @@ describe('createVitalClient auth + upload methods', () => {
     });
     await client.me();
     await client.updateMe({ displayName: 'Ada' });
+    await client.listNotificationChannels();
+    await client.createNotificationChannel({ type: 'meow', config: { nickname: 'Ada' } });
     await client.updateOnboarding({ createdTask: true });
     await client.presignUpload({ mime: 'image/jpeg', size: 12 });
     await client.completeUpload('att1');
@@ -132,14 +135,17 @@ describe('createVitalClient auth + upload methods', () => {
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       'GET http://x/api/v1/auth/me',
       'PATCH http://x/api/v1/auth/me',
+      'GET http://x/api/v1/notification-channels',
+      'POST http://x/api/v1/notification-channels',
       'PATCH http://x/api/v1/auth/onboarding',
       'POST http://x/api/v1/uploads/presign',
       'POST http://x/api/v1/uploads/att1/complete',
       'POST http://x/api/v1/uploads/att1/abort',
       'DELETE http://x/api/v1/uploads/att1',
     ]);
-    expect(calls[3]?.body).toEqual({ mime: 'image/jpeg', size: 12 });
-    expect(calls[4]?.body).toEqual({});
+    expect(calls[3]?.body).toEqual({ type: 'meow', config: { nickname: 'Ada' } });
+    expect(calls[5]?.body).toEqual({ mime: 'image/jpeg', size: 12 });
+    expect(calls[6]?.body).toEqual({});
   });
 
   it('lists/tasks/tags/search/bind methods hit the spec routes', async () => {

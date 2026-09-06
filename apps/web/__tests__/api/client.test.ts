@@ -110,6 +110,13 @@ describe('Tauri runtime client', () => {
               themePreference: 'system',
               weekStartsOn: 1,
               convertArchiveOnComplete: true,
+              notifications: {
+                taskRemind: true,
+                taskDue: true,
+                quietHoursStart: null,
+                quietHoursEnd: null,
+                allDayNotifyTime: '09:00',
+              },
               onboarding: {},
               createdAt: '2026-01-01T00:00:00.000Z',
               updatedAt: '2026-01-01T00:00:00.000Z',

@@ -1,4 +1,5 @@
 export * from './auth.js';
+export * from './notifications.js';
 export * from './uploads.js';
 export * from './errors.js';
 export * from './lists.js';

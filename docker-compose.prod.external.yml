@@ -8,7 +8,8 @@
 # (Skipping migrate lets new code hit the old schema and 500.) Re-run:
 #   docker compose -f docker-compose.prod.external.yml run --rm migrate
 #
-# No Postgres/MySQL/worker/backup in this file. Static files + :80/:443 are host nginx
+# No Postgres/MySQL/backup in this file. Worker is the same image, second process.
+# Static files + :80/:443 are host nginx
 # (deploy/nginx.conf → 127.0.0.1:3010).
 #
 # PG_HOST comes from .env — do not hardcode postgres.
@@ -70,3 +71,19 @@ services:
       timeout: 3s
       retries: 10
       start_period: 20s
+
+  worker:
+    <<: *app
+    image: ghcr.io/ximing/vital-server:${VITAL_IMAGE_TAG:-stable}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ['node', 'dist/worker.js']
+    environment:
+      NODE_ENV: production
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      ALL_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
+      all_proxy: ''

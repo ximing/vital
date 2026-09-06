@@ -20,6 +20,7 @@ import { setStorageAdapter, type UnifiedStorageAdapter } from './storage/factory
 import { registerTagRoutes } from './tags/tags.routes.js';
 import { registerTaskRoutes } from './tasks/tasks.routes.js';
 import './types.js';
+import { registerNotificationRoutes } from './notifications/notifications.routes.js';
 import { registerUploadRoutes } from './uploads/uploads.routes.js';
 import { logger } from './utils/logger.js';
 
@@ -74,6 +75,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   registerHealthRoutes(app);
   registerAuthRoutes(app);
   registerUploadRoutes(app);
+  registerNotificationRoutes(app);
   registerListRoutes(app);
   registerTaskRoutes(app);
   registerTagRoutes(app);

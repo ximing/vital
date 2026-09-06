@@ -45,6 +45,11 @@ export const envSchema = z.object({
   MEDIA_UPLOADING_TTL_HOURS: z.coerce.number().int().min(1).default(24),
   WEB_ORIGIN: z.string().url().default('http://localhost:5180'),
   COOKIE_SECURE: boolEnum.default('false'),
+  MEOW_BASE_URL: z.string().url().default('https://api.chuckfang.com'),
+  NOTIFY_ICON_URL: z.string().url().optional(),
+  WORKER_POLL_MS: z.coerce.number().int().min(1_000).default(15_000),
+  WORKER_CLAIM_LIMIT: z.coerce.number().int().min(1).max(100).default(20),
+  WORKER_HEAL_INTERVAL_MS: z.coerce.number().int().min(10_000).default(300_000),
 });
 
 export const config = envSchema.parse(process.env);

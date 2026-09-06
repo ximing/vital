@@ -78,7 +78,9 @@ describe('updateMeInputSchema', () => {
       themePreference: 'dark',
       weekStartsOn: 0,
       convertArchiveOnComplete: true,
+      notifications: { taskRemind: false },
     });
+    expect(ok.notifications?.taskRemind).toBe(false);
     expect(ok.displayName).toBe('Ada');
     expect(ok.weekStartsOn).toBe(0);
     expect(() => updateMeInputSchema.parse({ timezone: 'Not/AZone' })).toThrow();

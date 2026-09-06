@@ -5,6 +5,9 @@ import {
   inboxAssets,
   inboxItems,
   lists,
+  notificationChannels,
+  notificationDeliveries,
+  notificationOutbox,
   reports,
   refreshTokens,
   tags,
@@ -41,6 +44,9 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 
 export async function resetDb(): Promise<void> {
   await withRetry(async () => {
+    await db.delete(notificationDeliveries);
+    await db.delete(notificationOutbox);
+    await db.delete(notificationChannels);
     await db.delete(inboxAssets);
     await db.delete(entityLinks);
     await db.delete(inboxItems);

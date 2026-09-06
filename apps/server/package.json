@@ -7,6 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
+    "worker": "tsx src/worker.ts",
+    "start:worker": "node dist/worker.js",
     "test": "cross-env NODE_ENV=test tsx src/db/migrate.ts && vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/ __tests__/",

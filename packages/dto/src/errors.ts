@@ -21,6 +21,11 @@ export const ERROR_MESSAGES = {
   MEDIA_INVALID_STATE: '上传状态不允许此操作',
   LIST_NOT_FOUND: '清单不存在',
   TAG_NOT_FOUND: '标签不存在',
+  CHANNEL_NOT_FOUND: '通知渠道不存在',
+  CHANNEL_EXISTS: '该类型的通知渠道已存在',
+  CHANNEL_TYPE_UNSUPPORTED: '不支持的通知渠道',
+  MEOW_NICKNAME_INVALID: 'MeoW 昵称不合法',
+  CHANNEL_DELIVERY_FAILED: '通知发送失败',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

@@ -7,11 +7,15 @@ import type {
   CompleteTaskResponse,
   ConvertInboxInput,
   ConvertInboxResponse,
+  CreateNotificationChannelInput,
   CreateInboxInput,
   CurrentReportQuery,
   FillReportInput,
   GetReportQuery,
   CreateListInput,
+  NotificationChannel,
+  NotificationChannelCollection,
+  PatchNotificationChannelInput,
   CreateTagInput,
   CreateTaskInput,
   ExtractInboxInput,
@@ -64,6 +68,14 @@ export interface VitalClient {
   logout(): Promise<void>;
   me(): Promise<UserProfile>;
   updateMe(input: UpdateMeInput): Promise<UserProfile>;
+  listNotificationChannels(): Promise<NotificationChannelCollection>;
+  createNotificationChannel(input: CreateNotificationChannelInput): Promise<NotificationChannel>;
+  patchNotificationChannel(
+    id: string,
+    input: PatchNotificationChannelInput,
+  ): Promise<NotificationChannel>;
+  deleteNotificationChannel(id: string): Promise<void>;
+  testNotificationChannel(id: string): Promise<void>;
   updateOnboarding(input: UpdateOnboardingInput): Promise<UserProfile>;
   changePassword(input: ChangePasswordInput): Promise<void>;
   presignUpload(input: UploadPresignInput): Promise<UploadPresignResponse>;
@@ -163,6 +175,15 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     },
     me: () => http.request('/api/v1/auth/me'),
     updateMe: (input) => http.request('/api/v1/auth/me', { method: 'PATCH', body: input }),
+    listNotificationChannels: () => http.request('/api/v1/notification-channels'),
+    createNotificationChannel: (input) =>
+      http.request('/api/v1/notification-channels', { method: 'POST', body: input }),
+    patchNotificationChannel: (id, input) =>
+      http.request(`/api/v1/notification-channels/${id}`, { method: 'PATCH', body: input }),
+    deleteNotificationChannel: (id) =>
+      http.request(`/api/v1/notification-channels/${id}`, { method: 'DELETE' }),
+    testNotificationChannel: (id) =>
+      http.request(`/api/v1/notification-channels/${id}/test`, { method: 'POST' }),
     updateOnboarding: (input) =>
       http.request('/api/v1/auth/onboarding', { method: 'PATCH', body: input }),
     changePassword: async (input) => {

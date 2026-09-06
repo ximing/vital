@@ -1,4 +1,10 @@
-import type { AuthMode, AuthResponse, AuthTokens, UserProfile } from '@vital/dto';
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  type AuthMode,
+  type AuthResponse,
+  type AuthTokens,
+  type UserProfile,
+} from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import { ApiError, Http, type VitalClientOptions } from '../src/http.js';
 import {
@@ -20,6 +26,7 @@ const user: UserProfile = {
   themePreference: 'system',
   weekStartsOn: 1,
   convertArchiveOnComplete: true,
+  notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start local dev: migrate + API :3010 + web :5180
+# Start local dev: migrate + API :3010 + notification worker + web :5180
 # Usage:
 #   ./dev.sh          start (already running → print addresses)
 #   ./dev.sh stop     stop processes this script started
@@ -39,7 +39,7 @@ stop_dev() {
     done < "$PID_FILE"
     rm -f "$PID_FILE"
   fi
-  echo "已停止 API / Web"
+  echo "已停止 API / worker / Web"
 }
 
 if [[ "${1:-}" == "stop" ]]; then
@@ -83,6 +83,7 @@ else
   fi
   : >"$PID_FILE"
   start_one server pnpm --filter @vital/server dev
+  start_one worker pnpm --filter @vital/server worker
 fi
 
 if grep -q '"dev"' apps/web/package.json 2>/dev/null; then

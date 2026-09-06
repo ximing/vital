@@ -45,6 +45,7 @@ import {
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { getInboxList, getOwnedListOr404, SORT_GAP } from '../lists/lists.service.js';
+import { syncTaskNotifications } from '../notifications/outbox.js';
 import { assertOwnedTagIds } from '../tags/tags.service.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import {
@@ -380,8 +381,27 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     createdAt: now,
     updatedAt: now,
   };
-  await getDb().insert(tasks).values(row);
-  if (input.tagIds !== undefined) await replaceTags(row.id, input.tagIds);
+  await getDb().transaction(async (tx) => {
+    await tx.insert(tasks).values(row);
+    if (input.tagIds !== undefined) await replaceTags(row.id, input.tagIds, tx);
+    await syncTaskNotifications(
+      {
+        id: row.id,
+        userId: row.userId,
+        listId: row.listId,
+        title: row.title,
+        status: row.status ?? 'todo',
+        dueAt: row.dueAt ?? null,
+        remindAt: row.remindAt ?? null,
+        isAllDay: row.isAllDay ?? false,
+        timezone: row.timezone,
+        deletedAt: row.deletedAt ?? null,
+      },
+      user,
+      now,
+      tx,
+    );
+  });
   const [created] = await getDb().select().from(tasks).where(eq(tasks.id, row.id)).limit(1);
   if (!created) throw AppError.of(500, 'INTERNAL_ERROR');
   return dtoOf(created);
@@ -473,6 +493,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   if (input.priority !== undefined) patch.priority = input.priority;
   if (input.listId !== undefined) patch.listId = input.listId;
 
+  const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {
     await tx.update(tasks).set(patch).where(eq(tasks.id, task.id));
     if (input.listId !== undefined && input.listId !== task.listId && !task.parentId) {
@@ -482,29 +503,57 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
         .where(and(eq(tasks.parentId, task.id), eq(tasks.userId, userId)));
     }
     if (input.tagIds !== undefined) await replaceTags(task.id, input.tagIds, tx);
+    await syncTaskNotifications(
+      {
+        id: task.id,
+        userId: task.userId,
+        listId: patch.listId ?? task.listId,
+        title: patch.title ?? task.title,
+        status: patch.status ?? task.status,
+        dueAt: patch.dueAt !== undefined ? patch.dueAt : task.dueAt,
+        remindAt: patch.remindAt !== undefined ? patch.remindAt : task.remindAt,
+        isAllDay: patch.isAllDay ?? task.isAllDay,
+        timezone: patch.timezone ?? task.timezone,
+        deletedAt: task.deletedAt,
+      },
+      user,
+      now,
+      tx,
+    );
   });
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }
 
 export async function deleteTask(userId: string, id: string): Promise<void> {
   const task = await getOwnedTaskOr404(userId, id);
+  const user = await getUserEntity(userId);
   const now = new Date();
   await getDb().transaction(async (tx) => {
     if (task.parentId) {
       await tx.update(tasks).set({ deletedAt: now, updatedAt: now }).where(eq(tasks.id, task.id));
+      await syncTaskNotifications({ ...task, deletedAt: now }, user, now, tx);
       return;
     }
+    const children = await tx
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.parentId, task.id), eq(tasks.userId, userId)));
     await tx
       .update(tasks)
       .set({ deletedAt: now, updatedAt: now })
       .where(
         and(eq(tasks.userId, userId), or(eq(tasks.id, task.id), eq(tasks.parentId, task.id))),
       );
+    await syncTaskNotifications({ ...task, deletedAt: now }, user, now, tx);
+    for (const child of children) {
+      await syncTaskNotifications({ ...child, deletedAt: now }, user, now, tx);
+    }
   });
 }
 
 export async function restoreTask(userId: string, id: string): Promise<Task> {
   const task = await getOwnedTaskOr404(userId, id, { includeDeleted: true });
+  const user = await getUserEntity(userId);
   const now = new Date();
   await getDb().transaction(async (tx) => {
     if (task.parentId) {
@@ -512,8 +561,13 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
         .update(tasks)
         .set({ deletedAt: null, updatedAt: now })
         .where(eq(tasks.id, task.id));
+      await syncTaskNotifications({ ...task, deletedAt: null }, user, now, tx);
       return;
     }
+    const children = await tx
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.parentId, task.id), eq(tasks.userId, userId), isNotNull(tasks.deletedAt)));
     await tx
       .update(tasks)
       .set({ deletedAt: null, updatedAt: now })
@@ -523,6 +577,10 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
           or(eq(tasks.id, task.id), and(eq(tasks.parentId, task.id), isNotNull(tasks.deletedAt))),
         ),
       );
+    await syncTaskNotifications({ ...task, deletedAt: null }, user, now, tx);
+    for (const child of children) {
+      await syncTaskNotifications({ ...child, deletedAt: null }, user, now, tx);
+    }
   });
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }
@@ -588,6 +646,17 @@ export async function completeTask(userId: string, id: string): Promise<Complete
             ),
           );
       }
+      await syncTaskNotifications(
+        {
+          ...task,
+          dueAt: nextDue,
+          remindAt: nextRemind,
+          status: nextStatus,
+        },
+        user,
+        now,
+        tx,
+      );
     });
   } catch (err) {
     if (isUniqueViolation(err)) throw AppError.of(409, 'VALIDATION_ERROR');
@@ -632,6 +701,7 @@ export async function uncompleteTask(
     remindAt = shiftBy(task.remindAt, delta);
   }
 
+  const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {
     await tx.delete(taskCompletions).where(eq(taskCompletions.id, completion.id));
     await tx
@@ -645,6 +715,17 @@ export async function uncompleteTask(
         updatedAt: now,
       })
       .where(eq(tasks.id, task.id));
+    await syncTaskNotifications(
+      {
+        ...task,
+        status: 'todo',
+        dueAt,
+        remindAt,
+      },
+      user,
+      now,
+      tx,
+    );
   });
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }

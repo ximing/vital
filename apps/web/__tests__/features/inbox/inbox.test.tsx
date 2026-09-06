@@ -1,4 +1,11 @@
-import type { InboxItem, InboxPreview, List, Task, UserProfile } from '@vital/dto';
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  type InboxItem,
+  type InboxPreview,
+  type List,
+  type Task,
+  type UserProfile,
+} from '@vital/dto';
 import { ApiError } from '@vital/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -46,6 +53,7 @@ const mockUser: UserProfile = {
   themePreference: 'system',
   weekStartsOn: 1,
   convertArchiveOnComplete: false,
+  notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
+  DEFAULT_NOTIFICATION_PREFS,
+  hhmmSchema,
   onboardingStateSchema,
   themePreferenceSchema,
   weekStartsOnSchema,
@@ -7,6 +9,7 @@ import {
   type AuthResponse,
   type ChangePasswordInput,
   type LoginInput,
+  type NotificationPrefs,
   type OnboardingState,
   type RegisterInput,
   type UpdateMeInput,
@@ -39,6 +42,23 @@ function weekStartsOnOf(value: number): UserProfile['weekStartsOn'] {
   return parsed.success ? parsed.data : 1;
 }
 
+function hhmmOrNull(value: string | null): string | null {
+  if (value === null) return null;
+  const parsed = hhmmSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+function notificationsOf(user: User): NotificationPrefs {
+  const allDay = hhmmSchema.safeParse(user.allDayNotifyTime);
+  return {
+    taskRemind: user.notifyTaskRemind,
+    taskDue: user.notifyTaskDue,
+    quietHoursStart: hhmmOrNull(user.quietHoursStart),
+    quietHoursEnd: hhmmOrNull(user.quietHoursEnd),
+    allDayNotifyTime: allDay.success ? allDay.data : DEFAULT_NOTIFICATION_PREFS.allDayNotifyTime,
+  };
+}
+
 export function toProfile(user: User): UserProfile {
   return {
     id: user.id,
@@ -49,6 +69,7 @@ export function toProfile(user: User): UserProfile {
     themePreference: themeOf(user.themePreference),
     weekStartsOn: weekStartsOnOf(user.weekStartsOn),
     convertArchiveOnComplete: user.convertArchiveOnComplete,
+    notifications: notificationsOf(user),
     onboarding: onboardingOf(user.onboarding),
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
@@ -112,6 +133,11 @@ export async function registerUser(
     themePreference: 'system',
     weekStartsOn: 1,
     convertArchiveOnComplete: false,
+    notifyTaskRemind: true,
+    notifyTaskDue: true,
+    quietHoursStart: null,
+    quietHoursEnd: null,
+    allDayNotifyTime: '09:00',
     onboarding: {},
     passwordChangedAt: null,
     createdAt: now,
@@ -172,6 +198,31 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
   if (input.weekStartsOn !== undefined) patch.weekStartsOn = input.weekStartsOn;
   if (input.convertArchiveOnComplete !== undefined) {
     patch.convertArchiveOnComplete = input.convertArchiveOnComplete;
+  }
+  if (input.notifications !== undefined) {
+    const current = await getUserEntity(userId);
+    const nextStart =
+      input.notifications.quietHoursStart !== undefined
+        ? input.notifications.quietHoursStart
+        : current.quietHoursStart;
+    const nextEnd =
+      input.notifications.quietHoursEnd !== undefined
+        ? input.notifications.quietHoursEnd
+        : current.quietHoursEnd;
+    if ((nextStart === null) !== (nextEnd === null)) {
+      throw AppError.of(400, 'VALIDATION_ERROR');
+    }
+    if (input.notifications.taskRemind !== undefined) {
+      patch.notifyTaskRemind = input.notifications.taskRemind;
+    }
+    if (input.notifications.taskDue !== undefined) {
+      patch.notifyTaskDue = input.notifications.taskDue;
+    }
+    if (input.notifications.quietHoursStart !== undefined) patch.quietHoursStart = nextStart;
+    if (input.notifications.quietHoursEnd !== undefined) patch.quietHoursEnd = nextEnd;
+    if (input.notifications.allDayNotifyTime !== undefined) {
+      patch.allDayNotifyTime = input.notifications.allDayNotifyTime;
+    }
   }
   await getDb().update(users).set(patch).where(eq(users.id, userId));
   return getProfile(userId);

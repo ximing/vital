@@ -7,3 +7,4 @@ export * from './schema/tags.js';
 export * from './schema/inbox.js';
 export * from './schema/entity-links.js';
 export * from './schema/reports.js';
+export * from './schema/notifications.js';

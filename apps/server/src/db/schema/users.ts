@@ -23,6 +23,11 @@ export const users = pgTable(
     themePreference: varchar('theme_preference', { length: 16 }).notNull().default('system'),
     weekStartsOn: smallint('week_starts_on').notNull().default(1),
     convertArchiveOnComplete: boolean('convert_archive_on_complete').notNull().default(false),
+    notifyTaskRemind: boolean('notify_task_remind').notNull().default(true),
+    notifyTaskDue: boolean('notify_task_due').notNull().default(true),
+    quietHoursStart: varchar('quiet_hours_start', { length: 5 }),
+    quietHoursEnd: varchar('quiet_hours_end', { length: 5 }),
+    allDayNotifyTime: varchar('all_day_notify_time', { length: 5 }).notNull().default('09:00'),
     onboarding: jsonb('onboarding').$type<OnboardingState>().notNull().default({}),
     passwordChangedAt: timestamp('password_changed_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -31,6 +36,10 @@ export const users = pgTable(
   (t) => [
     check('users_theme_preference_check', sql`${t.themePreference} IN ('light', 'dark', 'system')`),
     check('users_week_starts_on_check', sql`${t.weekStartsOn} IN (0, 1)`),
+    check(
+      'users_quiet_hours_pair_check',
+      sql`(${t.quietHoursStart} IS NULL AND ${t.quietHoursEnd} IS NULL) OR (${t.quietHoursStart} IS NOT NULL AND ${t.quietHoursEnd} IS NOT NULL)`,
+    ),
   ],
 );
 

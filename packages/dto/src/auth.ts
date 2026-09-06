@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { patchNotificationPrefsSchema, type NotificationPrefs } from './notifications.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(255);
 
@@ -81,6 +82,7 @@ export const updateMeInputSchema = z
     themePreference: themePreferenceSchema.optional(),
     weekStartsOn: weekStartsOnSchema.optional(),
     convertArchiveOnComplete: z.boolean().optional(),
+    notifications: patchNotificationPrefsSchema.optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',
@@ -108,6 +110,7 @@ export interface UserProfile {
   themePreference: ThemePreference;
   weekStartsOn: WeekStartsOn;
   convertArchiveOnComplete: boolean;
+  notifications: NotificationPrefs;
   onboarding: OnboardingState;
   createdAt: string;
   updatedAt: string;

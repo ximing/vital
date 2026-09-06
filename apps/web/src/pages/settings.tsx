@@ -1,4 +1,5 @@
 import { t } from '@/copy';
+import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { useAuthStore } from '@/state/auth-store';
@@ -36,6 +37,8 @@ export function SettingsPage() {
         </h2>
         <ThemeToggle />
       </section>
+
+      <NotificationsSection />
 
       <Button variant="quiet" className="mt-10 px-0" onClick={() => void logout()}>
         {t.nav.logout}
