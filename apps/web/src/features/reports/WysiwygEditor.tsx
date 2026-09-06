@@ -3,8 +3,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { parseMarkdownToPmJSON, serializePmJSONToMarkdown, type PmNode } from '@vital/markdown';
-import { useEffect, useRef, type MouseEvent } from 'react';
+import { Bold, Heading2, List } from 'lucide-react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { t } from '@/copy';
+import { Icon } from '@/ui/icon';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { VitalEntity } from './entity-extension';
 import { withStubEmbed, type SlashHit } from './model';
@@ -34,6 +36,7 @@ export function WysiwygEditor({
   const onChangeRef = useRef(onChange);
   const onHydrateRef = useRef(onHydrate);
   const hydrated = useRef(false);
+  const [, bump] = useState(0);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -82,7 +85,9 @@ export function WysiwygEditor({
     },
     onSelectionUpdate: ({ editor: instance }) => {
       setSlash(slashFromEditor(instance));
+      bump((n) => n + 1);
     },
+    onTransaction: () => bump((n) => n + 1),
   });
 
   useEffect(() => {
@@ -114,10 +119,59 @@ export function WysiwygEditor({
 
   return (
     <div className="relative" data-testid="report-wysiwyg" onClick={onClick}>
+      <div className="mb-3 flex items-center gap-1">
+        <ToolbarBtn
+          label="粗体"
+          active={editor?.isActive('bold') === true}
+          onClick={() => editor?.chain().focus().toggleBold().run()}
+        >
+          <Icon icon={Bold} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label="小标题"
+          active={editor?.isActive('heading', { level: 2 }) === true}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          <Icon icon={Heading2} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label="列表"
+          active={editor?.isActive('bulletList') === true}
+          onClick={() => editor?.chain().focus().toggleBulletList().run()}
+        >
+          <Icon icon={List} size={14} />
+        </ToolbarBtn>
+      </div>
       <EditorContent editor={editor} />
       {slash && editor ? (
         <SlashMenu slash={slash} onPick={pick} onClose={() => setSlash(null)} />
       ) : null}
     </div>
+  );
+}
+
+function ToolbarBtn({
+  children,
+  active,
+  label,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${
+        active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

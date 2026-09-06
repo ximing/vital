@@ -188,19 +188,41 @@ describe('reports workspace', () => {
     expect(screen.getByTestId('report-wysiwyg').textContent).not.toContain('##');
     expect(screen.getByRole('checkbox', { name: t.reports.complete })).toBeInTheDocument();
     expect(screen.getByText('写纪要')).toBeInTheDocument();
+    expect(screen.getByTestId('streak-calendar')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.reports.sourceToggle })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('report-source')).not.toBeInTheDocument();
   });
 
-  it('toggles source mode with the button and ⌘/', async () => {
+  it('opens a past day from the streak calendar', async () => {
+    const past = makeReport({
+      id: 'r-past',
+      periodStart: '2026-09-05',
+      periodEnd: '2026-09-06',
+      title: '2026年9月5日 日报',
+      revision: 2,
+    });
+    vi.mocked(client.getCurrentReport).mockImplementation(async (type, at) => {
+      if (type === 'weekly') return weekly;
+      if (at === '2026-09-05') return past;
+      return daily;
+    });
+    vi.mocked(client.getReport).mockImplementation(async (id) => {
+      if (id === weekly.id) return weekly;
+      if (id === past.id) return past;
+      return daily;
+    });
+    vi.mocked(client.listReports).mockResolvedValue({
+      items: [asListItem({ ...daily, revision: 2 }), asListItem(past)],
+      nextCursor: null,
+    });
     const user = userEvent.setup();
     renderAt('/reports/r-daily');
-    expect(await screen.findByTestId('report-wysiwyg')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: t.reports.sourceToggle }));
-    const source = await screen.findByTestId('report-source');
-    expect((source as HTMLTextAreaElement).value).toContain('## 今日完成');
-    expect(screen.queryByTestId('report-wysiwyg')).not.toBeInTheDocument();
-    fireEvent.keyDown(window, { key: '/', metaKey: true });
-    expect(await screen.findByTestId('report-wysiwyg')).toBeInTheDocument();
-    expect(screen.queryByTestId('report-source')).not.toBeInTheDocument();
+    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: `9月5日 · ${t.reports.wrote}` }));
+    await waitFor(() => {
+      expect(client.getCurrentReport).toHaveBeenCalledWith('daily', '2026-09-05');
+    });
+    expect(await screen.findByDisplayValue(past.title)).toBeInTheDocument();
   });
 
   it('switches day/week/month/year via current get-or-create', async () => {
@@ -209,7 +231,7 @@ describe('reports workspace', () => {
     expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: t.reports.weekly }));
     await waitFor(() => {
-      expect(client.getCurrentReport).toHaveBeenCalledWith('weekly');
+      expect(client.getCurrentReport).toHaveBeenCalledWith('weekly', undefined);
     });
     expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
   });

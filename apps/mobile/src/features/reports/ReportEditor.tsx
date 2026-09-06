@@ -33,6 +33,7 @@ export function ReportEditor({ reportId }: { reportId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [insertKind, setInsertKind] = useState<EntityKind | null>(null);
+  const [editing, setEditing] = useState(false);
   const savedBody = useRef('');
   const bodyRef = useRef('');
   const reportRef = useRef<Report | null>(null);
@@ -200,14 +201,16 @@ export function ReportEditor({ reportId }: { reportId: string }) {
         onToggleTask={(id, status) => void onToggleTask(id, status)}
         onOpenInbox={(id) => router.push(`/inbox/${id}`)}
       />
-      <Field
-        label={copy.fields.markdown}
-        value={bodyMd}
-        onChangeText={writeBody}
-        multiline
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
+      {editing ? (
+        <Field
+          label={copy.reports.write}
+          value={bodyMd}
+          onChangeText={writeBody}
+          multiline
+          autoCapitalize="sentences"
+          autoCorrect
+        />
+      ) : null}
       <View style={styles.row}>
         <Button variant="secondary" onPress={() => setInsertKind('task')}>
           {copy.actions.insertTask}
@@ -224,6 +227,9 @@ export function ReportEditor({ reportId }: { reportId: string }) {
         />
       ) : null}
       <View style={styles.row}>
+        <Button variant="secondary" onPress={() => setEditing((v) => !v)}>
+          {editing ? copy.actions.done : copy.actions.edit}
+        </Button>
         <Button loading={busy} loadingText={copy.actions.saving} onPress={() => void save()}>
           {copy.actions.save}
         </Button>

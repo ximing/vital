@@ -25,7 +25,7 @@ export function Field({
         id={fieldId}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
-        className="h-[var(--field-h)] rounded-md border border-border bg-surface px-3 text-fg placeholder:text-muted"
+        className="h-[var(--field-h)] rounded-xl border border-border bg-surface-muted/40 px-3 text-fg placeholder:text-muted outline-none transition-[border-color,background-color] duration-[var(--ease-out)] focus:border-focus focus:bg-surface"
         {...props}
       />
       {error ? (

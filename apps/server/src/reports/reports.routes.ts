@@ -28,8 +28,8 @@ export function registerReportRoutes(app: FastifyInstance): void {
   app.get('/api/v1/reports/current', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
-    const { type } = currentReportQuerySchema.parse(req.query);
-    return getCurrentReport(user, type);
+    const { type, at } = currentReportQuerySchema.parse(req.query);
+    return getCurrentReport(user, type, at);
   });
 
   app.get('/api/v1/reports/:id/embeds', { preHandler: [requireAuth] }, async (req) => {

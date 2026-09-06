@@ -126,6 +126,12 @@ describe('todo model', () => {
     expect(payload.dueAt).toBe(zonedLocalMidnightIso('2026-09-06', TZ));
   });
 
+  it('creates a task on a picked calendar day', () => {
+    const payload = createPayload('周会', 'smart:today', 'inbox-1', TZ, NOW, '2026-09-08');
+    expect(payload.dueAt).toBe(zonedLocalMidnightIso('2026-09-08', TZ));
+    expect(payload.isAllDay).toBe(true);
+  });
+
   it('creates someday tasks with the someday bucket', () => {
     const payload = createPayload('以后再说', 'smart:someday', 'inbox-1', TZ, NOW);
     expect(payload.timeBucket).toBe('someday');

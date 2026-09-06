@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { DateTime } from 'luxon';
 import {
   ensureFillHeadings,
   extractTokens,
@@ -236,8 +237,18 @@ export async function listReports(userId: string, query: ListReportsQuery): Prom
   };
 }
 
-export async function getCurrentReport(user: UserProfile, type: ReportType): Promise<Report> {
-  const period = currentPeriod(type, user.timezone, user.weekStartsOn);
+export async function getCurrentReport(
+  user: UserProfile,
+  type: ReportType,
+  at?: string,
+): Promise<Report> {
+  const zoneNow = DateTime.now().setZone(user.timezone);
+  const anchor = at
+    ? DateTime.fromISO(at, { zone: user.timezone }).startOf('day')
+    : zoneNow.startOf('day');
+  if (!anchor.isValid) throw AppError.of(400, 'VALIDATION_ERROR');
+  if (anchor > zoneNow.startOf('day')) throw AppError.of(400, 'VALIDATION_ERROR');
+  const period = currentPeriod(type, user.timezone, user.weekStartsOn, anchor);
   const [existing] = await getDb()
     .select()
     .from(reports)
@@ -251,6 +262,7 @@ export async function getCurrentReport(user: UserProfile, type: ReportType): Pro
     .limit(1);
   if (existing) return liveReport(existing);
 
+  const livePeriod = currentPeriod(type, user.timezone, user.weekStartsOn, zoneNow);
   const prevStart = previousPeriodStart(type, period.start, user.timezone);
   const [previous] = await getDb()
     .select()
@@ -263,7 +275,7 @@ export async function getCurrentReport(user: UserProfile, type: ReportType): Pro
       ),
     )
     .limit(1);
-  if (previous) await freezeIfNeeded(previous);
+  if (previous && period.start === livePeriod.start) await freezeIfNeeded(previous);
 
   const rendered = renderReportTemplate(type, period.label);
   const id = randomUUID();

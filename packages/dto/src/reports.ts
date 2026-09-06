@@ -72,6 +72,10 @@ export type ListReportsQuery = z.infer<typeof listReportsQuerySchema>;
 
 export const currentReportQuerySchema = z.object({
   type: reportTypeSchema,
+  at: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 export type CurrentReportQuery = z.infer<typeof currentReportQuerySchema>;
 

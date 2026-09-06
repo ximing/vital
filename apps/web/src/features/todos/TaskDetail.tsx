@@ -1,19 +1,13 @@
-import type { List, PatchTaskInput, Tag, Task, TaskPriority, TimeBucket } from '@vital/dto';
-import {
-  Bell,
-  Calendar,
-  Flag,
-  Folder,
-  ListTodo,
-  Repeat,
-  Sun,
-  X,
-} from 'lucide-react';
+import type { List, PatchTaskInput, Tag, Task, TimeBucket } from '@vital/dto';
+import { Bell, Calendar, Folder, ListTodo, Repeat, Sun, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { t } from '@/copy';
+import { useAuth } from '@/services/auth.service';
 import { Button } from '@/ui/button';
+import { DateField } from '@/ui/date-field';
 import { Icon, type LucideIcon } from '@/ui/icon';
 import { NotesEditor } from './NotesEditor';
+import { PriorityPicker } from './priority';
 import {
   fromDatetimeLocal,
   inboxList,
@@ -28,45 +22,7 @@ import { TaskCheckbox } from './TaskRow';
 import { todosUi, useTodosUi } from './todos-ui.service';
 
 const controlClass =
-  'h-9 w-full rounded-md border border-transparent bg-transparent px-2 text-[length:var(--text-meta)] text-fg hover:border-border focus:border-border';
-
-function DateControl({
-  value,
-  kind,
-  ariaLabel,
-  zone,
-  onChange,
-}: {
-  value: string;
-  kind: 'date' | 'datetime-local';
-  ariaLabel: string;
-  zone: string;
-  onChange: (value: string) => void;
-}) {
-  if (value === '') {
-    return (
-      <button
-        type="button"
-        className="h-9 px-2 text-left text-[length:var(--text-meta)] text-muted hover:text-fg"
-        onClick={() => {
-          const today = toDateInput(new Date().toISOString(), zone);
-          onChange(kind === 'date' ? today : `${today}T09:00`);
-        }}
-      >
-        {t.todos.addDate}
-      </button>
-    );
-  }
-  return (
-    <input
-      className={controlClass}
-      type={kind}
-      value={value}
-      aria-label={ariaLabel}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
+  'h-9 w-full rounded-xl border border-transparent bg-transparent px-2 text-[length:var(--text-meta)] text-fg hover:border-border focus:border-border';
 
 function PropRow({
   icon,
@@ -112,6 +68,7 @@ export function TaskDetail({
   onCreateTag: (name: string) => Promise<Tag | void>;
 }) {
   const closeDetail = useTodosUi((s) => s.closeDetail);
+  const weekStartsOn = useAuth((s) => (s.user?.weekStartsOn === 0 ? 0 : 1));
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
   const [subTitle, setSubTitle] = useState('');
@@ -224,25 +181,7 @@ export function TaskDetail({
         />
 
         <div className="mt-4 flex flex-col gap-1.5">
-          <div className="flex gap-1" role="radiogroup" aria-label={t.todos.priorityLabel}>
-            {([0, 1, 2, 3] as TaskPriority[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                role="radio"
-                aria-checked={task.priority === p}
-                className={`inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-md text-[length:var(--text-caption)] ${
-                  task.priority === p
-                    ? 'bg-accent-subtle text-fg'
-                    : 'text-muted hover:bg-surface-muted'
-                }`}
-                onClick={() => onPatch({ priority: p })}
-              >
-                <Icon icon={Flag} size={12} />
-                {t.todos.priority[`p${p}` as 'p0' | 'p1' | 'p2' | 'p3']}
-              </button>
-            ))}
-          </div>
+          <PriorityPicker value={task.priority} onChange={(priority) => onPatch({ priority })} />
 
           {movable ? (
             <PropRow icon={Folder} label={t.todos.list}>
@@ -288,20 +227,22 @@ export function TaskDetail({
           </PropRow>
 
           <PropRow icon={Calendar} label={t.todos.due}>
-            <DateControl
+            <DateField
               value={dueValue}
               kind={allDay ? 'date' : 'datetime-local'}
               ariaLabel={t.todos.due}
               zone={zone}
+              weekStartsOn={weekStartsOn}
               onChange={setDue}
             />
           </PropRow>
           <PropRow icon={Calendar} label={t.todos.start}>
-            <DateControl
+            <DateField
               value={startValue}
               kind={allDay ? 'date' : 'datetime-local'}
               ariaLabel={t.todos.start}
               zone={zone}
+              weekStartsOn={weekStartsOn}
               onChange={setStart}
             />
           </PropRow>
@@ -351,11 +292,12 @@ export function TaskDetail({
           </PropRow>
 
           <PropRow icon={Bell} label={t.todos.remind}>
-            <DateControl
+            <DateField
               value={task.remindAt ? toDatetimeLocal(task.remindAt, zone) : ''}
               kind="datetime-local"
               ariaLabel={t.todos.remind}
               zone={zone}
+              weekStartsOn={weekStartsOn}
               onChange={(value) =>
                 onPatch({
                   remindAt: value === '' ? null : fromDatetimeLocal(value, zone),
@@ -391,7 +333,7 @@ export function TaskDetail({
           </div>
           <form onSubmit={(e) => void addTag(e)} className="mt-2">
             <input
-              className="h-8 w-full rounded-md border border-border bg-canvas px-2 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
+              className="h-8 w-full rounded-xl border border-border bg-canvas px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
               placeholder={t.todos.addTag}
@@ -437,7 +379,7 @@ export function TaskDetail({
               }}
             >
               <input
-                className="h-8 w-full rounded-md border border-border bg-canvas px-2 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
+                className="h-8 w-full rounded-xl border border-border bg-canvas px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
                 value={subTitle}
                 onChange={(e) => setSubTitle(e.target.value)}
                 placeholder={t.todos.addSubtask}

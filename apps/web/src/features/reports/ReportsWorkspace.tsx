@@ -1,6 +1,6 @@
 import type { Report, ReportType, SyncHead } from '@vital/dto';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, useNavigate, useParams, useSearchParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { useOnline } from '@/features/inbox/online';
@@ -26,7 +26,8 @@ import {
   useReportListQuery,
   useReportQuery,
 } from './queries';
-import { SourceEditor } from './SourceEditor';
+import { useAuth } from '@/services/auth.service';
+import { StreakCalendar } from './StreakCalendar';
 import { reportUi } from './report-ui.service';
 import { WysiwygEditor } from './WysiwygEditor';
 
@@ -44,7 +45,6 @@ type Session = {
   remoteToast: boolean;
   saveError: string | null;
   saveState: 'idle' | 'saving' | 'saved';
-  sourceMode: boolean;
 };
 
 function sessionFrom(report: Report, prev?: Session | null): Session {
@@ -62,7 +62,6 @@ function sessionFrom(report: Report, prev?: Session | null): Session {
     remoteToast: false,
     saveError: null,
     saveState: 'idle',
-    sourceMode: prev?.sourceMode ?? false,
   };
 }
 
@@ -77,6 +76,9 @@ export function ReportsWorkspace() {
   const typeParam = parseReportType(search.get('type'));
   const online = useOnline();
   const actions = useReportActions();
+  const user = useAuth((s) => s.user);
+  const timeZone = user?.timezone ?? 'UTC';
+  const weekStartsOn = user?.weekStartsOn === 0 ? 0 : 1;
 
   const currentQuery = useCurrentReportQuery(typeParam, id === '');
   const reportQuery = useReportQuery(id, id !== '');
@@ -144,22 +146,6 @@ export function ReportsWorkspace() {
     const current = currentQuery.data;
     if (current) navigate(reportHref(current.id, current.type), { replace: true });
   }, [id, currentQuery.data, navigate]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent): void {
-      if ((event.metaKey || event.ctrlKey) && event.key === '/') {
-        event.preventDefault();
-        if (fillingRef.current) return;
-        const live = sessionRef.current;
-        if (!live) return;
-        const next = { ...live, sourceMode: !live.sourceMode };
-        sessionRef.current = next;
-        setSession(next);
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   useEffect(() => {
     if (id === '' || !online) return;
@@ -302,7 +288,7 @@ export function ReportsWorkspace() {
     session?.filling,
   ]);
 
-  async function switchType(next: ReportType): Promise<void> {
+  async function openPeriod(next: ReportType, at?: string): Promise<void> {
     cancelSaveTimer();
     try {
       if (saveInFlightRef.current) await saveInFlightRef.current;
@@ -310,7 +296,7 @@ export function ReportsWorkspace() {
       if (live && live.id === id && sessionDirty(live) && !live.conflict && !live.blockSave) {
         await runSaveTracked(live);
       }
-      const current = await actions.loadCurrent(next);
+      const current = await actions.loadCurrent(next, at);
       navigate(reportHref(current.id, current.type));
     } catch (err) {
       if (isRevisionConflict(err)) {
@@ -319,6 +305,10 @@ export function ReportsWorkspace() {
         patchLive((s) => ({ ...s, saveError: humanError(err) }));
       }
     }
+  }
+
+  async function switchType(next: ReportType): Promise<void> {
+    await openPeriod(next);
   }
 
   async function onFill(): Promise<void> {
@@ -423,7 +413,7 @@ export function ReportsWorkspace() {
         </p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div
-            className="flex rounded-md bg-surface p-0.5"
+            className="flex rounded-xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]"
             role="tablist"
             aria-label={t.nav.reports}
           >
@@ -433,7 +423,7 @@ export function ReportsWorkspace() {
                 type="button"
                 role="tab"
                 aria-selected={liveType === type}
-                className={`min-h-[var(--touch-min)] rounded-md px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+                className={`min-h-[var(--touch-min)] rounded-lg px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
                   liveType === type ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
                 }`}
                 onClick={() => void switchType(type)}
@@ -442,40 +432,13 @@ export function ReportsWorkspace() {
               </button>
             ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="ghost"
-              disabled={
-                !online ||
-                !session ||
-                session.conflict ||
-                session.blockSave ||
-                session.filling ||
-                session.saveState === 'saving' ||
-                actions.fill.isPending
-              }
-              loading={actions.fill.isPending || session?.filling === true}
-              onClick={() => void onFill()}
-            >
-              {actions.fill.isPending ? t.reports.filling : t.reports.fill}
-            </Button>
-            <Button
-              variant="quiet"
-              aria-pressed={session?.sourceMode === true}
-              aria-label={t.reports.sourceToggle}
-              disabled={session?.filling === true}
-              onClick={() => patchLive((s) => ({ ...s, sourceMode: !s.sourceMode }))}
-            >
-              {session?.sourceMode ? t.reports.wysiwyg : t.reports.source}
-            </Button>
-            <span className="text-[length:var(--text-caption)] text-muted" role="status">
-              {session?.saveState === 'saving'
-                ? t.reports.saving
-                : session?.saveState === 'saved' && !dirty
-                  ? t.reports.saved
-                  : null}
-            </span>
-          </div>
+          <span className="text-[length:var(--text-caption)] text-muted" role="status">
+            {session?.saveState === 'saving'
+              ? t.reports.saving
+              : session?.saveState === 'saved' && !dirty
+                ? t.reports.saved
+                : null}
+          </span>
         </div>
       </header>
 
@@ -532,31 +495,52 @@ export function ReportsWorkspace() {
 
       {loading ? (
         <div
-          className="mx-auto w-full max-w-[65ch] px-4 py-10"
+          className="mx-auto grid w-full max-w-[88rem] flex-1 gap-6 px-4 py-10 lg:grid-cols-[19rem_minmax(0,1fr)]"
           aria-busy="true"
           aria-label={t.reports.loading}
         >
-          <div className="skeleton-pulse mb-4 h-10 rounded-md" />
-          <div className="skeleton-pulse h-64 rounded-md" />
+          <div className="skeleton-pulse h-72 rounded-2xl" />
+          <div className="skeleton-pulse h-96 rounded-2xl" />
         </div>
       ) : id === '' || !session || session.id !== id ? (
         <EmptyReports onOpen={() => void switchType(typeParam)} />
       ) : (
-        <div className="mx-auto flex w-full max-w-[65ch] flex-1 flex-col px-4 pb-16 pt-6">
-          <input
-            aria-label={t.reports.title}
-            value={session.draftTitle}
-            disabled={!online || session.filling}
-            onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
-            className="mb-6 w-full bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em] text-fg outline-none"
-          />
-          {session.sourceMode ? (
-            <SourceEditor
-              value={session.draftMd}
-              editable={online && !session.filling}
-              onChange={(md) => patchLive((s) => ({ ...s, draftMd: md }))}
+        <div className="mx-auto grid w-full max-w-[88rem] flex-1 gap-6 px-4 pb-16 pt-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+          <aside className="min-w-0 lg:sticky lg:top-4 lg:self-start">
+            <StreakCalendar
+              type={liveType}
+              items={history}
+              selectedStart={report?.periodStart}
+              weekStartsOn={weekStartsOn}
+              timeZone={timeZone}
+              onPick={(ymd) => void openPeriod(liveType, ymd)}
             />
-          ) : (
+          </aside>
+          <div className="min-w-0 rounded-2xl bg-surface px-5 py-6 shadow-[inset_0_0_0_1px_var(--border-subtle)] sm:px-8">
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <input
+                aria-label={t.reports.title}
+                value={session.draftTitle}
+                disabled={!online || session.filling}
+                onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
+                className="min-w-0 flex-1 bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em] text-fg outline-none"
+              />
+              <Button
+                variant="ghost"
+                disabled={
+                  !online ||
+                  session.conflict ||
+                  session.blockSave ||
+                  session.filling ||
+                  session.saveState === 'saving' ||
+                  actions.fill.isPending
+                }
+                loading={actions.fill.isPending || session.filling}
+                onClick={() => void onFill()}
+              >
+                {actions.fill.isPending ? t.reports.filling : t.reports.fill}
+              </Button>
+            </div>
             <WysiwygEditor
               key={`${session.id}:${session.editorKey}`}
               bodyMd={session.draftMd}
@@ -565,33 +549,9 @@ export function ReportsWorkspace() {
               onHydrate={handleHydrate}
               onToggleTask={(taskId) => void toggleTask(taskId)}
             />
-          )}
+          </div>
         </div>
       )}
-
-      {history.length > 0 ? (
-        <aside className="border-t border-border px-4 py-6">
-          <p className="mb-2 text-[length:var(--text-caption)] text-muted">{t.reports.history}</p>
-          <ul className="flex flex-col gap-1">
-            {history.map((item) => (
-              <li key={item.id}>
-                <NavLink
-                  to={reportHref(item.id, item.type)}
-                  className={({ isActive }) =>
-                    `flex min-h-[var(--touch-min)] items-center rounded-md px-3 text-[length:var(--text-meta)] ${
-                      isActive
-                        ? 'bg-accent-subtle text-fg'
-                        : 'text-muted hover:bg-surface-muted hover:text-fg'
-                    }`
-                  }
-                >
-                  {item.title}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      ) : null}
     </div>
   );
 }

@@ -2,9 +2,9 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { copy } from '../lib/copy';
 import { formatDay, isOverdue } from '../lib/format';
 import { useTheme } from '../theme/use-theme';
+import { PriorityMark, priorityColor } from '../features/todos/priority';
 
 export function TaskRow({
   task,
@@ -34,14 +34,19 @@ export function TaskRow({
       >
         {done ? <Text style={styles.checkMark}>✓</Text> : null}
       </Pressable>
+      {task.priority < 3 ? (
+        <View style={[styles.rail, { backgroundColor: priorityColor(task.priority, t) }]} />
+      ) : (
+        <View style={styles.railSpacer} />
+      )}
       <Pressable style={styles.body} onPress={() => onPress(task)}>
-        <Text style={[styles.title, done && styles.titleDone]} numberOfLines={2}>
-          {task.title}
-        </Text>
+        <View style={styles.titleRow}>
+          <PriorityMark priority={task.priority} theme={t} />
+          <Text style={[styles.title, done && styles.titleDone]} numberOfLines={2}>
+            {task.title}
+          </Text>
+        </View>
         <View style={styles.meta}>
-          {task.priority === 0 ? (
-            <Text style={[styles.tag, { color: t.statusOverdue }]}>{copy.priority[0]}</Text>
-          ) : null}
           {task.dueAt ? (
             <Text style={[styles.tag, overdue && !done ? styles.overdue : null]}>
               {formatDay(task.dueAt, task.timezone)}
@@ -65,6 +70,9 @@ const createStyles = (t: Theme) =>
       backgroundColor: t.bgCanvas,
     },
     indent: { paddingLeft: t.space[10] },
+    rail: { width: 3, alignSelf: 'stretch', borderRadius: 2, marginTop: 4, marginBottom: 4 },
+    railSpacer: { width: 3 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: t.space[1], minWidth: 0 },
     check: {
       width: t.space[6],
       height: t.space[6],
@@ -83,6 +91,7 @@ const createStyles = (t: Theme) =>
     checkMark: { color: t.fgOnAccent, fontSize: t.type.caption.fontSize, fontWeight: '700' },
     body: { flex: 1, minWidth: 0, gap: t.space[1] },
     title: {
+      flex: 1,
       fontSize: t.type.body.fontSize,
       lineHeight: t.type.body.lineHeight,
       color: t.fgPrimary,

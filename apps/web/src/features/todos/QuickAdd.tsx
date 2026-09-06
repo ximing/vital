@@ -6,9 +6,11 @@ import { useTodosUi } from './todos-ui.service';
 export function QuickAdd({
   onSubmit,
   disabled,
+  hint,
 }: {
   onSubmit: (title: string) => Promise<void> | void;
   disabled?: boolean;
+  hint?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const nonce = useTodosUi((s) => s.quickAddNonce);
@@ -36,9 +38,9 @@ export function QuickAdd({
         name="title"
         maxLength={500}
         disabled={disabled}
-        placeholder={t.todos.quickAddPlaceholder}
-        aria-label={t.todos.quickAddPlaceholder}
-        className="h-[var(--field-h)] w-full rounded-md border border-border bg-surface px-3 text-fg placeholder:text-muted"
+        placeholder={hint ?? t.todos.quickAddPlaceholder}
+        aria-label={hint ?? t.todos.quickAddPlaceholder}
+        className="h-11 w-full rounded-xl border border-border bg-surface-muted/40 px-4 text-fg placeholder:text-muted outline-none transition-[border-color,background-color] duration-[var(--ease-out)] focus:border-focus focus:bg-surface"
       />
     </form>
   );

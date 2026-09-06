@@ -66,6 +66,14 @@ describe('reports', () => {
     expect(nowFrozen?.snapshotAt).not.toBeNull();
     expect(nowFrozen?.snapshotJson).toMatchObject({ bodyMd: '# 昨天 日报\n\nold body\n', revision: 2 });
 
+    const past = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/reports/current?type=daily&at=${prevStart}`,
+      token: alice.token,
+    });
+    expect(past.statusCode).toBe(200);
+    expect(past.json().id).toBe(prevId);
+
     const hist = await injectJson(app, {
       method: 'GET',
       url: `/api/v1/reports/${prevId}?asOf=snapshot`,

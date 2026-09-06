@@ -9,7 +9,7 @@ import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Icon } from '@/ui/icon';
 import { BoardView } from './BoardView';
-import { EmptyTasks, TaskSkeleton } from './EmptyTasks';
+import { TaskSkeleton } from './EmptyTasks';
 import { LIST_FILTER_ID, useTodosKeyboard } from './keyboard';
 import { ListView } from './ListView';
 import {
@@ -18,6 +18,7 @@ import {
   circadianSlot,
   createPayload,
   filterTasks,
+  formatHumanDay,
   hourInZone,
   inboxList,
   listTitle,
@@ -36,7 +37,7 @@ import {
 } from './queries';
 import { TaskDetail } from './TaskDetail';
 import { UndoToast } from './UndoToast';
-import { useTodosUi } from './todos-ui.service';
+import { todosUi, useTodosUi } from './todos-ui.service';
 import { WeekView } from './WeekView';
 
 function useOnline(): boolean {
@@ -77,6 +78,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const actions = useTodoActions();
 
   const [weekAnchor, setWeekAnchor] = useState(() => todayYmd(timeZone));
+  const [composeDay, setComposeDay] = useState<string | null>(null);
   const range = useMemo(
     () => weekRangeIso(weekAnchor, weekStartsOn, timeZone),
     [weekAnchor, weekStartsOn, timeZone],
@@ -146,7 +148,10 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const inboxId = inbox?.id;
   async function handleCreate(name: string) {
     if (!inboxId) return;
-    await actions.create.mutateAsync(createPayload(name, listId, inboxId, timeZone));
+    await actions.create.mutateAsync(
+      createPayload(name, listId, inboxId, timeZone, new Date(), composeDay ?? undefined),
+    );
+    setComposeDay(null);
   }
 
   const persistedTasksQuery = useTasksQuery(detailTask?.listId ?? '', Boolean(detailTask));
@@ -237,7 +242,15 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           </div>
         ) : null}
 
-        <QuickAdd onSubmit={handleCreate} disabled={!online || !inboxId} />
+        <QuickAdd
+          onSubmit={handleCreate}
+          disabled={!online || !inboxId}
+          hint={
+            composeDay
+              ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}`
+              : undefined
+          }
+        />
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-24">
           {loading ? (
@@ -269,15 +282,21 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
             <div className="px-4">
               <Banner>{humanError(calendarQuery.error)}</Banner>
             </div>
-          ) : instances.length === 0 ? (
-            <EmptyTasks listId={listId} kind="week" />
           ) : (
             <WeekView
               listId={listId}
               days={range.days}
               instances={instances}
               timeZone={timeZone}
-              onSelectDay={setWeekAnchor}
+              composeDay={composeDay}
+              onSelectDay={(ymd) => {
+                setWeekAnchor(ymd);
+                setComposeDay(null);
+              }}
+              onAddDay={(ymd) => {
+                setComposeDay(ymd);
+                todosUi().requestQuickAdd();
+              }}
               onOpen={openDetail}
             />
           )}

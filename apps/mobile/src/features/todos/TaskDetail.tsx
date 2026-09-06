@@ -17,6 +17,8 @@ import { humanError } from '../../lib/errors';
 import { localDateStamp, zonedLocalMidnightIso } from '../../lib/format';
 import { useTheme } from '../../theme/use-theme';
 import { toggleComplete } from './complete';
+import { NotesField } from './NotesField';
+import { PriorityMark } from './priority';
 
 function recurrenceKind(rrule: string | null): 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom' {
   if (rrule === null || rrule === '') return 'none';
@@ -34,45 +36,6 @@ function rruleForKind(kind: 'daily' | 'weekly' | 'monthly' | 'yearly'): string {
   return 'FREQ=YEARLY';
 }
 
-function NotesPreview({ md, styles }: { md: string; styles: ReturnType<typeof createStyles> }) {
-  const lines = md.length === 0 ? [] : md.split('\n');
-  if (lines.length === 0) {
-    return <Text style={styles.placeholder}>{copy.todos.notesPlaceholder}</Text>;
-  }
-  return (
-    <View style={styles.preview}>
-      {lines.map((line, i) => {
-        if (line.startsWith('# ')) {
-          return (
-            <Text key={i} style={styles.h1}>
-              {line.slice(2)}
-            </Text>
-          );
-        }
-        if (line.startsWith('## ')) {
-          return (
-            <Text key={i} style={styles.h2}>
-              {line.slice(3)}
-            </Text>
-          );
-        }
-        if (line.startsWith('- ') || line.startsWith('* ')) {
-          return (
-            <Text key={i} style={styles.body}>
-              • {line.slice(2)}
-            </Text>
-          );
-        }
-        return (
-          <Text key={i} style={styles.body}>
-            {line === '' ? ' ' : line}
-          </Text>
-        );
-      })}
-    </View>
-  );
-}
-
 export function TaskDetail({ taskId }: { taskId: string }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
@@ -84,7 +47,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
   const [notes, setNotes] = useState('');
   const [dueYmd, setDueYmd] = useState('');
   const [tagDraft, setTagDraft] = useState('');
-  const [notesMode, setNotesMode] = useState<'edit' | 'preview'>('preview');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -196,9 +158,12 @@ export function TaskDetail({ taskId }: { taskId: string }) {
               style={[styles.chip, active && styles.chipActive]}
               onPress={() => void patch({ priority: p })}
             >
-              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                {copy.priority[p]}
-              </Text>
+              <View style={styles.chipInner}>
+                <PriorityMark priority={p} theme={t} />
+                <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
+                  {copy.priority[p]}
+                </Text>
+              </View>
             </Pressable>
           );
         })}
@@ -305,38 +270,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
         returnKeyType="done"
       />
 
-      <View style={styles.notesHead}>
-        <Text style={styles.label}>{copy.todos.notes}</Text>
-        <View style={styles.chipRow}>
-          <Pressable
-            style={[styles.chip, notesMode === 'edit' && styles.chipActive]}
-            onPress={() => setNotesMode('edit')}
-          >
-            <Text style={[styles.chipLabel, notesMode === 'edit' && styles.chipLabelActive]}>
-              {copy.todos.notesEdit}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.chip, notesMode === 'preview' && styles.chipActive]}
-            onPress={() => setNotesMode('preview')}
-          >
-            <Text style={[styles.chipLabel, notesMode === 'preview' && styles.chipLabelActive]}>
-              {copy.todos.notesPreview}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-      {notesMode === 'edit' ? (
-        <Field
-          label={copy.fields.markdown}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          autoCapitalize="sentences"
-        />
-      ) : (
-        <NotesPreview md={notes} styles={styles} />
-      )}
+      <NotesField value={notes} onChange={setNotes} />
 
       <View style={styles.actions}>
         <Button loading={busy} loadingText={copy.actions.saving} onPress={() => void save()}>
@@ -371,17 +305,6 @@ const createStyles = (t: Theme) =>
     chipActive: { backgroundColor: t.bgAccentSubtle },
     chipLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
     chipLabelActive: { color: t.fgPrimary, fontWeight: '600' },
-    notesHead: { gap: t.space[2] },
-    preview: {
-      minHeight: t.space[12] * 2,
-      padding: t.space[3],
-      borderRadius: t.radius.md,
-      backgroundColor: t.bgSurfaceMuted,
-      gap: t.space[1],
-    },
-    placeholder: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
-    h1: { fontSize: t.type.title.fontSize, fontWeight: '700', color: t.fgPrimary },
-    h2: { fontSize: t.type.body.fontSize, fontWeight: '600', color: t.fgPrimary },
-    body: { fontSize: t.type.body.fontSize, color: t.fgPrimary, lineHeight: t.type.body.lineHeight },
+    chipInner: { flexDirection: 'row', alignItems: 'center', gap: t.space[1] },
     actions: { flexDirection: 'row', gap: t.space[2], flexWrap: 'wrap', marginTop: t.space[2] },
   });

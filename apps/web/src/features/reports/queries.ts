@@ -58,9 +58,9 @@ export function useReportQuery(id: string, enabled = true) {
 export function useReportActions() {
   const qc = useQueryClient();
 
-  function cacheReport(report: Report): void {
+  function cacheReport(report: Report, asCurrent = false): void {
     qc.setQueryData(reportKeys.item(report.id), report);
-    qc.setQueryData(reportKeys.current(report.type), report);
+    if (asCurrent) qc.setQueryData(reportKeys.current(report.type), report);
   }
 
   const fill = useMutation({
@@ -69,6 +69,7 @@ export function useReportActions() {
     onSuccess: (report) => {
       cacheReport(report);
       void qc.invalidateQueries({ queryKey: reportKeys.list(report.type) });
+      void qc.invalidateQueries({ queryKey: reportKeys.current(report.type) });
     },
   });
 
@@ -81,13 +82,14 @@ export function useReportActions() {
   async function save(id: string, input: { revision: number; bodyMd?: string; title?: string }) {
     const report = await client.patchReport(id, input);
     cacheReport(report);
+    void qc.invalidateQueries({ queryKey: reportKeys.list(report.type) });
     await markWroteDaily(report.type);
     return report;
   }
 
-  async function loadCurrent(type: ReportType): Promise<Report> {
-    const report = await client.getCurrentReport(type);
-    cacheReport(report);
+  async function loadCurrent(type: ReportType, at?: string): Promise<Report> {
+    const report = await client.getCurrentReport(type, at);
+    cacheReport(report, at === undefined);
     return report;
   }
 

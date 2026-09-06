@@ -8,6 +8,10 @@ import {
 describe('report schemas', () => {
   it('current requires type', () => {
     expect(currentReportQuerySchema.parse({ type: 'daily' }).type).toBe('daily');
+    expect(currentReportQuerySchema.parse({ type: 'daily', at: '2026-09-01' }).at).toBe(
+      '2026-09-01',
+    );
+    expect(currentReportQuerySchema.safeParse({ type: 'daily', at: '09-01' }).success).toBe(false);
     expect(currentReportQuerySchema.safeParse({}).success).toBe(false);
   });
 

@@ -115,7 +115,7 @@ export interface VitalClient {
   deleteInbox(id: string): Promise<void>;
   convertInbox(id: string, input?: ConvertInboxInput): Promise<ConvertInboxResponse>;
   listReports(query?: { type?: ReportType; cursor?: string; limit?: number }): Promise<ReportCollection>;
-  getCurrentReport(type: ReportType): Promise<Report>;
+  getCurrentReport(type: ReportType, at?: string): Promise<Report>;
   getReport(id: string, query?: GetReportQuery): Promise<Report>;
   getReportEmbeds(id: string): Promise<ReportEmbedsResponse>;
   patchReport(id: string, input: PatchReportInput): Promise<Report>;
@@ -263,8 +263,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       if (query.limit !== undefined) q.limit = query.limit;
       return http.request('/api/v1/reports', { query: q });
     },
-    getCurrentReport: (type) => {
-      const query: CurrentReportQuery = { type };
+    getCurrentReport: (type, at) => {
+      const query: CurrentReportQuery = { type, ...(at ? { at } : {}) };
       return http.request('/api/v1/reports/current', { query });
     },
     getReport: (id, query = {}) => {

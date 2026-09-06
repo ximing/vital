@@ -335,8 +335,10 @@ describe('todos workspace', () => {
     expect(await screen.findByText('全天会议')).toBeInTheDocument();
     expect(screen.getByText('下午电话')).toBeInTheDocument();
     const chip = screen.getByRole('button', { name: '全天会议' });
-    expect(chip.className).toContain('rounded-full');
+    expect(chip.className).toContain('rounded-lg');
+    expect(chip).toHaveAttribute('data-priority', '2');
     const timed = screen.getByRole('button', { name: /下午电话/ });
+    expect(timed).toHaveAttribute('data-priority', '1');
     expect(within(timed).getByText('14:00')).toBeInTheDocument();
   });
 

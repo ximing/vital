@@ -1,7 +1,8 @@
 import type { Task, Tag } from '@vital/dto';
 import type { DragEvent } from 'react';
 import { t } from '@/copy';
-import { dueMeta, isDueSoon, isOverdue, priorityLabel, priorityTone } from './model';
+import { dueMeta, isDueSoon, isOverdue } from './model';
+import { priorityBarClass, PriorityMark } from './priority';
 
 export function TaskCheckbox({
   task,
@@ -80,10 +81,17 @@ export function TaskRow({
       onDrop={onDrop}
       onClick={onSelect}
       onDoubleClick={onOpen}
-      className={`flex min-h-[var(--touch-min)] cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
+      className={`flex min-h-[var(--touch-min)] cursor-pointer items-start gap-3 rounded-xl px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
         selected ? 'bg-accent-subtle' : 'hover:bg-surface-muted'
       } ${depth === 1 ? 'ml-8' : ''}`}
     >
+      {task.priority < 3 ? (
+        <span
+          className={`mt-2 h-5 w-[3px] shrink-0 rounded-full ${priorityBarClass(task.priority)}`}
+        />
+      ) : (
+        <span className="mt-2 w-[3px] shrink-0" />
+      )}
       <TaskCheckbox task={task} timeZone={timeZone} onToggle={onComplete} />
       <div className="min-w-0 flex-1">
         <p
@@ -91,9 +99,7 @@ export function TaskRow({
             done ? 'text-muted line-through' : 'text-fg'
           }`}
         >
-          <span className={`mr-2 text-[length:var(--text-caption)] ${priorityTone(task.priority)}`}>
-            {t.todos.priority[priorityLabel(task.priority)]}
-          </span>
+          <PriorityMark priority={task.priority} className="mr-1.5 align-middle" />
           {task.title}
         </p>
         <p className="flex flex-wrap items-center gap-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)]">

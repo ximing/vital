@@ -394,9 +394,19 @@ export function createPayload(
   inboxId: string,
   timeZone: string,
   now = new Date(),
+  dueYmd?: string,
 ): CreateTaskInput {
   const trimmed = title.trim();
   const target = writeListId(listId, inboxId);
+  if (dueYmd) {
+    return {
+      title: trimmed,
+      listId: target,
+      dueAt: zonedLocalMidnightIso(dueYmd, timeZone),
+      isAllDay: true,
+      timezone: timeZone,
+    };
+  }
   const today = todayYmd(timeZone, now);
   const midnight = zonedLocalMidnightIso(today, timeZone);
   if (listId === 'smart:today' || listId === 'smart:upcoming') {
