@@ -12,6 +12,7 @@ import { registerListRoutes } from './lists/lists.routes.js';
 import { populateUser } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
 import { globalRateLimit } from './plugins/rate-limit.js';
+import { isTrustedProxy } from './plugins/trust-proxy.js';
 import { registerReportRoutes } from './reports/reports.routes.js';
 import { registerSearchRoutes } from './search/search.routes.js';
 import { registerSyncRoutes } from './sync/sync.routes.js';
@@ -33,8 +34,8 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
 
   const app = Fastify({
     logger: false,
-    // Only trust loopback proxies (nginx / compose). `true` honors any spoofed X-Forwarded-For.
-    trustProxy: (address: string) => address === '127.0.0.1' || address === '::1',
+    // Loopback + docker-gateway hop (host nginx → 127.0.0.1:3010 publish). Not `true` (spoofed XFF).
+    trustProxy: isTrustedProxy,
     bodyLimit: 1024 * 1024,
     requestIdHeader: 'x-request-id',
   });
