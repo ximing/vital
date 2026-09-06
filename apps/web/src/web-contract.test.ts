@@ -42,6 +42,7 @@ describe('web shell contract', () => {
     expect(client).not.toContain('localStorage');
   });
 
+<<<<<<< HEAD
   it('todos live under features/todos with smart:today and keyboard keys', () => {
     const app = read('src/App.tsx');
     expect(app).toContain('/todos/lists/:listId');
@@ -106,5 +107,16 @@ describe('web shell contract', () => {
     expect(search).toContain(".search({ q, limit: 20 })");
     const copy = read('src/copy.ts');
     expect(copy).toContain('输入关键词搜任务、稍后读和报告。');
+  });
+
+  it('Tauri runtime uses bearer plugin-http + plugin-store and an absolute baseUrl', () => {
+    const client = read('src/api/client.ts');
+    expect(client).toContain('__TAURI_INTERNALS__');
+    expect(client).toContain("authMode: 'bearer'");
+    expect(client).toContain('@tauri-apps/plugin-http');
+    expect(client).toContain('@tauri-apps/plugin-store');
+    expect(client).toContain('http://127.0.0.1:3010');
+    expect(client).toContain('VITE_TAURI_API_URL');
+    expect(client).toContain('tauriFetch');
   });
 });
