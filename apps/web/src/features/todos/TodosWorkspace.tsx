@@ -1,4 +1,5 @@
 import type { Task, TaskPriority } from '@vital/dto';
+import { CalendarDays, Columns3, List, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useParams, useSearchParams } from 'react-router';
 import { t } from '@/copy';
@@ -6,6 +7,7 @@ import { humanError } from '@/lib/errors';
 import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
+import { Icon } from '@/ui/icon';
 import { BoardView } from './BoardView';
 import { EmptyTasks, TaskSkeleton } from './EmptyTasks';
 import { LIST_FILTER_ID, useTodosKeyboard } from './keyboard';
@@ -162,49 +164,61 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
 
   const loading = tasksQuery.isLoading || listsQuery.isLoading;
   const error = tasksQuery.error ?? listsQuery.error;
-  const viewTabs: TodoView[] = ['list', 'board', 'week'];
+  const viewTabs: { id: TodoView; icon: typeof List }[] = [
+    { id: 'list', icon: List },
+    { id: 'board', icon: Columns3 },
+    { id: 'week', icon: CalendarDays },
+  ];
 
   return (
     <div className="flex min-h-screen bg-canvas">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-end justify-between gap-3 px-4 pb-2 pt-6">
-          <div>
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-5">
+          <div className="min-w-0">
             <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
               {kicker}
             </p>
-            <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
+            <h1 className="truncate text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
               {title}
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div
-              className="flex rounded-md bg-surface p-0.5"
+              className="flex rounded-lg border border-border bg-surface p-0.5"
               role="tablist"
               aria-label={t.nav.todos}
             >
               {viewTabs.map((tab) => (
                 <NavLink
-                  key={tab}
-                  to={viewHref(tab, listId)}
+                  key={tab.id}
+                  to={viewHref(tab.id, listId)}
                   role="tab"
-                  aria-selected={view === tab}
-                  className={`min-h-[var(--touch-min)] rounded-md px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
-                    view === tab ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
+                  aria-selected={view === tab.id}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+                    view === tab.id ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
                   }`}
                 >
-                  {t.todos.views[tab]}
+                  <Icon icon={tab.icon} size={14} />
+                  {t.todos.views[tab.id]}
                 </NavLink>
               ))}
             </div>
-            <input
-              id={LIST_FILTER_ID}
-              type="search"
-              value={listFilter}
-              onChange={(e) => setListFilter(e.target.value)}
-              placeholder={t.todos.filterPlaceholder}
-              aria-label={t.todos.filterPlaceholder}
-              className="h-[var(--control-h)] w-44 rounded-md border border-border bg-surface px-3 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
-            />
+            <label className="relative">
+              <Icon
+                icon={Search}
+                size={14}
+                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+              />
+              <input
+                id={LIST_FILTER_ID}
+                type="search"
+                value={listFilter}
+                onChange={(e) => setListFilter(e.target.value)}
+                placeholder={t.todos.filterPlaceholder}
+                aria-label={t.todos.filterPlaceholder}
+                className="h-8 w-44 rounded-md border border-border bg-surface py-0 pl-8 pr-3 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
+              />
+            </label>
           </div>
         </header>
 

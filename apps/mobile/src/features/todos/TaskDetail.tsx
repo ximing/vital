@@ -1,39 +1,106 @@
 import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
-import type { Task } from '@vital/dto';
+import type { List, Tag, Task, TaskPriority } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
-import { client } from '../../lib/api';
-import { copy } from '../../lib/copy';
-import { humanError } from '../../lib/errors';
-import { formatDateTime } from '../../lib/format';
-import { useFocusReload } from '../../hooks/use-focus-reload';
-import { useTheme } from '../../theme/use-theme';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
 import { Loading } from '../../components/Loading';
 import { Screen } from '../../components/Screen';
 import { toast } from '../../components/toast';
+import { useFocusReload } from '../../hooks/use-focus-reload';
+import { client } from '../../lib/api';
+import { copy } from '../../lib/copy';
+import { humanError } from '../../lib/errors';
+import { localDateStamp, zonedLocalMidnightIso } from '../../lib/format';
+import { useTheme } from '../../theme/use-theme';
 import { toggleComplete } from './complete';
+
+function recurrenceKind(rrule: string | null): 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom' {
+  if (rrule === null || rrule === '') return 'none';
+  if (/\bFREQ=DAILY\b/.test(rrule) && !/\bBYDAY=/.test(rrule)) return 'daily';
+  if (/\bFREQ=WEEKLY\b/.test(rrule) && !/\bBYDAY=/.test(rrule)) return 'weekly';
+  if (/\bFREQ=MONTHLY\b/.test(rrule)) return 'monthly';
+  if (/\bFREQ=YEARLY\b/.test(rrule)) return 'yearly';
+  return 'custom';
+}
+
+function rruleForKind(kind: 'daily' | 'weekly' | 'monthly' | 'yearly'): string {
+  if (kind === 'daily') return 'FREQ=DAILY';
+  if (kind === 'weekly') return 'FREQ=WEEKLY';
+  if (kind === 'monthly') return 'FREQ=MONTHLY';
+  return 'FREQ=YEARLY';
+}
+
+function NotesPreview({ md, styles }: { md: string; styles: ReturnType<typeof createStyles> }) {
+  const lines = md.length === 0 ? [] : md.split('\n');
+  if (lines.length === 0) {
+    return <Text style={styles.placeholder}>{copy.todos.notesPlaceholder}</Text>;
+  }
+  return (
+    <View style={styles.preview}>
+      {lines.map((line, i) => {
+        if (line.startsWith('# ')) {
+          return (
+            <Text key={i} style={styles.h1}>
+              {line.slice(2)}
+            </Text>
+          );
+        }
+        if (line.startsWith('## ')) {
+          return (
+            <Text key={i} style={styles.h2}>
+              {line.slice(3)}
+            </Text>
+          );
+        }
+        if (line.startsWith('- ') || line.startsWith('* ')) {
+          return (
+            <Text key={i} style={styles.body}>
+              • {line.slice(2)}
+            </Text>
+          );
+        }
+        return (
+          <Text key={i} style={styles.body}>
+            {line === '' ? ' ' : line}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
 
 export function TaskDetail({ taskId }: { taskId: string }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const auth = useAuth();
   const [task, setTask] = useState<Task | null>(null);
+  const [lists, setLists] = useState<List[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [dueYmd, setDueYmd] = useState('');
+  const [tagDraft, setTagDraft] = useState('');
+  const [notesMode, setNotesMode] = useState<'edit' | 'preview'>('preview');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const next = await client.getTask(taskId);
+      const [next, listRes, tagRes] = await Promise.all([
+        client.getTask(taskId),
+        client.listLists(),
+        client.listTags(),
+      ]);
       setTask(next);
       setTitle(next.title);
       setNotes(next.notes);
+      setDueYmd(next.dueAt ? localDateStamp(next.timezone, new Date(next.dueAt)) : '');
+      setLists(listRes.items.filter((row) => row.kind === 'user' || row.kind === 'inbox'));
+      setTags(tagRes.items);
       setError(null);
     } catch (err) {
       setError(humanError(err));
@@ -53,11 +120,33 @@ export function TaskDetail({ taskId }: { taskId: string }) {
     );
   }
 
+  const zone = task.timezone || auth.user?.timezone || 'UTC';
+  const kind = recurrenceKind(task.recurrence);
+
+  async function patch(input: Parameters<typeof client.patchTask>[1]): Promise<void> {
+    if (task === null) return;
+    try {
+      const next = await client.patchTask(task.id, input);
+      setTask(next);
+      setTitle(next.title);
+      setNotes(next.notes);
+      setDueYmd(next.dueAt ? localDateStamp(next.timezone, new Date(next.dueAt)) : '');
+    } catch (err) {
+      toast(humanError(err));
+    }
+  }
+
   async function save(): Promise<void> {
     if (task === null) return;
     setBusy(true);
     try {
-      const next = await client.patchTask(task.id, { title: title.trim(), notes });
+      const dueAt = dueYmd.trim() === '' ? null : zonedLocalMidnightIso(zone, dueYmd.trim());
+      const next = await client.patchTask(task.id, {
+        title: title.trim() || task.title,
+        notes,
+        dueAt,
+        isAllDay: true,
+      });
       setTask(next);
       toast(copy.toast.saved);
     } catch (err) {
@@ -67,21 +156,188 @@ export function TaskDetail({ taskId }: { taskId: string }) {
     }
   }
 
+  async function addTag(): Promise<void> {
+    const name = tagDraft.trim();
+    if (name === '' || task === null) return;
+    const existing = tags.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
+    try {
+      if (existing) {
+        if (!task.tagIds.includes(existing.id)) {
+          await patch({ tagIds: [...task.tagIds, existing.id] });
+        }
+      } else {
+        const created = await client.createTag({ name });
+        setTags((prev) => [...prev, created]);
+        await patch({ tagIds: [...task.tagIds, created.id] });
+      }
+      setTagDraft('');
+    } catch (err) {
+      toast(humanError(err));
+    }
+  }
+
   return (
     <Screen scroll>
       <Stack.Screen options={{ title: task.title }} />
-      <Field label={copy.fields.title} value={title} onChangeText={setTitle} autoCapitalize="sentences" />
       <Field
-        label={copy.fields.notes}
-        value={notes}
-        onChangeText={setNotes}
-        multiline
+        label={copy.fields.title}
+        value={title}
+        onChangeText={setTitle}
         autoCapitalize="sentences"
       />
-      <Text style={styles.meta}>
-        {copy.priority[task.priority]}
-        {task.dueAt ? ` · ${formatDateTime(task.dueAt, task.timezone)}` : ''}
-      </Text>
+
+      <Text style={styles.label}>{copy.todos.priority}</Text>
+      <View style={styles.chipRow}>
+        {([0, 1, 2, 3] as TaskPriority[]).map((p) => {
+          const active = task.priority === p;
+          return (
+            <Pressable
+              key={p}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => void patch({ priority: p })}
+            >
+              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
+                {copy.priority[p]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={styles.label}>{copy.todos.list}</Text>
+      <View style={styles.chipRow}>
+        {lists.map((list) => {
+          const active = task.listId === list.id;
+          const label = list.kind === 'inbox' ? copy.lists.inbox : list.name;
+          return (
+            <Pressable
+              key={list.id}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => void patch({ listId: list.id })}
+            >
+              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {task.status !== 'done' ? (
+        <>
+          <Text style={styles.label}>{copy.todos.status.todo}</Text>
+          <View style={styles.chipRow}>
+            {(['todo', 'doing'] as const).map((status) => {
+              const active = (task.status === 'doing' ? 'doing' : 'todo') === status;
+              return (
+                <Pressable
+                  key={status}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => void patch({ status })}
+                >
+                  <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
+                    {copy.todos.status[status]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+
+      <Field
+        label={`${copy.todos.due} (YYYY-MM-DD)`}
+        value={dueYmd}
+        onChangeText={setDueYmd}
+        placeholder="2026-09-06"
+        autoCapitalize="none"
+      />
+
+      <Text style={styles.label}>{copy.todos.recurrence}</Text>
+      <View style={styles.chipRow}>
+        {(
+          [
+            ['none', copy.todos.recurrenceNone],
+            ['daily', copy.todos.recurrenceDaily],
+            ['weekly', copy.todos.recurrenceWeekly],
+            ['monthly', copy.todos.recurrenceMonthly],
+            ['yearly', copy.todos.recurrenceYearly],
+          ] as const
+        ).map(([id, label]) => {
+          const active = kind === id;
+          return (
+            <Pressable
+              key={id}
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() =>
+                void patch({ recurrence: id === 'none' ? null : rruleForKind(id) })
+              }
+            >
+              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={styles.label}>{copy.todos.tags}</Text>
+      <View style={styles.chipRow}>
+        {tags.map((tag) => {
+          const on = task.tagIds.includes(tag.id);
+          return (
+            <Pressable
+              key={tag.id}
+              style={[styles.chip, on && styles.chipActive]}
+              onPress={() => {
+                const tagIds = on
+                  ? task.tagIds.filter((id) => id !== tag.id)
+                  : [...task.tagIds, tag.id];
+                void patch({ tagIds });
+              }}
+            >
+              <Text style={[styles.chipLabel, on && styles.chipLabelActive]}>#{tag.name}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Field
+        label={copy.todos.addTag}
+        value={tagDraft}
+        onChangeText={setTagDraft}
+        onSubmitEditing={() => void addTag()}
+        returnKeyType="done"
+      />
+
+      <View style={styles.notesHead}>
+        <Text style={styles.label}>{copy.todos.notes}</Text>
+        <View style={styles.chipRow}>
+          <Pressable
+            style={[styles.chip, notesMode === 'edit' && styles.chipActive]}
+            onPress={() => setNotesMode('edit')}
+          >
+            <Text style={[styles.chipLabel, notesMode === 'edit' && styles.chipLabelActive]}>
+              {copy.todos.notesEdit}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.chip, notesMode === 'preview' && styles.chipActive]}
+            onPress={() => setNotesMode('preview')}
+          >
+            <Text style={[styles.chipLabel, notesMode === 'preview' && styles.chipLabelActive]}>
+              {copy.todos.notesPreview}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+      {notesMode === 'edit' ? (
+        <Field
+          label={copy.fields.markdown}
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+          autoCapitalize="sentences"
+        />
+      ) : (
+        <NotesPreview md={notes} styles={styles} />
+      )}
+
       <View style={styles.actions}>
         <Button loading={busy} loadingText={copy.actions.saving} onPress={() => void save()}>
           {copy.actions.save}
@@ -103,6 +359,29 @@ export function TaskDetail({ taskId }: { taskId: string }) {
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    meta: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
-    actions: { flexDirection: 'row', gap: t.space[2], flexWrap: 'wrap' },
+    label: { fontSize: t.type.meta.fontSize, color: t.fgMuted, marginTop: t.space[2] },
+    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
+    chip: {
+      minHeight: t.space[8],
+      paddingHorizontal: t.space[3],
+      borderRadius: t.radius.pill,
+      backgroundColor: t.bgSurfaceMuted,
+      justifyContent: 'center',
+    },
+    chipActive: { backgroundColor: t.bgAccentSubtle },
+    chipLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    chipLabelActive: { color: t.fgPrimary, fontWeight: '600' },
+    notesHead: { gap: t.space[2] },
+    preview: {
+      minHeight: t.space[12] * 2,
+      padding: t.space[3],
+      borderRadius: t.radius.md,
+      backgroundColor: t.bgSurfaceMuted,
+      gap: t.space[1],
+    },
+    placeholder: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
+    h1: { fontSize: t.type.title.fontSize, fontWeight: '700', color: t.fgPrimary },
+    h2: { fontSize: t.type.body.fontSize, fontWeight: '600', color: t.fgPrimary },
+    body: { fontSize: t.type.body.fontSize, color: t.fgPrimary, lineHeight: t.type.body.lineHeight },
+    actions: { flexDirection: 'row', gap: t.space[2], flexWrap: 'wrap', marginTop: t.space[2] },
   });

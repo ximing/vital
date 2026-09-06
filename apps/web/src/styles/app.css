@@ -246,6 +246,44 @@ body {
   text-underline-offset: 3px;
 }
 
+.task-notes-doc {
+  min-height: 10rem;
+  padding: 0.65rem 0.85rem;
+  outline: none;
+  font-size: var(--text-meta);
+  line-height: var(--text-body-lh);
+}
+
+.task-notes-doc h1,
+.task-notes-doc h2,
+.task-notes-doc h3 {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0.6em 0 0.3em;
+}
+
+.task-notes-doc p {
+  margin: 0 0 0.5em;
+}
+
+.task-notes-doc ul,
+.task-notes-doc ol {
+  margin: 0 0 0.5em;
+  padding-left: 1.25rem;
+}
+
+.task-notes-doc p.is-editor-empty:first-child::before {
+  color: var(--fg-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.task-notes-source {
+  font-family: var(--font-mono);
+}
+
 .report-doc p.is-editor-empty:first-child::before {
   color: var(--fg-muted);
   content: attr(data-placeholder);

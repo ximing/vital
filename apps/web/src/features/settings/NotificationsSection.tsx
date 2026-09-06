@@ -12,7 +12,7 @@ function prefsOf(value: NotificationPrefs | undefined): NotificationPrefs {
   return value ?? DEFAULT_NOTIFICATION_PREFS;
 }
 
-export function NotificationsSection() {
+export function NotificationsSection({ heading = true }: { heading?: boolean }) {
   const user = useAuth((s) => s.user);
   const setUser = useAuth((s) => s.setUser);
   const copy = t.settings.notify;
@@ -88,11 +88,13 @@ export function NotificationsSection() {
   }
 
   return (
-    <section className="mt-8">
-      <h2 className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-        {copy.title}
-      </h2>
-      <p className="mt-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+    <section className={heading ? 'mt-8' : undefined}>
+      {heading ? (
+        <h2 className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          {copy.title}
+        </h2>
+      ) : null}
+      <p className={`${heading ? 'mt-2' : ''} text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted`}>
         {copy.hint}
       </p>
 

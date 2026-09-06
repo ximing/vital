@@ -1,10 +1,12 @@
 import { DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { NotificationsSection } from '../../../src/features/settings/NotificationsSection';
+import { SettingsPage } from '../../../src/pages/settings';
 import { setAuthForTest } from '@/services/auth.service';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -51,6 +53,25 @@ describe('NotificationsSection', () => {
       createdAt: mockUser.createdAt,
       updatedAt: mockUser.updatedAt,
     });
+  });
+
+  it('switches settings tabs', async () => {
+    const user = userEvent.setup();
+    render(
+      <RabRoot>
+        <MemoryRouter>
+          <SettingsPage />
+        </MemoryRouter>
+      </RabRoot>,
+    );
+    expect(screen.getByRole('tab', { name: t.settings.tabs.account })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.click(screen.getByRole('tab', { name: t.settings.tabs.appearance }));
+    expect(screen.getByRole('radiogroup', { name: t.theme.label })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: t.settings.tabs.prefs }));
+    expect(screen.getByLabelText(t.settings.timezone)).toBeInTheDocument();
   });
 
   it('saves a MeoW nickname', async () => {

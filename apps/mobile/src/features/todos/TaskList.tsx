@@ -1,13 +1,15 @@
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { CalendarDays, Columns3, List } from 'lucide-react-native';
 import type { ListId, Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { Icon } from '../../ui/icon';
 import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError, isNetworkError } from '../../lib/errors';
-import { nestTasks } from '../../lib/format';
+import { formatDay, localDateStamp, nestTasks } from '../../lib/format';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
 import { Banner } from '../../components/Banner';
@@ -40,6 +42,7 @@ export function TaskList({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [inboxCreateId, setInboxCreateId] = useState<string | undefined>(undefined);
+  const [view, setView] = useState<'list' | 'board' | 'week'>('list');
 
   const applyTask = useCallback((next: Task) => {
     setItems((prev) => {
@@ -80,6 +83,24 @@ export function TaskList({
 
   const nested = useMemo(() => nestTasks(items.filter((row) => row.deletedAt === null)), [items]);
   const resolvedCreateId = createListId ?? inboxCreateId;
+  const live = items.filter((row) => row.deletedAt === null);
+  const tz = auth.user?.timezone ?? 'UTC';
+
+  function renderRow(task: Task, indent = false) {
+    return (
+      <TaskRow
+        task={task}
+        indent={indent}
+        onToggle={(row) =>
+          void toggleComplete(row, applyTask, {
+            user: auth.user,
+            refreshUser: auth.refreshUser,
+          })
+        }
+        onPress={(row) => router.push(`/todos/task/${row.id}`)}
+      />
+    );
+  }
 
   if (loading && items.length === 0) return <Loading />;
 
@@ -98,6 +119,63 @@ export function TaskList({
           onCreated={(task) => setItems((prev) => [task, ...prev])}
         />
       ) : null}
+      <View style={styles.views} accessibilityRole="tablist">
+        {(
+          [
+            ['list', List, copy.todos.views.list],
+            ['board', Columns3, copy.todos.views.board],
+            ['week', CalendarDays, copy.todos.views.week],
+          ] as const
+        ).map(([id, glyph, label]) => {
+          const active = view === id;
+          return (
+            <Pressable
+              key={id}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              onPress={() => setView(id)}
+              style={[styles.viewTab, active && styles.viewTabActive]}
+            >
+              <Icon icon={glyph} size={16} color={active ? t.fgPrimary : t.fgMuted} />
+              <Text style={[styles.viewLabel, active && styles.viewLabelActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {view === 'board' ? (
+        <ScrollView horizontal contentContainerStyle={styles.board}>
+          {(['todo', 'doing', 'done'] as const).map((status) => (
+            <View key={status} style={styles.column}>
+              <Text style={styles.colTitle}>
+                {status === 'todo'
+                  ? copy.todos.status.todo
+                  : status === 'doing'
+                    ? copy.todos.status.doing
+                    : copy.empty.done}
+              </Text>
+              {live
+                .filter((row) => (status === 'done' ? row.status === 'done' : row.status === status))
+                .map((row) => (
+                  <View key={row.id}>{renderRow(row)}</View>
+                ))}
+            </View>
+          ))}
+        </ScrollView>
+      ) : view === 'week' ? (
+        <FlatList
+          data={groupByDay(live, tz)}
+          keyExtractor={(row) => row.key}
+          renderItem={({ item }) => (
+            <View>
+              <Text style={styles.dayHead}>{item.label}</Text>
+              {item.tasks.map((task) => (
+                <View key={task.id}>{renderRow(task)}</View>
+              ))}
+            </View>
+          )}
+          ListEmptyComponent={<EmptyState title={empty} />}
+        />
+      ) : (
       <FlatList
         data={nested}
         keyExtractor={(row) => row.task.id}
@@ -157,12 +235,79 @@ export function TaskList({
           ) : null
         }
       />
+      )}
     </View>
   );
+}
+
+function groupByDay(
+  tasks: Task[],
+  tz: string,
+): { key: string; label: string; tasks: Task[] }[] {
+  const buckets = new Map<string, Task[]>();
+  for (const task of tasks) {
+    const key = task.dueAt ? localDateStamp(tz, new Date(task.dueAt)) : 'none';
+    const list = buckets.get(key) ?? [];
+    list.push(task);
+    buckets.set(key, list);
+  }
+  const keys = [...buckets.keys()].sort((a, b) => {
+    if (a === 'none') return 1;
+    if (b === 'none') return -1;
+    return a.localeCompare(b);
+  });
+  return keys.map((key) => ({
+    key,
+    label: key === 'none' ? copy.lists.anytime : formatDay(key + 'T00:00:00.000Z', tz),
+    tasks: buckets.get(key) ?? [],
+  }));
 }
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bgCanvas },
     more: { padding: t.space[4] },
+    views: {
+      flexDirection: 'row',
+      marginHorizontal: t.space[4],
+      marginBottom: t.space[2],
+      padding: t.space[1],
+      borderRadius: t.radius.md,
+      backgroundColor: t.bgSurface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.borderSubtle,
+    },
+    viewTab: {
+      flex: 1,
+      minHeight: t.space[8],
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: t.space[1],
+      borderRadius: t.radius.sm,
+    },
+    viewTabActive: { backgroundColor: t.bgAccentSubtle },
+    viewLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    viewLabelActive: { color: t.fgPrimary, fontWeight: '600' },
+    board: { paddingHorizontal: t.space[4], gap: t.space[3] },
+    column: {
+      width: 280,
+      backgroundColor: t.bgSurface,
+      borderRadius: t.radius.md,
+      paddingVertical: t.space[2],
+    },
+    colTitle: {
+      paddingHorizontal: t.space[4],
+      paddingVertical: t.space[2],
+      fontSize: t.type.meta.fontSize,
+      fontWeight: '600',
+      color: t.fgMuted,
+    },
+    dayHead: {
+      paddingHorizontal: t.space[4],
+      paddingVertical: t.space[2],
+      fontSize: t.type.meta.fontSize,
+      fontWeight: '600',
+      color: t.fgMuted,
+    },
   });

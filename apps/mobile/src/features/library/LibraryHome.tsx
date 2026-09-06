@@ -1,6 +1,6 @@
 import { ONBOARDING_CHECKLIST_KEYS, type List } from '@vital/dto';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import type { Theme } from '@vital/tokens';
@@ -8,7 +8,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { TabHeader } from '../../components/TabHeader';
-import { ThemeToggle } from '../../components/ThemeToggle';
+
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
@@ -66,9 +66,14 @@ export function LibraryHome() {
       <TabHeader
         title={copy.nav.library}
         right={
-          <Button variant="secondary" onPress={() => router.push('/search')}>
-            {copy.nav.search}
-          </Button>
+          <View style={styles.headerActions}>
+            <Button variant="secondary" onPress={() => router.push('/search')}>
+              {copy.nav.search}
+            </Button>
+            <Button variant="secondary" onPress={() => router.push('/settings')}>
+              {copy.settings.title}
+            </Button>
+          </View>
         }
       />
       {error ? (
@@ -129,13 +134,7 @@ export function LibraryHome() {
             <Text style={styles.rowTitle}>{list.name}</Text>
           </Pressable>
         ))}
-        <Text style={styles.section}>{copy.theme.label}</Text>
-        <Text style={styles.hint}>{copy.theme.hint}</Text>
-        <ThemeToggle />
         {auth.user ? <Text style={styles.hint}>{auth.user.email}</Text> : null}
-        <Button variant="danger" onPress={() => void auth.logout()}>
-          {copy.auth.logout}
-        </Button>
       </ScrollView>
     </SafeAreaView>
   );
@@ -161,4 +160,5 @@ const createStyles = (t: Theme) =>
     rowTitle: { fontSize: t.type.body.fontSize, color: t.fgPrimary },
     done: { color: t.fgMuted, textDecorationLine: 'line-through' },
     hint: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
+    headerActions: { flexDirection: 'row', gap: t.space[2] },
   });
