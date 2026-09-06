@@ -77,6 +77,7 @@ export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
 export const updateMeInputSchema = z
   .object({
     displayName: z.string().trim().min(1).max(50).optional(),
+    avatarAttachmentId: z.string().uuid().nullable().optional(),
     timezone: ianaTimezoneSchema.optional(),
     locale: z.string().min(2).max(16).optional(),
     themePreference: themePreferenceSchema.optional(),
@@ -105,6 +106,7 @@ export interface UserProfile {
   id: string;
   email: string;
   displayName: string;
+  avatarAttachmentId?: string | null;
   timezone: string;
   locale: string;
   themePreference: ThemePreference;

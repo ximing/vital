@@ -147,8 +147,10 @@ export async function bindUpload(
     if (!owner || owner.userId !== userId || owner.deletedAt) {
       throw AppError.of(404, 'INBOX_NOT_FOUND');
     }
-  } else {
+  } else if (input.ownerType === 'report') {
     await getOwnedReportOr404(userId, input.ownerId);
+  } else if (input.ownerId !== userId) {
+    throw AppError.of(404, 'NOT_FOUND');
   }
 
   const ext = mime.extension(row.mime) || 'bin';

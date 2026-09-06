@@ -1,5 +1,6 @@
-import { LogOut } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { ImagePlus, LogOut } from 'lucide-react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { IMAGE_MIME_TYPES } from '@vital/dto';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
@@ -16,6 +17,24 @@ export function AccountSection() {
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const avatarInput = useRef<HTMLInputElement>(null);
+
+  async function onAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !user || !(IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const uploaded = await client.upload({ file, mime: file.type, size: file.size });
+      await client.bindUpload(uploaded.id, { ownerType: 'user', ownerId: user.id });
+      setUser(await client.updateMe({ avatarAttachmentId: uploaded.id }));
+    } catch (err) {
+      setError(humanError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -35,6 +54,26 @@ export function AccountSection() {
 
   return (
     <div>
+      <div className="mb-8 flex items-center gap-4">
+        {user?.avatarAttachmentId ? (
+          <img
+            src={client.uploadUrl(user.avatarAttachmentId)}
+            alt="头像"
+            className="h-16 w-16 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-subtle text-lg font-semibold text-accent-deep">
+            {(user?.displayName ?? '?').slice(0, 1)}
+          </div>
+        )}
+        <div>
+          <Button variant="ghost" className="gap-2" onClick={() => avatarInput.current?.click()} loading={saving}>
+            <Icon icon={ImagePlus} size={15} />
+            设置头像
+          </Button>
+          <input ref={avatarInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" onChange={(event) => void onAvatarChange(event)} />
+        </div>
+      </div>
       <form onSubmit={(e) => void onSubmit(e)} className="flex max-w-xl flex-col gap-4">
         <Field
           label={t.settings.displayName}

@@ -65,6 +65,7 @@ export function toProfile(user: User): UserProfile {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    avatarAttachmentId: user.avatarAttachmentId,
     timezone: user.timezone,
     locale: user.locale,
     themePreference: themeOf(user.themePreference),
@@ -129,6 +130,7 @@ export async function registerUser(
     email: input.email,
     passwordHash: await hashPassword(input.password),
     displayName: input.displayName,
+    avatarAttachmentId: null,
     timezone: 'Asia/Shanghai',
     locale: 'zh-CN',
     themePreference: 'system',
@@ -193,6 +195,7 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
 export async function updateMe(userId: string, input: UpdateMeInput): Promise<UserProfile> {
   const patch: Partial<User> = { updatedAt: new Date() };
   if (input.displayName !== undefined) patch.displayName = input.displayName;
+  if (input.avatarAttachmentId !== undefined) patch.avatarAttachmentId = input.avatarAttachmentId;
   if (input.timezone !== undefined) patch.timezone = input.timezone;
   if (input.locale !== undefined) patch.locale = input.locale;
   if (input.themePreference !== undefined) patch.themePreference = input.themePreference;

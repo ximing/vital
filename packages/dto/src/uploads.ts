@@ -28,7 +28,7 @@ export const ATTACHMENT_MIME_TYPES = [
 
 export type AttachmentMimeType = (typeof ATTACHMENT_MIME_TYPES)[number];
 
-export const attachmentOwnerTypeSchema = z.enum(['tmp', 'task', 'inbox', 'report']);
+export const attachmentOwnerTypeSchema = z.enum(['tmp', 'task', 'inbox', 'report', 'user']);
 export type AttachmentOwnerType = z.infer<typeof attachmentOwnerTypeSchema>;
 
 export const attachmentStatusSchema = z.enum(['uploading', 'ready', 'orphaned']);
@@ -69,7 +69,7 @@ export interface UploadCompleteResponse {
 }
 
 export const uploadBindInputSchema = z.object({
-  ownerType: z.enum(['task', 'inbox', 'report']),
+  ownerType: z.enum(['task', 'inbox', 'report', 'user']),
   ownerId: z.string().uuid(),
 });
 export type UploadBindInput = z.infer<typeof uploadBindInputSchema>;
@@ -77,6 +77,6 @@ export type UploadBindInput = z.infer<typeof uploadBindInputSchema>;
 export interface UploadBindResponse {
   id: string;
   status: 'ready';
-  ownerType: 'task' | 'inbox' | 'report';
+  ownerType: 'task' | 'inbox' | 'report' | 'user';
   ownerId: string;
 }

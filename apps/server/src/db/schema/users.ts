@@ -18,6 +18,7 @@ export const users = pgTable(
     email: varchar('email', { length: 255 }).notNull().unique(),
     passwordHash: varchar('password_hash', { length: 255 }).notNull(),
     displayName: varchar('display_name', { length: 50 }).notNull(),
+    avatarAttachmentId: char('avatar_attachment_id', { length: 36 }),
     timezone: varchar('timezone', { length: 64 }).notNull().default('Asia/Shanghai'),
     locale: varchar('locale', { length: 16 }).notNull().default('zh-CN'),
     themePreference: varchar('theme_preference', { length: 16 }).notNull().default('system'),
