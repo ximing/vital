@@ -9,12 +9,12 @@ export function EmptyInbox() {
   const [hint, setHint] = useState(false);
 
   return (
-    <div className="flex flex-col items-start px-3 py-10">
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
       <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {t.empty.inbox}
       </p>
-      <div className="mt-5 flex flex-wrap gap-2">
+      <div className="mt-5 flex flex-wrap justify-center gap-2">
         <button
           type="button"
           className="inline-flex min-h-[var(--touch-min)] items-center rounded-md bg-accent-subtle px-4 text-fg transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
@@ -47,7 +47,7 @@ export function EmptyInbox() {
 
 export function EmptyReader() {
   return (
-    <div className="flex flex-col items-start px-4 py-16">
+    <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
       <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {t.empty.inboxReader}

@@ -253,11 +253,9 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           />
 
           <div
-            className={
-              view === 'list'
-                ? 'min-h-0 flex-1 overflow-y-auto pb-16'
-                : 'flex min-h-0 flex-1 flex-col pb-6'
-            }
+            className={`flex min-h-0 flex-1 flex-col ${
+              view === 'list' ? 'overflow-y-auto pb-16' : 'pb-6'
+            }`}
           >
             {loading ? (
               <TaskSkeleton />
