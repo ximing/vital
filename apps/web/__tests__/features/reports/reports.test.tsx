@@ -7,10 +7,11 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useAuthStore } from '@/state/auth-store';
+import { setAuthForTest } from '@/services/auth.service';
 import { SAVE_DEBOUNCE_MS } from '../../../src/features/reports/model';
 import { ReportsWorkspace } from '../../../src/features/reports/ReportsWorkspace';
-import { resetReportUi } from '../../../src/features/reports/ui-store';
+import { resetReportUi } from '../../../src/features/reports/report-ui.service';
+import { RabRoot } from '../../helpers/rab-root';
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>();
@@ -100,14 +101,16 @@ function renderAt(path: string) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/reports" element={<ReportsWorkspace />} />
-          <Route path="/reports/:id" element={<ReportsWorkspace />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <RabRoot>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/reports" element={<ReportsWorkspace />} />
+            <Route path="/reports/:id" element={<ReportsWorkspace />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </RabRoot>,
   );
 }
 
@@ -125,7 +128,7 @@ describe('reports workspace', () => {
 
   beforeEach(() => {
     resetReportUi();
-    useAuthStore.setState({ user: mockUser, status: 'ready' });
+    setAuthForTest(mockUser);
     vi.mocked(client.getCurrentReport).mockImplementation(async (type) =>
       type === 'weekly' ? weekly : daily,
     );

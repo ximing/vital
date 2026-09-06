@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
-import { useAuthStore } from '@/state/auth-store';
+import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
@@ -13,8 +13,8 @@ function prefsOf(value: NotificationPrefs | undefined): NotificationPrefs {
 }
 
 export function NotificationsSection() {
-  const user = useAuthStore((s) => s.user);
-  const setUser = useAuthStore((s) => s.setUser);
+  const user = useAuth((s) => s.user);
+  const setUser = useAuth((s) => s.setUser);
   const copy = t.settings.notify;
   const prefs = prefsOf(user?.notifications);
   const [channels, setChannels] = useState<NotificationChannel[]>([]);

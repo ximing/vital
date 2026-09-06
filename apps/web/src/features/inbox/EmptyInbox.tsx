@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { t } from '@/copy';
 import { EmptyArt } from '@/ui/empty-art';
 import { PASTE_URL_ID } from './model';
-import { useInboxUi } from './ui-store';
+import { useInboxUi } from './inbox-ui.service';
 
 export function EmptyInbox() {
   const requestPaste = useInboxUi((s) => s.requestPaste);

@@ -1,18 +1,10 @@
-import { Text } from 'react-native';
+import { BookOpen, Calendar, Library, Sun } from 'lucide-react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RequireAuth } from '../../src/components/RequireAuth';
 import { copy } from '../../src/lib/copy';
 import { useTheme } from '../../src/theme/use-theme';
-
-function TabGlyph({ glyph, focused }: { glyph: string; focused: boolean }) {
-  const t = useTheme();
-  return (
-    <Text style={{ color: focused ? t.accentPrimary : t.fgMuted, fontSize: t.type.body.fontSize }}>
-      {glyph}
-    </Text>
-  );
-}
+import { Icon } from '../../src/ui/icon';
 
 export default function TabsLayout() {
   const t = useTheme();
@@ -39,28 +31,36 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: copy.nav.today,
-            tabBarIcon: ({ focused }) => <TabGlyph glyph="今" focused={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+              <Icon icon={Sun} color={focused ? t.accentPrimary : color} size={22} />
+            ),
           }}
         />
         <Tabs.Screen
           name="inbox"
           options={{
             title: copy.nav.inbox,
-            tabBarIcon: ({ focused }) => <TabGlyph glyph="读" focused={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+              <Icon icon={BookOpen} color={focused ? t.accentPrimary : color} size={22} />
+            ),
           }}
         />
         <Tabs.Screen
           name="reports"
           options={{
             title: copy.nav.reports,
-            tabBarIcon: ({ focused }) => <TabGlyph glyph="报" focused={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+              <Icon icon={Calendar} color={focused ? t.accentPrimary : color} size={22} />
+            ),
           }}
         />
         <Tabs.Screen
           name="library"
           options={{
             title: copy.nav.library,
-            tabBarIcon: ({ focused }) => <TabGlyph glyph="我" focused={focused} />,
+            tabBarIcon: ({ focused, color }) => (
+              <Icon icon={Library} color={focused ? t.accentPrimary : color} size={22} />
+            ),
           }}
         />
       </Tabs>

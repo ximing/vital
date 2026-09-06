@@ -1,5 +1,5 @@
 import { t } from '@/copy';
-import { useTodosUi } from './ui-store';
+import { useTodosUi } from './todos-ui.service';
 
 export function UndoToast({ onUndo }: { onUndo: () => void }) {
   const undo = useTodosUi((s) => s.completeUndo);

@@ -1,13 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RSRoot } from '@rabjs/react';
+import { setupWindowRootContainer } from '@rabjs/devtools';
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { App } from '@/App';
 import { t } from '@/copy';
 import { subscribeSystemTheme } from '@/lib/theme';
+import { authService, useAuth } from '@/services/auth.service';
+import { registerVitalServices } from '@/services/register';
 import { VitalMark } from '@/shell/VitalMark';
-import { useAuthStore } from '@/state/auth-store';
 import '@/styles/app.css';
+
+registerVitalServices();
+setupWindowRootContainer();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,12 +33,11 @@ function BootScreen() {
 }
 
 function Root() {
-  const status = useAuthStore((s) => s.status);
-  const boot = useAuthStore((s) => s.boot);
+  const status = useAuth((s) => s.status);
 
   useEffect(() => {
-    void boot();
-  }, [boot]);
+    void authService().boot();
+  }, []);
 
   useEffect(() => subscribeSystemTheme(), []);
 
@@ -44,11 +49,13 @@ const rootEl = document.getElementById('root');
 if (rootEl) {
   createRoot(rootEl).render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <Root />
-        </BrowserRouter>
-      </QueryClientProvider>
+      <RSRoot>
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <Root />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </RSRoot>
     </StrictMode>,
   );
 }

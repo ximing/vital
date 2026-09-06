@@ -8,6 +8,7 @@ import { client } from '@/api/client';
 import { t } from '@/copy';
 import { CommandPalette } from '../../../src/features/palette/CommandPalette';
 import { commandItems, filterItems, isPaletteToggle } from '../../../src/features/palette/model';
+import { RabRoot } from '../../helpers/rab-root';
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>();
@@ -88,11 +89,13 @@ describe('command palette', () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <CommandPalette />
-        </MemoryRouter>
-      </QueryClientProvider>,
+      <RabRoot>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <CommandPalette />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RabRoot>,
     );
     expect(screen.queryByRole('dialog', { name: t.nav.palette })).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'k', metaKey: true, code: 'KeyK' });

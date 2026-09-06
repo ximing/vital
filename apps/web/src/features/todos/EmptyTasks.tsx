@@ -1,7 +1,7 @@
 import { t } from '@/copy';
 import { EmptyArt } from '@/ui/empty-art';
 import { emptyCopyKey } from './model';
-import { useTodosUi } from './ui-store';
+import { useTodosUi } from './todos-ui.service';
 import { QUICK_ADD_ID, focusById } from './keyboard';
 
 export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'board' | 'week' }) {

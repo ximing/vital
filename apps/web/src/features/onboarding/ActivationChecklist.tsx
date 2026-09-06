@@ -1,13 +1,13 @@
 import { ONBOARDING_CHECKLIST_KEYS } from '@vital/dto';
 import { useNavigate } from 'react-router';
 import { t } from '@/copy';
-import { useAuthStore } from '@/state/auth-store';
+import { useAuth } from '@/services/auth.service';
 import { markOnboarding } from './mark';
 import { checklistHref, remainingCount, showChecklist } from './model';
 
 export function ActivationChecklist() {
   const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
+  const user = useAuth((s) => s.user);
   const state = user?.onboarding;
   if (!state || !showChecklist(state)) return null;
   const left = remainingCount(state);

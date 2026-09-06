@@ -1,7 +1,7 @@
 import { useEffect, useRef, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { QUICK_ADD_ID } from './keyboard';
-import { useTodosUi } from './ui-store';
+import { useTodosUi } from './todos-ui.service';
 
 export function QuickAdd({
   onSubmit,

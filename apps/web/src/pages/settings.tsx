@@ -2,12 +2,12 @@ import { t } from '@/copy';
 import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
-import { useAuthStore } from '@/state/auth-store';
+import { useAuth } from '@/services/auth.service';
 import { Button } from '@/ui/button';
 
 export function SettingsPage() {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+  const user = useAuth((s) => s.user);
+  const logout = useAuth((s) => s.logout);
 
   return (
     <div className="mx-auto max-w-lg px-10 py-16">

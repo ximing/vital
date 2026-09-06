@@ -11,7 +11,7 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
-import { useTodosUi } from './ui-store';
+import { todosUi } from './todos-ui.service';
 
 export const todoKeys = {
   all: ['todos'] as const,
@@ -81,7 +81,7 @@ export function useTodoActions() {
     onSuccess: async (task) => {
       await invalidate();
       await markOnboarding({ createdTask: true });
-      useTodosUi.getState().setSelected(task.id);
+      todosUi().setSelected(task.id);
     },
   });
 
@@ -94,7 +94,7 @@ export function useTodoActions() {
   const remove = useMutation({
     mutationFn: (id: string) => client.deleteTask(id),
     onSuccess: () => {
-      useTodosUi.getState().closeDetail();
+      todosUi().closeDetail();
       return invalidate();
     },
   });
@@ -118,7 +118,7 @@ export function useTodoActions() {
   async function complete(task: Task): Promise<void> {
     if (task.status === 'canceled') return;
     if (task.status === 'done' && task.recurrence === null) return;
-    const ui = useTodosUi.getState();
+    const ui = todosUi();
     if (ui.completeUndo && !ui.completeUndo.wantUndo && ui.completeUndo.taskId === task.id) {
       await undoComplete();
       return;
@@ -126,29 +126,29 @@ export function useTodoActions() {
     ui.startComplete(task);
     try {
       const res = await client.completeTask(task.id);
-      const live = useTodosUi.getState().completeUndo;
-      useTodosUi.getState().setCompletionId(task.id, res.undo.completionId);
+      const live = todosUi().completeUndo;
+      todosUi().setCompletionId(task.id, res.undo.completionId);
       if (live?.taskId === task.id && live.wantUndo) {
         await client.uncompleteTask(task.id, { completionId: res.undo.completionId });
-        useTodosUi.getState().finishUndo();
+        todosUi().finishUndo();
       }
       await invalidate();
       await markOnboarding({ completedTask: true });
     } catch (err) {
-      useTodosUi.getState().failComplete();
+      todosUi().failComplete();
       throw err;
     }
   }
 
   async function undoComplete(): Promise<void> {
-    const live = useTodosUi.getState().completeUndo;
+    const live = todosUi().completeUndo;
     if (!live) return;
     if (live.completionId === null) {
-      useTodosUi.getState().markWantUndo();
+      todosUi().markWantUndo();
       return;
     }
     await client.uncompleteTask(live.taskId, { completionId: live.completionId });
-    useTodosUi.getState().finishUndo();
+    todosUi().finishUndo();
     await invalidate();
   }
 
@@ -159,7 +159,7 @@ export function useTodoActions() {
 
   async function setStatus(task: Task, status: 'todo' | 'doing'): Promise<void> {
     if (task.status === 'done') {
-      const completionId = useTodosUi.getState().lastCompletionId[task.id];
+      const completionId = todosUi().lastCompletionId[task.id];
       if (completionId === undefined) return;
       await client.uncompleteTask(task.id, { completionId });
       if (status === 'doing') await client.patchTask(task.id, { status: 'doing' });

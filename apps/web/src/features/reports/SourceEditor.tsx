@@ -10,7 +10,7 @@ import {
   type SlashQuery,
 } from './model';
 import { SlashMenu } from './SlashMenu';
-import { useReportUi } from './ui-store';
+import { useReportUi } from './report-ui.service';
 
 export function SourceEditor({
   value,

@@ -21,6 +21,7 @@ export default mergeConfig(
               '@tiptap/react',
               '@tiptap/core',
               '@tiptap/starter-kit',
+              '@rabjs/react',
             ],
           },
         },

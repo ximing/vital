@@ -1,11 +1,14 @@
+import type { LucideIcon } from 'lucide-react';
+import { Folder, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import { t } from '@/copy';
+import { Icon } from '@/ui/icon';
 import { userLists } from './model';
 import { useListsQuery, useTodoActions } from './queries';
 
 const NAV_BASE =
-  'relative flex min-h-[var(--touch-min)] items-center px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
+  'relative flex min-h-[var(--touch-min)] items-center gap-2 px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
 
 function navClass({ isActive }: { isActive: boolean }): string {
   return `${NAV_BASE} ${
@@ -15,7 +18,13 @@ function navClass({ isActive }: { isActive: boolean }): string {
   }`;
 }
 
-export function UserListsNav() {
+export function UserListsNav({
+  icon = Folder,
+  addIcon = Plus,
+}: {
+  icon?: LucideIcon;
+  addIcon?: LucideIcon;
+}) {
   const { data } = useListsQuery();
   const { createList } = useTodoActions();
   const navigate = useNavigate();
@@ -41,7 +50,8 @@ export function UserListsNav() {
     <div>
       {lists.map((list) => (
         <NavLink key={list.id} to={`/todos/lists/${list.id}`} className={navClass}>
-          {list.name}
+          <Icon icon={icon} className="shrink-0 opacity-80" />
+          <span className="truncate">{list.name}</span>
         </NavLink>
       ))}
       {open ? (
@@ -65,6 +75,7 @@ export function UserListsNav() {
           className={`${NAV_BASE} w-full text-left text-muted hover:bg-surface-muted hover:text-fg`}
           onClick={() => setOpen(true)}
         >
+          <Icon icon={addIcon} className="shrink-0 opacity-80" />
           {t.todos.newList}
         </button>
       )}

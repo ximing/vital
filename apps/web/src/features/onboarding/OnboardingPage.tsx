@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
 import { humanError } from '@/lib/errors';
-import { useAuthStore } from '@/state/auth-store';
+import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { EmptyArt } from '@/ui/empty-art';
@@ -11,7 +11,7 @@ import { ONBOARDING_HREFS } from './model';
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const user = useAuthStore((s) => s.user);
+  const user = useAuth((s) => s.user);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

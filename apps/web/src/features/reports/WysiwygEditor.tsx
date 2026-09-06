@@ -10,7 +10,7 @@ import { VitalEntity } from './entity-extension';
 import { withStubEmbed, type SlashHit } from './model';
 import { insertChip, slashFromEditor } from './slash';
 import { SlashMenu } from './SlashMenu';
-import { useReportUi } from './ui-store';
+import { reportUi, useReportUi } from './report-ui.service';
 
 function asPm(md: string): PmNode {
   return parseMarkdownToPmJSON(md);
@@ -64,7 +64,7 @@ export function WysiwygEditor({
         spellcheck: 'true',
       },
       handleKeyDown: (_view, event) => {
-        if (event.key === 'Enter' && useReportUi.getState().slash) {
+        if (event.key === 'Enter' && reportUi().slash) {
           return true;
         }
         return false;
@@ -95,11 +95,9 @@ export function WysiwygEditor({
 
   function pick(hit: SlashHit): void {
     if (!editor) return;
-    const current = useReportUi.getState().slash;
+    const current = reportUi().slash;
     insertChip(editor, current, hit.kind, hit.id);
-    useReportUi
-      .getState()
-      .mergeEmbeds(withStubEmbed({ tasks: {}, inbox: {} }, hit.kind, hit.id, hit.title));
+    reportUi().mergeEmbeds(withStubEmbed({ tasks: {}, inbox: {} }, hit.kind, hit.id, hit.title));
     setSlash(null);
     if (hit.kind === 'task') void markOnboarding({ pinnedTask: true });
   }

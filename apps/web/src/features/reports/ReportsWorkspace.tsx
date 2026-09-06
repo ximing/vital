@@ -27,7 +27,7 @@ import {
   useReportQuery,
 } from './queries';
 import { SourceEditor } from './SourceEditor';
-import { useReportUi } from './ui-store';
+import { reportUi } from './report-ui.service';
 import { WysiwygEditor } from './WysiwygEditor';
 
 type Session = {
@@ -95,7 +95,7 @@ export function ReportsWorkspace() {
 
   useEffect(() => {
     if (!report || session?.id !== report.id) return;
-    useReportUi.getState().setEmbeds(report.embeds);
+    reportUi().setEmbeds(report.embeds);
   }, [report, session?.id]);
 
   const dirty = session ? sessionDirty(session) : false;
@@ -186,13 +186,13 @@ export function ReportsWorkspace() {
           draftMdRef.current = next.draftMd;
           fillingRef.current = false;
           setSession(next);
-          useReportUi.getState().setEmbeds(remote.embeds);
+          reportUi().setEmbeds(remote.embeds);
           return;
         }
         if (action.fetchEmbeds) {
           const res = await client.getReportEmbeds(reportId);
           if (cancelled || fillingRef.current) return;
-          useReportUi.getState().mergeEmbeds(res.embeds);
+          reportUi().mergeEmbeds(res.embeds);
         }
         if (action.toastRemote && !fillingRef.current) {
           const live = sessionRef.current;
@@ -238,7 +238,7 @@ export function ReportsWorkspace() {
           saveState: 'saved',
         });
       }
-      useReportUi.getState().mergeEmbeds(saved.embeds);
+      reportUi().mergeEmbeds(saved.embeds);
       return saved;
     } catch (err) {
       if (isRevisionConflict(err)) {
@@ -348,7 +348,7 @@ export function ReportsWorkspace() {
       const filled = await actions.fill.mutateAsync({ id: after.id, revision: rev });
       fillingRef.current = false;
       commitSession(sessionFrom(filled, sessionRef.current));
-      useReportUi.getState().setEmbeds(filled.embeds);
+      reportUi().setEmbeds(filled.embeds);
     } catch (err) {
       fillingRef.current = false;
       if (isRevisionConflict(err)) {
@@ -377,27 +377,27 @@ export function ReportsWorkspace() {
       const remote = await actions.loadReport(id);
       fillingRef.current = false;
       commitSession(sessionFrom(remote, sessionRef.current));
-      useReportUi.getState().setEmbeds(remote.embeds);
+      reportUi().setEmbeds(remote.embeds);
     } catch (err) {
       patchLive((s) => ({ ...s, saveError: humanError(err) }));
     }
   }
 
   async function toggleTask(taskId: string): Promise<void> {
-    const embed = useReportUi.getState().embeds.tasks[taskId];
+    const embed = reportUi().embeds.tasks[taskId];
     if (!embed || embed.deletedAt !== null) return;
     try {
       if (embed.status === 'done') {
-        const completionId = useReportUi.getState().lastCompletionId[taskId];
+        const completionId = reportUi().lastCompletionId[taskId];
         if (completionId === undefined) return;
         await client.uncompleteTask(taskId, { completionId });
       } else {
         const res = await client.completeTask(taskId);
-        useReportUi.getState().setCompletionId(taskId, res.undo.completionId);
+        reportUi().setCompletionId(taskId, res.undo.completionId);
       }
       if (id !== '') {
         const res = await actions.loadEmbeds(id);
-        useReportUi.getState().mergeEmbeds(res.embeds);
+        reportUi().mergeEmbeds(res.embeds);
       }
     } catch (err) {
       patchLive((s) => ({ ...s, saveError: humanError(err) }));

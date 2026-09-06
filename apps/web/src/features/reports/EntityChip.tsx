@@ -3,7 +3,7 @@ import { NodeViewWrapper } from '@tiptap/react';
 import { isEntityKind } from '@vital/markdown';
 import { t } from '@/copy';
 import { chipDeleted, chipLabel, taskChipStatus } from './model';
-import { useReportUi } from './ui-store';
+import { useReportUi } from './report-ui.service';
 
 export function EntityChipView({ node }: NodeViewProps) {
   const kindRaw = node.attrs.kind;

@@ -11,7 +11,7 @@ import { markOnboarding } from '@/features/onboarding/mark';
 import { todoKeys } from '@/features/todos/queries';
 import { humanError } from '@/lib/errors';
 import { createInputFromPreview, pendingIdForUrl, type PendingSave } from './model';
-import { useInboxUi } from './ui-store';
+import { inboxUi } from './inbox-ui.service';
 
 export const inboxKeys = {
   all: ['inbox'] as const,
@@ -71,7 +71,7 @@ export function useInboxActions() {
 
   async function extract(url: string): Promise<InboxPreview> {
     const id = pendingIdForUrl(url);
-    useInboxUi.getState().upsertPending({
+    inboxUi().upsertPending({
       id,
       url,
       phase: 'processing',
@@ -80,11 +80,11 @@ export function useInboxActions() {
     });
     try {
       const preview = await client.extractInbox({ url });
-      useInboxUi.getState().removePending(id);
-      useInboxUi.getState().setPreview(preview);
+      inboxUi().removePending(id);
+      inboxUi().setPreview(preview);
       return preview;
     } catch (err) {
-      useInboxUi.getState().upsertPending({
+      inboxUi().upsertPending({
         id,
         url,
         phase: 'failed',
@@ -96,19 +96,19 @@ export function useInboxActions() {
   }
 
   async function createFromPreview(): Promise<InboxItem> {
-    const ui = useInboxUi.getState();
+    const ui = inboxUi();
     if (ui.preview === null) throw new Error('没有预览');
     const input = createInputFromPreview(ui.preview, ui.previewTitle);
     const failId = pendingIdForUrl(input.originalUrl ?? input.title);
     try {
       const item = await client.createInbox(input);
-      useInboxUi.getState().setPreview(null);
-      useInboxUi.getState().removePending(failId);
+      inboxUi().setPreview(null);
+      inboxUi().removePending(failId);
       await markCaptured();
       await invalidate();
       return item;
     } catch (err) {
-      useInboxUi.getState().upsertPending({
+      inboxUi().upsertPending({
         id: failId,
         url: input.originalUrl ?? '',
         phase: 'failed',
@@ -127,9 +127,9 @@ export function useInboxActions() {
   }
 
   async function retry(save: PendingSave): Promise<InboxItem | InboxPreview | undefined> {
-    useInboxUi.getState().removePending(save.id);
+    inboxUi().removePending(save.id);
     if (save.preview) {
-      useInboxUi.getState().setPreview(save.preview);
+      inboxUi().setPreview(save.preview);
       return createFromPreview();
     }
     if (save.url !== '') return extract(save.url);

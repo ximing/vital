@@ -2,9 +2,9 @@ import type { Task } from '@vital/dto';
 import { useNavigate } from 'react-router';
 import { t } from '@/copy';
 import { useTasksQuery, useTodoActions } from '@/features/todos/queries';
-import { useTodosUi } from '@/features/todos/ui-store';
+import { todosUi } from '@/features/todos/todos-ui.service';
 import { UndoToast } from '@/features/todos/UndoToast';
-import { useAuthStore } from '@/state/auth-store';
+import { useAuth } from '@/services/auth.service';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
@@ -13,12 +13,12 @@ import { unprocessedTodos, visibleSaves } from './model';
 import { useOnline } from './online';
 import { PasteUrl } from './PasteUrl';
 import { useInboxActions, useInboxListQuery } from './queries';
-import { useInboxUi } from './ui-store';
+import { useInboxUi } from './inbox-ui.service';
 
 export function InboxWorkspace() {
   const navigate = useNavigate();
   const online = useOnline();
-  const timeZone = useAuthStore((s) => s.user?.timezone) ?? 'UTC';
+  const timeZone = useAuth((s) => s.user?.timezone) ?? 'UTC';
   const inboxQuery = useInboxListQuery();
   const tasksQuery = useTasksQuery('smart:inbox');
   const todoActions = useTodoActions();
@@ -30,7 +30,7 @@ export function InboxWorkspace() {
   const error = inboxQuery.error ?? tasksQuery.error;
 
   function openTask(task: Task) {
-    useTodosUi.getState().openDetail(task.id);
+    todosUi().openDetail(task.id);
     navigate('/todos/lists/smart:inbox');
   }
 

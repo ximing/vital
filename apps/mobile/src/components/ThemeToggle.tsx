@@ -1,22 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Theme } from '@vital/tokens';
 import { copy } from '../lib/copy';
-import {
-  THEME_CHOICE_OPTIONS,
-  getThemeChoice,
-  setThemeChoice,
-  subscribeThemeChoice,
-  type ThemeChoice,
-} from '../theme/preference';
+import { themeService, useThemeChoice } from '../services/theme.service';
+import { THEME_CHOICE_OPTIONS } from '../theme/preference';
 import { useTheme } from '../theme/use-theme';
 
 export function ThemeToggle() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  const [choice, setChoice] = useState<ThemeChoice>(getThemeChoice);
-
-  useEffect(() => subscribeThemeChoice(setChoice), []);
+  const choice = useThemeChoice();
 
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={copy.theme.label} style={styles.row}>
@@ -28,7 +21,7 @@ export function ThemeToggle() {
             accessibilityRole="radio"
             accessibilityState={{ selected: active }}
             hitSlop={{ top: t.space[1], bottom: t.space[1] }}
-            onPress={() => setThemeChoice(o.value)}
+            onPress={() => themeService().setChoice(o.value)}
             style={[styles.option, active && styles.optionActive]}
           >
             <Text style={[styles.label, active && styles.labelActive]}>{o.label}</Text>

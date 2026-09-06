@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useTodosUi } from '@/features/todos/ui-store';
+import { todosUi } from '@/features/todos/todos-ui.service';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
@@ -11,7 +11,7 @@ import { canPatchStatus, isFavorite, nextFavoriteStatus, READER_SIZES } from './
 import { useOnline } from './online';
 import { useInboxActions, useInboxItemQuery } from './queries';
 import { ReaderArticle } from './ReaderArticle';
-import { useInboxUi } from './ui-store';
+import { useInboxUi } from './inbox-ui.service';
 
 export function InboxReader() {
   const { id = '' } = useParams();
@@ -77,7 +77,7 @@ export function InboxReader() {
       const res = await actions.convertKeepUrl(item.id);
       setConvertNote(t.inbox.convertKeptUrl);
       if (res.task.id) {
-        useTodosUi.getState().openDetail(res.task.id);
+        todosUi().openDetail(res.task.id);
       }
     } catch (err) {
       setActionError(humanError(err));

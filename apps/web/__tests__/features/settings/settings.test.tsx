@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { NotificationsSection } from '../../../src/features/settings/NotificationsSection';
-import { useAuthStore } from '@/state/auth-store';
+import { setAuthForTest } from '@/services/auth.service';
+import { RabRoot } from '../../helpers/rab-root';
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>();
@@ -38,7 +39,7 @@ const mockUser: UserProfile = {
 
 describe('NotificationsSection', () => {
   beforeEach(() => {
-    useAuthStore.setState({ user: mockUser, status: 'ready' });
+    setAuthForTest(mockUser);
     vi.mocked(client.listNotificationChannels).mockResolvedValue({ items: [] });
     vi.mocked(client.createNotificationChannel).mockResolvedValue({
       id: 'c1',
@@ -54,7 +55,11 @@ describe('NotificationsSection', () => {
 
   it('saves a MeoW nickname', async () => {
     const user = userEvent.setup();
-    render(<NotificationsSection />);
+    render(
+      <RabRoot>
+        <NotificationsSection />
+      </RabRoot>,
+    );
     await waitFor(() => expect(client.listNotificationChannels).toHaveBeenCalled());
     await user.type(screen.getByLabelText(t.settings.notify.nickname), 'Ada');
     await user.click(screen.getByRole('button', { name: t.settings.notify.saveChannel }));

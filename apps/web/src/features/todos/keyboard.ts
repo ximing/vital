@@ -2,7 +2,7 @@ import type { Task, TaskPriority } from '@vital/dto';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { HOME_PATH } from '@/copy';
-import { useTodosUi } from './ui-store';
+import { todosUi, useTodosUi } from './todos-ui.service';
 
 export const QUICK_ADD_ID = 'todo-quick-add';
 export const LIST_FILTER_ID = 'todo-list-filter';
@@ -63,7 +63,7 @@ export function useTodosKeyboard(opts: {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTypingTarget(event.target)) return;
 
-      const undo = useTodosUi.getState().completeUndo;
+      const undo = todosUi().completeUndo;
       const toastLive = undo !== null && !undo.wantUndo;
 
       if (event.key === 'n') {
@@ -87,14 +87,14 @@ export function useTodosKeyboard(opts: {
         event.preventDefault();
         const next = moveSelection(
           visibleRef.current,
-          useTodosUi.getState().selectedId,
+          todosUi().selectedId,
           event.key === 'j' ? 1 : -1,
         );
         setSelected(next);
         return;
       }
       if (event.key === 'Enter') {
-        const id = useTodosUi.getState().selectedId;
+        const id = todosUi().selectedId;
         if (id === null) return;
         event.preventDefault();
         openDetail(id);

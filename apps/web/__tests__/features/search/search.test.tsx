@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { SearchPage } from '../../../src/features/search/SearchPage';
+import { RabRoot } from '../../helpers/rab-root';
 
 vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>();
@@ -53,11 +54,13 @@ describe('search page', () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <SearchPage />
-        </MemoryRouter>
-      </QueryClientProvider>,
+      <RabRoot>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <SearchPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RabRoot>,
     );
     expect(screen.getByText(t.empty.search)).toBeInTheDocument();
     await user.type(screen.getByLabelText(t.search.placeholder), '稍后');

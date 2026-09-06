@@ -1,15 +1,34 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+  BookOpen,
+  Calendar,
+  CalendarClock,
+  CalendarDays,
+  CalendarFold,
+  CalendarRange,
+  CircleCheck,
+  Cloud,
+  Folder,
+  Inbox,
+  Infinity as InfinityIcon,
+  Plus,
+  Search,
+  Settings,
+  Sun,
+} from 'lucide-react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
 import { useInboxUi } from '@/features/inbox';
 import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { UserListsNav, useTodosUi } from '@/features/todos';
+import { useAuth } from '@/services/auth.service';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
-import { useAuthStore } from '@/state/auth-store';
+import { Icon } from '@/ui/icon';
 
 const NAV_BASE =
-  'relative flex min-h-[var(--touch-min)] items-center px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
+  'relative flex min-h-[var(--touch-min)] items-center gap-2 px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
 
 function navClass({ isActive }: { isActive: boolean }): string {
   return `${NAV_BASE} ${
@@ -21,18 +40,43 @@ function navClass({ isActive }: { isActive: boolean }): string {
 
 function SectionLabel({ children }: { children: string }) {
   return (
-    <p className="px-3 pb-1 pt-4 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+    <p className="px-3 pb-1 pt-4 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] font-medium tracking-wide text-muted">
       {children}
     </p>
   );
 }
 
+function RailLink({
+  to,
+  icon,
+  children,
+  isActive,
+}: {
+  to: string;
+  icon: LucideIcon;
+  children: string;
+  isActive?: (args: { isActive: boolean }) => boolean;
+}) {
+  return (
+    <NavLink
+      to={to}
+      className={(args) => navClass({ isActive: isActive ? isActive(args) : args.isActive })}
+    >
+      <Icon icon={icon} className="shrink-0 opacity-80" />
+      <span className="truncate">{children}</span>
+    </NavLink>
+  );
+}
+
 export function Shell() {
-  const user = useAuthStore((s) => s.user);
+  const user = useAuth((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
   const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
   const requestPaste = useInboxUi((s) => s.requestPaste);
+
+  const onReports = location.pathname.startsWith('/reports');
+  const reportType = new URLSearchParams(location.search).get('type');
 
   return (
     <div className="min-h-screen bg-canvas text-fg">
@@ -55,7 +99,7 @@ export function Shell() {
         <div className="px-3 pb-2">
           <button
             type="button"
-            className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center rounded-md bg-accent text-[length:var(--text-body)] text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
+            className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center gap-2 rounded-md bg-accent text-[length:var(--text-body)] text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
             aria-label={t.nav.quickAdd}
             onClick={() => {
               if (location.pathname.startsWith('/inbox')) {
@@ -67,76 +111,81 @@ export function Shell() {
               if (!location.pathname.startsWith('/todos')) navigate(HOME_PATH);
             }}
           >
+            <Icon icon={Plus} size={18} />
             {t.nav.quickAdd}
           </button>
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3">
           <SectionLabel>{t.rail.rhythm}</SectionLabel>
-          <NavLink to="/todos/lists/smart:today" className={navClass}>
+          <RailLink to="/todos/lists/smart:today" icon={Sun}>
             {t.lists.today}
-          </NavLink>
-          <NavLink to="/todos/lists/smart:upcoming" className={navClass}>
+          </RailLink>
+          <RailLink to="/todos/lists/smart:upcoming" icon={CalendarClock}>
             {t.lists.upcoming}
-          </NavLink>
-          <NavLink to="/todos/lists/smart:anytime" className={navClass}>
+          </RailLink>
+          <RailLink to="/todos/lists/smart:anytime" icon={InfinityIcon}>
             {t.lists.anytime}
-          </NavLink>
-          <NavLink to="/todos/lists/smart:someday" className={navClass}>
+          </RailLink>
+          <RailLink to="/todos/lists/smart:someday" icon={Cloud}>
             {t.lists.someday}
-          </NavLink>
+          </RailLink>
+          <RailLink to="/todos/lists/smart:done" icon={CircleCheck}>
+            {t.lists.done}
+          </RailLink>
 
           <SectionLabel>{t.rail.capture}</SectionLabel>
-          <NavLink to="/inbox" className={navClass}>
+          <RailLink to="/inbox" icon={BookOpen}>
             {t.nav.inbox}
-          </NavLink>
-          <p className="px-3 pt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-            {t.rail.lists}
-          </p>
-          <NavLink to="/todos/lists/smart:inbox" className={navClass}>
+          </RailLink>
+          <RailLink to="/todos/lists/smart:inbox" icon={Inbox}>
             {t.lists.inbox}
-          </NavLink>
-          <UserListsNav />
-          <NavLink to="/todos/lists/smart:done" className={navClass}>
-            {t.lists.done}
-          </NavLink>
+          </RailLink>
+
+          <SectionLabel>{t.rail.lists}</SectionLabel>
+          <UserListsNav icon={Folder} addIcon={Plus} />
 
           <SectionLabel>{t.rail.reflect}</SectionLabel>
-          <NavLink
+          <RailLink
             to="/reports"
-            className={() => {
-              const type = new URLSearchParams(location.search).get('type');
-              const onReports = location.pathname.startsWith('/reports');
-              const daily =
-                onReports && type !== 'weekly' && type !== 'monthly' && type !== 'yearly';
-              return navClass({ isActive: daily });
-            }}
+            icon={Calendar}
+            isActive={() => onReports && reportType !== 'weekly' && reportType !== 'monthly' && reportType !== 'yearly'}
           >
             {t.reports.daily}
-          </NavLink>
-          <NavLink
+          </RailLink>
+          <RailLink
             to="/reports?type=weekly"
-            className={() => {
-              const type = new URLSearchParams(location.search).get('type');
-              return navClass({
-                isActive: location.pathname.startsWith('/reports') && type === 'weekly',
-              });
-            }}
+            icon={CalendarRange}
+            isActive={() => onReports && reportType === 'weekly'}
           >
             {t.reports.weekly}
-          </NavLink>
+          </RailLink>
+          <RailLink
+            to="/reports?type=monthly"
+            icon={CalendarDays}
+            isActive={() => onReports && reportType === 'monthly'}
+          >
+            {t.reports.monthly}
+          </RailLink>
+          <RailLink
+            to="/reports?type=yearly"
+            icon={CalendarFold}
+            isActive={() => onReports && reportType === 'yearly'}
+          >
+            {t.reports.yearly}
+          </RailLink>
 
-          <div className="mt-4">
-            <NavLink to="/search" className={navClass}>
-              {t.nav.searchHint}
-            </NavLink>
-            <NavLink to="/settings" className={navClass}>
+          <div className="mt-4 border-t border-border pt-2">
+            <RailLink to="/search" icon={Search}>
+              {t.nav.search}
+            </RailLink>
+            <RailLink to="/settings" icon={Settings}>
               {t.nav.settings}
-            </NavLink>
+            </RailLink>
           </div>
         </nav>
 
-        <div className="shrink-0 px-3 py-3">
+        <div className="shrink-0 border-t border-border px-3 py-3">
           <ThemeToggle compact />
           {user ? (
             <p className="mt-2 truncate px-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">

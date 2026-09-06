@@ -13,7 +13,7 @@ import {
   zonedLocalMidnightIso,
 } from './model';
 import { TaskCheckbox } from './TaskRow';
-import { useTodosUi } from './ui-store';
+import { todosUi, useTodosUi } from './todos-ui.service';
 
 const fieldClass =
   'h-[var(--field-h)] w-full rounded-md border border-border bg-surface px-3 text-fg';
@@ -351,7 +351,7 @@ export function TaskDetail({
                     className={`truncate text-left text-[length:var(--text-body)] ${
                       child.status === 'done' ? 'text-muted line-through' : 'text-fg'
                     }`}
-                    onClick={() => useTodosUi.getState().openDetail(child.id)}
+                    onClick={() => todosUi().openDetail(child.id)}
                   >
                     {child.title}
                   </button>

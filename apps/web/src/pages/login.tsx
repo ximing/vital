@@ -5,7 +5,7 @@ import { HOME_PATH, t } from '@/copy';
 import { needsOnboarding } from '@/features/onboarding';
 import { humanError } from '@/lib/errors';
 import { AuthLayout } from '@/pages/auth-layout';
-import { useAuthStore } from '@/state/auth-store';
+import { authService, useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
@@ -13,7 +13,7 @@ import { Field } from '@/ui/field';
 type FieldErrors = { email?: string; password?: string };
 
 export function LoginPage() {
-  const login = useAuthStore((s) => s.login);
+  const login = useAuth((s) => s.login);
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
   const [email, setEmail] = useState('');
@@ -43,7 +43,7 @@ export function LoginPage() {
     void login(parsed.data)
       .then(() => {
         const from = location.state?.from;
-        const user = useAuthStore.getState().user;
+        const user = authService().user;
         const dest =
           from && from !== '/login' && from !== '/register'
             ? from

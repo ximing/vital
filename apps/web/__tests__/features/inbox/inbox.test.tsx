@@ -14,10 +14,11 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useAuthStore } from '@/state/auth-store';
+import { setAuthForTest } from '@/services/auth.service';
 import { InboxReader } from '../../../src/features/inbox/InboxReader';
 import { InboxWorkspace } from '../../../src/features/inbox/InboxWorkspace';
-import { resetInboxUi } from '../../../src/features/inbox/ui-store';
+import { resetInboxUi } from '../../../src/features/inbox/inbox-ui.service';
+import { RabRoot } from '../../helpers/rab-root';
 
 const TZ = 'Asia/Shanghai';
 
@@ -139,21 +140,23 @@ function renderAt(path: string) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/inbox" element={<InboxWorkspace />} />
-          <Route path="/inbox/:id" element={<InboxReader />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <RabRoot>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/inbox" element={<InboxWorkspace />} />
+            <Route path="/inbox/:id" element={<InboxReader />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </RabRoot>,
   );
 }
 
 describe('inbox workspace', () => {
   beforeEach(() => {
     resetInboxUi();
-    useAuthStore.setState({ user: mockUser, status: 'ready' });
+    setAuthForTest(mockUser);
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });
@@ -265,7 +268,7 @@ describe('inbox workspace', () => {
 describe('inbox reader', () => {
   beforeEach(() => {
     resetInboxUi();
-    useAuthStore.setState({ user: mockUser, status: 'ready' });
+    setAuthForTest(mockUser);
     vi.mocked(client.fetchUploadBlob).mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
     vi.mocked(client.patchInbox).mockImplementation(async (id) =>
       makeItem({ id, title: 'Example Domain', readAt: '2026-09-06T00:01:00.000Z' }),

@@ -36,6 +36,20 @@ export function commandItems(): PaletteItem[] {
       hint: t.palette.goto,
       href: '/reports?type=weekly',
     },
+    {
+      id: 'goto-monthly',
+      kind: 'goto',
+      title: t.reports.monthly,
+      hint: t.palette.goto,
+      href: '/reports?type=monthly',
+    },
+    {
+      id: 'goto-yearly',
+      kind: 'goto',
+      title: t.reports.yearly,
+      hint: t.palette.goto,
+      href: '/reports?type=yearly',
+    },
     { id: 'goto-search', kind: 'goto', title: t.nav.search, hint: t.palette.goto, href: '/search' },
     { id: 'goto-board', kind: 'goto', title: t.palette.board, hint: t.palette.goto, href: '/todos/board' },
     {

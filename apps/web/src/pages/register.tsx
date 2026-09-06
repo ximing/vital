@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { AuthLayout } from '@/pages/auth-layout';
-import { useAuthStore } from '@/state/auth-store';
+import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
@@ -12,7 +12,7 @@ import { Field } from '@/ui/field';
 type FieldErrors = { email?: string; displayName?: string; password?: string; confirm?: string };
 
 export function RegisterPage() {
-  const register = useAuthStore((s) => s.register);
+  const register = useAuth((s) => s.register);
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
   const [email, setEmail] = useState('');

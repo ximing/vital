@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useParams, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
-import { useAuthStore } from '@/state/auth-store';
+import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { BoardView } from './BoardView';
@@ -34,7 +34,7 @@ import {
 } from './queries';
 import { TaskDetail } from './TaskDetail';
 import { UndoToast } from './UndoToast';
-import { useTodosUi } from './ui-store';
+import { useTodosUi } from './todos-ui.service';
 import { WeekView } from './WeekView';
 
 function useOnline(): boolean {
@@ -64,7 +64,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const params = useParams();
   const [search] = useSearchParams();
   const listId = params.listId ?? search.get('list') ?? 'smart:today';
-  const user = useAuthStore((s) => s.user);
+  const user = useAuth((s) => s.user);
   const timeZone = user?.timezone ?? 'UTC';
   const weekStartsOn = user?.weekStartsOn === 0 ? 0 : 1;
   const online = useOnline();

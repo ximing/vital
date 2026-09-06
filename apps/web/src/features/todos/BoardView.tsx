@@ -4,7 +4,7 @@ import { t } from '@/copy';
 import { EmptyTasks } from './EmptyTasks';
 import { splitByPriority, splitByStatus } from './model';
 import { TaskRow } from './TaskRow';
-import { useTodosUi } from './ui-store';
+import { useTodosUi } from './todos-ui.service';
 
 const STATUS_COLS = ['todo', 'doing', 'done'] as const;
 const PRIORITY_COLS: TaskPriority[] = [0, 1, 2, 3];

@@ -6,7 +6,8 @@ import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useAuthStore } from '@/state/auth-store';
+import { setAuthForTest } from '@/services/auth.service';
+import { RabRoot } from '../../helpers/rab-root';
 import { ActivationChecklist } from '../../../src/features/onboarding/ActivationChecklist';
 import { needsOnboarding, showChecklist } from '../../../src/features/onboarding/model';
 import { OnboardingPage } from '../../../src/features/onboarding/OnboardingPage';
@@ -39,17 +40,19 @@ const mockUser: UserProfile = {
 function renderOnboarding() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <OnboardingPage />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <RabRoot>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <OnboardingPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </RabRoot>,
   );
 }
 
 describe('onboarding', () => {
   beforeEach(() => {
-    useAuthStore.setState({ user: mockUser, status: 'ready' });
+    setAuthForTest(mockUser);
     vi.mocked(client.updateOnboarding).mockResolvedValue({
       ...mockUser,
       onboarding: { dismissed: true },
@@ -78,14 +81,16 @@ describe('onboarding', () => {
 
   it('renders the five-item activation checklist', async () => {
     const user = userEvent.setup();
-    useAuthStore.setState({ user: mockUser, status: 'ready' });
+    setAuthForTest(mockUser);
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <ActivationChecklist />
-        </MemoryRouter>
-      </QueryClientProvider>,
+      <RabRoot>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <ActivationChecklist />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RabRoot>,
     );
     expect(screen.getByText(t.checklist.items.createdTask)).toBeInTheDocument();
     expect(screen.getByText(t.checklist.items.completedTask)).toBeInTheDocument();

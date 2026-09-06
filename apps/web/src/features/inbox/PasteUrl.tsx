@@ -6,7 +6,7 @@ import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { hostLabel, normalizePasteUrl, PASTE_URL_ID } from './model';
 import { useInboxActions } from './queries';
-import { useInboxUi } from './ui-store';
+import { useInboxUi } from './inbox-ui.service';
 
 export function PasteUrl({ disabled }: { disabled?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);

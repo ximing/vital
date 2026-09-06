@@ -6,10 +6,11 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useAuthStore } from '@/state/auth-store';
+import { setAuthForTest } from '@/services/auth.service';
 import { TodosWorkspace } from '../../../src/features/todos/TodosWorkspace';
 import { zonedLocalMidnightIso } from '../../../src/features/todos/model';
-import { resetTodosUi } from '../../../src/features/todos/ui-store';
+import { resetTodosUi } from '../../../src/features/todos/todos-ui.service';
+import { RabRoot } from '../../helpers/rab-root';
 
 const TZ = 'Asia/Shanghai';
 
@@ -102,22 +103,24 @@ function renderAt(path: string) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />
-          <Route path="/todos/board" element={<TodosWorkspace view="board" />} />
-          <Route path="/todos/calendar" element={<TodosWorkspace view="week" />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <RabRoot>
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />
+            <Route path="/todos/board" element={<TodosWorkspace view="board" />} />
+            <Route path="/todos/calendar" element={<TodosWorkspace view="week" />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </RabRoot>,
   );
 }
 
 describe('todos workspace', () => {
   beforeEach(() => {
     resetTodosUi();
-    useAuthStore.setState({ user: mockUser, status: 'ready' });
+    setAuthForTest(mockUser);
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date('2026-09-06T00:00:00.000Z'));
     vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox] });

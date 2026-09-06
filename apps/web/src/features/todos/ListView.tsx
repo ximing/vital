@@ -11,7 +11,7 @@ import {
   type ListSection,
 } from './model';
 import { TaskRow } from './TaskRow';
-import { useTodosUi } from './ui-store';
+import { useTodosUi } from './todos-ui.service';
 
 function GroupHeading({ children, tone }: { children: string; tone?: 'overdue' | 'muted' }) {
   return (
