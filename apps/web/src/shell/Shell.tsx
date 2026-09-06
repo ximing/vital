@@ -3,9 +3,6 @@ import {
   BookOpen,
   Calendar,
   CalendarClock,
-  CalendarDays,
-  CalendarFold,
-  CalendarRange,
   CircleCheck,
   Cloud,
   Folder,
@@ -23,24 +20,14 @@ import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { UserListsNav, useTodosUi } from '@/features/todos';
 import { useAuth } from '@/services/auth.service';
+import { initialsOf, railNavClass } from '@/shell/rail-nav';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { Icon } from '@/ui/icon';
 
-const NAV_BASE =
-  'relative flex min-h-[var(--touch-min)] items-center gap-2 px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
-
-function navClass({ isActive }: { isActive: boolean }): string {
-  return `${NAV_BASE} ${
-    isActive
-      ? "rounded-xl bg-accent-subtle text-fg before:absolute before:inset-y-2 before:left-1 before:w-0.5 before:rounded-full before:bg-accent before:content-['']"
-      : 'rounded-xl text-muted hover:bg-surface-muted hover:text-fg'
-  }`;
-}
-
 function SectionLabel({ children }: { children: string }) {
   return (
-    <p className="px-3 pb-1 pt-4 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] font-medium tracking-wide text-muted">
+    <p className="px-3 pb-1 pt-4 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] font-medium text-muted">
       {children}
     </p>
   );
@@ -60,7 +47,7 @@ function RailLink({
   return (
     <NavLink
       to={to}
-      className={(args) => navClass({ isActive: isActive ? isActive(args) : args.isActive })}
+      className={(args) => railNavClass(isActive ? isActive(args) : args.isActive)}
     >
       <Icon icon={icon} className="shrink-0 opacity-80" />
       <span className="truncate">{children}</span>
@@ -74,9 +61,10 @@ export function Shell() {
   const location = useLocation();
   const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
   const requestPaste = useInboxUi((s) => s.requestPaste);
-
   const onReports = location.pathname.startsWith('/reports');
-  const reportType = new URLSearchParams(location.search).get('type');
+  const onSearch = location.pathname.startsWith('/search');
+  const onSettings = location.pathname.startsWith('/settings');
+  const initials = initialsOf(user?.displayName ?? '');
 
   return (
     <div className="min-h-screen bg-canvas text-fg">
@@ -84,12 +72,9 @@ export function Shell() {
         className="fixed inset-y-0 left-0 z-[var(--z-sticky)] flex w-rail flex-col border-r border-border bg-surface"
         aria-label="主导航"
       >
-        <div className="relative overflow-hidden px-4 pb-3 pt-5">
-          <span className="pointer-events-none absolute -right-6 -top-8 h-24 w-24 text-accent opacity-30">
-            <VitalMark className="pulse-mark h-full w-full" />
-          </span>
-          <NavLink to="/todos/lists/smart:today" className="relative flex items-center gap-2">
-            <VitalMark className="h-8 w-8 shrink-0 text-accent" />
+        <div className="px-3 pb-2 pt-5">
+          <NavLink to="/todos/lists/smart:today" className="flex items-center gap-2 px-1">
+            <VitalMark className="h-7 w-7 shrink-0 text-accent" />
             <span className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em] text-fg">
               {t.brand.wordmark}
             </span>
@@ -97,6 +82,24 @@ export function Shell() {
         </div>
 
         <div className="px-3 pb-2">
+          <NavLink
+            to="/search"
+            aria-label={t.nav.search}
+            className={`flex h-9 items-center gap-2 px-2.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+              onSearch
+                ? 'bg-surface-muted text-fg'
+                : 'bg-canvas text-muted hover:text-fg'
+            }`}
+          >
+            <Icon icon={Search} size={14} className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{t.nav.search}</span>
+            <span className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              ⌘K
+            </span>
+          </NavLink>
+        </div>
+
+        <div className="px-3 pb-3">
           <button
             type="button"
             className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center gap-2 rounded-2xl bg-accent text-[length:var(--text-body)] font-medium text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
@@ -116,7 +119,7 @@ export function Shell() {
           </button>
         </div>
 
-        <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-3">
+        <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2">
           <SectionLabel>{t.rail.rhythm}</SectionLabel>
           <RailLink to="/todos/lists/smart:today" icon={Sun}>
             {t.lists.today}
@@ -144,54 +147,40 @@ export function Shell() {
 
           <SectionLabel>{t.rail.lists}</SectionLabel>
           <UserListsNav icon={Folder} addIcon={Plus} />
-
-          <SectionLabel>{t.rail.reflect}</SectionLabel>
-          <RailLink
-            to="/reports"
-            icon={Calendar}
-            isActive={() => onReports && reportType !== 'weekly' && reportType !== 'monthly' && reportType !== 'yearly'}
-          >
-            {t.reports.daily}
-          </RailLink>
-          <RailLink
-            to="/reports?type=weekly"
-            icon={CalendarRange}
-            isActive={() => onReports && reportType === 'weekly'}
-          >
-            {t.reports.weekly}
-          </RailLink>
-          <RailLink
-            to="/reports?type=monthly"
-            icon={CalendarDays}
-            isActive={() => onReports && reportType === 'monthly'}
-          >
-            {t.reports.monthly}
-          </RailLink>
-          <RailLink
-            to="/reports?type=yearly"
-            icon={CalendarFold}
-            isActive={() => onReports && reportType === 'yearly'}
-          >
-            {t.reports.yearly}
-          </RailLink>
-
-          <div className="mt-4 border-t border-border pt-2">
-            <RailLink to="/search" icon={Search}>
-              {t.nav.search}
-            </RailLink>
-            <RailLink to="/settings" icon={Settings}>
-              {t.nav.settings}
-            </RailLink>
-          </div>
         </nav>
 
-        <div className="shrink-0 border-t border-border px-3 py-3">
-          <ThemeToggle compact />
-          {user ? (
-            <p className="mt-2 truncate px-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-              {user.displayName}
-            </p>
-          ) : null}
+        <div className="shrink-0 border-t border-border pt-1">
+          <RailLink to="/reports" icon={Calendar} isActive={() => onReports}>
+            {t.rail.reflect}
+          </RailLink>
+        </div>
+
+        <div className="shrink-0 border-t border-border">
+          <NavLink
+            to="/settings"
+            className={`flex items-center gap-2.5 px-3 py-2.5 ${
+              onSettings ? 'bg-surface-muted text-fg' : 'text-fg hover:bg-surface-muted'
+            }`}
+          >
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-[length:var(--text-caption)] font-semibold leading-none text-fg"
+              aria-hidden
+            >
+              {initials}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
+                {user?.displayName ?? ''}
+              </span>
+              <span className="block text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+                {t.nav.settings}
+              </span>
+            </span>
+            <Icon icon={Settings} size={14} className="shrink-0 text-muted" />
+          </NavLink>
+          <div className="px-3 pb-3">
+            <ThemeToggle compact />
+          </div>
         </div>
       </aside>
 
