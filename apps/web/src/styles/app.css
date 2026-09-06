@@ -182,7 +182,8 @@ body {
 }
 
 .report-doc {
-  min-height: 22rem;
+  min-height: 18rem;
+  max-width: none;
   outline: none;
 }
 

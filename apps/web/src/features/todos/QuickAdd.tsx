@@ -30,7 +30,7 @@ export function QuickAdd({
   }
 
   return (
-    <form onSubmit={handle} className="px-4 pb-3 pt-1">
+    <form onSubmit={handle} className="pb-3 pt-3">
       <input
         id={QUICK_ADD_ID}
         ref={inputRef}
@@ -40,7 +40,7 @@ export function QuickAdd({
         disabled={disabled}
         placeholder={hint ?? t.todos.quickAddPlaceholder}
         aria-label={hint ?? t.todos.quickAddPlaceholder}
-        className="h-11 w-full rounded-xl border border-border bg-surface-muted/40 px-4 text-fg placeholder:text-muted outline-none transition-[border-color,background-color] duration-[var(--ease-out)] focus:border-focus focus:bg-surface"
+        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-fg shadow-[var(--shadow)] placeholder:text-muted outline-none transition-[border-color,box-shadow] duration-[var(--ease-out)] focus:border-focus focus:shadow-[0_0_0_4px_var(--bg-accent-subtle)]"
       />
     </form>
   );

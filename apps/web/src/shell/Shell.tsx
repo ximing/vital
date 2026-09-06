@@ -33,8 +33,8 @@ const NAV_BASE =
 function navClass({ isActive }: { isActive: boolean }): string {
   return `${NAV_BASE} ${
     isActive
-      ? "bg-accent-subtle text-fg before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-accent before:content-['']"
-      : 'text-muted hover:bg-surface-muted hover:text-fg'
+      ? "rounded-xl bg-accent-subtle text-fg before:absolute before:inset-y-2 before:left-1 before:w-0.5 before:rounded-full before:bg-accent before:content-['']"
+      : 'rounded-xl text-muted hover:bg-surface-muted hover:text-fg'
   }`;
 }
 
@@ -99,7 +99,7 @@ export function Shell() {
         <div className="px-3 pb-2">
           <button
             type="button"
-            className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center gap-2 rounded-md bg-accent text-[length:var(--text-body)] text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
+            className="flex min-h-[var(--control-h-prominent)] w-full items-center justify-center gap-2 rounded-2xl bg-accent text-[length:var(--text-body)] font-medium text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
             aria-label={t.nav.quickAdd}
             onClick={() => {
               if (location.pathname.startsWith('/inbox')) {

@@ -44,15 +44,15 @@ export function WeekView({
   const heading = `${Number(start.slice(5, 7))}月${Number(start.slice(8))}日 – ${Number(end.slice(5, 7))}月${Number(end.slice(8))}日`;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 pb-6">
+    <div className="flex min-h-0 flex-1 flex-col px-6 pb-6">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[length:var(--text-meta)] font-medium tracking-[-0.02em] text-fg">
           {heading}
         </p>
-        <div className="flex items-center gap-0.5 rounded-full bg-surface p-0.5">
+        <div className="flex items-center gap-0.5 rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-surface-muted hover:text-fg"
             onClick={() => onSelectDay(addDaysYmd(start, -7))}
             aria-label={t.todos.weekPrev}
           >
@@ -60,14 +60,14 @@ export function WeekView({
           </button>
           <button
             type="button"
-            className="h-8 rounded-full px-3 text-[length:var(--text-caption)] text-muted hover:bg-surface-muted hover:text-fg"
+            className="h-8 rounded-xl px-3 text-[length:var(--text-caption)] text-muted hover:bg-surface-muted hover:text-fg"
             onClick={() => onSelectDay(today)}
           >
             {t.todos.weekThis}
           </button>
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-surface-muted hover:text-fg"
             onClick={() => onSelectDay(addDaysYmd(start, 7))}
             aria-label={t.todos.weekNext}
           >
@@ -75,7 +75,7 @@ export function WeekView({
           </button>
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-7 overflow-hidden rounded-2xl bg-surface shadow-[inset_0_0_0_1px_var(--border-subtle)]">
+      <div className="grid min-h-0 flex-1 grid-cols-7 overflow-hidden rounded-2xl bg-surface shadow-[var(--shadow)]">
         {days.map((ymd, index) => {
           const items = byDay.get(ymd) ?? [];
           const isToday = ymd === today;

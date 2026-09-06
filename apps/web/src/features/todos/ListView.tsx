@@ -16,7 +16,7 @@ import { useTodosUi } from './todos-ui.service';
 function GroupHeading({ children, tone }: { children: string; tone?: 'overdue' | 'muted' }) {
   return (
     <h2
-      className={`px-3 pb-1 pt-4 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+      className={`px-3 pb-1.5 pt-6 text-[length:var(--text-caption)] font-medium leading-[var(--text-caption-lh)] ${
         tone === 'overdue' ? 'text-overdue' : 'text-muted'
       }`}
     >

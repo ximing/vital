@@ -15,7 +15,7 @@ export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'b
   const showAction = !(kind === 'list' && listId === 'smart:done');
 
   return (
-    <div className="flex flex-col items-start px-4 py-16">
+    <div className="flex flex-col items-start px-3 py-16">
       <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {copy}
@@ -23,7 +23,7 @@ export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'b
       {showAction ? (
         <button
           type="button"
-          className="mt-5 inline-flex min-h-[var(--touch-min)] items-center rounded-md bg-accent-subtle px-4 text-fg transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
+          className="mt-5 inline-flex min-h-[var(--touch-min)] items-center rounded-2xl bg-accent px-4 font-medium text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
           onClick={() => {
             requestQuickAdd();
             focusById(QUICK_ADD_ID);
@@ -38,9 +38,9 @@ export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'b
 
 export function TaskSkeleton() {
   return (
-    <div className="flex flex-col gap-3 px-4 py-6" aria-busy="true" aria-label={t.todos.loading}>
+    <div className="flex flex-col gap-3 px-3 py-6" aria-busy="true" aria-label={t.todos.loading}>
       {Array.from({ length: 6 }, (_, i) => (
-        <div key={i} className="skeleton-pulse h-11 rounded-md" />
+        <div key={i} className="skeleton-pulse h-11 rounded-2xl" />
       ))}
     </div>
   );

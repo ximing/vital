@@ -15,7 +15,7 @@ export function AuthLayout({
     <div className="grid min-h-screen bg-canvas lg:grid-cols-[minmax(260px,42%)_1fr]">
       <section
         className="relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-between"
-        style={{ background: 'var(--ink-950)', color: 'var(--ink-50)' }}
+        style={{ background: 'var(--ink-950)', color: 'var(--pulse-100)' }}
       >
         <div
           className="pointer-events-none absolute -left-16 top-16 h-[22rem] w-[22rem] opacity-40"

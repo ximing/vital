@@ -67,37 +67,39 @@ export function BoardView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex gap-1 px-4 pb-3" role="radiogroup" aria-label={t.todos.views.board}>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={boardMode === 'status'}
-          className={`min-h-[var(--touch-min)] rounded-md px-3 text-[length:var(--text-meta)] ${
-            boardMode === 'status'
-              ? 'bg-accent-subtle text-fg'
-              : 'text-muted hover:bg-surface-muted'
-          }`}
-          onClick={() => setBoardMode('status')}
-        >
-          {t.todos.boardByStatus}
-        </button>
-        <button
-          type="button"
-          role="radio"
-          aria-checked={boardMode === 'priority'}
-          className={`min-h-[var(--touch-min)] rounded-md px-3 text-[length:var(--text-meta)] ${
-            boardMode === 'priority'
-              ? 'bg-accent-subtle text-fg'
-              : 'text-muted hover:bg-surface-muted'
-          }`}
-          onClick={() => setBoardMode('priority')}
-        >
-          {t.todos.boardByPriority}
-        </button>
+      <div className="flex px-6 pb-3" role="radiogroup" aria-label={t.todos.views.board}>
+        <div className="flex rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={boardMode === 'status'}
+            className={`h-8 rounded-xl px-3 text-[length:var(--text-meta)] ${
+              boardMode === 'status'
+                ? 'bg-accent-subtle text-fg'
+                : 'text-muted hover:text-fg'
+            }`}
+            onClick={() => setBoardMode('status')}
+          >
+            {t.todos.boardByStatus}
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={boardMode === 'priority'}
+            className={`h-8 rounded-xl px-3 text-[length:var(--text-meta)] ${
+              boardMode === 'priority'
+                ? 'bg-accent-subtle text-fg'
+                : 'text-muted hover:text-fg'
+            }`}
+            onClick={() => setBoardMode('priority')}
+          >
+            {t.todos.boardByPriority}
+          </button>
+        </div>
       </div>
 
       <div
-        className={`grid min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-6 ${
+        className={`grid min-h-0 flex-1 gap-4 overflow-x-auto px-6 pb-6 ${
           boardMode === 'status' ? 'grid-cols-3' : 'grid-cols-4'
         }`}
       >
@@ -105,7 +107,7 @@ export function BoardView({
           ? STATUS_COLS.map((status) => (
               <section
                 key={status}
-                className="min-w-[12rem] rounded-md bg-surface p-2"
+                className="min-h-[28rem] min-w-[12rem] rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
                 onDragOver={dragOver}
                 onDrop={(event) => {
                   event.preventDefault();
@@ -125,7 +127,7 @@ export function BoardView({
           : PRIORITY_COLS.map((priority) => (
               <section
                 key={priority}
-                className="min-w-[12rem] rounded-md bg-surface p-2"
+                className="min-h-[28rem] min-w-[12rem] rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
                 onDragOver={dragOver}
                 onDrop={(event) => {
                   event.preventDefault();

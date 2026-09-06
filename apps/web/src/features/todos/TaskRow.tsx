@@ -81,8 +81,8 @@ export function TaskRow({
       onDrop={onDrop}
       onClick={onSelect}
       onDoubleClick={onOpen}
-      className={`flex min-h-[var(--touch-min)] cursor-pointer items-start gap-3 rounded-xl px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
-        selected ? 'bg-accent-subtle' : 'hover:bg-surface-muted'
+      className={`flex min-h-[var(--touch-min)] cursor-pointer items-start gap-3 rounded-2xl px-3 py-2.5 transition-[background-color] duration-[var(--ease-out)] ${
+        selected ? 'bg-surface-muted' : 'hover:bg-surface-muted'
       } ${depth === 1 ? 'ml-8' : ''}`}
     >
       {task.priority < 3 ? (

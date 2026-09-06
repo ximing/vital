@@ -368,140 +368,149 @@ export function ReportsWorkspace() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
-      <header className="px-4 pb-2 pt-6">
-        <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-          {t.reports.kicker}
-        </p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <div
-            className="flex rounded-xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]"
-            role="tablist"
-            aria-label={t.nav.reports}
-          >
-            {REPORT_TYPES.map((type) => (
-              <button
-                key={type}
-                type="button"
-                role="tab"
-                aria-selected={liveType === type}
-                className={`min-h-[var(--touch-min)] rounded-lg px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
-                  liveType === type ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
-                }`}
-                onClick={() => void switchType(type)}
-              >
-                {t.reports[type]}
-              </button>
-            ))}
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6">
+        <header className="pb-2 pt-8">
+          <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+            {t.reports.kicker}
+          </p>
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+            <div
+              className="flex rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]"
+              role="tablist"
+              aria-label={t.nav.reports}
+            >
+              {REPORT_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="tab"
+                  aria-selected={liveType === type}
+                  className={`h-9 rounded-xl px-3.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+                    liveType === type ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
+                  }`}
+                  onClick={() => void switchType(type)}
+                >
+                  {t.reports[type]}
+                </button>
+              ))}
+            </div>
+            <span className="text-[length:var(--text-caption)] text-muted" role="status">
+              {session?.saveState === 'saving'
+                ? t.reports.saving
+                : session?.saveState === 'saved' && !dirty
+                  ? t.reports.saved
+                  : null}
+            </span>
           </div>
-          <span className="text-[length:var(--text-caption)] text-muted" role="status">
-            {session?.saveState === 'saving'
-              ? t.reports.saving
-              : session?.saveState === 'saved' && !dirty
-                ? t.reports.saved
-                : null}
-          </span>
-        </div>
-      </header>
+        </header>
 
-      {!online ? (
-        <div className="px-4">
-          <Banner>{t.todos.offline}</Banner>
-        </div>
-      ) : null}
+        {!online ? (
+          <div className="pt-2">
+            <Banner>{t.todos.offline}</Banner>
+          </div>
+        ) : null}
 
-      {error ? (
-        <div className="flex items-center gap-3 px-4 py-2">
-          <Banner>{humanError(error)}</Banner>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              void reportQuery.refetch();
-              void reviewQuery.refetch();
-            }}
-          >
-            {t.reports.retry}
-          </Button>
-        </div>
-      ) : null}
+        {error ? (
+          <div className="flex items-center gap-3 py-2">
+            <Banner>{humanError(error)}</Banner>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                void reportQuery.refetch();
+                void reviewQuery.refetch();
+              }}
+            >
+              {t.reports.retry}
+            </Button>
+          </div>
+        ) : null}
 
-      {session?.saveError ? (
-        <div className="px-4 py-2">
-          <Banner>{session.saveError}</Banner>
-        </div>
-      ) : null}
+        {session?.saveError ? (
+          <div className="py-2">
+            <Banner>{session.saveError}</Banner>
+          </div>
+        ) : null}
 
-      {session?.conflict ? (
-        <div className="flex flex-wrap items-center gap-3 px-4 py-2">
-          <Banner>{t.reports.conflict}</Banner>
-          <Button variant="ghost" onClick={() => void reloadRemote()}>
-            {t.reports.reload}
-          </Button>
-          <Button
-            variant="quiet"
-            onClick={() => patchLive((s) => ({ ...s, conflict: false, blockSave: true }))}
-          >
-            {t.reports.keepLocal}
-          </Button>
-        </div>
-      ) : null}
+        {session?.conflict ? (
+          <div className="flex flex-wrap items-center gap-3 py-2">
+            <Banner>{t.reports.conflict}</Banner>
+            <Button variant="ghost" onClick={() => void reloadRemote()}>
+              {t.reports.reload}
+            </Button>
+            <Button
+              variant="quiet"
+              onClick={() => patchLive((s) => ({ ...s, conflict: false, blockSave: true }))}
+            >
+              {t.reports.keepLocal}
+            </Button>
+          </div>
+        ) : null}
 
-      {session?.remoteToast && !session.conflict ? (
-        <div className="flex flex-wrap items-center gap-3 px-4 py-2" role="status">
-          <p className="text-[length:var(--text-meta)] text-muted">{t.reports.remoteUpdated}</p>
-          <Button variant="ghost" onClick={() => void reloadRemote()}>
-            {t.reports.reload}
-          </Button>
-        </div>
-      ) : null}
+        {session?.remoteToast && !session.conflict ? (
+          <div className="flex flex-wrap items-center gap-3 py-2" role="status">
+            <p className="text-[length:var(--text-meta)] text-muted">{t.reports.remoteUpdated}</p>
+            <Button variant="ghost" onClick={() => void reloadRemote()}>
+              {t.reports.reload}
+            </Button>
+          </div>
+        ) : null}
 
-      {id === '' ? (
-        <ReportsOverview
-          type={typeParam}
-          weekStartsOn={weekStartsOn}
-          timeZone={timeZone}
-          onPick={(ymd) => void openPeriod(typeParam, ymd)}
-        />
-      ) : loading || !session || session.id !== id ? (
-        <div
-          className="mx-auto w-full max-w-[65ch] px-4 py-10"
-          aria-busy="true"
-          aria-label={t.reports.loading}
-        >
-          <div className="skeleton-pulse mb-4 h-10 rounded-md" />
-          <div className="skeleton-pulse h-64 rounded-md" />
-        </div>
-      ) : (
-        <div className="mx-auto flex w-full max-w-[65ch] flex-1 flex-col px-4 pb-16 pt-4">
-          <input
-            aria-label={t.reports.title}
-            value={session.draftTitle}
-            disabled={!online || session.filling}
-            onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
-            className="mb-4 w-full bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em] text-fg outline-none"
+        {id === '' ? (
+          <ReportsOverview
+            type={typeParam}
+            weekStartsOn={weekStartsOn}
+            timeZone={timeZone}
+            onPick={(ymd) => void openPeriod(typeParam, ymd)}
           />
-          {reviewQuery.data ? (
-            <ReviewLists
-              review={reviewQuery.data}
-              onToggleTask={(task) => void toggleReviewTask(task)}
-              onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
-              onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
-            />
-          ) : null}
-          <div className="mt-8 min-w-0 rounded-2xl bg-surface px-5 py-5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
-            <p className="mb-2 text-[length:var(--text-caption)] text-muted">{t.reports.writeToday}</p>
-            <WysiwygEditor
-              key={`${session.id}:${session.editorKey}`}
-              bodyMd={extractNotes(session.draftMd, liveType)}
-              editable={online && !session.filling}
-              onChange={(md) =>
-                patchLive((s) => ({ ...s, draftMd: replaceNotes(s.draftMd, liveType, md) }))
-              }
-              onHydrate={handleHydrate}
-              onToggleTask={(taskId) => void toggleTask(taskId)}
-            />
+        ) : loading || !session || session.id !== id ? (
+          <div className="py-10" aria-busy="true" aria-label={t.reports.loading}>
+            <div className="skeleton-pulse mb-4 h-10 rounded-2xl" />
+            <div className="grid gap-8 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)]">
+              <div className="skeleton-pulse h-40 rounded-2xl" />
+              <div className="skeleton-pulse h-64 rounded-[1.5rem]" />
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex-1 pb-20 pt-4">
+            <input
+              aria-label={t.reports.title}
+              value={session.draftTitle}
+              disabled={!online || session.filling}
+              onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
+              className="mb-8 w-full bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.04em] text-fg outline-none"
+            />
+            <div className="grid gap-8 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)] lg:items-start">
+              <aside className="order-2 min-w-0 lg:sticky lg:top-6 lg:order-1">
+                {reviewQuery.data ? (
+                  <ReviewLists
+                    review={reviewQuery.data}
+                    onToggleTask={(task) => void toggleReviewTask(task)}
+                    onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
+                    onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
+                  />
+                ) : (
+                  <div className="skeleton-pulse h-40 rounded-2xl" aria-busy="true" />
+                )}
+              </aside>
+              <div className="order-1 min-w-0 rounded-[1.5rem] bg-surface px-5 py-5 shadow-[var(--shadow)] sm:px-8 sm:py-7 lg:order-2">
+                <p className="mb-4 text-[length:var(--text-caption)] text-muted">
+                  {t.reports.writeToday}
+                </p>
+                <WysiwygEditor
+                  key={`${session.id}:${session.editorKey}`}
+                  bodyMd={extractNotes(session.draftMd, liveType)}
+                  editable={online && !session.filling}
+                  onChange={(md) =>
+                    patchLive((s) => ({ ...s, draftMd: replaceNotes(s.draftMd, liveType, md) }))
+                  }
+                  onHydrate={handleHydrate}
+                  onToggleTask={(taskId) => void toggleTask(taskId)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

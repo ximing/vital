@@ -23,7 +23,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`inline-flex min-h-[var(--touch-min)] items-center justify-center rounded-md px-4 text-[length:var(--text-body)] leading-[var(--text-body-lh)] transition-[color,background-color,opacity] duration-[var(--ease-out)] disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex min-h-[var(--touch-min)] items-center justify-center rounded-2xl px-4 text-[length:var(--text-body)] leading-[var(--text-body-lh)] font-medium transition-[color,background-color,opacity] duration-[var(--ease-out)] disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       {...props}

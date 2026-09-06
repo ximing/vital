@@ -13,54 +13,79 @@ export function ReviewLists({
   onOpenTask: (taskId: string) => void;
   onOpenInbox: (inboxId: string) => void;
 }) {
+  const empty =
+    review.completed.length === 0 && review.carried.length === 0 && review.captured.length === 0;
+
   return (
-    <div className="flex flex-col gap-6">
-      <Section title={`${t.reports.completed} ${review.completed.length}`}>
-        {review.completed.length === 0 ? (
-          <p className="text-[length:var(--text-body)] text-muted">{t.reports.emptyDone}</p>
-        ) : (
-          review.completed.map((item) => (
-            <ReviewTaskRow
-              key={`${item.taskId}-${item.completionId ?? ''}`}
-              item={item}
-              done
-              onToggle={() => onToggleTask(item)}
-              onOpen={() => onOpenTask(item.taskId)}
-            />
-          ))
-        )}
-      </Section>
-      <Section title={`${t.reports.carried} ${review.carried.length}`}>
-        {review.carried.length === 0 ? (
-          <p className="text-[length:var(--text-body)] text-muted">{t.reports.emptyCarried}</p>
-        ) : (
-          review.carried.map((item) => (
-            <ReviewTaskRow
-              key={item.taskId}
-              item={item}
-              done={false}
-              onToggle={() => onToggleTask(item)}
-              onOpen={() => onOpenTask(item.taskId)}
-            />
-          ))
-        )}
-      </Section>
-      <Section title={`${t.reports.captured} ${review.captured.length}`}>
-        {review.captured.length === 0 ? (
-          <p className="text-[length:var(--text-body)] text-muted">{t.reports.emptyCaptured}</p>
-        ) : (
-          review.captured.map((item) => (
-            <button
-              key={item.inboxId}
-              type="button"
-              className="flex min-h-9 w-full items-center rounded-xl px-2 py-1.5 text-left text-[length:var(--text-body)] text-fg hover:bg-surface-muted"
-              onClick={() => onOpenInbox(item.inboxId)}
-            >
-              {item.title}
-            </button>
-          ))
-        )}
-      </Section>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-wrap gap-2">
+        <Pill label={t.reports.completed} value={review.completed.length} />
+        <Pill label={t.reports.carried} value={review.carried.length} />
+        <Pill label={t.reports.captured} value={review.captured.length} />
+      </div>
+      {empty ? (
+        <p className="text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
+          {t.reports.emptyDone}
+        </p>
+      ) : (
+        <>
+          {review.completed.length > 0 ? (
+            <Section title={t.reports.completed}>
+              {review.completed.map((item) => (
+                <ReviewTaskRow
+                  key={`${item.taskId}-${item.completionId ?? ''}`}
+                  item={item}
+                  done
+                  onToggle={() => onToggleTask(item)}
+                  onOpen={() => onOpenTask(item.taskId)}
+                />
+              ))}
+            </Section>
+          ) : null}
+          {review.carried.length > 0 ? (
+            <Section title={t.reports.carried}>
+              {review.carried.map((item) => (
+                <ReviewTaskRow
+                  key={item.taskId}
+                  item={item}
+                  done={false}
+                  onToggle={() => onToggleTask(item)}
+                  onOpen={() => onOpenTask(item.taskId)}
+                />
+              ))}
+            </Section>
+          ) : null}
+          {review.captured.length > 0 ? (
+            <Section title={t.reports.captured}>
+              {review.captured.map((item) => (
+                <button
+                  key={item.inboxId}
+                  type="button"
+                  className="flex min-h-9 w-full items-center rounded-xl px-2 py-1.5 text-left text-[length:var(--text-body)] text-fg hover:bg-surface-muted"
+                  onClick={() => onOpenInbox(item.inboxId)}
+                >
+                  {item.title}
+                </button>
+              ))}
+            </Section>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function Pill({ label, value }: { label: string; value: number }) {
+  return (
+    <div
+      className={`flex items-baseline gap-1.5 rounded-2xl px-3 py-2 ${
+        value > 0 ? 'bg-accent-subtle' : 'bg-surface shadow-[inset_0_0_0_1px_var(--border-subtle)]'
+      }`}
+    >
+      <span className="text-[length:var(--text-title)] font-semibold tabular-nums leading-none">
+        {value}
+      </span>
+      <span className="text-[length:var(--text-caption)] text-muted">{label}</span>
     </div>
   );
 }
@@ -68,7 +93,7 @@ export function ReviewLists({
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h2 className="mb-2 text-[length:var(--text-caption)] text-muted">{title}</h2>
+      <h2 className="mb-1 text-[length:var(--text-caption)] text-muted">{title}</h2>
       <div className="flex flex-col">{children}</div>
     </section>
   );

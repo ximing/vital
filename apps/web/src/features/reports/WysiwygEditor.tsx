@@ -119,7 +119,7 @@ export function WysiwygEditor({
 
   return (
     <div className="relative" data-testid="report-wysiwyg" onClick={onClick}>
-      <div className="mb-3 flex items-center gap-1">
+      <div className="mb-4 flex items-center gap-0.5">
         <ToolbarBtn
           label="粗体"
           active={editor?.isActive('bold') === true}
@@ -167,7 +167,7 @@ function ToolbarBtn({
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${
         active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
       }`}
     >

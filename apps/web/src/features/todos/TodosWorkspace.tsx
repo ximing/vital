@@ -169,137 +169,152 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
 
   const loading = tasksQuery.isLoading || listsQuery.isLoading;
   const error = tasksQuery.error ?? listsQuery.error;
+  const listColumn = view === 'list';
   const viewTabs: { id: TodoView; icon: typeof List }[] = [
     { id: 'list', icon: List },
     { id: 'board', icon: Columns3 },
     { id: 'week', icon: CalendarDays },
   ];
 
+  const quickAdd = (
+    <QuickAdd
+      onSubmit={handleCreate}
+      disabled={!online || !inboxId}
+      hint={
+        composeDay ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}` : undefined
+      }
+    />
+  );
+
   return (
     <div className="flex min-h-screen bg-canvas">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 pb-3 pt-5">
-          <div className="min-w-0">
-            <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-              {kicker}
-            </p>
-            <h1 className="truncate text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
-              {title}
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div
-              className="flex rounded-lg border border-border bg-surface p-0.5"
-              role="tablist"
-              aria-label={t.nav.todos}
-            >
-              {viewTabs.map((tab) => (
-                <NavLink
-                  key={tab.id}
-                  to={viewHref(tab.id, listId)}
-                  role="tab"
-                  aria-selected={view === tab.id}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
-                    view === tab.id ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
-                  }`}
-                >
-                  <Icon icon={tab.icon} size={14} />
-                  {t.todos.views[tab.id]}
-                </NavLink>
-              ))}
-            </div>
-            <label className="relative">
-              <Icon
-                icon={Search}
-                size={14}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
-              />
-              <input
-                id={LIST_FILTER_ID}
-                type="search"
-                value={listFilter}
-                onChange={(e) => setListFilter(e.target.value)}
-                placeholder={t.todos.filterPlaceholder}
-                aria-label={t.todos.filterPlaceholder}
-                className="h-8 w-44 rounded-md border border-border bg-surface py-0 pl-8 pr-3 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
-              />
-            </label>
-          </div>
-        </header>
-
-        {!online ? (
-          <div className="px-4">
-            <Banner>{t.todos.offline}</Banner>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="flex items-center gap-3 px-4 py-2">
-            <Banner>{humanError(error)}</Banner>
-            <Button variant="ghost" onClick={() => void tasksQuery.refetch()}>
-              {t.todos.retry}
-            </Button>
-          </div>
-        ) : null}
-
-        <QuickAdd
-          onSubmit={handleCreate}
-          disabled={!online || !inboxId}
-          hint={
-            composeDay
-              ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}`
-              : undefined
+        <div
+          className={
+            listColumn
+              ? 'flex min-h-0 w-full max-w-[42rem] flex-1 flex-col px-8'
+              : 'flex min-h-0 flex-1 flex-col'
           }
-        />
-
-        <div className="min-h-0 flex-1 overflow-y-auto pb-24">
-          {loading ? (
-            <TaskSkeleton />
-          ) : view === 'list' ? (
-            <ListView
-              listId={listId}
-              tasks={tasks}
-              tags={tags}
-              timeZone={timeZone}
-              onComplete={(task) => void actions.complete(task)}
-              onReorder={(input) => actions.reorder.mutate(input)}
-            />
-          ) : view === 'board' ? (
-            <BoardView
-              listId={listId}
-              tasks={tasks}
-              tags={tags}
-              timeZone={timeZone}
-              onComplete={(task) => void actions.complete(task)}
-              onStatus={(task, status) => void actions.setStatus(task, status)}
-              onPriority={(task, priority: TaskPriority) =>
-                void actions.setPriority(task, priority)
-              }
-            />
-          ) : calendarQuery.isLoading ? (
-            <TaskSkeleton />
-          ) : calendarQuery.error ? (
-            <div className="px-4">
-              <Banner>{humanError(calendarQuery.error)}</Banner>
+        >
+          <header
+            className={`flex flex-wrap items-end justify-between gap-3 pb-1 pt-8 ${
+              listColumn ? '' : 'px-6'
+            }`}
+          >
+            <div className="min-w-0">
+              <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+                {kicker}
+              </p>
+              <h1 className="truncate text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.04em]">
+                {title}
+              </h1>
             </div>
-          ) : (
-            <WeekView
-              listId={listId}
-              days={range.days}
-              instances={instances}
-              timeZone={timeZone}
-              composeDay={composeDay}
-              onSelectDay={(ymd) => {
-                setWeekAnchor(ymd);
-                setComposeDay(null);
-              }}
-              onAddDay={(ymd) => {
-                setComposeDay(ymd);
-                todosUi().requestQuickAdd();
-              }}
-              onOpen={openDetail}
-            />
-          )}
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="flex rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]"
+                role="tablist"
+                aria-label={t.nav.todos}
+              >
+                {viewTabs.map((tab) => (
+                  <NavLink
+                    key={tab.id}
+                    to={viewHref(tab.id, listId)}
+                    role="tab"
+                    aria-selected={view === tab.id}
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+                      view === tab.id ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
+                    }`}
+                  >
+                    <Icon icon={tab.icon} size={14} />
+                    {t.todos.views[tab.id]}
+                  </NavLink>
+                ))}
+              </div>
+              <label className="relative">
+                <Icon
+                  icon={Search}
+                  size={14}
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+                />
+                <input
+                  id={LIST_FILTER_ID}
+                  type="search"
+                  value={listFilter}
+                  onChange={(e) => setListFilter(e.target.value)}
+                  placeholder={t.todos.filterPlaceholder}
+                  aria-label={t.todos.filterPlaceholder}
+                  className="h-8 w-44 rounded-xl border border-border bg-surface py-0 pl-8 pr-3 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
+                />
+              </label>
+            </div>
+          </header>
+
+          {!online ? (
+            <div className={listColumn ? 'pt-2' : 'px-4'}>
+              <Banner>{t.todos.offline}</Banner>
+            </div>
+          ) : null}
+
+          {error ? (
+            <div className={`flex items-center gap-3 py-2 ${listColumn ? '' : 'px-4'}`}>
+              <Banner>{humanError(error)}</Banner>
+              <Button variant="ghost" onClick={() => void tasksQuery.refetch()}>
+                {t.todos.retry}
+              </Button>
+            </div>
+          ) : null}
+
+          {listColumn ? quickAdd : <div className="px-6">{quickAdd}</div>}
+
+          <div className="min-h-0 flex-1 overflow-y-auto pb-24">
+            {loading ? (
+              <TaskSkeleton />
+            ) : view === 'list' ? (
+              <ListView
+                listId={listId}
+                tasks={tasks}
+                tags={tags}
+                timeZone={timeZone}
+                onComplete={(task) => void actions.complete(task)}
+                onReorder={(input) => actions.reorder.mutate(input)}
+              />
+            ) : view === 'board' ? (
+              <BoardView
+                listId={listId}
+                tasks={tasks}
+                tags={tags}
+                timeZone={timeZone}
+                onComplete={(task) => void actions.complete(task)}
+                onStatus={(task, status) => void actions.setStatus(task, status)}
+                onPriority={(task, priority: TaskPriority) =>
+                  void actions.setPriority(task, priority)
+                }
+              />
+            ) : calendarQuery.isLoading ? (
+              <TaskSkeleton />
+            ) : calendarQuery.error ? (
+              <div className="px-4">
+                <Banner>{humanError(calendarQuery.error)}</Banner>
+              </div>
+            ) : (
+              <WeekView
+                listId={listId}
+                days={range.days}
+                instances={instances}
+                timeZone={timeZone}
+                composeDay={composeDay}
+                onSelectDay={(ymd) => {
+                  setWeekAnchor(ymd);
+                  setComposeDay(null);
+                }}
+                onAddDay={(ymd) => {
+                  setComposeDay(ymd);
+                  todosUi().requestQuickAdd();
+                }}
+                onOpen={openDetail}
+              />
+            )}
+          </div>
         </div>
       </div>
 
