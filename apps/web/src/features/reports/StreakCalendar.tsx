@@ -44,7 +44,7 @@ export function StreakCalendar({
 
   if (grain === 'year') {
     return (
-      <div className="rounded-2xl bg-surface p-5 shadow-[var(--shadow)]" data-testid="streak-calendar">
+      <div className="h-full rounded-2xl bg-surface p-5 shadow-[var(--shadow)]" data-testid="streak-calendar">
         <p className="mb-3 text-[length:var(--text-meta)] font-medium">{t.reports.yearly}</p>
         <div className="flex flex-col gap-2">
           {heatmap.map((cell) => {
@@ -86,7 +86,7 @@ export function StreakCalendar({
   if (grain === 'month') {
     const year = (heatmap[0]?.date ?? today).slice(0, 4);
     return (
-      <div className="rounded-2xl bg-surface p-5 shadow-[var(--shadow)]" data-testid="streak-calendar">
+      <div className="h-full rounded-2xl bg-surface p-5 shadow-[var(--shadow)]" data-testid="streak-calendar">
         <p className="mb-3 text-[length:var(--text-meta)] font-medium">{year}年</p>
         <div className="grid grid-cols-3 gap-2">
           {heatmap.map((cell) => {
@@ -132,7 +132,7 @@ export function StreakCalendar({
   })();
 
   return (
-    <div className="rounded-2xl bg-surface p-5 shadow-[var(--shadow)]" data-testid="streak-calendar">
+    <div className="h-full rounded-2xl bg-surface p-5 shadow-[var(--shadow)]" data-testid="streak-calendar">
       <div className="mb-3 flex items-center justify-between">
         <button
           type="button"

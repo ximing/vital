@@ -169,38 +169,16 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
 
   const loading = tasksQuery.isLoading || listsQuery.isLoading;
   const error = tasksQuery.error ?? listsQuery.error;
-  const listColumn = view === 'list';
   const viewTabs: { id: TodoView; icon: typeof List }[] = [
     { id: 'list', icon: List },
     { id: 'board', icon: Columns3 },
     { id: 'week', icon: CalendarDays },
   ];
 
-  const quickAdd = (
-    <QuickAdd
-      onSubmit={handleCreate}
-      disabled={!online || !inboxId}
-      hint={
-        composeDay ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}` : undefined
-      }
-    />
-  );
-
   return (
     <div className="flex min-h-screen bg-canvas">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div
-          className={
-            listColumn
-              ? 'flex min-h-0 w-full max-w-[42rem] flex-1 flex-col px-8'
-              : 'flex min-h-0 flex-1 flex-col'
-          }
-        >
-          <header
-            className={`flex flex-wrap items-end justify-between gap-3 pb-1 pt-8 ${
-              listColumn ? '' : 'px-6'
-            }`}
-          >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-8 pt-8 xl:px-10">
+          <header className="flex flex-wrap items-end justify-between gap-3 pb-1">
             <div className="min-w-0">
               <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
                 {kicker}
@@ -250,13 +228,13 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           </header>
 
           {!online ? (
-            <div className={listColumn ? 'pt-2' : 'px-4'}>
+            <div className="pt-2">
               <Banner>{t.todos.offline}</Banner>
             </div>
           ) : null}
 
           {error ? (
-            <div className={`flex items-center gap-3 py-2 ${listColumn ? '' : 'px-4'}`}>
+            <div className="flex items-center gap-3 py-2">
               <Banner>{humanError(error)}</Banner>
               <Button variant="ghost" onClick={() => void tasksQuery.refetch()}>
                 {t.todos.retry}
@@ -264,9 +242,23 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
             </div>
           ) : null}
 
-          {listColumn ? quickAdd : <div className="px-6">{quickAdd}</div>}
+          <QuickAdd
+            onSubmit={handleCreate}
+            disabled={!online || !inboxId}
+            hint={
+              composeDay
+                ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}`
+                : undefined
+            }
+          />
 
-          <div className="min-h-0 flex-1 overflow-y-auto pb-24">
+          <div
+            className={
+              view === 'list'
+                ? 'min-h-0 flex-1 overflow-y-auto pb-16'
+                : 'flex min-h-0 flex-1 flex-col pb-6'
+            }
+          >
             {loading ? (
               <TaskSkeleton />
             ) : view === 'list' ? (
@@ -315,7 +307,6 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
               />
             )}
           </div>
-        </div>
       </div>
 
       {detailOpen && detailTask ? (

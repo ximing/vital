@@ -15,7 +15,7 @@ export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'b
   const showAction = !(kind === 'list' && listId === 'smart:done');
 
   return (
-    <div className="flex flex-col items-start px-3 py-16">
+    <div className="flex flex-col items-start px-1 py-16">
       <EmptyArt />
       <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {copy}

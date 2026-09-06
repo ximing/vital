@@ -182,9 +182,13 @@ body {
 }
 
 .report-doc {
-  min-height: 18rem;
+  min-height: 16rem;
   max-width: none;
   outline: none;
+}
+
+.report-paper .report-doc {
+  min-height: 100%;
 }
 
 .report-source {

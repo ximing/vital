@@ -23,7 +23,7 @@ function Stat({
 }) {
   const d = deltaText(delta);
   return (
-    <div className="min-w-0 flex-1">
+    <div className="min-w-[5.5rem]">
       <p className="text-[length:var(--text-caption)] text-muted">{label}</p>
       <p className="mt-1 flex items-baseline gap-2">
         <span className="text-[length:var(--text-display)] font-semibold tabular-nums tracking-[-0.04em]">
@@ -64,7 +64,7 @@ export function ReportsOverview({
   if (query.isLoading || !data) {
     return (
       <div
-        className="grid flex-1 gap-8 py-10 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)]"
+        className="grid min-h-0 flex-1 gap-8 py-10 lg:grid-cols-[20rem_minmax(0,1fr)]"
         aria-busy="true"
         aria-label={t.reports.loading}
       >
@@ -99,7 +99,7 @@ function OverviewBody({
   onCursorMonth: (ymd: string) => void;
 }) {
   return (
-    <div className="grid flex-1 gap-10 pb-16 pt-6 lg:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)] lg:items-start">
+    <div className="grid min-h-0 h-full flex-1 gap-8 pb-8 pt-4 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-stretch">
       <StreakCalendar
         type={data.type}
         heatmap={data.heatmap}
@@ -110,11 +110,11 @@ function OverviewBody({
         onPick={onPick}
         onCursorMonth={onCursorMonth}
       />
-      <div className="min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-col rounded-[1.5rem] bg-surface px-8 py-7 shadow-[var(--shadow)]">
         <p className="text-[length:var(--text-title)] font-semibold tracking-[-0.03em] text-fg">
           {data.period.label}
         </p>
-        <div className="mt-6 flex flex-wrap gap-8">
+        <div className="mt-6 flex flex-wrap gap-10">
           <Stat
             label={t.reports.completed}
             value={data.totals.completed}
@@ -154,7 +154,7 @@ function OverviewBody({
             </ul>
           )}
         </div>
-        <Button className="mt-8" onClick={() => onPick(data.period.start)}>
+        <Button className="mt-8 self-start" onClick={() => onPick(data.period.start)}>
           {t.reports.openPeriod}
         </Button>
       </div>

@@ -368,8 +368,8 @@ export function ReportsWorkspace() {
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6">
-        <header className="pb-2 pt-8">
+      <div className="flex min-h-0 w-full flex-1 flex-col px-8 pt-8 xl:px-10">
+        <header className="shrink-0 pb-2">
           <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
             {t.reports.kicker}
           </p>
@@ -456,44 +456,48 @@ export function ReportsWorkspace() {
         ) : null}
 
         {id === '' ? (
+          <div className="flex min-h-0 flex-1 flex-col">
           <ReportsOverview
             type={typeParam}
             weekStartsOn={weekStartsOn}
             timeZone={timeZone}
             onPick={(ymd) => void openPeriod(typeParam, ymd)}
           />
+          </div>
         ) : loading || !session || session.id !== id ? (
-          <div className="py-10" aria-busy="true" aria-label={t.reports.loading}>
+          <div className="flex-1 py-10" aria-busy="true" aria-label={t.reports.loading}>
             <div className="skeleton-pulse mb-4 h-10 rounded-2xl" />
-            <div className="grid gap-8 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)]">
-              <div className="skeleton-pulse h-40 rounded-2xl" />
-              <div className="skeleton-pulse h-64 rounded-[1.5rem]" />
+            <div className="grid h-[28rem] gap-8 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
+              <div className="skeleton-pulse rounded-2xl" />
+              <div className="skeleton-pulse rounded-[1.5rem]" />
             </div>
           </div>
         ) : (
-          <div className="flex-1 pb-20 pt-4">
+          <div className="flex min-h-0 flex-1 flex-col pb-8 pt-4">
             <input
               aria-label={t.reports.title}
               value={session.draftTitle}
               disabled={!online || session.filling}
               onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
-              className="mb-8 w-full bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.04em] text-fg outline-none"
+              className="mb-6 w-full shrink-0 bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.04em] text-fg outline-none"
             />
-            <div className="grid gap-8 lg:grid-cols-[minmax(14rem,17rem)_minmax(0,1fr)] lg:items-start">
-              <aside className="order-2 min-w-0 lg:sticky lg:top-6 lg:order-1">
+            <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)] lg:items-stretch">
+              <aside className="order-2 min-h-0 min-w-0 lg:order-1">
                 {reviewQuery.data ? (
-                  <ReviewLists
-                    review={reviewQuery.data}
-                    onToggleTask={(task) => void toggleReviewTask(task)}
-                    onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
-                    onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
-                  />
+                  <div className="h-full overflow-y-auto rounded-[1.5rem] bg-surface px-4 py-4 shadow-[var(--shadow)] sm:px-5 sm:py-5">
+                    <ReviewLists
+                      review={reviewQuery.data}
+                      onToggleTask={(task) => void toggleReviewTask(task)}
+                      onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
+                      onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
+                    />
+                  </div>
                 ) : (
-                  <div className="skeleton-pulse h-40 rounded-2xl" aria-busy="true" />
+                  <div className="skeleton-pulse h-full min-h-40 rounded-[1.5rem]" aria-busy="true" />
                 )}
               </aside>
-              <div className="order-1 min-w-0 rounded-[1.5rem] bg-surface px-5 py-5 shadow-[var(--shadow)] sm:px-8 sm:py-7 lg:order-2">
-                <p className="mb-4 text-[length:var(--text-caption)] text-muted">
+              <div className="report-paper order-1 flex min-h-[22rem] min-w-0 flex-col rounded-[1.5rem] bg-surface px-5 py-5 shadow-[var(--shadow)] sm:px-8 sm:py-7 lg:order-2 lg:min-h-0">
+                <p className="mb-4 shrink-0 text-[length:var(--text-caption)] text-muted">
                   {t.reports.writeToday}
                 </p>
                 <WysiwygEditor

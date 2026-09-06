@@ -44,7 +44,7 @@ export function WeekView({
   const heading = `${Number(start.slice(5, 7))}月${Number(start.slice(8))}日 – ${Number(end.slice(5, 7))}月${Number(end.slice(8))}日`;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-6 pb-6">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[length:var(--text-meta)] font-medium tracking-[-0.02em] text-fg">
           {heading}
@@ -86,7 +86,7 @@ export function WeekView({
           return (
             <section
               key={ymd}
-              className={`group/day flex min-h-[24rem] cursor-pointer flex-col px-1.5 py-3 ${
+              className={`group/day flex min-h-0 cursor-pointer flex-col px-1.5 py-3 ${
                 index > 0 ? 'border-l border-border/70' : ''
               } ${isToday ? 'bg-accent-subtle/50' : composing ? 'bg-surface-muted/60' : ''}`}
               aria-current={isToday ? 'date' : undefined}

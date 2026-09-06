@@ -118,8 +118,8 @@ export function WysiwygEditor({
   }
 
   return (
-    <div className="relative" data-testid="report-wysiwyg" onClick={onClick}>
-      <div className="mb-4 flex items-center gap-0.5">
+    <div className="relative flex min-h-0 flex-1 flex-col" data-testid="report-wysiwyg" onClick={onClick}>
+      <div className="mb-4 flex shrink-0 items-center gap-0.5">
         <ToolbarBtn
           label="粗体"
           active={editor?.isActive('bold') === true}
@@ -142,7 +142,9 @@ export function WysiwygEditor({
           <Icon icon={List} size={14} />
         </ToolbarBtn>
       </div>
-      <EditorContent editor={editor} />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <EditorContent editor={editor} />
+      </div>
       {slash && editor ? (
         <SlashMenu slash={slash} onPick={pick} onClose={() => setSlash(null)} />
       ) : null}

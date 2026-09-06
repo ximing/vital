@@ -67,7 +67,7 @@ export function BoardView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex px-6 pb-3" role="radiogroup" aria-label={t.todos.views.board}>
+      <div className="flex pb-3" role="radiogroup" aria-label={t.todos.views.board}>
         <div className="flex rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
           <button
             type="button"
@@ -99,7 +99,7 @@ export function BoardView({
       </div>
 
       <div
-        className={`grid min-h-0 flex-1 gap-4 overflow-x-auto px-6 pb-6 ${
+        className={`grid min-h-0 flex-1 auto-rows-fr gap-4 overflow-x-auto ${
           boardMode === 'status' ? 'grid-cols-3' : 'grid-cols-4'
         }`}
       >
@@ -107,7 +107,7 @@ export function BoardView({
           ? STATUS_COLS.map((status) => (
               <section
                 key={status}
-                className="min-h-[28rem] min-w-[12rem] rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
+                className="min-h-0 min-w-[12rem] overflow-y-auto rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
                 onDragOver={dragOver}
                 onDrop={(event) => {
                   event.preventDefault();
@@ -127,7 +127,7 @@ export function BoardView({
           : PRIORITY_COLS.map((priority) => (
               <section
                 key={priority}
-                className="min-h-[28rem] min-w-[12rem] rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
+                className="min-h-0 min-w-[12rem] overflow-y-auto rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
                 onDragOver={dragOver}
                 onDrop={(event) => {
                   event.preventDefault();
