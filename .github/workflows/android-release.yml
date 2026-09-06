@@ -1,0 +1,116 @@
+name: Build Android Release APK
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: android-release-${{ github.event.release.tag_name || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace deps and typecheck mobile
+        run: pnpm --filter @vital/mobile... build
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            apps/mobile/android/.gradle
+          key: gradle-${{ runner.os }}-${{ hashFiles('apps/mobile/app.config.ts') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Parse version from tag
+        id: ver
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          if [[ -z "$tag" ]]; then
+            tag="v0.0.0"
+          fi
+          if [[ "$tag" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
+            version_name="${major}.${minor}.${patch}"
+            version_code=$(( major * 10000 + minor * 100 + patch ))
+            {
+              echo "version_name=$version_name"
+              echo "version_code=$version_code"
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo "APP_VERSION_NAME=$version_name"
+              echo "APP_VERSION_CODE=$version_code"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::error::Release tag '$tag' does not match v?MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
+      - name: Prepare signing env
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+        run: |
+          if [[ -z "$ANDROID_KEYSTORE" ]]; then
+            echo "::error::ANDROID_KEYSTORE secret is missing"
+            exit 1
+          fi
+          keystore="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE" | base64 -d > "$keystore"
+          {
+            echo "RELEASE_STORE_FILE=$keystore"
+            echo "RELEASE_STORE_STORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$ANDROID_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$ANDROID_KEY_PASSWORD"
+            echo "EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL:-https://vital.aimo.plus}"
+          } >> "$GITHUB_ENV"
+
+      - name: Expo prebuild (android)
+        run: pnpm --filter @vital/mobile exec expo prebuild --platform android --clean
+
+      - name: Build release APK
+        run: ./gradlew assembleRelease
+        working-directory: apps/mobile/android
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vital-android-${{ steps.ver.outputs.version_name }}
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Attach APK to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/mobile/android/app/build/outputs/apk/release/*.apk

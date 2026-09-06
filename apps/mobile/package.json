@@ -32,6 +32,7 @@
     "react-native-screens": "~4.16.0"
   },
   "devDependencies": {
+    "@expo/config-plugins": "^57.0.9",
     "@types/react": "~19.1.0",
     "@vital/eslint-config": "workspace:*",
     "@vital/tsconfig": "workspace:*",
