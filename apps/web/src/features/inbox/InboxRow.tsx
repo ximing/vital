@@ -45,7 +45,8 @@ export function SaveRow({
   return (
     <Link
       to={`/inbox/${item.id}`}
-      className={`flex min-h-[var(--touch-min)] flex-col px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
+      data-density="reading-row"
+      className={`flex min-h-11 flex-col px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
         selected ? 'bg-surface-muted' : 'hover:bg-surface-muted'
       }`}
     >

@@ -8,6 +8,8 @@ import type {
 import { ApiError } from '@vital/api-client';
 import { normalizeTrailingNewlines, renderToken, type EntityKind } from '@vital/markdown';
 
+export type { ReportType };
+
 export const POLL_MS = 5000;
 export const SAVE_DEBOUNCE_MS = 800;
 export const REPORT_TYPES: ReportType[] = ['daily', 'weekly', 'monthly', 'yearly'];

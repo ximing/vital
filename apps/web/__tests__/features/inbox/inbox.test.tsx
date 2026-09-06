@@ -186,6 +186,11 @@ describe('inbox workspace', () => {
     resetInboxUi();
   });
 
+  it('marks the selected reader as a constrained reading canvas', async () => {
+    renderAt('/inbox');
+    expect(await screen.findByRole('main')).toHaveAttribute('data-region', 'reading-canvas');
+  });
+
   it('shows later-read empty copy in the capture pane', async () => {
     renderAt('/inbox');
     expect(await screen.findByText(t.empty.inbox)).toBeInTheDocument();
@@ -205,6 +210,7 @@ describe('inbox workspace', () => {
     });
     renderAt('/inbox');
     expect(await screen.findByText('未读文章')).toBeInTheDocument();
+    expect(screen.getByText('未读文章').closest('[data-density="reading-row"]')).not.toBeNull();
     expect(screen.queryByText('未整理的任务')).not.toBeInTheDocument();
   });
 

@@ -20,7 +20,7 @@ const ZONES = [
 ];
 
 const fieldClass =
-  'h-[var(--field-h)] w-full max-w-sm rounded-md border border-border bg-surface px-3 text-fg';
+  'h-[var(--field-h)] w-full max-w-xl rounded-md border border-border bg-surface px-3 text-fg';
 
 export function PrefsSection() {
   const user = useAuth((s) => s.user);
@@ -40,7 +40,7 @@ export function PrefsSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <label className="flex max-w-sm flex-col gap-1">
+      <label className="flex max-w-xl flex-col gap-1">
         <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
           {t.settings.timezone}
         </span>

@@ -2,6 +2,7 @@ import { db, pool } from '../../src/db/index.js';
 import {
   attachments,
   entityLinks,
+  extensionAuthCodes,
   inboxAssets,
   inboxItems,
   lists,
@@ -58,6 +59,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(attachments);
     await db.delete(reports);
     await db.delete(refreshTokens);
+    await db.delete(extensionAuthCodes);
     await db.delete(users);
   });
 }

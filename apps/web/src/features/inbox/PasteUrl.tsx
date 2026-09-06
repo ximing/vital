@@ -89,7 +89,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
           aria-label={t.inbox.pasteUrl}
           className="h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
         />
-        <Button type="submit" variant="ghost" loading={extracting} disabled={disabled || busy} className="w-full">
+        <Button type="submit" loading={extracting} disabled={disabled || busy} className="h-10 w-full">
           {extracting ? t.inbox.extracting : t.inbox.extract}
         </Button>
       </form>

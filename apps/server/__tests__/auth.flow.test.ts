@@ -73,6 +73,42 @@ describe('auth flow', () => {
     expect(cookieFrom(bearerLogin, REFRESH_COOKIE_NAME)).toBeUndefined();
   });
 
+  it('extension one-time code exchanges for bearer tokens and cannot be reused', async () => {
+    const registered = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: alice,
+    });
+    const token = registered.json().tokens.accessToken as string;
+    const issued = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/extension/code',
+      token,
+    });
+    expect(issued.statusCode).toBe(201);
+    const code = issued.json().code as string;
+    expect(code.length).toBeGreaterThanOrEqual(20);
+    expect(issued.json().expiresIn).toBe(120);
+
+    const exchanged = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/extension/exchange',
+      payload: { code },
+    });
+    expect(exchanged.statusCode).toBe(200);
+    expect(exchanged.json().user.email).toBe('alice@example.com');
+    expect(exchanged.json().tokens.accessToken).toBeTruthy();
+    expect(exchanged.json().tokens.refreshToken).toBeTruthy();
+
+    const reuse = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/extension/exchange',
+      payload: { code },
+    });
+    expect(reuse.statusCode).toBe(400);
+    expect(reuse.json().error.code).toBe('AUTH_CODE_INVALID');
+  });
+
   it('refresh rotates; reuse revokes all and clears cookie', async () => {
     const first = await injectJson(app, {
       method: 'POST',

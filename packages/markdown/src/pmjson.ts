@@ -2,6 +2,7 @@ import type {
   BlockContent,
   Code,
   Heading,
+  Image,
   Link,
   List,
   ListItem,
@@ -13,9 +14,25 @@ import type {
   Emphasis,
   Delete,
   InlineCode,
+  Table,
+  TableCell,
+  TableRow,
   Text,
 } from 'mdast';
 import { isRecord, type MdastRoot, type PmMark, type PmNode } from './types.js';
+
+const UPLOAD_SRC = /^\/api\/v1\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function safeImageSrc(url: string): string | null {
+  if (UPLOAD_SRC.test(url)) return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.href;
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function withContent(type: string, content: PmNode[], attrs?: PmNode['attrs']): PmNode {
   const node: PmNode = { type };
@@ -64,9 +81,15 @@ function phrasingToPm(nodes: PhrasingContent[], marks: PmMark[]): PmNode[] {
           attrs: { kind: node.kind, id: node.id },
         });
         break;
-      case 'image':
-        out.push(textNode(node.alt ?? node.url, marks));
+      case 'image': {
+        const src = safeImageSrc(node.url);
+        if (src === null) break;
+        const attrs: Record<string, string | number | boolean | null> = { src };
+        if (node.alt) attrs.alt = node.alt;
+        if (node.title) attrs.title = node.title;
+        out.push({ type: 'image', attrs });
         break;
+      }
       default:
         break;
     }
@@ -117,9 +140,29 @@ function flowToPm(node: BlockContent | RootContent): PmNode {
       );
     case 'thematicBreak':
       return { type: 'horizontalRule' };
+    case 'table':
+      return tableToPm(node);
     default:
       return withContent('paragraph', []);
   }
+}
+
+function tableCellToPm(node: TableCell, header: boolean): PmNode {
+  return withContent(header ? 'tableHeader' : 'tableCell', [
+    withContent('paragraph', phrasingToPm(node.children, [])),
+  ]);
+}
+
+function tableToPm(node: Table): PmNode {
+  return withContent(
+    'table',
+    node.children.map((row, index) =>
+      withContent(
+        'tableRow',
+        row.children.map((cell) => tableCellToPm(cell, index === 0)),
+      ),
+    ),
+  );
 }
 
 export function mdastToPmJSON(tree: MdastRoot): PmNode {
@@ -218,6 +261,19 @@ function pmPhrasing(nodes: PmNode[]): PhrasingContent[] {
       if ((kind === 'task' || kind === 'inbox') && typeof id === 'string') {
         out.push({ type: 'vitalEntity', kind, id });
       }
+      continue;
+    }
+    if (node.type === 'image') {
+      const attrs = node.attrs ?? {};
+      const src = typeof attrs.src === 'string' ? safeImageSrc(attrs.src) : null;
+      if (src === null) continue;
+      const image: Image = {
+        type: 'image',
+        url: src,
+        alt: typeof attrs.alt === 'string' ? attrs.alt : null,
+        title: typeof attrs.title === 'string' ? attrs.title : null,
+      };
+      out.push(image);
     }
   }
   return out;
@@ -285,9 +341,36 @@ function pmFlow(node: PmNode): BlockContent | null {
       };
     case 'horizontalRule':
       return { type: 'thematicBreak' };
+    case 'image': {
+      const phrasing = pmPhrasing([node]);
+      if (phrasing.length === 0) return null;
+      const p: Paragraph = { type: 'paragraph', children: phrasing };
+      return p;
+    }
+    case 'table':
+      return pmTable(node);
     default:
       return null;
   }
+}
+
+function pmTableCell(node: PmNode): TableCell {
+  const phrasing = asPmNodes(node.content).flatMap((block) => {
+    if (block.type === 'paragraph') return pmPhrasing(asPmNodes(block.content));
+    if (block.type === 'text' || block.type === 'image' || block.type === 'hardBreak') {
+      return pmPhrasing([block]);
+    }
+    return [];
+  });
+  return { type: 'tableCell', children: phrasing };
+}
+
+function pmTable(node: PmNode): Table {
+  const rows: TableRow[] = asPmNodes(node.content).map((row) => ({
+    type: 'tableRow',
+    children: asPmNodes(row.content).map((cell) => pmTableCell(cell)),
+  }));
+  return { type: 'table', children: rows };
 }
 
 export function pmJSONToMdast(doc: unknown): MdastRoot {

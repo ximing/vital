@@ -266,7 +266,7 @@ export async function getReportOverview(
         lt(inboxItems.capturedAt, periodBounds.end),
       ),
     );
-  const captured = Number(capturedRow?.n ?? 0);
+  const captured = capturedRow?.n ?? 0;
 
   const listIds = [...listCounts.keys()];
   const listName = new Map<string, string>();

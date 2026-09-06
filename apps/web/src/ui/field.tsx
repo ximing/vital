@@ -1,5 +1,8 @@
 import { useId, type InputHTMLAttributes } from 'react';
 
+export const FIELD_CONTROL_CLASS =
+  'h-[var(--field-h)] rounded-md border border-border bg-surface-muted/40 px-3 text-fg placeholder:text-muted outline-none transition-[border-color,background-color,box-shadow] duration-[var(--ease-out)] focus:border-focus focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]';
+
 export function Field({
   label,
   error,
@@ -25,7 +28,7 @@ export function Field({
         id={fieldId}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : undefined}
-        className="h-[var(--field-h)] rounded-xl border border-border bg-surface-muted/40 px-3 text-fg placeholder:text-muted outline-none transition-[border-color,background-color] duration-[var(--ease-out)] focus:border-focus focus:bg-surface"
+        className={FIELD_CONTROL_CLASS}
         {...props}
       />
       {error ? (

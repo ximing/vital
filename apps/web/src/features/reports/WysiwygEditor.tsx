@@ -1,14 +1,35 @@
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
-import { EditorContent, useEditor } from '@tiptap/react';
+import Image from '@tiptap/extension-image';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import { EditorContent, useEditor, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { parseMarkdownToPmJSON, serializePmJSONToMarkdown, type PmNode } from '@vital/markdown';
-import { Bold, Heading2, List } from 'lucide-react';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import {
+  Bold,
+  Code,
+  Heading1,
+  Heading2,
+  ImageIcon,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  Minus,
+  Paperclip,
+  Quote,
+  Strikethrough,
+  Table as TableIcon,
+} from 'lucide-react';
+import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { VitalEntity } from './entity-extension';
+import { isImageMime, uploadReportFile } from './media';
 import { withStubEmbed, type SlashHit } from './model';
 import { insertChip, slashFromEditor } from './slash';
 import { SlashMenu } from './SlashMenu';
@@ -18,13 +39,18 @@ function asPm(md: string): PmNode {
   return parseMarkdownToPmJSON(md);
 }
 
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif';
+const FILE_ACCEPT = `${IMAGE_ACCEPT},application/pdf,text/plain,text/markdown,.pdf,.txt,.md`;
+
 export function WysiwygEditor({
+  reportId,
   bodyMd,
   editable,
   onChange,
   onHydrate,
   onToggleTask,
 }: {
+  reportId: string;
   bodyMd: string;
   editable: boolean;
   onChange: (md: string) => void;
@@ -36,12 +62,54 @@ export function WysiwygEditor({
   const onChangeRef = useRef(onChange);
   const onHydrateRef = useRef(onHydrate);
   const hydrated = useRef(false);
+  const editorRef = useRef<Editor | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [, bump] = useState(0);
+  const ingestRef = useRef<(files: FileList | File[]) => Promise<void>>(async () => undefined);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onHydrateRef.current = onHydrate;
   });
+
+  async function ingestFiles(files: FileList | File[]): Promise<void> {
+    const instance = editorRef.current;
+    if (!instance || !editable) return;
+    const list = Array.from(files);
+    if (list.length === 0) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      for (const file of list) {
+        const uploaded = await uploadReportFile(file, reportId);
+        if (isImageMime(uploaded.mime)) {
+          instance.chain().focus().setImage({ src: uploaded.src, alt: uploaded.name }).run();
+        } else {
+          instance
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: uploaded.name,
+                  marks: [{ type: 'link', attrs: { href: uploaded.src } }],
+                },
+              ],
+            })
+            .run();
+        }
+      }
+    } catch {
+      setUploadError(t.reports.uploadFailed);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -54,6 +122,14 @@ export function WysiwygEditor({
         openOnClick: false,
         autolink: true,
       }),
+      Image.configure({
+        inline: true,
+        allowBase64: false,
+      }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
       Placeholder.configure({
         placeholder: t.empty.reportEditor,
       }),
@@ -68,6 +144,24 @@ export function WysiwygEditor({
       },
       handleKeyDown: (_view, event) => {
         if (event.key === 'Enter' && reportUi().slash) {
+          return true;
+        }
+        return false;
+      },
+      handlePaste: (_view, event) => {
+        const files = event.clipboardData?.files;
+        if (files && files.length > 0) {
+          event.preventDefault();
+          void ingestRef.current(files);
+          return true;
+        }
+        return false;
+      },
+      handleDrop: (_view, event) => {
+        const files = event.dataTransfer?.files;
+        if (files && files.length > 0) {
+          event.preventDefault();
+          void ingestRef.current(files);
           return true;
         }
         return false;
@@ -88,6 +182,11 @@ export function WysiwygEditor({
       bump((n) => n + 1);
     },
     onTransaction: () => bump((n) => n + 1),
+  });
+
+  useEffect(() => {
+    ingestRef.current = ingestFiles;
+    editorRef.current = editor;
   });
 
   useEffect(() => {
@@ -117,32 +216,176 @@ export function WysiwygEditor({
     if (id) onToggleTask(id);
   }
 
+  function setLink(): void {
+    if (!editor) return;
+    const previous = editor.getAttributes('link').href;
+    const href = window.prompt(t.reports.linkPrompt, typeof previous === 'string' ? previous : 'https://');
+    if (href === null) return;
+    const trimmed = href.trim();
+    if (trimmed === '') {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
+  }
+
+  function onPickImage(event: ChangeEvent<HTMLInputElement>): void {
+    const files = event.target.files;
+    event.target.value = '';
+    if (files) void ingestFiles(files);
+  }
+
+  const canEdit = editable && !uploading;
+
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col" data-testid="report-wysiwyg" onClick={onClick}>
-      <div className="mb-4 flex shrink-0 items-center gap-0.5">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-surface"
+      data-testid="report-wysiwyg"
+      data-region="report-editor"
+      onClick={onClick}
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b border-border px-2 py-1.5">
+        <span className="mr-2 px-1 text-[length:var(--text-caption)] text-muted">
+          {t.reports.writeToday}
+        </span>
         <ToolbarBtn
-          label="粗体"
+          label={t.reports.bold}
           active={editor?.isActive('bold') === true}
+          disabled={!canEdit}
           onClick={() => editor?.chain().focus().toggleBold().run()}
         >
           <Icon icon={Bold} size={14} />
         </ToolbarBtn>
         <ToolbarBtn
-          label="小标题"
+          label={t.reports.italic}
+          active={editor?.isActive('italic') === true}
+          disabled={!canEdit}
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
+        >
+          <Icon icon={Italic} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.strike}
+          active={editor?.isActive('strike') === true}
+          disabled={!canEdit}
+          onClick={() => editor?.chain().focus().toggleStrike().run()}
+        >
+          <Icon icon={Strikethrough} size={14} />
+        </ToolbarBtn>
+        <ToolbarSep />
+        <ToolbarBtn
+          label={t.reports.heading}
+          active={editor?.isActive('heading', { level: 1 }) === true}
+          disabled={!canEdit}
+          onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
+        >
+          <Icon icon={Heading1} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.heading2}
           active={editor?.isActive('heading', { level: 2 }) === true}
+          disabled={!canEdit}
           onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
         >
           <Icon icon={Heading2} size={14} />
         </ToolbarBtn>
         <ToolbarBtn
-          label="列表"
+          label={t.reports.quote}
+          active={editor?.isActive('blockquote') === true}
+          disabled={!canEdit}
+          onClick={() => editor?.chain().focus().toggleBlockquote().run()}
+        >
+          <Icon icon={Quote} size={14} />
+        </ToolbarBtn>
+        <ToolbarSep />
+        <ToolbarBtn
+          label={t.reports.bullet}
           active={editor?.isActive('bulletList') === true}
+          disabled={!canEdit}
           onClick={() => editor?.chain().focus().toggleBulletList().run()}
         >
           <Icon icon={List} size={14} />
         </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.ordered}
+          active={editor?.isActive('orderedList') === true}
+          disabled={!canEdit}
+          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+        >
+          <Icon icon={ListOrdered} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.code}
+          active={editor?.isActive('codeBlock') === true}
+          disabled={!canEdit}
+          onClick={() => editor?.chain().focus().toggleCodeBlock().run()}
+        >
+          <Icon icon={Code} size={14} />
+        </ToolbarBtn>
+        <ToolbarSep />
+        <ToolbarBtn label={t.reports.link} active={editor?.isActive('link') === true} disabled={!canEdit} onClick={setLink}>
+          <Icon icon={Link2} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.image}
+          active={false}
+          disabled={!canEdit}
+          onClick={() => imageInputRef.current?.click()}
+        >
+          <Icon icon={ImageIcon} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.attach}
+          active={false}
+          disabled={!canEdit}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Icon icon={Paperclip} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.table}
+          active={editor?.isActive('table') === true}
+          disabled={!canEdit}
+          onClick={() => {
+            if (!editor) return;
+            if (editor.isActive('table')) {
+              editor.chain().focus().deleteTable().run();
+              return;
+            }
+            editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+          }}
+        >
+          <Icon icon={TableIcon} size={14} />
+        </ToolbarBtn>
+        <ToolbarBtn
+          label={t.reports.rule}
+          active={false}
+          disabled={!canEdit}
+          onClick={() => editor?.chain().focus().setHorizontalRule().run()}
+        >
+          <Icon icon={Minus} size={14} />
+        </ToolbarBtn>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          className="hidden"
+          onChange={onPickImage}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={FILE_ACCEPT}
+          className="hidden"
+          onChange={onPickImage}
+        />
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {uploadError ? (
+        <p className="border-b border-border px-3 py-1.5 text-[length:var(--text-caption)] text-danger" role="alert">
+          {uploadError}
+        </p>
+      ) : null}
+      <div className="min-h-[16rem] min-w-0 flex-1 overflow-y-auto px-4 py-3">
         <EditorContent editor={editor} />
       </div>
       {slash && editor ? (
@@ -152,15 +395,21 @@ export function WysiwygEditor({
   );
 }
 
+function ToolbarSep() {
+  return <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />;
+}
+
 function ToolbarBtn({
   children,
   active,
   label,
+  disabled,
   onClick,
 }: {
   children: React.ReactNode;
   active: boolean;
   label: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -168,9 +417,14 @@ function ToolbarBtn({
       type="button"
       aria-label={label}
       aria-pressed={active}
+      disabled={disabled}
       onClick={onClick}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${
-        active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+        disabled
+          ? 'text-muted/40'
+          : active
+            ? 'bg-accent-subtle text-fg'
+            : 'text-muted hover:bg-surface-muted hover:text-fg'
       }`}
     >
       {children}

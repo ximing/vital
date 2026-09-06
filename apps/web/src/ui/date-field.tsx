@@ -80,7 +80,7 @@ export function DateField({
           aria-label={ariaLabel}
           aria-expanded={open}
           onClick={toggleOpen}
-          className={`h-9 min-w-0 flex-1 truncate rounded-xl px-2.5 text-left text-[length:var(--text-meta)] ${
+          className={`h-9 min-w-0 flex-1 truncate rounded-md px-2.5 text-left text-[length:var(--text-meta)] ${
             selectedYmd === '' ? 'text-muted' : 'text-fg'
           } hover:bg-surface-muted`}
         >
@@ -101,7 +101,7 @@ export function DateField({
         ) : null}
       </div>
       {open ? (
-        <div className="absolute right-0 z-[var(--z-dropdown)] mt-1 w-72 rounded-2xl border border-border bg-surface p-3 shadow-[var(--shadow)]">
+        <div className="absolute right-0 z-[var(--z-dropdown)] mt-1 w-72 rounded-xl border border-border bg-elevated p-3 shadow-[var(--shadow)]">
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
@@ -159,7 +159,7 @@ export function DateField({
                   type="time"
                   value={selectedTime}
                   onChange={(e) => onChange(`${selectedYmd}T${e.target.value || '09:00'}`)}
-                  className="h-8 flex-1 rounded-xl border border-border bg-canvas px-2 text-fg"
+                  className="h-8 flex-1 rounded-md border border-border bg-surface-muted px-2 text-fg"
                 />
               </label>
               <button

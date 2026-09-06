@@ -9,22 +9,23 @@ export function EmptyInbox() {
   const [hint, setHint] = useState(false);
 
   return (
-    <div className="flex flex-1 flex-col items-center px-3 py-8 text-center">
-      <EmptyArt />
+    <div className="relative flex flex-1 flex-col items-center px-3 py-8 text-center">
+      <div data-vignette="mineral-garden" aria-hidden="true" className="absolute inset-0" />
+      <EmptyArt className="relative z-10" />
       <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {t.empty.inbox}
       </p>
       <div className="mt-4 flex w-full flex-col gap-2">
         <button
           type="button"
-          className="inline-flex min-h-9 w-full items-center justify-center bg-accent-subtle px-3 text-[length:var(--text-meta)] text-fg transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
+          className="relative z-10 inline-flex min-h-9 w-full items-center justify-center rounded-md px-3 text-[length:var(--text-meta)] text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
           onClick={() => setHint(true)}
         >
           {t.empty.actionExtension}
         </button>
         <button
           type="button"
-          className="inline-flex min-h-9 w-full items-center justify-center px-3 text-[length:var(--text-meta)] text-muted transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+          className="relative z-10 inline-flex min-h-9 w-full items-center justify-center rounded-md px-3 text-[length:var(--text-meta)] text-muted transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
           onClick={() => {
             requestPaste();
             document.getElementById(PASTE_URL_ID)?.focus();

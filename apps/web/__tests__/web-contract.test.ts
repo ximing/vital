@@ -42,6 +42,16 @@ describe('web shell contract', () => {
     expect(client).not.toContain('localStorage');
   });
 
+  it('shell is a viewport-height flex row so rail and library span the window', () => {
+    const shell = read('src/shell/Shell.tsx');
+    expect(shell).toContain('h-dvh');
+    expect(shell).toContain('overflow-hidden');
+    expect(shell).not.toContain('fixed inset-y-0');
+    const pane = read('src/shell/SecondaryPane.tsx');
+    expect(pane).toContain('h-full');
+    expect(pane).not.toContain('fixed inset-y-0');
+  });
+
   it('todos live under features/todos with smart:today and keyboard keys', () => {
     const app = read('src/App.tsx');
     expect(app).toContain('/todos/lists/:listId');
@@ -58,6 +68,7 @@ describe('web shell contract', () => {
   it('inbox lives under features/inbox with reader, convert, and empty copy', () => {
     const app = read('src/App.tsx');
     expect(app).toContain('/inbox/:id');
+    expect(app).toContain('/auth/extension');
     expect(app).toContain('InboxWorkspace');
     expect(app).toContain('InboxReader');
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
@@ -104,7 +115,7 @@ describe('web shell contract', () => {
     expect(palette).toContain('isPaletteToggle');
     expect(palette).toContain("event.key === 'k'");
     const search = read('src/features/search/SearchPage.tsx');
-    expect(search).toContain(".search({ q, limit: 20 })");
+    expect(search).toContain('.search({ q, limit: 20 })');
     const copy = read('src/copy.ts');
     expect(copy).toContain('输入关键词搜任务、稍后读和报告。');
   });

@@ -135,6 +135,13 @@ describe('todos workspace', () => {
     resetTodosUi();
   });
 
+  it('keeps today in a focus canvas and does not reserve an empty detail pane', async () => {
+    renderAt('/todos/lists/smart:today');
+    expect(await screen.findByRole('main')).toHaveAttribute('data-region', 'focus-canvas');
+    expect(screen.queryByLabelText(t.todos.pickTask)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(t.todos.quickAddPlaceholder)).toHaveClass('field-focus');
+  });
+
   it('shows spec empty copy on today', async () => {
     renderAt('/todos/lists/smart:today');
     expect(await screen.findByText(t.empty.today)).toBeInTheDocument();
@@ -177,6 +184,10 @@ describe('todos workspace', () => {
     });
     renderAt('/todos/lists/smart:today');
     expect(await screen.findByText('昨天没做完')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '昨天没做完' })).toHaveAttribute(
+      'data-density',
+      'task-row',
+    );
     expect(screen.getByText(t.todos.overdue)).toBeInTheDocument();
     const overdueHead = screen.getByText(t.todos.overdue);
     const todayHeads = screen.getAllByText(t.lists.today);

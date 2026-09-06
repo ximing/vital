@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   changePasswordInputSchema,
+  chromeExtensionIdSchema,
+  exchangeExtensionAuthInputSchema,
   loginInputSchema,
   registerInputSchema,
   updateMeInputSchema,
@@ -34,6 +36,21 @@ describe('registerInputSchema', () => {
         displayName: 'A',
       }),
     ).toThrow();
+  });
+
+  it('accepts a 32-char chrome extension id and rejects others', () => {
+    expect(chromeExtensionIdSchema.parse('abcdefghijklmnopabcdefghijklmnop')).toBe(
+      'abcdefghijklmnopabcdefghijklmnop',
+    );
+    expect(chromeExtensionIdSchema.safeParse('not-an-id').success).toBe(false);
+    expect(chromeExtensionIdSchema.safeParse('q'.repeat(32)).success).toBe(false);
+  });
+
+  it('requires a long one-time extension auth code', () => {
+    expect(exchangeExtensionAuthInputSchema.parse({ code: 'a'.repeat(32) }).code).toBe(
+      'a'.repeat(32),
+    );
+    expect(exchangeExtensionAuthInputSchema.safeParse({ code: 'short' }).success).toBe(false);
   });
 
   it('accepts 128-char password', () => {

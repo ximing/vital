@@ -56,7 +56,10 @@ function clip(value: string | null | undefined, max: number): string | null {
   return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
 }
 
-function htmlOnWrite(html: string | null | undefined, text: string | null | undefined): string | null {
+function htmlOnWrite(
+  html: string | null | undefined,
+  text: string | null | undefined,
+): string | null {
   if (html !== undefined && html !== null) {
     const clean = sanitizeExtractedHtml(html);
     return clean === '' ? null : clean;
@@ -156,7 +159,10 @@ export async function listInbox(userId: string, query: ListInboxQuery): Promise<
     const t = new Date(cur.t);
     where = and(
       where,
-      or(lt(inboxItems.capturedAt, t), and(eq(inboxItems.capturedAt, t), sql`${inboxItems.id} < ${cur.id}`)),
+      or(
+        lt(inboxItems.capturedAt, t),
+        and(eq(inboxItems.capturedAt, t), sql`${inboxItems.id} < ${cur.id}`),
+      ),
     ) as SQL;
   }
   const rows = await getDb()
@@ -255,10 +261,10 @@ export async function createInbox(
     if (stored.id !== id) {
       const replay = replayOf(stored.idempotencyResponse ?? null);
       if (replay && isInboxItemBody(replay.body)) {
-        return { status: replay.status, item: replay.body };
+        return { status: 200, item: replay.body };
       }
       const current = await dtoOf(stored);
-      return { status: 201, item: current };
+      return { status: 200, item: current };
     }
     const created = await dtoOf(stored);
     const payload: InboxIdempotencyResponse = { status: 201, body: created };
@@ -410,5 +416,3 @@ export async function convertInbox(
   const updated = await getOwnedInboxOr404(userId, id);
   return { created: true, result: { inbox: await dtoOf(updated), task } };
 }
-
-

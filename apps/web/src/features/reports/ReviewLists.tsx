@@ -78,14 +78,10 @@ export function ReviewLists({
 function Pill({ label, value }: { label: string; value: number }) {
   return (
     <div
-      className={`flex items-baseline gap-1.5 rounded-2xl px-3 py-2 ${
-        value > 0 ? 'bg-accent-subtle' : 'bg-surface shadow-[inset_0_0_0_1px_var(--border-subtle)]'
-      }`}
+      className="flex items-baseline gap-1.5 text-[length:var(--text-caption)] text-muted"
     >
-      <span className="text-[length:var(--text-title)] font-semibold tabular-nums leading-none">
-        {value}
-      </span>
-      <span className="text-[length:var(--text-caption)] text-muted">{label}</span>
+      <span className="font-semibold tabular-nums text-fg">{value}</span>
+      <span>{label}</span>
     </div>
   );
 }

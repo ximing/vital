@@ -46,12 +46,10 @@ const REPORT_ICONS = {
 
 export function SecondaryPane({
   section,
-  left,
   width,
   onResize,
 }: {
   section: AppSection;
-  left: number;
   width: number;
   onResize: (width: number) => void;
 }) {
@@ -86,8 +84,9 @@ export function SecondaryPane({
 
   return (
     <aside
-      className="fixed inset-y-0 z-[var(--z-sticky)] flex flex-col border-r border-border bg-canvas"
-      style={{ left, width }}
+      data-region="library"
+      className="relative flex h-full shrink-0 flex-col bg-surface"
+      style={{ width }}
       aria-label={title}
     >
       <div className="shrink-0 px-4 pb-2 pt-5">
@@ -110,7 +109,7 @@ export function SecondaryPane({
         role="separator"
         aria-orientation="vertical"
         aria-label={t.rail.resize}
-        className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize hover:bg-accent/40"
+        className="absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize hover:bg-accent focus-visible:bg-accent"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

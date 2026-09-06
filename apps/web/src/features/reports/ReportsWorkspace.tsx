@@ -21,6 +21,7 @@ import {
 } from './model';
 import { useReportActions, useReportQuery, useReportReviewQuery } from './queries';
 import { useAuth } from '@/services/auth.service';
+import { ReportsCalendar } from './ReportsCalendar';
 import { ReportsOverview } from './Overview';
 import { ReviewLists } from './ReviewLists';
 import { reportUi } from './report-ui.service';
@@ -358,119 +359,108 @@ export function ReportsWorkspace() {
   const error = id === '' ? null : reportQuery.error;
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
-      <div className="flex min-h-0 w-full flex-1 flex-col px-8 pt-8 xl:px-10">
-        <header className="flex shrink-0 items-end justify-between gap-3 pb-2">
-          <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-            {t.reports.kicker}
-          </p>
-          <span className="text-[length:var(--text-caption)] text-muted" role="status">
-            {session?.saveState === 'saving'
-              ? t.reports.saving
-              : session?.saveState === 'saved' && !dirty
-                ? t.reports.saved
-                : null}
-          </span>
-        </header>
+    <div className="flex h-full min-h-0 flex-1 flex-col lg:flex-row">
+      <main
+        id="main"
+        data-region="reflection-canvas"
+        className="order-2 flex min-h-0 min-w-0 flex-1 flex-col bg-canvas lg:order-1"
+      >
+        <div className="flex w-full max-w-[45rem] flex-1 flex-col">
+          <header className="flex shrink-0 items-end justify-between gap-3 pb-2">
+            <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              {t.reports.kicker}
+            </p>
+            <span className="text-[length:var(--text-caption)] text-muted" role="status">
+              {session?.saveState === 'saving'
+                ? t.reports.saving
+                : session?.saveState === 'saved' && !dirty
+                  ? t.reports.saved
+                  : null}
+            </span>
+          </header>
 
-        {!online ? (
-          <div className="pt-2">
-            <Banner>{t.todos.offline}</Banner>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="flex items-center gap-3 py-2">
-            <Banner>{humanError(error)}</Banner>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void reportQuery.refetch();
-                void reviewQuery.refetch();
-              }}
-            >
-              {t.reports.retry}
-            </Button>
-          </div>
-        ) : null}
-
-        {session?.saveError ? (
-          <div className="py-2">
-            <Banner>{session.saveError}</Banner>
-          </div>
-        ) : null}
-
-        {session?.conflict ? (
-          <div className="flex flex-wrap items-center gap-3 py-2">
-            <Banner>{t.reports.conflict}</Banner>
-            <Button variant="ghost" onClick={() => void reloadRemote()}>
-              {t.reports.reload}
-            </Button>
-            <Button
-              variant="quiet"
-              onClick={() => patchLive((s) => ({ ...s, conflict: false, blockSave: true }))}
-            >
-              {t.reports.keepLocal}
-            </Button>
-          </div>
-        ) : null}
-
-        {session?.remoteToast && !session.conflict ? (
-          <div className="flex flex-wrap items-center gap-3 py-2" role="status">
-            <p className="text-[length:var(--text-meta)] text-muted">{t.reports.remoteUpdated}</p>
-            <Button variant="ghost" onClick={() => void reloadRemote()}>
-              {t.reports.reload}
-            </Button>
-          </div>
-        ) : null}
-
-        {id === '' ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-          <ReportsOverview
-            type={typeParam}
-            weekStartsOn={weekStartsOn}
-            timeZone={timeZone}
-            onPick={(ymd) => void openPeriod(typeParam, ymd)}
-          />
-          </div>
-        ) : loading || !session || session.id !== id ? (
-          <div className="flex-1 py-10" aria-busy="true" aria-label={t.reports.loading}>
-            <div className="skeleton-pulse mb-4 h-10 rounded-2xl" />
-            <div className="grid h-[28rem] gap-8 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
-              <div className="skeleton-pulse rounded-2xl" />
-              <div className="skeleton-pulse rounded-[1.5rem]" />
+          {!online ? (
+            <div className="pt-2">
+              <Banner>{t.todos.offline}</Banner>
             </div>
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col pb-8 pt-4">
-            <input
-              aria-label={t.reports.title}
-              value={session.draftTitle}
-              disabled={!online || session.filling}
-              onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
-              className="mb-6 w-full shrink-0 bg-transparent text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.04em] text-fg outline-none"
-            />
-            <div className="grid min-h-0 flex-1 gap-8 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)] lg:items-stretch">
-              <aside className="order-2 min-h-0 min-w-0 lg:order-1">
-                {reviewQuery.data ? (
-                  <div className="h-full overflow-y-auto rounded-[1.5rem] bg-surface px-4 py-4 shadow-[var(--shadow)] sm:px-5 sm:py-5">
-                    <ReviewLists
-                      review={reviewQuery.data}
-                      onToggleTask={(task) => void toggleReviewTask(task)}
-                      onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
-                      onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
-                    />
-                  </div>
-                ) : (
-                  <div className="skeleton-pulse h-full min-h-40 rounded-[1.5rem]" aria-busy="true" />
-                )}
-              </aside>
-              <div className="report-paper order-1 flex min-h-[22rem] min-w-0 flex-col rounded-[1.5rem] bg-surface px-5 py-5 shadow-[var(--shadow)] sm:px-8 sm:py-7 lg:order-2 lg:min-h-0">
-                <p className="mb-4 shrink-0 text-[length:var(--text-caption)] text-muted">
-                  {t.reports.writeToday}
-                </p>
+          ) : null}
+
+          {error ? (
+            <div className="flex items-center gap-3 py-2">
+              <Banner>{humanError(error)}</Banner>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  void reportQuery.refetch();
+                  void reviewQuery.refetch();
+                }}
+              >
+                {t.reports.retry}
+              </Button>
+            </div>
+          ) : null}
+
+          {session?.saveError ? (
+            <div className="py-2">
+              <Banner>{session.saveError}</Banner>
+            </div>
+          ) : null}
+
+          {session?.conflict ? (
+            <div className="flex flex-wrap items-center gap-3 py-2">
+              <Banner>{t.reports.conflict}</Banner>
+              <Button variant="ghost" onClick={() => void reloadRemote()}>
+                {t.reports.reload}
+              </Button>
+              <Button
+                variant="quiet"
+                onClick={() => patchLive((s) => ({ ...s, conflict: false, blockSave: true }))}
+              >
+                {t.reports.keepLocal}
+              </Button>
+            </div>
+          ) : null}
+
+          {session?.remoteToast && !session.conflict ? (
+            <div className="flex flex-wrap items-center gap-3 py-2" role="status">
+              <p className="text-[length:var(--text-meta)] text-muted">{t.reports.remoteUpdated}</p>
+              <Button variant="ghost" onClick={() => void reloadRemote()}>
+                {t.reports.reload}
+              </Button>
+            </div>
+          ) : null}
+
+          {id === '' ? (
+            <ReportsOverview type={typeParam} onPick={(ymd) => void openPeriod(typeParam, ymd)} />
+          ) : loading || !session || session.id !== id ? (
+            <div className="flex-1 py-10" aria-busy="true" aria-label={t.reports.loading}>
+              <div className="skeleton-pulse mb-4 h-10 rounded-lg" />
+              <div className="skeleton-pulse mb-8 h-32 rounded-lg" />
+              <div className="skeleton-pulse h-64 rounded-lg" />
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1 flex-col gap-8 pt-4">
+              <input
+                aria-label={t.reports.title}
+                value={session.draftTitle}
+                disabled={!online || session.filling}
+                onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
+                className="w-full shrink-0 bg-transparent text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em] text-fg outline-none"
+              />
+              {reviewQuery.data ? (
+                <ReviewLists
+                  review={reviewQuery.data}
+                  onToggleTask={(task) => void toggleReviewTask(task)}
+                  onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
+                  onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
+                />
+              ) : (
+                <div className="skeleton-pulse h-24 rounded-lg" aria-busy="true" />
+              )}
+              <div className="report-paper flex min-h-[16rem] min-w-0 flex-1 flex-col">
                 <WysiwygEditor
                   key={`${session.id}:${session.editorKey}`}
+                  reportId={session.id}
                   bodyMd={extractNotes(session.draftMd, liveType)}
                   editable={online && !session.filling}
                   onChange={(md) =>
@@ -481,9 +471,22 @@ export function ReportsWorkspace() {
                 />
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </main>
+      <aside
+        data-region="calendar-pane"
+        aria-label={t.reports.history}
+        className="order-1 shrink-0 border-b border-border bg-surface px-4 py-3 lg:order-2 lg:h-full lg:w-[17.5rem] lg:border-b-0 lg:border-l lg:px-3 lg:py-5"
+      >
+        <ReportsCalendar
+          type={liveType}
+          selectedStart={report?.periodStart}
+          weekStartsOn={weekStartsOn}
+          timeZone={timeZone}
+          onPick={(ymd) => void openPeriod(liveType, ymd)}
+        />
+      </aside>
     </div>
   );
 }

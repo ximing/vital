@@ -5,6 +5,7 @@ import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
+import { TimeField } from '@/ui/time-field';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
 
@@ -115,10 +116,9 @@ export function NotificationsSection({ heading = true }: { heading?: boolean }) 
         {copy.taskDue}
       </label>
 
-      <Field
+      <TimeField
         className="mt-4"
         label={copy.allDayTime}
-        type="time"
         value={prefs.allDayNotifyTime}
         onChange={(e) =>
           void savePrefs({ ...prefs, allDayNotifyTime: e.target.value.slice(0, 5) })
@@ -126,9 +126,8 @@ export function NotificationsSection({ heading = true }: { heading?: boolean }) 
       />
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <Field
+        <TimeField
           label={copy.quietStart}
-          type="time"
           value={prefs.quietHoursStart ?? ''}
           onChange={(e) => {
             const start = e.target.value === '' ? null : e.target.value.slice(0, 5);
@@ -136,9 +135,8 @@ export function NotificationsSection({ heading = true }: { heading?: boolean }) 
             void savePrefs({ ...prefs, quietHoursStart: start, quietHoursEnd: end });
           }}
         />
-        <Field
+        <TimeField
           label={copy.quietEnd}
-          type="time"
           value={prefs.quietHoursEnd ?? ''}
           disabled={prefs.quietHoursStart === null}
           onChange={(e) => {

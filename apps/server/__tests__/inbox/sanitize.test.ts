@@ -11,6 +11,13 @@ describe('sanitizeExtractedHtml', () => {
     expect(clean).not.toContain('javascript:');
     expect(clean).toContain('https://ok.example');
   });
+
+  it('keeps relative upload paths so rehosted images survive write', () => {
+    const clean = sanitizeExtractedHtml(
+      '<p><img src="/api/v1/uploads/11111111-1111-4111-8111-111111111111" alt="h"></p>',
+    );
+    expect(clean).toContain('/api/v1/uploads/11111111-1111-4111-8111-111111111111');
+  });
 });
 
 describe('escapeParagraph', () => {

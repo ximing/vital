@@ -176,20 +176,21 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   ];
 
   return (
-    <div className="flex min-h-screen bg-canvas">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col px-8 pt-8 xl:px-10">
+    <div className="flex min-h-full bg-canvas">
+      <main id="main" data-region="focus-canvas" className="flex min-h-full min-w-0 flex-1 flex-col">
+          <div className={view === 'list' ? 'mx-auto flex w-full max-w-[57.5rem] min-h-0 flex-1 flex-col' : 'flex min-h-0 min-w-0 flex-1 flex-col'}>
           <header className="flex flex-wrap items-end justify-between gap-3 pb-1">
             <div className="min-w-0">
               <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
                 {kicker}
               </p>
-              <h1 className="truncate text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.04em]">
+              <h1 className="truncate text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
                 {title}
               </h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div
-                className="flex rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]"
+                className="flex h-9 rounded-md bg-surface p-0.5"
                 role="tablist"
                 aria-label={t.nav.todos}
               >
@@ -199,7 +200,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                     to={viewHref(tab.id, listId)}
                     role="tab"
                     aria-selected={view === tab.id}
-                    className={`inline-flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+                    className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
                       view === tab.id ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
                     }`}
                   >
@@ -221,7 +222,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                   onChange={(e) => setListFilter(e.target.value)}
                   placeholder={t.todos.filterPlaceholder}
                   aria-label={t.todos.filterPlaceholder}
-                  className="h-8 w-44 rounded-xl border border-border bg-surface py-0 pl-8 pr-3 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
+                  className="h-10 w-44 rounded-md border border-border bg-surface py-0 pl-8 pr-3 text-[length:var(--text-meta)] text-fg placeholder:text-muted field-focus"
                 />
               </label>
             </div>
@@ -305,7 +306,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
               />
             )}
           </div>
-      </div>
+          </div>
+      </main>
 
       {detailOpen && detailTask ? (
         <TaskDetail
@@ -327,16 +329,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           }}
           onCreateTag={async (name) => actions.createTag.mutateAsync(name)}
         />
-      ) : (
-        <aside
-          className="flex h-screen w-detail shrink-0 flex-col border-l border-border bg-surface"
-          aria-label={t.todos.pickTask}
-        >
-          <div className="flex flex-1 items-center justify-center px-6 text-center text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-            {t.todos.pickTask}
-          </div>
-        </aside>
-      )}
+      ) : null}
 
       <UndoToast onUndo={() => void actions.undoComplete()} />
     </div>

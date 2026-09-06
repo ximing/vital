@@ -67,4 +67,22 @@ describe('search page', () => {
     await waitFor(() => expect(client.search).toHaveBeenCalledWith({ q: '稍后', limit: 20 }));
     expect(await screen.findByText('一篇稍后读')).toBeInTheDocument();
   });
+
+  it('uses a wide search canvas instead of shrinking to its empty-state content', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <RabRoot>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <SearchPage />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RabRoot>,
+    );
+
+    const canvas = container.firstElementChild;
+    expect(canvas).toHaveAttribute('data-region', 'search-canvas');
+    expect(canvas).toHaveClass('w-full', 'max-w-5xl');
+    expect(screen.getByLabelText(t.search.placeholder)).toHaveClass('w-full');
+  });
 });

@@ -84,7 +84,7 @@ export function InboxReader() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas">
+    <main id="main" data-region="reading-canvas" className="flex min-h-full flex-1 flex-col bg-canvas">
       <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-canvas/95 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap items-center gap-1">
@@ -182,7 +182,8 @@ export function InboxReader() {
         </p>
       ) : null}
 
-      <div className="mx-auto w-full max-w-[42rem] flex-1 px-4 py-8">
+      <div className="reader-progress w-full" aria-hidden="true" />
+      <div className="mx-auto w-full max-w-[43.75rem] flex-1 px-4 py-8">
         {query.isLoading ? (
           <InboxSkeleton />
         ) : !item ? (
@@ -223,6 +224,6 @@ export function InboxReader() {
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }

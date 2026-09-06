@@ -120,3 +120,21 @@ export interface AuthResponse {
   user: UserProfile;
   tokens: AuthTokens;
 }
+
+/** Chrome MV3 IDs are 32 chars in a–p. */
+export const chromeExtensionIdSchema = z
+  .string()
+  .length(32)
+  .regex(/^[a-p]{32}$/);
+export type ChromeExtensionId = z.infer<typeof chromeExtensionIdSchema>;
+
+export const exchangeExtensionAuthInputSchema = z.object({
+  code: z.string().min(20).max(128),
+});
+export type ExchangeExtensionAuthInput = z.infer<typeof exchangeExtensionAuthInputSchema>;
+
+export const extensionAuthCodeResponseSchema = z.object({
+  code: z.string().min(20).max(128),
+  expiresIn: z.number().int().positive(),
+});
+export type ExtensionAuthCodeResponse = z.infer<typeof extensionAuthCodeResponseSchema>;

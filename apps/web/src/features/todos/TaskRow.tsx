@@ -75,13 +75,14 @@ export function TaskRow({
       aria-label={task.title}
       aria-selected={selected}
       data-task-id={task.id}
+      data-density="task-row"
       draggable={onDragStart !== undefined}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
       onClick={onSelect}
       onDoubleClick={onOpen}
-      className={`flex min-h-[var(--touch-min)] cursor-pointer items-start gap-3 rounded-2xl px-3 py-2.5 transition-[background-color] duration-[var(--ease-out)] ${
+      className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
         selected ? 'bg-surface-muted' : 'hover:bg-surface-muted'
       } ${depth === 1 ? 'ml-8' : ''}`}
     >
@@ -109,7 +110,7 @@ export function TaskRow({
             </span>
           ) : null}
           {namedTags.map((tag) => (
-            <span key={tag.id} className="rounded-full bg-surface-muted px-2 text-muted">
+            <span key={tag.id} className="rounded-sm bg-surface-muted px-1.5 text-[length:var(--text-caption)] text-muted">
               {tag.name}
             </span>
           ))}

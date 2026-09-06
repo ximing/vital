@@ -64,6 +64,36 @@ describe('createVitalClient auth + upload methods', () => {
     expect(calls[2]?.body).toEqual({});
   });
 
+  it('issues and exchanges extension auth codes', async () => {
+    const store = memoryStore({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
+    const urls: string[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        const u = urlOf(url);
+        urls.push(`${init?.method ?? 'GET'} ${u}`);
+        if (u.endsWith('/extension/code')) {
+          return respond(201, { code: 'c'.repeat(32), expiresIn: 120 });
+        }
+        return respond(200, {
+          user,
+          tokens: { accessToken: 'a2', refreshToken: 'r2', expiresIn: 900 },
+        });
+      },
+    });
+    const issued = await client.createExtensionAuthCode();
+    expect(issued.code).toHaveLength(32);
+    const exchanged = await client.exchangeExtensionAuth({ code: issued.code });
+    expect(exchanged.tokens.refreshToken).toBe('r2');
+    expect(store.tokens?.refreshToken).toBe('r2');
+    expect(urls).toEqual([
+      'POST http://x/api/v1/auth/extension/code',
+      'POST http://x/api/v1/auth/extension/exchange',
+    ]);
+  });
+
   it('cookie login does not persist a leaked refreshToken string', async () => {
     const store = memoryStore();
     const client = createVitalClient({
@@ -183,6 +213,7 @@ describe('createVitalClient auth + upload methods', () => {
   it('inbox extract/create/assets/convert methods hit the spec routes', async () => {
     const store = memoryStore({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
     const calls: { method: string; url: string; body: unknown; idem?: string }[] = [];
+    let inboxPosts = 0;
     const client = createVitalClient({
       baseUrl: 'http://x',
       authMode: 'bearer',
@@ -205,10 +236,25 @@ describe('createVitalClient auth + upload methods', () => {
         if (idem !== undefined) rec.idem = idem;
         calls.push(rec);
         if (init?.method === 'DELETE') return respond204();
+        if (u.endsWith('/api/v1/inbox') && (init?.method ?? 'GET') === 'POST') {
+          inboxPosts += 1;
+          return respond(inboxPosts === 1 ? 201 : 200, { id: 'i1' });
+        }
         return respond(200, { id: 'i1' });
       },
     });
     await client.extractInbox({ url: 'https://example.com/a' });
+    const created = await client.createInboxResult(
+      { title: 'A', originalUrl: 'https://example.com/a', source: 'extension' },
+      'a'.repeat(64),
+    );
+    expect(created.created).toBe(true);
+    expect(created.item.id).toBe('i1');
+    const replay = await client.createInboxResult(
+      { title: 'A', originalUrl: 'https://example.com/a', source: 'extension' },
+      'a'.repeat(64),
+    );
+    expect(replay.created).toBe(false);
     await client.createInbox(
       { title: 'A', originalUrl: 'https://example.com/a', source: 'extension' },
       'a'.repeat(64),
@@ -225,6 +271,8 @@ describe('createVitalClient auth + upload methods', () => {
     await client.convertInbox('i1');
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       'POST http://x/api/v1/inbox/extract',
+      'POST http://x/api/v1/inbox',
+      'POST http://x/api/v1/inbox',
       'POST http://x/api/v1/inbox',
       'PATCH http://x/api/v1/inbox/i1/assets',
       'POST http://x/api/v1/inbox/i1/convert',

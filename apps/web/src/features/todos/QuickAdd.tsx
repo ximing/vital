@@ -40,7 +40,7 @@ export function QuickAdd({
         disabled={disabled}
         placeholder={hint ?? t.todos.quickAddPlaceholder}
         aria-label={hint ?? t.todos.quickAddPlaceholder}
-        className="h-12 w-full rounded-2xl border border-border bg-surface px-4 text-fg shadow-[var(--shadow)] placeholder:text-muted outline-none transition-[border-color,box-shadow] duration-[var(--ease-out)] focus:border-focus focus:shadow-[0_0_0_4px_var(--bg-accent-subtle)]"
+        className="field-focus h-10 w-full rounded-md border-0 bg-surface-muted px-3 text-fg shadow-none placeholder:text-muted outline-none transition-[border-color,box-shadow,background-color] duration-[var(--ease-out)] focus:border focus:border-border focus:bg-surface"
       />
     </form>
   );

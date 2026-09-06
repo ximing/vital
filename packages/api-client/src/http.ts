@@ -145,7 +145,7 @@ export class Http {
     }
   }
 
-  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  private async send(path: string, options: RequestOptions = {}): Promise<Response> {
     const first = await this.doFetch(path, options);
     if (first.status === 401 && (await this.shouldAttemptRefresh(options))) {
       const refreshed = await this.refresh();
@@ -156,10 +156,22 @@ export class Http {
         }
         throw await toApiError(second);
       }
-      return parseBody<T>(second);
+      return second;
     }
     if (!first.ok) throw await toApiError(first);
-    return parseBody<T>(first);
+    return first;
+  }
+
+  async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    return parseBody<T>(await this.send(path, options));
+  }
+
+  async requestWithStatus(
+    path: string,
+    options: RequestOptions = {},
+  ): Promise<{ status: number; data: unknown }> {
+    const res = await this.send(path, options);
+    return { status: res.status, data: await parseBody(res) };
   }
 
   /**

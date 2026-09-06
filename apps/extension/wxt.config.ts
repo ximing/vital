@@ -27,7 +27,9 @@ export default defineConfig({
   },
   manifest: () => {
     const apiUrl = process.env.WXT_API_URL ?? 'http://localhost:3010';
+    const webUrl = process.env.WXT_WEB_URL ?? 'http://localhost:5180';
     const s3 = process.env.WXT_S3_ENDPOINT ?? 'https://s3.aimo.plus';
+    const webMatches = withLocalhostAlias(originPattern(webUrl));
     const hostPermissions = [...withLocalhostAlias(originPattern(apiUrl)), originPattern(s3)];
     return {
       name: 'Vital',
@@ -35,6 +37,17 @@ export default defineConfig({
       minimum_chrome_version: '116',
       permissions: ['storage', 'activeTab', 'scripting', 'contextMenus', 'offscreen'],
       host_permissions: hostPermissions,
+      externally_connectable: { matches: webMatches },
+      web_accessible_resources: [{ resources: ['options.html'], matches: webMatches }],
+      commands: {
+        'save-page': {
+          suggested_key: { default: 'Alt+Shift+V' },
+          description: '保存当前页到 Vital',
+        },
+        'save-and-edit': {
+          description: '保存并编辑',
+        },
+      },
       action: {
         default_title: '保存到 Vital',
         default_icon: {

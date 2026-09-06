@@ -59,7 +59,7 @@ export function SearchPage() {
   const empty = q === '' || items === null;
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-12">
+    <div data-region="search-canvas" className="mx-auto w-full max-w-5xl px-8 py-12 xl:px-10">
       <EmptyArt />
       <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
         {t.nav.search}

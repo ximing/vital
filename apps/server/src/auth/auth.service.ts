@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   DEFAULT_NOTIFICATION_PREFS,
   hhmmSchema,
@@ -8,6 +8,7 @@ import {
   type AuthMode,
   type AuthResponse,
   type ChangePasswordInput,
+  type ExtensionAuthCodeResponse,
   type LoginInput,
   type NotificationPrefs,
   type OnboardingState,
@@ -16,11 +17,11 @@ import {
   type UpdateOnboardingInput,
   type UserProfile,
 } from '@vital/dto';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
-import { lists, users, type User } from '../db/schema.js';
+import { extensionAuthCodes, lists, users, type User } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { inboxListValues } from '../lists/lists.service.js';
 import { logger } from '../utils/logger.js';
@@ -226,6 +227,57 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
   }
   await getDb().update(users).set(patch).where(eq(users.id, userId));
   return getProfile(userId);
+}
+
+const EXTENSION_CODE_TTL_SECONDS = 120;
+
+function sha256(input: string): string {
+  return createHash('sha256').update(input).digest('hex');
+}
+
+export async function createExtensionAuthCode(userId: string): Promise<ExtensionAuthCodeResponse> {
+  await getUserEntity(userId);
+  const code = randomBytes(32).toString('base64url');
+  const now = new Date();
+  await getDb()
+    .insert(extensionAuthCodes)
+    .values({
+      id: randomUUID(),
+      userId,
+      codeHash: sha256(code),
+      expiresAt: new Date(now.getTime() + EXTENSION_CODE_TTL_SECONDS * 1000),
+      usedAt: null,
+      createdAt: now,
+    });
+  return { code, expiresIn: EXTENSION_CODE_TTL_SECONDS };
+}
+
+export async function exchangeExtensionAuthCode(
+  code: string,
+  deviceInfo?: string,
+): Promise<{ response: AuthResponse; refreshToken: string }> {
+  const hash = sha256(code);
+  const now = new Date();
+  const claimed = await getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .select()
+      .from(extensionAuthCodes)
+      .where(eq(extensionAuthCodes.codeHash, hash))
+      .limit(1);
+    if (!row || row.usedAt !== null || row.expiresAt.getTime() <= now.getTime()) {
+      throw AppError.of(400, 'AUTH_CODE_INVALID');
+    }
+    const updated = await tx
+      .update(extensionAuthCodes)
+      .set({ usedAt: now })
+      .where(and(eq(extensionAuthCodes.id, row.id), isNull(extensionAuthCodes.usedAt)))
+      .returning({ userId: extensionAuthCodes.userId });
+    const claimedRow = updated[0];
+    if (!claimedRow) throw AppError.of(400, 'AUTH_CODE_INVALID');
+    return claimedRow;
+  });
+  const user = await getUserEntity(claimed.userId);
+  return buildAuthResponse(user, 'bearer', deviceInfo ?? 'chrome-extension');
 }
 
 export async function updateOnboarding(

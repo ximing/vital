@@ -1,3 +1,4 @@
+import { LogOut } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -6,6 +7,7 @@ import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
+import { Icon } from '@/ui/icon';
 
 export function AccountSection() {
   const user = useAuth((s) => s.user);
@@ -33,7 +35,7 @@ export function AccountSection() {
 
   return (
     <div>
-      <form onSubmit={(e) => void onSubmit(e)} className="flex max-w-sm flex-col gap-4">
+      <form onSubmit={(e) => void onSubmit(e)} className="flex max-w-xl flex-col gap-4">
         <Field
           label={t.settings.displayName}
           name="displayName"
@@ -51,7 +53,8 @@ export function AccountSection() {
           {t.settings.saveProfile}
         </Button>
       </form>
-      <Button variant="quiet" className="mt-10 px-0" onClick={() => void logout()}>
+      <Button variant="danger" className="mt-10 gap-2" onClick={() => void logout()}>
+        <Icon icon={LogOut} size={15} />
         {t.nav.logout}
       </Button>
     </div>

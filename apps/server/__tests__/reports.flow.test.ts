@@ -390,13 +390,14 @@ describe('reports', () => {
     });
     expect(overview.json().totals.wrote).toBe(0);
 
+    const currentBody = current.json() as { id: string; revision: number; bodyMd: string };
     const patched = await injectJson(app, {
       method: 'PATCH',
-      url: `/api/v1/reports/${current.json().id}`,
+      url: `/api/v1/reports/${currentBody.id}`,
       token: alice.token,
       payload: {
-        revision: current.json().revision + 1,
-        bodyMd: `${current.json().bodyMd}留下一句。\n`,
+        revision: currentBody.revision + 1,
+        bodyMd: `${currentBody.bodyMd}留下一句。\n`,
       },
     });
     expect(patched.statusCode).toBe(200);

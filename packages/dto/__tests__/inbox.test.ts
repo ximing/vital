@@ -45,8 +45,8 @@ describe('patchInboxInputSchema', () => {
 });
 
 describe('patchInboxAssetsInputSchema', () => {
-  it('caps assets at 10', () => {
-    expect(MAX_INBOX_ASSETS).toBe(10);
+  it('accepts a full article set and only rejects past the safety ceiling', () => {
+    expect(MAX_INBOX_ASSETS).toBe(200);
     const asset = {
       attachmentId: '11111111-1111-4111-8111-111111111111',
       originalSrc: 'https://x/a.png',
@@ -55,7 +55,12 @@ describe('patchInboxAssetsInputSchema', () => {
     expect(patchInboxAssetsInputSchema.parse({ assets: [asset] }).assets).toHaveLength(1);
     expect(
       patchInboxAssetsInputSchema.safeParse({
-        assets: Array.from({ length: 11 }, (_, i) => ({ ...asset, sortOrder: i })),
+        assets: Array.from({ length: 50 }, (_, i) => ({ ...asset, sortOrder: i })),
+      }).success,
+    ).toBe(true);
+    expect(
+      patchInboxAssetsInputSchema.safeParse({
+        assets: Array.from({ length: 201 }, (_, i) => ({ ...asset, sortOrder: i })),
       }).success,
     ).toBe(false);
   });

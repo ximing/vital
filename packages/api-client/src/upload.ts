@@ -1,6 +1,6 @@
 import {
+  ATTACHMENT_MIME_TYPES,
   ERROR_MESSAGES,
-  IMAGE_MIME_TYPES,
   MAX_IMAGE_BYTES,
   type UploadCompleteResponse,
   type UploadPresignResponse,
@@ -28,7 +28,7 @@ export async function uploadImpl(
   if (input.size > MAX_IMAGE_BYTES) {
     throw new ApiError(413, 'MEDIA_TOO_LARGE', ERROR_MESSAGES.MEDIA_TOO_LARGE);
   }
-  if (!(IMAGE_MIME_TYPES as readonly string[]).includes(input.mime)) {
+  if (!(ATTACHMENT_MIME_TYPES as readonly string[]).includes(input.mime)) {
     throw new ApiError(422, 'MEDIA_MISMATCH', ERROR_MESSAGES.MEDIA_MISMATCH);
   }
 

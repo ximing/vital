@@ -66,6 +66,11 @@ describe('NotificationsSection', () => {
         </MemoryRouter>
       </RabRoot>,
     );
+    const canvas = screen.getByRole('heading', { name: t.settings.title }).parentElement;
+    expect(canvas).toHaveAttribute('data-region', 'settings-canvas');
+    expect(canvas).toHaveClass('w-full', 'max-w-5xl');
+    expect(screen.getByRole('button', { name: t.nav.logout })).toHaveClass('border', 'text-danger');
+    expect(screen.getByLabelText(t.settings.displayName).closest('form')).toHaveClass('max-w-xl');
     expect(screen.getByRole('tab', { name: t.settings.tabs.account })).toHaveAttribute(
       'aria-selected',
       'true',

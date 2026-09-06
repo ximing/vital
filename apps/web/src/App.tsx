@@ -5,6 +5,7 @@ import { OnboardingPage } from '@/features/onboarding';
 import { ReportsWorkspace } from '@/features/reports';
 import { SearchPage } from '@/features/search/SearchPage';
 import { TodosWorkspace } from '@/features/todos';
+import { ExtensionAuthPage } from '@/pages/extension-auth';
 import { LoginPage } from '@/pages/login';
 import { NotFoundPage } from '@/pages/empty';
 import { RegisterPage } from '@/pages/register';
@@ -36,6 +37,14 @@ export function App() {
         element={
           <RequireAuth>
             <OnboardingPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/auth/extension"
+        element={
+          <RequireAuth>
+            <ExtensionAuthPage />
           </RequireAuth>
         }
       />

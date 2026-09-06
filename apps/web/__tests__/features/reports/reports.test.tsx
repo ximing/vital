@@ -35,6 +35,8 @@ vi.mock('@/api/client', async (importOriginal) => {
       syncHead: vi.fn(),
       completeTask: vi.fn(),
       uncompleteTask: vi.fn(),
+      upload: vi.fn(),
+      bindUpload: vi.fn(),
       search: vi.fn(),
       listTasks: vi.fn(),
       listInbox: vi.fn(),
@@ -171,6 +173,13 @@ function renderAt(path: string) {
 }
 
 describe('reports workspace', () => {
+  it('keeps the report editor as the primary reflection canvas', async () => {
+    renderAt('/reports');
+    expect(await screen.findByRole('main')).toHaveAttribute('data-region', 'reflection-canvas');
+    expect(await screen.findByTestId('streak-calendar')).toHaveAttribute('data-context', 'calendar');
+    expect(document.querySelector('[data-region="calendar-pane"]')).not.toBeNull();
+  });
+
   const daily = makeReport({ id: 'r-daily' });
   const weekly = makeReport({
     id: 'r-weekly',
@@ -254,6 +263,13 @@ describe('reports workspace', () => {
     expect(await screen.findByText('写纪要')).toBeInTheDocument();
     expect(screen.getByTestId('report-wysiwyg').textContent).not.toContain('##');
     expect(screen.queryByTestId('report-source')).not.toBeInTheDocument();
+    expect(screen.getByTestId('streak-calendar')).toBeInTheDocument();
+    expect(document.querySelector('[data-region="calendar-pane"]')).not.toBeNull();
+    expect(screen.getByTestId('report-wysiwyg')).toHaveAttribute('data-region', 'report-editor');
+    expect(screen.getByRole('button', { name: t.reports.image })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.reports.table })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.reports.attach })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.reports.link })).toBeInTheDocument();
   });
 
   it('opens a past day from the streak calendar', async () => {
@@ -286,6 +302,7 @@ describe('reports workspace', () => {
       expect(client.getCurrentReport).toHaveBeenCalledWith('daily', '2026-09-05');
     });
     expect(await screen.findByDisplayValue(past.title)).toBeInTheDocument();
+    expect(screen.getByTestId('streak-calendar')).toBeInTheDocument();
   });
 
   it('switches type on overview without opening a document', async () => {
@@ -388,7 +405,7 @@ describe('reports workspace', () => {
       new ApiError(500, 'INTERNAL_ERROR', '服务器内部错误'),
     );
     renderAt('/reports');
-    expect(await screen.findByText('服务器内部错误')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: t.reports.retry })).toBeInTheDocument();
+    expect(await screen.findAllByText('服务器内部错误')).not.toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: t.reports.retry }).length).toBeGreaterThan(0);
   });
 });

@@ -10,6 +10,8 @@ import type {
   CreateNotificationChannelInput,
   CreateInboxInput,
   CurrentReportQuery,
+  ExchangeExtensionAuthInput,
+  ExtensionAuthCodeResponse,
   FillReportInput,
   GetReportQuery,
   ReportOverview,
@@ -67,6 +69,8 @@ export interface VitalClient {
   boot(): Promise<boolean>;
   register(input: RegisterInput): Promise<AuthResponse>;
   login(input: LoginInput): Promise<AuthResponse>;
+  createExtensionAuthCode(): Promise<ExtensionAuthCodeResponse>;
+  exchangeExtensionAuth(input: ExchangeExtensionAuthInput): Promise<AuthResponse>;
   refresh(): Promise<AuthResponse>;
   logout(): Promise<void>;
   me(): Promise<UserProfile>;
@@ -112,12 +116,20 @@ export interface VitalClient {
   extractInbox(input: ExtractInboxInput): Promise<InboxPreview>;
   listInbox(query?: { status?: string; cursor?: string; limit?: number }): Promise<InboxCollection>;
   createInbox(input: CreateInboxInput, idempotencyKey?: string): Promise<InboxItem>;
+  createInboxResult(
+    input: CreateInboxInput,
+    idempotencyKey?: string,
+  ): Promise<{ item: InboxItem; created: boolean }>;
   getInbox(id: string): Promise<InboxItem>;
   patchInbox(id: string, input: PatchInboxInput): Promise<InboxItem>;
   patchInboxAssets(id: string, input: PatchInboxAssetsInput): Promise<InboxItem>;
   deleteInbox(id: string): Promise<void>;
   convertInbox(id: string, input?: ConvertInboxInput): Promise<ConvertInboxResponse>;
-  listReports(query?: { type?: ReportType; cursor?: string; limit?: number }): Promise<ReportCollection>;
+  listReports(query?: {
+    type?: ReportType;
+    cursor?: string;
+    limit?: number;
+  }): Promise<ReportCollection>;
   getCurrentReport(type: ReportType, at?: string): Promise<Report>;
   getReportOverview(type: ReportType, at?: string): Promise<ReportOverview>;
   getReport(id: string, query?: GetReportQuery): Promise<Report>;
@@ -146,6 +158,20 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     skipAuthRefresh: true,
   };
 
+  async function createInboxResult(
+    input: CreateInboxInput,
+    idempotencyKey?: string,
+  ): Promise<{ item: InboxItem; created: boolean }> {
+    const headers: Record<string, string> = {};
+    if (idempotencyKey !== undefined) headers['Idempotency-Key'] = idempotencyKey;
+    const result = await http.requestWithStatus('/api/v1/inbox', {
+      method: 'POST',
+      body: input,
+      ...(idempotencyKey !== undefined ? { headers } : {}),
+    });
+    return { item: result.data as InboxItem, created: result.status === 201 };
+  }
+
   return {
     authMode: options.authMode,
     boot: () => http.boot(),
@@ -158,6 +184,16 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       persistAuth(
         options,
         await http.request<unknown>('/api/v1/auth/login', { ...skipAuth, body: input }),
+      ),
+    createExtensionAuthCode: () =>
+      http.request('/api/v1/auth/extension/code', { method: 'POST', body: {} }),
+    exchangeExtensionAuth: async (input) =>
+      persistAuth(
+        options,
+        await http.request<unknown>('/api/v1/auth/extension/exchange', {
+          ...skipAuth,
+          body: input,
+        }),
       ),
     refresh: () => http.refresh(),
     logout: async () => {
@@ -225,19 +261,20 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     getTask: (id) => http.request(`/api/v1/tasks/${id}`),
     patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),
     deleteTask: (id) => http.request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),
-    completeTask: (id) => http.request(`/api/v1/tasks/${id}/complete`, { method: 'POST', body: {} }),
+    completeTask: (id) =>
+      http.request(`/api/v1/tasks/${id}/complete`, { method: 'POST', body: {} }),
     uncompleteTask: (id, input) =>
       http.request(`/api/v1/tasks/${id}/uncomplete`, { method: 'POST', body: input }),
     restoreTask: (id) => http.request(`/api/v1/tasks/${id}/restore`, { method: 'POST', body: {} }),
     reorderTasks: (input) => http.request('/api/v1/tasks/reorder', { method: 'PUT', body: input }),
-    calendar: (query) => http.request('/api/v1/tasks/calendar', { query: { from: query.from, to: query.to } }),
+    calendar: (query) =>
+      http.request('/api/v1/tasks/calendar', { query: { from: query.from, to: query.to } }),
     listTags: () => http.request('/api/v1/tags'),
     createTag: (input) => http.request('/api/v1/tags', { method: 'POST', body: input }),
     patchTag: (id, input) => http.request(`/api/v1/tags/${id}`, { method: 'PATCH', body: input }),
     deleteTag: (id) => http.request(`/api/v1/tags/${id}`, { method: 'DELETE' }),
     search: (input) => http.request('/api/v1/search', { method: 'POST', body: input }),
-    extractInbox: (input) =>
-      http.request('/api/v1/inbox/extract', { method: 'POST', body: input }),
+    extractInbox: (input) => http.request('/api/v1/inbox/extract', { method: 'POST', body: input }),
     listInbox: (query = {}) => {
       const q: Record<string, string | number | boolean | undefined> = {};
       if (query.status !== undefined) q.status = query.status;
@@ -245,17 +282,12 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       if (query.limit !== undefined) q.limit = query.limit;
       return http.request('/api/v1/inbox', { query: q });
     },
-    createInbox: (input, idempotencyKey) => {
-      const headers: Record<string, string> = {};
-      if (idempotencyKey !== undefined) headers['Idempotency-Key'] = idempotencyKey;
-      return http.request('/api/v1/inbox', {
-        method: 'POST',
-        body: input,
-        ...(idempotencyKey !== undefined ? { headers } : {}),
-      });
-    },
+    createInboxResult,
+    createInbox: async (input, idempotencyKey) =>
+      (await createInboxResult(input, idempotencyKey)).item,
     getInbox: (id) => http.request(`/api/v1/inbox/${id}`),
-    patchInbox: (id, input) => http.request(`/api/v1/inbox/${id}`, { method: 'PATCH', body: input }),
+    patchInbox: (id, input) =>
+      http.request(`/api/v1/inbox/${id}`, { method: 'PATCH', body: input }),
     patchInboxAssets: (id, input) =>
       http.request(`/api/v1/inbox/${id}/assets`, { method: 'PATCH', body: input }),
     deleteInbox: (id) => http.request(`/api/v1/inbox/${id}`, { method: 'DELETE' }),

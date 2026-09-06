@@ -87,7 +87,7 @@ describe('theme helper', () => {
   });
 
   it('survives localStorage throws', () => {
-    const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    const spy = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
       throw new Error('blocked');
     });
     expect(getThemeChoice()).toBe('system');

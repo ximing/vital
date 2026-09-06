@@ -35,13 +35,12 @@ export async function fetchImagesInPage(
   return out;
 }
 
-export function showInPageToast(text: string): void {
+export function showInPageToast(text: string, actionLabel?: string, actionUrl?: string): void {
   const id = 'vital-save-toast';
   document.getElementById(id)?.remove();
   const el = document.createElement('div');
   el.id = id;
   el.setAttribute('role', 'status');
-  el.textContent = text;
   el.style.cssText = [
     'position:fixed',
     'z-index:2147483647',
@@ -50,18 +49,32 @@ export function showInPageToast(text: string): void {
     'max-width:min(360px,calc(100vw - 32px))',
     'padding:10px 14px',
     'border-radius:10px',
-    'background:#0e1a24',
-    'color:#ffffff',
+    'background:#1c1914',
+    'color:#fffbf5',
     'font:13px/1.4 system-ui,PingFang SC,Noto Sans SC,sans-serif',
-    'box-shadow:0 8px 24px rgb(14 26 36 / 28%)',
-    'pointer-events:none',
+    'box-shadow:0 8px 24px rgb(28 25 20 / 28%)',
+    'display:flex',
+    'align-items:center',
+    'gap:10px',
+    actionUrl ? 'pointer-events:auto' : 'pointer-events:none',
   ].join(';');
   const accent = document.createElement('span');
   accent.style.cssText =
-    'display:inline-block;width:6px;height:6px;border-radius:99px;background:#1ab3b0;margin-right:8px;vertical-align:middle';
-  el.prepend(accent);
+    'display:inline-block;width:6px;height:6px;border-radius:99px;background:#e8a317;flex:none';
+  const label = document.createElement('span');
+  label.textContent = text;
+  el.append(accent, label);
+  if (actionLabel && actionUrl) {
+    const link = document.createElement('a');
+    link.textContent = actionLabel;
+    link.href = actionUrl;
+    link.target = '_blank';
+    link.rel = 'noreferrer';
+    link.style.cssText = 'color:#e8a317;font-weight:600;text-decoration:none;white-space:nowrap';
+    el.append(link);
+  }
   document.documentElement.appendChild(el);
   window.setTimeout(() => {
     el.remove();
-  }, 2800);
+  }, 4200);
 }

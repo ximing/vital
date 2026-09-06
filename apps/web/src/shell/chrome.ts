@@ -1,8 +1,12 @@
-export const RAIL_EXPANDED = 152;
+export const RAIL_EXPANDED = 56;
 export const RAIL_COLLAPSED = 56;
-export const PANE_MIN = 196;
-export const PANE_MAX = 420;
-export const PANE_DEFAULT = 256;
+export const RAIL_WIDTH = 56;
+export const LIBRARY_MIN = 224;
+export const LIBRARY_MAX = 264;
+export const LIBRARY_DEFAULT = 248;
+export const PANE_MIN = LIBRARY_MIN;
+export const PANE_MAX = LIBRARY_MAX;
+export const PANE_DEFAULT = LIBRARY_DEFAULT;
 
 const RAIL_KEY = 'vital:rail-collapsed';
 const PANE_KEY = 'vital:pane-width';

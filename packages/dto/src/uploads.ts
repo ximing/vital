@@ -18,6 +18,16 @@ export const IMAGE_MIME_TYPES = [
 
 export type ImageMimeType = (typeof IMAGE_MIME_TYPES)[number];
 
+/** Report editor attachments: images plus a small file set. Still no SVG. */
+export const ATTACHMENT_MIME_TYPES = [
+  ...IMAGE_MIME_TYPES,
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+] as const;
+
+export type AttachmentMimeType = (typeof ATTACHMENT_MIME_TYPES)[number];
+
 export const attachmentOwnerTypeSchema = z.enum(['tmp', 'task', 'inbox', 'report']);
 export type AttachmentOwnerType = z.infer<typeof attachmentOwnerTypeSchema>;
 
@@ -30,7 +40,7 @@ export const uploadPresignInputSchema = z
     size: z.number().int().positive(),
   })
   .superRefine((val, ctx) => {
-    if (!(IMAGE_MIME_TYPES as readonly string[]).includes(val.mime)) {
+    if (!(ATTACHMENT_MIME_TYPES as readonly string[]).includes(val.mime)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'MIME_KIND_MISMATCH',

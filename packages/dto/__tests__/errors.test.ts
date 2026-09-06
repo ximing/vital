@@ -22,5 +22,6 @@ describe('ERROR_MESSAGES', () => {
     expect(ERROR_MESSAGES.CHANNEL_NOT_FOUND).toBe('通知渠道不存在');
     expect(ERROR_MESSAGES.CHANNEL_DELIVERY_FAILED).toBe('通知发送失败');
     expect(ERROR_MESSAGES.MEOW_NICKNAME_INVALID).toBe('MeoW 昵称不合法');
+    expect(ERROR_MESSAGES.AUTH_CODE_INVALID).toBe('授权码无效或已过期');
   });
 });

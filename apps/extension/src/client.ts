@@ -1,8 +1,10 @@
 import { ApiError, createVitalClient, fetchPut, type VitalClient } from '@vital/api-client';
-import type { UserProfile } from '@vital/dto';
+import type { AuthResponse, UserProfile } from '@vital/dto';
+import { extensionLoginUrl, isTrustedWebOrigin } from './capture-helpers.js';
 import { API_URL, WEB_URL } from './config.js';
+import { clearDraft, readDraft } from './draft-store.js';
 import { copy } from './i18n.js';
-import type { PanelRequest, PanelResponse } from './messages.js';
+import { isExternalAuthMessage, type PanelRequest, type PanelResponse } from './messages.js';
 import { chromeTokenStore, readProfileJson, storeProfileJson } from './token-store.js';
 
 let client: VitalClient | null = null;
@@ -78,19 +80,34 @@ function errorMessage(err: unknown): string {
   return copy.toastFailed;
 }
 
+async function applyAuthResponse(res: AuthResponse): Promise<PanelResponse> {
+  await persistProfile(res.user);
+  void chrome.runtime.sendMessage({ type: 'session-changed' }).catch(() => undefined);
+  return { ok: true, session: { loggedIn: true, profile: res.user } };
+}
+
+export async function handleExternalAuth(
+  message: unknown,
+  senderUrl: string | undefined,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isTrustedWebOrigin(senderUrl, WEB_URL)) {
+    return { ok: false, error: copy.toastFailed };
+  }
+  if (!isExternalAuthMessage(message)) return { ok: false, error: copy.toastFailed };
+  try {
+    const res = await getClient().exchangeExtensionAuth({ code: message.code });
+    await persistProfile(res.user);
+    void chrome.runtime.sendMessage({ type: 'session-changed' }).catch(() => undefined);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
 export async function handlePanelMessage(message: PanelRequest): Promise<PanelResponse> {
   switch (message.type) {
     case 'session': {
       return { ok: true, session: await getSession() };
-    }
-    case 'login': {
-      try {
-        const res = await getClient().login({ email: message.email, password: message.password });
-        await persistProfile(res.user);
-        return { ok: true, session: { loggedIn: true, profile: res.user } };
-      } catch (err) {
-        return { ok: false, error: errorMessage(err) };
-      }
     }
     case 'logout': {
       try {
@@ -111,6 +128,50 @@ export async function handlePanelMessage(message: PanelRequest): Promise<PanelRe
     case 'open-web': {
       await chrome.tabs.create({ url: `${WEB_URL.replace(/\/$/, '')}/inbox` });
       return { ok: true };
+    }
+    case 'open-login': {
+      await chrome.tabs.create({ url: extensionLoginUrl(WEB_URL, chrome.runtime.id) });
+      return { ok: true };
+    }
+    case 'exchange-code': {
+      try {
+        const res = await getClient().exchangeExtensionAuth({ code: message.code });
+        return applyAuthResponse(res);
+      } catch (err) {
+        return { ok: false, error: errorMessage(err) };
+      }
+    }
+    case 'lists': {
+      try {
+        const collection = await getClient().listLists();
+        return {
+          ok: true,
+          lists: collection.items.filter((list) => list.kind === 'inbox' || list.kind === 'user'),
+        };
+      } catch (err) {
+        return { ok: false, error: errorMessage(err) };
+      }
+    }
+    case 'load-draft': {
+      return { ok: true, draft: await readDraft() };
+    }
+    case 'clear-draft': {
+      await clearDraft();
+      return { ok: true };
+    }
+    case 'commit-draft': {
+      try {
+        const { commitDraft } = await import('./capture.js');
+        await commitDraft({
+          title: message.title,
+          note: message.note,
+          mode: message.mode,
+          listId: message.listId,
+        });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: errorMessage(err) };
+      }
     }
   }
 }

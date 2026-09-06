@@ -25,7 +25,7 @@ export function SettingsPage() {
   const tab = isTab(search.get('tab'));
 
   return (
-    <div className="mx-auto max-w-2xl px-8 py-12">
+    <div data-region="settings-canvas" className="mx-auto w-full max-w-5xl px-8 py-12 xl:px-10">
       <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
         {t.settings.title}
       </h1>

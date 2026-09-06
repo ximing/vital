@@ -19,7 +19,6 @@ export function sanitizeExtractedHtml(html: string): string {
     },
     allowedSchemes: ['http', 'https'],
     allowedSchemesByTag: {
-      img: ['http', 'https'],
       a: ['http', 'https', 'mailto'],
     },
     allowProtocolRelative: false,

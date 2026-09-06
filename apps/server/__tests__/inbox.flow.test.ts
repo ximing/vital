@@ -61,10 +61,7 @@ afterAll(async () => {
   await app.close();
 });
 
-async function readyImage(
-  token: string,
-  size = 1024,
-): Promise<string> {
+async function readyImage(token: string, size = 1024): Promise<string> {
   const presigned = await injectJson(app, {
     method: 'POST',
     url: '/api/v1/uploads/presign',
@@ -105,7 +102,11 @@ describe('inbox', () => {
     expect(preview.extractedHtml).toBeTruthy();
     expect(preview.canonicalUrl).toBe('https://news.example.com/a');
 
-    const listed = await injectJson(app, { method: 'GET', url: '/api/v1/inbox', token: alice.token });
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox',
+      token: alice.token,
+    });
     expect(listed.statusCode).toBe(200);
     expect(listed.json().items).toEqual([]);
 
@@ -153,7 +154,7 @@ describe('inbox', () => {
       headers: { 'idempotency-key': key },
       payload: { title: 'Second should not persist', originalUrl: url, source: 'extension' },
     });
-    expect(second.statusCode).toBe(201);
+    expect(second.statusCode).toBe(200);
     expect(second.json().id).toBe(id);
     expect(second.json().title).toBe('First');
     const rows = await db.select().from(inboxItems).where(eq(inboxItems.userId, alice.id));

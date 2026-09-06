@@ -1,5 +1,6 @@
 import {
   changePasswordInputSchema,
+  exchangeExtensionAuthInputSchema,
   loginInputSchema,
   refreshInputSchema,
   registerInputSchema,
@@ -13,12 +14,15 @@ import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import {
   limitChangePassword,
+  limitExtensionAuth,
   limitLogin,
   limitRefresh,
   limitRegister,
 } from '../plugins/rate-limit.js';
 import {
   changePassword,
+  createExtensionAuthCode,
+  exchangeExtensionAuthCode,
   getProfile,
   loginUser,
   registerUser,
@@ -120,6 +124,27 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     return updateOnboarding(user.id, updateOnboardingInputSchema.parse(req.body));
   });
+
+  app.post(
+    '/api/v1/auth/extension/code',
+    { preHandler: [requireAuth, limitExtensionAuth] },
+    async (req, reply) => {
+      const user = req.user;
+      if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+      const issued = await createExtensionAuthCode(user.id);
+      return reply.code(201).send(issued);
+    },
+  );
+
+  app.post(
+    '/api/v1/auth/extension/exchange',
+    { preHandler: [limitExtensionAuth] },
+    async (req, reply) => {
+      const input = exchangeExtensionAuthInputSchema.parse(req.body);
+      const { response } = await exchangeExtensionAuthCode(input.code, deviceInfoFrom(req));
+      return reply.send(response);
+    },
+  );
 
   app.post(
     '/api/v1/auth/change-password',

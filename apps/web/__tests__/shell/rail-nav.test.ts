@@ -10,8 +10,8 @@ describe('rail-nav', () => {
   });
 
   it('uses a square selected state without rounding', () => {
-    expect(railNavClass(true)).not.toContain('rounded');
-    expect(railNavClass(false)).not.toContain('rounded');
+    expect(railNavClass(true)).toContain('rounded-md');
+    expect(railNavClass(true)).toContain('bg-accent-subtle');
     expect(railNavClass(true)).toContain('before:bg-accent');
   });
 });

@@ -155,7 +155,8 @@ export function TaskDetail({
 
   return (
     <aside
-      className="flex h-screen w-detail shrink-0 flex-col border-l border-border bg-surface"
+      data-region="detail"
+      className="flex h-full min-h-full w-full max-w-[25rem] shrink-0 flex-col bg-elevated"
       aria-label={task.title}
     >
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">

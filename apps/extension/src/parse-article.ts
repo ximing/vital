@@ -1,5 +1,6 @@
 import { Readability } from '@mozilla/readability';
 import { MAX_EXTRACT_HTML_BYTES, MAX_INBOX_ASSETS } from '@vital/dto';
+import { extractSite } from './extractors.js';
 import { clip, escapeParagraph, hostnameOf } from './html.js';
 import { collectArticleImages } from './images.js';
 
@@ -31,24 +32,34 @@ export function parseArticle(html: string, url: string): ParsedArticle {
   let byline: string | null = null;
   let siteName: string | null = null;
 
-  try {
-    const clone = doc.cloneNode(true);
-    if (!(clone instanceof Document)) {
-      throw new Error('clone failed');
+  const site = extractSite(doc, url);
+  if (site !== null && (site.html.trim().length > 20 || site.text.trim().length > 20)) {
+    title = clip(site.title, 500) ?? fallbackTitle;
+    extractedHtml = clip(site.html, MAX_EXTRACT_HTML_BYTES);
+    extractedText = clip(site.text, MAX_EXTRACT_HTML_BYTES);
+    excerpt = clip(site.text, 500);
+    byline = clip(site.byline, 200);
+    siteName = clip(site.siteName, 200);
+  } else {
+    try {
+      const clone = doc.cloneNode(true);
+      if (!(clone instanceof Document)) {
+        throw new Error('clone failed');
+      }
+      const article = new Readability(clone).parse();
+      if (article !== null) {
+        title = clip(article.title, 500) ?? fallbackTitle;
+        extractedHtml = clip(article.content, MAX_EXTRACT_HTML_BYTES);
+        extractedText = clip(article.textContent, MAX_EXTRACT_HTML_BYTES);
+        excerpt = clip(article.excerpt, 500);
+        byline = clip(article.byline, 200);
+        siteName = clip(article.siteName, 200);
+      }
+    } catch {
+      const bodyText = doc.body?.textContent ?? '';
+      extractedText = clip(bodyText.replace(/\s+/g, ' ').trim(), MAX_EXTRACT_HTML_BYTES);
+      excerpt = clip(extractedText, 500);
     }
-    const article = new Readability(clone).parse();
-    if (article !== null) {
-      title = clip(article.title, 500) ?? fallbackTitle;
-      extractedHtml = clip(article.content, MAX_EXTRACT_HTML_BYTES);
-      extractedText = clip(article.textContent, MAX_EXTRACT_HTML_BYTES);
-      excerpt = clip(article.excerpt, 500);
-      byline = clip(article.byline, 200);
-      siteName = clip(article.siteName, 200);
-    }
-  } catch {
-    const bodyText = doc.body?.textContent ?? '';
-    extractedText = clip(bodyText.replace(/\s+/g, ' ').trim(), MAX_EXTRACT_HTML_BYTES);
-    excerpt = clip(extractedText, 500);
   }
 
   if (extractedHtml === null && extractedText !== null) {
