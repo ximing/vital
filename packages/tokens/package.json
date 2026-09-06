@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src/",
+    "lint": "eslint src/ __tests__/",
     "test": "vitest run",
     "raster-icons": "node scripts/raster-icons.mjs",
     "clean": "rm -rf dist"

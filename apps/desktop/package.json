@@ -8,7 +8,7 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "tauri": "tauri",
-    "test": "node --test tauri.contract.test.mjs"
+    "test": "node --test __tests__/tauri.contract.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.9.0",

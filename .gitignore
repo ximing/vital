@@ -6,6 +6,8 @@ build/
 .env.*
 !.env.example
 !.env.production.example
+apps/server/.env.test
+apps/server/.env.production
 .DS_Store
 .expo/
 coverage/

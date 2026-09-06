@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.app.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
-    "lint": "eslint src/ vite.config.ts vitest.config.ts",
+    "lint": "eslint src/ __tests__/ vite.config.ts vitest.config.ts",
     "preview": "vite preview --port 5180 --strictPort",
     "test": "vitest run"
   },

@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "test": "cross-env NODE_ENV=test tsx src/db/migrate.ts && vitest run",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/ tests/",
+    "lint": "eslint src/ __tests__/",
     "migrate": "tsx src/db/migrate.ts",
     "migrate:generate": "drizzle-kit generate",
     "migrate:studio": "drizzle-kit studio",

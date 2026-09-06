@@ -2,8 +2,8 @@
   "extends": "@vital/tsconfig/base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src", "__tests__"]
 }
