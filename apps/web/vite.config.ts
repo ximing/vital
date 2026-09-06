@@ -28,6 +28,7 @@ export default defineConfig({
   // Keep rust compiler output visible when `tauri dev` owns the terminal.
   clearScreen: false,
   server: {
+    host: '127.0.0.1',
     port: 5180,
     strictPort: true,
     proxy: {
