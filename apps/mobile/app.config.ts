@@ -61,6 +61,12 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-secure-store',
+    [
+      'expo-image-picker',
+      {
+        photosPermission: '允许 Vital 选取头像。',
+      },
+    ],
     withEnvReleaseSigning as unknown as string,
   ],
   experiments: { typedRoutes: false },

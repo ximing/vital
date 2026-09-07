@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List } from 'lucide-react-native';
-import type { CalendarInstance, ListId, Task } from '@vital/dto';
+import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List as ListIcon } from 'lucide-react-native';
+import type { CalendarInstance, List, ListId, Tag, Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Icon } from '../../ui/icon';
 import { useAuth } from '../../auth/AuthProvider';
@@ -37,6 +37,8 @@ export function TaskList({
   const styles = useMemo(() => createStyles(t), [t]);
   const auth = useAuth();
   const [items, setItems] = useState<Task[]>([]);
+  const [lists, setLists] = useState<List[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
@@ -68,8 +70,14 @@ export function TaskList({
         const lists = await client.listLists();
         setInboxCreateId(lists.items.find((row) => row.kind === 'inbox')?.id);
       }
-      const page = await client.listTasks({ listId });
+      const [page, listRes, tagRes] = await Promise.all([
+        client.listTasks({ listId }),
+        client.listLists(),
+        client.listTags(),
+      ]);
       setItems(page.items);
+      setLists(listRes.items);
+      setTags(tagRes.items);
       setCursor(page.nextCursor);
       setError(null);
       setOffline(false);
@@ -125,11 +133,20 @@ export function TaskList({
   const end = days[6] ?? weekAnchor;
   const weekHeading = `${Number(start.slice(5, 7))}月${Number(start.slice(8))}日 – ${Number(end.slice(5, 7))}月${Number(end.slice(8))}日`;
 
+  function listNameOf(task: Task): string | undefined {
+    if (!String(listId).startsWith('smart:')) return undefined;
+    const found = lists.find((row) => row.id === task.listId);
+    if (!found) return undefined;
+    return found.kind === 'inbox' ? copy.lists.inbox : found.name;
+  }
+
   function renderRow(task: Task, indent = false) {
     return (
       <TaskRow
         task={task}
         indent={indent}
+        tags={tags}
+        listName={listNameOf(task)}
         onToggle={(row) =>
           void toggleComplete(row, applyTask, {
             user: auth.user,
@@ -173,7 +190,7 @@ export function TaskList({
       <View style={styles.views} accessibilityRole="tablist">
         {(
           [
-            ['list', List, copy.todos.views.list],
+            ['list', ListIcon, copy.todos.views.list],
             ['board', Columns3, copy.todos.views.board],
             ['week', CalendarDays, copy.todos.views.week],
           ] as const
@@ -307,29 +324,9 @@ export function TaskList({
         ListEmptyComponent={<EmptyState title={empty} />}
         renderItem={({ item }) => (
           <View>
-            <TaskRow
-              task={item.task}
-              onToggle={(task) =>
-                void toggleComplete(task, applyTask, {
-                  user: auth.user,
-                  refreshUser: auth.refreshUser,
-                })
-              }
-              onPress={(task) => router.push(`/todos/task/${task.id}`)}
-            />
+            {renderRow(item.task)}
             {item.children.map((child) => (
-              <TaskRow
-                key={child.id}
-                task={child}
-                indent
-                onToggle={(task) =>
-                void toggleComplete(task, applyTask, {
-                  user: auth.user,
-                  refreshUser: auth.refreshUser,
-                })
-              }
-                onPress={(task) => router.push(`/todos/task/${task.id}`)}
-              />
+              <View key={child.id}>{renderRow(child, true)}</View>
             ))}
           </View>
         )}
@@ -369,8 +366,6 @@ const createStyles = (t: Theme) =>
       padding: t.space[1],
       borderRadius: t.radius.md,
       backgroundColor: t.bgSurface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: t.borderSubtle,
     },
     viewTab: {
       flex: 1,

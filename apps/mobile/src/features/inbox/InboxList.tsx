@@ -114,9 +114,9 @@ const createStyles = (t: Theme) =>
     flex: { flex: 1, backgroundColor: t.bgCanvas },
     card: {
       marginHorizontal: t.space[4],
-      marginBottom: t.space[3],
+      marginBottom: t.space[2],
       padding: t.space[4],
-      borderRadius: t.radius.lg,
+      borderRadius: t.radius.md,
       backgroundColor: t.bgSurface,
       gap: t.space[1],
     },

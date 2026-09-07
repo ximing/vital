@@ -1,19 +1,24 @@
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Task } from '@vital/dto';
+import type { Tag, Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { formatDay, isOverdue } from '../lib/format';
+import { isOverdue } from '../lib/format';
+import { dueMeta, isDueSoon, recurrenceMeta, reminderMeta } from '../lib/schedule';
 import { useTheme } from '../theme/use-theme';
 import { PriorityMark, priorityColor } from '../features/todos/priority';
 
 export function TaskRow({
   task,
   indent = false,
+  tags = [],
+  listName,
   onToggle,
   onPress,
 }: {
   task: Task;
   indent?: boolean;
+  tags?: Tag[];
+  listName?: string;
   onToggle: (task: Task) => void;
   onPress: (task: Task) => void;
 }) {
@@ -21,6 +26,13 @@ export function TaskRow({
   const styles = useMemo(() => createStyles(t), [t]);
   const done = task.status === 'done';
   const overdue = isOverdue(task);
+  const soon = isDueSoon(task);
+  const due = dueMeta(task, task.timezone);
+  const reminder = reminderMeta(task, task.timezone);
+  const repeat = recurrenceMeta(task);
+  const namedTags = tags.filter((tag) => task.tagIds.includes(tag.id)).slice(0, 3);
+  const extraTags = Math.max(0, task.tagIds.length - namedTags.length);
+  const note = task.notes.replaceAll(/\s+/g, ' ').trim();
 
   return (
     <View style={[styles.row, indent && styles.indent]}>
@@ -46,12 +58,26 @@ export function TaskRow({
             {task.title}
           </Text>
         </View>
+        {note !== '' ? (
+          <Text style={[styles.note, done && styles.noteDone]} numberOfLines={1}>
+            {note}
+          </Text>
+        ) : null}
         <View style={styles.meta}>
-          {task.dueAt ? (
-            <Text style={[styles.tag, overdue && !done ? styles.overdue : null]}>
-              {formatDay(task.dueAt, task.timezone)}
+          {due ? (
+            <Text style={[styles.secondary, overdue && !done ? styles.overdue : soon ? styles.soon : null]}>
+              {due}
             </Text>
           ) : null}
+          {reminder ? <Text style={styles.muted}>{reminder}</Text> : null}
+          {repeat ? <Text style={styles.muted}>{repeat}</Text> : null}
+          {listName ? <Text style={styles.tertiary}>{listName}</Text> : null}
+          {namedTags.map((tag) => (
+            <Text key={tag.id} style={styles.tertiary}>
+              #{tag.name}
+            </Text>
+          ))}
+          {extraTags > 0 ? <Text style={styles.tertiary}>+{extraTags}</Text> : null}
         </View>
       </Pressable>
     </View>
@@ -97,7 +123,12 @@ const createStyles = (t: Theme) =>
       color: t.fgPrimary,
     },
     titleDone: { color: t.fgMuted, textDecorationLine: 'line-through' },
-    meta: { flexDirection: 'row', gap: t.space[2] },
-    tag: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    note: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    noteDone: { opacity: 0.7 },
+    meta: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
+    secondary: { fontSize: t.type.caption.fontSize, color: t.textSecondary },
+    muted: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    tertiary: { fontSize: t.type.caption.fontSize, color: t.textTertiary },
     overdue: { color: t.statusOverdue },
+    soon: { color: t.statusDueSoon },
   });

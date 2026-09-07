@@ -192,7 +192,7 @@ const createStyles = (t: Theme) =>
       marginHorizontal: t.space[4],
       marginBottom: t.space[2],
       padding: t.space[1],
-      borderRadius: t.radius.lg,
+      borderRadius: t.radius.md,
       backgroundColor: t.bgSurface,
       gap: t.space[1],
     },
@@ -218,7 +218,7 @@ const createStyles = (t: Theme) =>
     statValue: { fontSize: t.type.title.fontSize, fontWeight: '700', color: t.fgPrimary },
     cal: {
       backgroundColor: t.bgSurface,
-      borderRadius: t.radius.lg,
+      borderRadius: t.radius.md,
       padding: t.space[4],
       gap: t.space[3],
     },

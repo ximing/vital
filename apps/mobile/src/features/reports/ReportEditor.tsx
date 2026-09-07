@@ -38,7 +38,6 @@ export function ReportEditor({ reportId }: { reportId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [insertKind, setInsertKind] = useState<EntityKind | null>(null);
-  const [editing, setEditing] = useState(false);
   const [review, setReview] = useState<ReportReview | null>(null);
   const savedBody = useRef('');
   const bodyRef = useRef('');
@@ -170,64 +169,57 @@ export function ReportEditor({ reportId }: { reportId: string }) {
       ) : null}
       {review ? (
         <View style={styles.review}>
-          <Text style={styles.section}>
+          <Text style={styles.metaLine}>
             {copy.reports.completed} {review.completed.length}
-          </Text>
-          {review.completed.length === 0 ? (
-            <Text style={styles.hint}>{copy.reports.emptyDone}</Text>
-          ) : (
-            review.completed.map((item) => (
-              <Text key={`${item.taskId}-${item.completionId ?? ''}`} style={styles.doneItem}>
-                {item.title}
-              </Text>
-            ))
-          )}
-          <Text style={styles.section}>
+            {'  '}
             {copy.reports.carried} {review.carried.length}
-          </Text>
-          {review.carried.map((item) => (
-            <Pressable
-              key={item.taskId}
-              onPress={() => void toggleReviewTask(item)}
-              style={styles.carry}
-            >
-              <Text style={styles.carryTitle}>{item.title}</Text>
-            </Pressable>
-          ))}
-          <Text style={styles.section}>
+            {'  '}
             {copy.reports.captured} {review.captured.length}
           </Text>
-          {review.captured.map((item) => (
-            <Pressable key={item.inboxId} onPress={() => router.push(`/inbox/${item.inboxId}`)}>
-              <Text style={styles.carryTitle}>{item.title}</Text>
-            </Pressable>
-          ))}
+          {review.completed.length === 0 && review.carried.length === 0 && review.captured.length === 0 ? (
+            <Text style={styles.hint}>{copy.reports.emptyDone}</Text>
+          ) : (
+            <>
+              {review.completed.map((item) => (
+                <Text key={`${item.taskId}-${item.completionId ?? ''}`} style={styles.doneItem}>
+                  {item.title}
+                </Text>
+              ))}
+              {review.carried.map((item) => (
+                <Pressable
+                  key={item.taskId}
+                  onPress={() => void toggleReviewTask(item)}
+                  style={styles.carry}
+                >
+                  <Text style={styles.carryTitle}>{item.title}</Text>
+                </Pressable>
+              ))}
+              {review.captured.map((item) => (
+                <Pressable key={item.inboxId} onPress={() => router.push(`/inbox/${item.inboxId}`)}>
+                  <Text style={styles.carryTitle}>{item.title}</Text>
+                </Pressable>
+              ))}
+            </>
+          )}
         </View>
       ) : null}
-      {editing ? (
-        <Field
-          label={copy.reports.write}
-          value={report ? extractNotes(bodyMd, report.type) : ''}
-          onChangeText={(next) => {
-            if (!report) return;
-            writeBody(replaceNotes(bodyRef.current, report.type, next));
-          }}
-          multiline
-          autoCapitalize="sentences"
-          autoCorrect
-        />
-      ) : (
-        <Text style={styles.hint}>
-          {report && extractNotes(bodyMd, report.type).trim() !== ''
-            ? extractNotes(bodyMd, report.type)
-            : copy.empty.reportBody}
-        </Text>
-      )}
+      <Text style={styles.writeLabel}>{copy.reports.write}</Text>
+      <Field
+        value={report ? extractNotes(bodyMd, report.type) : ''}
+        onChangeText={(next) => {
+          if (!report) return;
+          writeBody(replaceNotes(bodyRef.current, report.type, next));
+        }}
+        multiline
+        autoCapitalize="sentences"
+        autoCorrect
+        placeholder={copy.empty.reportBody}
+      />
       <View style={styles.row}>
-        <Button variant="secondary" onPress={() => setInsertKind('task')}>
+        <Button variant="quiet" onPress={() => setInsertKind('task')}>
           {copy.actions.insertTask}
         </Button>
-        <Button variant="secondary" onPress={() => setInsertKind('inbox')}>
+        <Button variant="quiet" onPress={() => setInsertKind('inbox')}>
           {copy.actions.insertInbox}
         </Button>
       </View>
@@ -239,13 +231,10 @@ export function ReportEditor({ reportId }: { reportId: string }) {
         />
       ) : null}
       <View style={styles.row}>
-        <Button variant="secondary" onPress={() => setEditing((v) => !v)}>
-          {editing ? copy.actions.done : copy.actions.edit}
-        </Button>
         <Button loading={busy} loadingText={copy.actions.saving} onPress={() => void save()}>
           {copy.actions.save}
         </Button>
-        <Button variant="secondary" loading={busy} onPress={() => void fill()}>
+        <Button variant="quiet" loading={busy} onPress={() => void fill()}>
           {copy.actions.fill}
         </Button>
       </View>
@@ -256,9 +245,10 @@ export function ReportEditor({ reportId }: { reportId: string }) {
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     hint: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    writeLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
+    metaLine: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
     row: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
     review: { gap: t.space[2] },
-    section: { fontSize: t.type.caption.fontSize, color: t.fgMuted, marginTop: t.space[2] },
     doneItem: {
       fontSize: t.type.body.fontSize,
       color: t.fgMuted,

@@ -1,40 +1,27 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
-import type { List, Tag, Task, TaskPriority } from '@vital/dto';
+import type { List, PatchTaskInput, Tag, Task, TaskPriority, TimeBucket } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
+import { DateField } from '../../components/DateField';
 import { Field } from '../../components/Field';
 import { Loading } from '../../components/Loading';
 import { Screen } from '../../components/Screen';
+import { SelectField } from '../../components/SelectField';
 import { toast } from '../../components/toast';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
-import { localDateStamp, zonedLocalMidnightIso } from '../../lib/format';
+import { fromDatetimeLocal, localDateStamp, toDatetimeLocal, zonedLocalMidnightIso } from '../../lib/format';
 import { useTheme } from '../../theme/use-theme';
 import { toggleComplete } from './complete';
 import { NotesField } from './NotesField';
 import { PriorityMark } from './priority';
-
-function recurrenceKind(rrule: string | null): 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom' {
-  if (rrule === null || rrule === '') return 'none';
-  if (/\bFREQ=DAILY\b/.test(rrule) && !/\bBYDAY=/.test(rrule)) return 'daily';
-  if (/\bFREQ=WEEKLY\b/.test(rrule) && !/\bBYDAY=/.test(rrule)) return 'weekly';
-  if (/\bFREQ=MONTHLY\b/.test(rrule)) return 'monthly';
-  if (/\bFREQ=YEARLY\b/.test(rrule)) return 'yearly';
-  return 'custom';
-}
-
-function rruleForKind(kind: 'daily' | 'weekly' | 'monthly' | 'yearly'): string {
-  if (kind === 'daily') return 'FREQ=DAILY';
-  if (kind === 'weekly') return 'FREQ=WEEKLY';
-  if (kind === 'monthly') return 'FREQ=MONTHLY';
-  return 'FREQ=YEARLY';
-}
+import { RecurrenceField, ReminderField } from './schedule-fields';
 
 export function TaskDetail({ taskId }: { taskId: string }) {
   const t = useTheme();
@@ -45,7 +32,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
-  const [dueYmd, setDueYmd] = useState('');
   const [tagDraft, setTagDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,7 +46,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
       setTask(next);
       setTitle(next.title);
       setNotes(next.notes);
-      setDueYmd(next.dueAt ? localDateStamp(next.timezone, new Date(next.dueAt)) : '');
       setLists(listRes.items.filter((row) => row.kind === 'user' || row.kind === 'inbox'));
       setTags(tagRes.items);
       setError(null);
@@ -83,36 +68,42 @@ export function TaskDetail({ taskId }: { taskId: string }) {
   }
 
   const zone = task.timezone || auth.user?.timezone || 'UTC';
-  const kind = recurrenceKind(task.recurrence);
+  const weekStartsOn = auth.user?.weekStartsOn === 0 ? 0 : 1;
+  const allDay = task.isAllDay;
+  const dueValue =
+    task.dueAt === null ? '' : allDay ? localDateStamp(zone, new Date(task.dueAt)) : toDatetimeLocal(task.dueAt, zone);
+  const startValue =
+    task.startAt === null
+      ? ''
+      : allDay
+        ? localDateStamp(zone, new Date(task.startAt))
+        : toDatetimeLocal(task.startAt, zone);
 
-  async function patch(input: Parameters<typeof client.patchTask>[1]): Promise<void> {
+  async function patch(input: PatchTaskInput): Promise<void> {
     if (task === null) return;
     try {
       const next = await client.patchTask(task.id, input);
       setTask(next);
       setTitle(next.title);
       setNotes(next.notes);
-      setDueYmd(next.dueAt ? localDateStamp(next.timezone, new Date(next.dueAt)) : '');
     } catch (err) {
       toast(humanError(err));
     }
+  }
+
+  async function saveTitle(): Promise<void> {
+    if (task === null) return;
+    const next = title.trim();
+    if (next !== '' && next !== task.title) await patch({ title: next });
+    else setTitle(task.title);
   }
 
   async function save(): Promise<void> {
     if (task === null) return;
     setBusy(true);
     try {
-      const dueAt = dueYmd.trim() === '' ? null : zonedLocalMidnightIso(zone, dueYmd.trim());
-      const next = await client.patchTask(task.id, {
-        title: title.trim() || task.title,
-        notes,
-        dueAt,
-        isAllDay: true,
-      });
-      setTask(next);
+      await patch({ title: title.trim() || task.title, notes });
       toast(copy.toast.saved);
-    } catch (err) {
-      toast(humanError(err));
     } finally {
       setBusy(false);
     }
@@ -138,6 +129,15 @@ export function TaskDetail({ taskId }: { taskId: string }) {
     }
   }
 
+  function setStamp(field: 'dueAt' | 'startAt', value: string): void {
+    if (value === '') {
+      void patch({ [field]: null });
+      return;
+    }
+    const iso = allDay ? zonedLocalMidnightIso(zone, value) : fromDatetimeLocal(value, zone);
+    void patch({ [field]: iso, isAllDay: allDay });
+  }
+
   return (
     <Screen scroll>
       <Stack.Screen options={{ title: task.title }} />
@@ -145,6 +145,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
         label={copy.fields.title}
         value={title}
         onChangeText={setTitle}
+        onBlur={() => void saveTitle()}
         autoCapitalize="sentences"
       />
 
@@ -160,9 +161,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
             >
               <View style={styles.chipInner}>
                 <PriorityMark priority={p} theme={t} />
-                <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>
-                  {copy.priority[p]}
-                </Text>
+                <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{copy.priority[p]}</Text>
               </View>
             </Pressable>
           );
@@ -208,39 +207,48 @@ export function TaskDetail({ taskId }: { taskId: string }) {
         </>
       ) : null}
 
-      <Field
-        label={`${copy.todos.due} (YYYY-MM-DD)`}
-        value={dueYmd}
-        onChangeText={setDueYmd}
-        placeholder="2026-09-06"
-        autoCapitalize="none"
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel}>{copy.todos.allDay}</Text>
+        <Switch value={allDay} onValueChange={(next) => void patch({ isAllDay: next })} />
+      </View>
+
+      <DateField
+        label={copy.todos.due}
+        value={dueValue}
+        kind={allDay ? 'date' : 'datetime-local'}
+        zone={zone}
+        weekStartsOn={weekStartsOn}
+        onChange={(next) => setStamp('dueAt', next)}
+      />
+      <DateField
+        label={copy.todos.start}
+        value={startValue}
+        kind={allDay ? 'date' : 'datetime-local'}
+        zone={zone}
+        weekStartsOn={weekStartsOn}
+        onChange={(next) => setStamp('startAt', next)}
       />
 
-      <Text style={styles.label}>{copy.todos.recurrence}</Text>
-      <View style={styles.chipRow}>
-        {(
-          [
-            ['none', copy.todos.recurrenceNone],
-            ['daily', copy.todos.recurrenceDaily],
-            ['weekly', copy.todos.recurrenceWeekly],
-            ['monthly', copy.todos.recurrenceMonthly],
-            ['yearly', copy.todos.recurrenceYearly],
-          ] as const
-        ).map(([id, label]) => {
-          const active = kind === id;
-          return (
-            <Pressable
-              key={id}
-              style={[styles.chip, active && styles.chipActive]}
-              onPress={() =>
-                void patch({ recurrence: id === 'none' ? null : rruleForKind(id) })
-              }
-            >
-              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {task.dueAt === null && task.startAt === null ? (
+        <SelectField
+          label={copy.todos.timeBucket}
+          value={task.timeBucket}
+          options={[
+            { value: 'anytime', label: copy.lists.anytime },
+            { value: 'someday', label: copy.lists.someday },
+            { value: 'dated', label: copy.todos.due },
+          ]}
+          onChange={(timeBucket) => void patch({ timeBucket: timeBucket as TimeBucket, dueAt: null, startAt: null })}
+        />
+      ) : null}
+
+      <RecurrenceField task={task} onPatch={(input) => void patch(input)} />
+      <ReminderField
+        task={task}
+        zone={zone}
+        weekStartsOn={weekStartsOn}
+        onPatch={(input) => void patch(input)}
+      />
 
       <Text style={styles.label}>{copy.todos.tags}</Text>
       <View style={styles.chipRow}>
@@ -251,9 +259,7 @@ export function TaskDetail({ taskId }: { taskId: string }) {
               key={tag.id}
               style={[styles.chip, on && styles.chipActive]}
               onPress={() => {
-                const tagIds = on
-                  ? task.tagIds.filter((id) => id !== tag.id)
-                  : [...task.tagIds, tag.id];
+                const tagIds = on ? task.tagIds.filter((id) => id !== tag.id) : [...task.tagIds, tag.id];
                 void patch({ tagIds });
               }}
             >
@@ -306,5 +312,12 @@ const createStyles = (t: Theme) =>
     chipLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
     chipLabelActive: { color: t.fgPrimary, fontWeight: '600' },
     chipInner: { flexDirection: 'row', alignItems: 'center', gap: t.space[1] },
+    switchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: t.hit,
+    },
+    switchLabel: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
     actions: { flexDirection: 'row', gap: t.space[2], flexWrap: 'wrap', marginTop: t.space[2] },
   });
