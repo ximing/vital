@@ -176,8 +176,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   ];
 
   return (
-    <div className="flex min-h-full bg-canvas">
-      <main id="main" data-region="focus-canvas" className="flex min-h-full min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 bg-canvas">
+      <main id="main" data-region="focus-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
           <div className={view === 'list' ? 'mx-auto flex w-full max-w-[57.5rem] min-h-0 flex-1 flex-col' : 'flex min-h-0 min-w-0 flex-1 flex-col'}>
           <header className="flex flex-wrap items-end justify-between gap-3 pb-1">
             <div className="min-w-0">

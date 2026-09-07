@@ -70,7 +70,7 @@ export function BoardView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex pb-3" role="radiogroup" aria-label={t.todos.views.board}>
-        <div className="flex rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
+        <div className="flex rounded-md bg-surface p-0.5">
           <button
             type="button"
             role="radio"

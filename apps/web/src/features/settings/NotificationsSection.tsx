@@ -91,15 +91,17 @@ export function NotificationsSection({ heading = true }: { heading?: boolean }) 
   return (
     <section className={heading ? 'mt-8' : undefined}>
       {heading ? (
-        <h2 className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-          {copy.title}
-        </h2>
+        <>
+          <h2 className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+            {copy.title}
+          </h2>
+          <p className="mt-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+            {copy.hint}
+          </p>
+        </>
       ) : null}
-      <p className={`${heading ? 'mt-2' : ''} text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted`}>
-        {copy.hint}
-      </p>
 
-      <label className="mt-4 flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+      <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
         <input
           type="checkbox"
           checked={prefs.taskRemind}
@@ -117,32 +119,35 @@ export function NotificationsSection({ heading = true }: { heading?: boolean }) 
       </label>
 
       <TimeField
-        className="mt-4"
+        className="mt-4 max-w-xs"
         label={copy.allDayTime}
         value={prefs.allDayNotifyTime}
-        onChange={(e) =>
-          void savePrefs({ ...prefs, allDayNotifyTime: e.target.value.slice(0, 5) })
-        }
+        onChange={(value) => {
+          if (value === '') return;
+          void savePrefs({ ...prefs, allDayNotifyTime: value });
+        }}
       />
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4 grid max-w-lg grid-cols-2 gap-3">
         <TimeField
           label={copy.quietStart}
           value={prefs.quietHoursStart ?? ''}
-          onChange={(e) => {
-            const start = e.target.value === '' ? null : e.target.value.slice(0, 5);
-            const end = start === null ? null : (prefs.quietHoursEnd ?? '08:00');
-            void savePrefs({ ...prefs, quietHoursStart: start, quietHoursEnd: end });
+          clearable
+          onChange={(start) => {
+            const nextStart = start === '' ? null : start;
+            const end = nextStart === null ? null : (prefs.quietHoursEnd ?? '08:00');
+            void savePrefs({ ...prefs, quietHoursStart: nextStart, quietHoursEnd: end });
           }}
         />
         <TimeField
           label={copy.quietEnd}
           value={prefs.quietHoursEnd ?? ''}
           disabled={prefs.quietHoursStart === null}
-          onChange={(e) => {
-            const end = e.target.value === '' ? null : e.target.value.slice(0, 5);
-            const start = end === null ? null : prefs.quietHoursStart;
-            void savePrefs({ ...prefs, quietHoursStart: start, quietHoursEnd: end });
+          clearable
+          onChange={(end) => {
+            const nextEnd = end === '' ? null : end;
+            const start = nextEnd === null ? null : prefs.quietHoursStart;
+            void savePrefs({ ...prefs, quietHoursStart: start, quietHoursEnd: nextEnd });
           }}
         />
       </div>

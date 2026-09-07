@@ -84,8 +84,8 @@ export function InboxReader() {
   }
 
   return (
-    <main id="main" data-region="reading-canvas" className="flex min-h-full flex-1 flex-col bg-canvas">
-      <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-canvas/95 px-4 py-3">
+    <main id="main" data-region="reading-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-canvas">
+      <header className="sticky top-0 z-[var(--z-sticky)] bg-canvas/95 px-6 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap items-center gap-1">
             <Button
@@ -183,7 +183,7 @@ export function InboxReader() {
       ) : null}
 
       <div className="reader-progress w-full" aria-hidden="true" />
-      <div className="mx-auto w-full max-w-[43.75rem] flex-1 px-4 py-8">
+      <div className="mx-auto w-full max-w-[43.75rem] flex-1 px-6 py-8">
         {query.isLoading ? (
           <InboxSkeleton />
         ) : !item ? (

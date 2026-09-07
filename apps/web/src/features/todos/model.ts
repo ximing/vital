@@ -2,9 +2,11 @@ import {
   SMART_LIST_IDS,
   type CreateTaskInput,
   type List,
+  type RecurrenceKind,
   type Task,
   type TaskPriority,
 } from '@vital/dto';
+import { t } from '@/copy';
 
 export const UNDO_COMPLETE_MS = 5000;
 
@@ -509,6 +511,37 @@ export function dueMeta(task: Task, timeZone: string, now = new Date()): string 
   if (task.isAllDay) return isOverdue(task, timeZone, now) ? `逾期 · ${day}` : day;
   const clock = formatHm(task.dueAt ?? task.startAt ?? '', timeZone);
   return isOverdue(task, timeZone, now) ? `逾期 · ${day} ${clock}` : `${day} ${clock}`;
+}
+
+export function recurrenceMeta(task: Task): string | null {
+  const kind: RecurrenceKind | 'none' | 'custom' = task.recurrenceKind ?? recurrenceKind(task.recurrence);
+  if (kind === 'none') return null;
+  if (kind === 'daily') return t.todos.recurrenceDaily;
+  if (kind === 'weekly') return t.todos.recurrenceWeekly;
+  if (kind === 'monthly') return t.todos.recurrenceMonthly;
+  if (kind === 'yearly') return t.todos.recurrenceYearly;
+  if (kind === 'weekdays') return t.todos.recurrenceWeekdays;
+  if (kind === 'weekends') return t.todos.recurrenceWeekends;
+  if (kind === 'holidays') return t.todos.recurrenceHolidays;
+  if (kind === 'legal_workdays') return t.todos.recurrenceLegalWorkdays;
+  return t.todos.recurrence;
+}
+
+export function reminderMeta(task: Task, timeZone: string): string | null {
+  const mode = task.reminderMode ?? (task.remindAt ? 'custom' : 'none');
+  if (mode === 'none') return null;
+  if (mode === 'due') return t.todos.reminderDue;
+  if (mode === 'offset') {
+    const minutes = task.reminderOffsetMinutes ?? 15;
+    if (minutes === 5) return t.todos.reminder5m;
+    if (minutes === 15) return t.todos.reminder15m;
+    if (minutes === 30) return t.todos.reminder30m;
+    if (minutes === 60) return t.todos.reminder1h;
+    if (minutes === 1440) return t.todos.reminder1d;
+  }
+  const at = task.reminderAt ?? task.remindAt;
+  if (at) return `${t.todos.remind} ${formatHm(at, timeZone)}`;
+  return t.todos.remind;
 }
 
 export function recurrenceKind(

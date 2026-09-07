@@ -1,10 +1,17 @@
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { t } from '@/copy';
 import { addMonthsYmd, monthGrid, ymdParts } from '@/lib/calendar-grid';
 import { formatHumanDay, toDateInput, todayYmd } from '@/features/todos/model';
 import { Icon } from '@/ui/icon';
-import { FIELD_CONTROL_CLASS, FIELD_POPOVER_CLASS } from '@/ui/field';
+import {
+  FIELD_CLEAR_CLASS,
+  FIELD_CONTROL_CLASS,
+  FIELD_CONTROL_OPEN_CLASS,
+  FIELD_POPOVER_CLASS,
+} from '@/ui/field';
+import { TimePicker } from '@/ui/time-field';
+import { usePopover } from '@/ui/use-popover';
 
 export function DateField({
   value,
@@ -21,33 +28,16 @@ export function DateField({
   ariaLabel: string;
   onChange: (next: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
+  const popover = usePopover();
   const today = todayYmd(zone);
   const selectedYmd = value === '' ? '' : value.slice(0, 10);
   const selectedTime = value.includes('T') ? value.slice(11, 16) : '09:00';
   const [monthCursor, setMonthCursor] = useState((selectedYmd || today).slice(0, 7) + '-01');
 
   function toggleOpen() {
-    if (!open) setMonthCursor((selectedYmd || today).slice(0, 7) + '-01');
-    setOpen((prev) => !prev);
+    if (!popover.open) setMonthCursor((selectedYmd || today).slice(0, 7) + '-01');
+    popover.toggle();
   }
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(event: MouseEvent) {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDoc);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
 
   const { y, m } = ymdParts(monthCursor);
   const cells = monthGrid(y, m, weekStartsOn);
@@ -60,7 +50,7 @@ export function DateField({
   function pickDay(ymd: string) {
     if (kind === 'date') {
       onChange(ymd);
-      setOpen(false);
+      popover.close();
     } else {
       onChange(`${ymd}T${selectedTime || '09:00'}`);
     }
@@ -74,34 +64,34 @@ export function DateField({
         : `${formatHumanDay(selectedYmd, zone)} ${selectedTime}`;
 
   return (
-    <div ref={root} className="relative">
+    <div ref={popover.root} className="relative">
       <div className="flex items-center gap-1">
         <button
           type="button"
           aria-label={ariaLabel}
-          aria-expanded={open}
+          aria-expanded={popover.open}
           onClick={toggleOpen}
           className={`${FIELD_CONTROL_CLASS} min-w-0 flex-1 truncate px-2.5 text-left text-[length:var(--text-meta)] ${
             selectedYmd === '' ? 'text-muted' : 'text-fg'
-          } hover:bg-surface-muted`}
+          } ${popover.open ? FIELD_CONTROL_OPEN_CLASS : ''}`}
         >
           {summary}
         </button>
         {selectedYmd !== '' ? (
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-muted hover:text-fg"
+            className={FIELD_CLEAR_CLASS}
             aria-label={t.todos.clearDate}
             onClick={() => {
               onChange('');
-              setOpen(false);
+              popover.close();
             }}
           >
             <Icon icon={X} size={14} />
           </button>
         ) : null}
       </div>
-      {open ? (
+      {popover.open ? (
         <div
           role="dialog"
           aria-label="日期选择器"
@@ -157,20 +147,16 @@ export function DateField({
             })}
           </div>
           {kind === 'datetime-local' && selectedYmd !== '' ? (
-            <div className="mt-3 flex items-center gap-2">
-              <label className="flex min-w-0 flex-1 items-center gap-2 text-[length:var(--text-caption)] text-muted">
-                {t.todos.remindTime}
-                <input
-                  type="time"
-                  value={selectedTime}
-                  onChange={(e) => onChange(`${selectedYmd}T${e.target.value || '09:00'}`)}
-                  className={`${FIELD_CONTROL_CLASS} h-8 flex-1 px-2 text-[length:var(--text-caption)]`}
-                />
-              </label>
+            <div className="mt-3 flex flex-col gap-2">
+              <p className="text-[length:var(--text-caption)] text-muted">{t.todos.remindTime}</p>
+              <TimePicker
+                value={selectedTime}
+                onChange={(next) => onChange(`${selectedYmd}T${next}`)}
+              />
               <button
                 type="button"
-                className="h-8 rounded-xl px-2.5 text-[length:var(--text-caption)] text-accent hover:bg-accent-subtle"
-                onClick={() => setOpen(false)}
+                className="h-8 rounded-md text-[length:var(--text-caption)] text-accent hover:bg-accent-subtle"
+                onClick={() => popover.close()}
               >
                 {t.todos.dateDone}
               </button>
@@ -179,7 +165,7 @@ export function DateField({
           {selectedYmd === '' ? (
             <button
               type="button"
-              className="mt-2 w-full rounded-xl py-1.5 text-[length:var(--text-caption)] text-accent hover:bg-accent-subtle"
+              className="mt-2 w-full rounded-md py-1.5 text-[length:var(--text-caption)] text-accent hover:bg-accent-subtle"
               onClick={() => pickDay(toDateInput(new Date().toISOString(), zone))}
             >
               {formatHumanDay(today, zone)}

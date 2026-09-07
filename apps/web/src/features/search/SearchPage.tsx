@@ -59,7 +59,8 @@ export function SearchPage() {
   const empty = q === '' || items === null;
 
   return (
-    <div data-region="search-canvas" className="mx-auto w-full max-w-5xl px-8 py-12 xl:px-10">
+    <div data-region="search-canvas" className="h-full min-h-0 w-full overflow-y-auto px-8 py-10 xl:px-12">
+      <div className="w-full max-w-6xl">
       <EmptyArt />
       <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
         {t.nav.search}
@@ -74,7 +75,7 @@ export function SearchPage() {
         onChange={(event) => setQuery(event.target.value)}
         placeholder={t.search.placeholder}
         aria-label={t.search.placeholder}
-        className="mt-6 h-[var(--field-h)] w-full rounded-md border border-border bg-surface px-3 text-fg placeholder:text-muted"
+        className="mt-6 h-[var(--field-h)] w-full rounded-md bg-surface px-3 text-fg placeholder:text-muted outline-none focus:shadow-[0_0_0_3px_var(--focus-ring)]"
       />
       {error ? (
         <div className="mt-4">
@@ -103,6 +104,7 @@ export function SearchPage() {
           ))}
         </ul>
       )}
+      </div>
     </div>
   );
 }

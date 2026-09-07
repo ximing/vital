@@ -89,6 +89,10 @@ export type FixedRecurrenceTask = Pick<RecurrenceTask, 'dueAt' | 'timezone' | 'i
   recurrenceKind: FixedRecurrenceKind;
 };
 
+export type FixedCalendarTask = RecurrenceTask & {
+  recurrenceKind: FixedRecurrenceKind;
+};
+
 function invalid(): never {
   throw AppError.of(400, 'RRULE_INVALID');
 }
@@ -376,6 +380,19 @@ function matchesFixedKind(
   return matchesChinaRule(cursor.toISODate() ?? '', kind, lookup);
 }
 
+async function fixedCursorMatches(
+  task: FixedRecurrenceTask,
+  cursor: DateTime,
+  lookup?: ChinaCalendarLookup,
+): Promise<boolean> {
+  if (task.dueAt === null) return false;
+  const origin = DateTime.fromJSDate(task.dueAt, { zone: task.timezone });
+  if (task.recurrenceKind === 'holidays' || task.recurrenceKind === 'legal_workdays') {
+    return matchesChinaRule(cursor.toISODate() ?? '', task.recurrenceKind, lookup);
+  }
+  return matchesFixedKind(cursor, origin, task.recurrenceKind, async () => null);
+}
+
 export async function nextFixedOccurrenceAfter(
   task: FixedRecurrenceTask,
   afterDue: Date,
@@ -385,20 +402,40 @@ export async function nextFixedOccurrenceAfter(
   const zone = task.timezone;
   const origin = DateTime.fromJSDate(task.dueAt, { zone });
   const after = DateTime.fromJSDate(afterDue, { zone });
-  const time = { hour: origin.hour, minute: origin.minute, second: origin.second, millisecond: origin.millisecond };
+  const time = {
+    hour: origin.hour,
+    minute: origin.minute,
+    second: origin.second,
+    millisecond: origin.millisecond,
+  };
   for (let day = 1; day <= 400; day += 1) {
     const cursor = after.startOf('day').plus({ days: day }).set(time);
-    const matches =
-      task.recurrenceKind === 'holidays' || task.recurrenceKind === 'legal_workdays'
-        ? await matchesChinaRule(
-            cursor.toISODate() ?? '',
-            task.recurrenceKind,
-            lookup,
-          )
-        : await matchesFixedKind(cursor, origin, task.recurrenceKind, async () => null);
-    if (matches) {
-      return cursor.toJSDate();
-    }
+    if (await fixedCursorMatches(task, cursor, lookup)) return cursor.toJSDate();
+  }
+  return null;
+}
+
+export async function firstFixedOccurrenceOnOrAfter(
+  task: FixedRecurrenceTask,
+  fromUtc: Date,
+  lookup?: ChinaCalendarLookup,
+): Promise<Date | null> {
+  if (task.dueAt === null) return null;
+  if (task.dueAt >= fromUtc) return task.dueAt;
+  const zone = task.timezone;
+  const origin = DateTime.fromJSDate(task.dueAt, { zone });
+  const from = DateTime.fromJSDate(fromUtc, { zone });
+  const time = {
+    hour: origin.hour,
+    minute: origin.minute,
+    second: origin.second,
+    millisecond: origin.millisecond,
+  };
+  let cursor = from.startOf('day').set(time);
+  if (cursor.toMillis() < fromUtc.getTime()) cursor = cursor.plus({ days: 1 });
+  for (let day = 0; day < 400; day += 1) {
+    if (await fixedCursorMatches(task, cursor, lookup)) return cursor.toJSDate();
+    cursor = cursor.plus({ days: 1 });
   }
   return null;
 }
@@ -497,6 +534,49 @@ export function expandTask(
       priority: task.priority,
     });
   }
+  return out;
+}
+
+export async function expandFixedTask(
+  task: FixedCalendarTask,
+  completions: { occurrenceAt: Date }[],
+  fromUtc: Date,
+  toUtc: Date,
+): Promise<CalendarInstance[]> {
+  const status =
+    task.status === 'todo' || task.status === 'doing' || task.status === 'done' || task.status === 'canceled'
+      ? task.status
+      : 'todo';
+  const inRange = completions.filter(
+    (completion) => completion.occurrenceAt >= fromUtc && completion.occurrenceAt <= toUtc,
+  );
+  const doneAt = new Set(inRange.map((completion) => completion.occurrenceAt.getTime()));
+  const out: CalendarInstance[] = inRange.map((completion) => ({
+    taskId: task.id,
+    listId: task.listId,
+    title: task.title,
+    occurrenceAt: completion.occurrenceAt,
+    isAllDay: task.isAllDay,
+    status: 'done',
+    priority: task.priority,
+  }));
+  const dueMs = task.dueAt?.getTime();
+  let cursor = await firstFixedOccurrenceOnOrAfter(task, fromUtc);
+  for (let count = 0; cursor !== null && cursor <= toUtc && count < 400; count += 1) {
+    if (cursor >= fromUtc && !doneAt.has(cursor.getTime())) {
+      out.push({
+        taskId: task.id,
+        listId: task.listId,
+        title: task.title,
+        occurrenceAt: cursor,
+        isAllDay: task.isAllDay,
+        status: dueMs === cursor.getTime() ? status : 'todo',
+        priority: task.priority,
+      });
+    }
+    cursor = await nextFixedOccurrenceAfter(task, cursor);
+  }
+  if (cursor !== null && cursor <= toUtc) throw AppError.of(400, 'RRULE_TOO_DENSE');
   return out;
 }
 

@@ -19,6 +19,7 @@ export function AccountSection() {
   const [saving, setSaving] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const avatarInput = useRef<HTMLInputElement>(null);
+  const initial = (user?.displayName ?? '?').slice(0, 1);
 
   async function onAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -55,29 +56,52 @@ export function AccountSection() {
   }
 
   return (
-    <div>
-      <div className="mb-8 flex items-center gap-4">
-        {user?.avatarUrl && !avatarFailed ? (
-          <img
-            src={user.avatarUrl}
-            alt="头像"
-            className="h-16 w-16 rounded-full object-cover"
-            onError={() => setAvatarFailed(true)}
-          />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-subtle text-lg font-semibold text-accent-deep">
-            {(user?.displayName ?? '?').slice(0, 1)}
+    <div className="flex flex-col gap-8">
+      <div className="flex items-center gap-5">
+        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-accent-subtle">
+          {user?.avatarUrl && !avatarFailed ? (
+            <img
+              src={user.avatarUrl}
+              alt={t.settings.avatarAlt}
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={() => setAvatarFailed(true)}
+            />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-accent-deep">
+              {initial}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
+            {user?.displayName || t.settings.account}
+          </p>
+          {user ? (
+            <p className="mt-0.5 truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+              {user.email}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button variant="ghost" className="gap-2" onClick={() => avatarInput.current?.click()} loading={saving}>
+              <Icon icon={ImagePlus} size={15} />
+              {t.settings.changeAvatar}
+            </Button>
+            <Button variant="quiet" className="gap-2" onClick={() => void logout()}>
+              <Icon icon={LogOut} size={15} />
+              {t.nav.logout}
+            </Button>
+            <input
+              ref={avatarInput}
+              className="sr-only"
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
+              onChange={(event) => void onAvatarChange(event)}
+            />
           </div>
-        )}
-        <div>
-          <Button variant="ghost" className="gap-2" onClick={() => avatarInput.current?.click()} loading={saving}>
-            <Icon icon={ImagePlus} size={15} />
-            设置头像
-          </Button>
-          <input ref={avatarInput} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif" onChange={(event) => void onAvatarChange(event)} />
         </div>
       </div>
-      <form onSubmit={(e) => void onSubmit(e)} className="flex max-w-xl flex-col gap-4">
+
+      <form onSubmit={(e) => void onSubmit(e)} className="flex max-w-2xl flex-col gap-4">
         <Field
           label={t.settings.displayName}
           name="displayName"
@@ -85,20 +109,13 @@ export function AccountSection() {
           onChange={(e) => setDisplayName(e.target.value)}
           maxLength={50}
         />
-        {user ? (
-          <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-            {user.email}
-          </p>
-        ) : null}
         {error ? <Banner>{error}</Banner> : null}
-        <Button type="submit" loading={saving} disabled={displayName.trim() === ''}>
-          {t.settings.saveProfile}
-        </Button>
+        <div>
+          <Button type="submit" loading={saving} disabled={displayName.trim() === ''}>
+            {t.settings.saveProfile}
+          </Button>
+        </div>
       </form>
-      <Button variant="danger" className="mt-10 gap-2" onClick={() => void logout()}>
-        <Icon icon={LogOut} size={15} />
-        {t.nav.logout}
-      </Button>
     </div>
   );
 }

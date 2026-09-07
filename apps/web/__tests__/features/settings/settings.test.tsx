@@ -66,11 +66,14 @@ describe('NotificationsSection', () => {
         </MemoryRouter>
       </RabRoot>,
     );
-    const canvas = screen.getByRole('heading', { name: t.settings.title }).parentElement;
-    expect(canvas).toHaveAttribute('data-region', 'settings-canvas');
-    expect(canvas).toHaveClass('w-full', 'max-w-5xl');
-    expect(screen.getByRole('button', { name: t.nav.logout })).toHaveClass('border', 'text-danger');
-    expect(screen.getByLabelText(t.settings.displayName).closest('form')).toHaveClass('max-w-xl');
+    const canvas = document.querySelector('[data-region="settings-canvas"]');
+    expect(canvas).not.toBeNull();
+    expect(canvas).toHaveClass('w-full');
+    expect(screen.getByRole('heading', { name: t.settings.title }).parentElement).toHaveClass(
+      'max-w-6xl',
+    );
+    expect(screen.getByRole('button', { name: t.nav.logout })).toHaveClass('text-muted');
+    expect(screen.getByLabelText(t.settings.displayName).closest('form')).toHaveClass('max-w-2xl');
     expect(screen.getByRole('tab', { name: t.settings.tabs.account })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -83,9 +86,16 @@ describe('NotificationsSection', () => {
       );
     });
     expect(screen.getByRole('radiogroup', { name: t.theme.label })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: t.settings.tabs.notifications }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: t.settings.notify.allDayTime })).toHaveClass(
+        'h-[var(--field-h)]',
+        'rounded-md',
+      );
+    });
     await user.click(screen.getByRole('tab', { name: t.settings.tabs.prefs }));
     await waitFor(() => {
-      expect(screen.getByLabelText(t.settings.timezone)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: t.settings.timezone })).toBeInTheDocument();
     });
   });
 

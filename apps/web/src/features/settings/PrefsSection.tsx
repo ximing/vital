@@ -4,6 +4,7 @@ import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
+import { SelectField } from '@/ui/select-field';
 
 const ZONES = [
   'Asia/Shanghai',
@@ -18,9 +19,6 @@ const ZONES = [
   'America/Chicago',
   'Australia/Sydney',
 ];
-
-const fieldClass =
-  'h-[var(--field-h)] w-full max-w-xl rounded-md border border-border bg-surface px-3 text-fg';
 
 export function PrefsSection() {
   const user = useAuth((s) => s.user);
@@ -39,22 +37,17 @@ export function PrefsSection() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <label className="flex max-w-xl flex-col gap-1">
+    <div className="flex max-w-2xl flex-col gap-6">
+      <label className="flex flex-col gap-1">
         <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
           {t.settings.timezone}
         </span>
-        <select
-          className={fieldClass}
+        <SelectField
           value={user?.timezone ?? 'UTC'}
-          onChange={(e) => void patch({ timezone: e.target.value })}
-        >
-          {zones.map((zone) => (
-            <option key={zone} value={zone}>
-              {zone}
-            </option>
-          ))}
-        </select>
+          ariaLabel={t.settings.timezone}
+          options={zones.map((zone) => ({ value: zone, label: zone }))}
+          onChange={(timezone) => void patch({ timezone })}
+        />
       </label>
       <div role="radiogroup" aria-label={t.settings.weekStartsOn}>
         <p className="mb-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">

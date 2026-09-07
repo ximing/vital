@@ -2,6 +2,7 @@ import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import {
   allDayDates,
+  expandFixedTask,
   matchesAllDay,
   nextFixedOccurrenceAfter,
   nextAllDayAfter,
@@ -137,5 +138,62 @@ describe('fixed recurrence kinds', () => {
       async (date) => (date === '2026-02-21' ? 'workday' : null),
     );
     expect(DateTime.fromJSDate(next as Date, { zone: 'Asia/Shanghai' }).toISO()).toContain('2026-02-21T09:00:00');
+  });
+
+  it('expands a timed daily series across a calendar window', async () => {
+    const dueAt = DateTime.fromISO('2026-09-07T09:00:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    const instances = await expandFixedTask(
+      {
+        id: 't1',
+        listId: 'l1',
+        title: '晨间规划',
+        timezone: 'Asia/Shanghai',
+        isAllDay: false,
+        dueAt,
+        startAt: null,
+        recurrenceRrule: null,
+        recurrenceDtstart: dueAt,
+        status: 'todo',
+        priority: 3,
+        recurrenceKind: 'daily',
+      },
+      [],
+      DateTime.fromISO('2026-09-07T00:00:00.000Z').toJSDate(),
+      DateTime.fromISO('2026-09-09T23:59:59.000Z').toJSDate(),
+    );
+    expect(instances.map((item) => item.occurrenceAt.toISOString())).toEqual([
+      '2026-09-07T01:00:00.000Z',
+      '2026-09-08T01:00:00.000Z',
+      '2026-09-09T01:00:00.000Z',
+    ]);
+  });
+
+  it('skips ahead for a stale daily without duplicating completions', async () => {
+    const dueAt = DateTime.fromISO('2024-09-01T09:00:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    const done = DateTime.fromISO('2026-09-07T09:00:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    const instances = await expandFixedTask(
+      {
+        id: 't1',
+        listId: 'l1',
+        title: '晨间规划',
+        timezone: 'Asia/Shanghai',
+        isAllDay: false,
+        dueAt,
+        startAt: null,
+        recurrenceRrule: null,
+        recurrenceDtstart: dueAt,
+        status: 'todo',
+        priority: 3,
+        recurrenceKind: 'daily',
+      },
+      [{ occurrenceAt: done }],
+      DateTime.fromISO('2026-09-07T00:00:00.000Z').toJSDate(),
+      DateTime.fromISO('2026-09-09T23:59:59.000Z').toJSDate(),
+    );
+    expect(instances.map((item) => [item.occurrenceAt.toISOString(), item.status])).toEqual([
+      ['2026-09-07T01:00:00.000Z', 'done'],
+      ['2026-09-08T01:00:00.000Z', 'todo'],
+      ['2026-09-09T01:00:00.000Z', 'todo'],
+    ]);
   });
 });

@@ -363,9 +363,9 @@ export function ReportsWorkspace() {
       <main
         id="main"
         data-region="reflection-canvas"
-        className="order-2 flex min-h-0 min-w-0 flex-1 flex-col bg-canvas px-8 py-8 lg:order-1 xl:px-12"
+        className="order-2 flex min-h-0 min-w-0 flex-1 flex-col bg-canvas lg:order-1"
       >
-        <div className="flex w-full max-w-5xl flex-1 flex-col">
+        <div className="flex w-full min-h-0 flex-1 flex-col">
           <header className="flex shrink-0 items-end justify-between gap-3 pb-2">
             <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
               {t.reports.kicker}
@@ -439,7 +439,7 @@ export function ReportsWorkspace() {
               <div className="skeleton-pulse h-64 rounded-lg" />
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col gap-8 pt-4">
+            <div className="flex min-h-0 flex-1 flex-col gap-6 pt-2">
               <input
                 aria-label={t.reports.title}
                 value={session.draftTitle}
@@ -457,7 +457,7 @@ export function ReportsWorkspace() {
               ) : (
                 <div className="skeleton-pulse h-24 rounded-lg" aria-busy="true" />
               )}
-              <div className="report-paper flex min-h-[16rem] min-w-0 flex-1 flex-col">
+              <div className="report-paper flex min-h-[16rem] min-w-0 flex-1 flex-col pt-2">
                 <WysiwygEditor
                   key={`${session.id}:${session.editorKey}`}
                   reportId={session.id}
@@ -477,7 +477,7 @@ export function ReportsWorkspace() {
       <aside
         data-region="calendar-pane"
         aria-label={t.reports.history}
-        className="order-1 shrink-0 bg-surface-muted px-5 py-5 lg:order-2 lg:h-full lg:w-[20rem] lg:px-5 lg:py-6"
+        className="order-1 shrink-0 bg-surface px-5 py-5 lg:order-2 lg:h-full lg:w-[20rem] lg:px-5 lg:py-6"
       >
         <ReportsCalendar
           type={liveType}

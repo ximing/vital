@@ -53,6 +53,7 @@ import { assertOwnedTagIds } from '../tags/tags.service.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import {
   allDayLocalMidnight,
+  expandFixedTask,
   expandTask,
   nextFixedOccurrenceAfter,
   nextOccurrenceAfter,
@@ -930,6 +931,7 @@ export async function calendar(userId: string, query: CalendarQuery): Promise<Ca
         isNull(tasks.deletedAt),
         or(
           isNotNull(tasks.recurrenceRrule),
+          isNotNull(tasks.recurrenceKind),
           and(isNotNull(tasks.dueAt), gte(tasks.dueAt, from), lte(tasks.dueAt, to)),
           and(isNotNull(tasks.startAt), gte(tasks.startAt, from), lte(tasks.startAt, to)),
         ),
@@ -946,17 +948,29 @@ export async function calendar(userId: string, query: CalendarQuery): Promise<Ca
     list.push({ occurrenceAt: c.occurrenceAt });
     byTask.set(c.taskId, list);
   }
-  const instances = rows.flatMap((row) =>
-    expandTask(toRecurrence(row), byTask.get(row.id) ?? [], from, to).map((inst) => ({
-      taskId: inst.taskId,
-      listId: inst.listId,
-      title: inst.title,
-      occurrenceAt: inst.occurrenceAt.toISOString(),
-      isAllDay: inst.isAllDay,
-      status: inst.status,
-      priority: asPriority(inst.priority),
-    })),
+  const groups = await Promise.all(
+    rows.map(async (row) => {
+      const recurrenceKind = asRecurrenceKind(row.recurrenceKind);
+      const expanded = recurrenceKind
+        ? await expandFixedTask(
+            { ...toRecurrence(row), recurrenceKind },
+            byTask.get(row.id) ?? [],
+            from,
+            to,
+          )
+        : expandTask(toRecurrence(row), byTask.get(row.id) ?? [], from, to);
+      return expanded.map((inst) => ({
+        taskId: inst.taskId,
+        listId: inst.listId,
+        title: inst.title,
+        occurrenceAt: inst.occurrenceAt.toISOString(),
+        isAllDay: inst.isAllDay,
+        status: inst.status,
+        priority: asPriority(inst.priority),
+      }));
+    }),
   );
+  const instances = groups.flat();
   instances.sort((a, b) => a.occurrenceAt.localeCompare(b.occurrenceAt));
   return { instances };
 }

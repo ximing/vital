@@ -82,7 +82,8 @@ describe('search page', () => {
 
     const canvas = container.firstElementChild;
     expect(canvas).toHaveAttribute('data-region', 'search-canvas');
-    expect(canvas).toHaveClass('w-full', 'max-w-5xl');
+    expect(canvas).toHaveClass('w-full');
+    expect(canvas?.querySelector('.max-w-6xl')).not.toBeNull();
     expect(screen.getByLabelText(t.search.placeholder)).toHaveClass('w-full');
   });
 });

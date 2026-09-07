@@ -9,7 +9,7 @@ export function EmptyInbox() {
   const [hint, setHint] = useState(false);
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col items-center px-3 py-8 text-center">
+    <div className="relative flex min-h-0 flex-1 flex-col items-center px-3 py-8 text-center">
       <div data-vignette="mineral-garden" aria-hidden="true" className="absolute inset-0" />
       <EmptyArt className="relative z-10" />
       <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">

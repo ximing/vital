@@ -1,7 +1,7 @@
 import type { Task, Tag } from '@vital/dto';
 import type { DragEvent } from 'react';
 import { t } from '@/copy';
-import { dueMeta, isDueSoon, isOverdue } from './model';
+import { dueMeta, isDueSoon, isOverdue, recurrenceMeta, reminderMeta } from './model';
 import { priorityBarClass, PriorityMark } from './priority';
 
 export function TaskCheckbox({
@@ -67,8 +67,11 @@ export function TaskRow({
 }) {
   const overdue = isOverdue(task, timeZone);
   const soon = isDueSoon(task, timeZone);
-  const meta = dueMeta(task, timeZone);
-  const namedTags = tags.filter((tag) => task.tagIds.includes(tag.id));
+  const due = dueMeta(task, timeZone);
+  const reminder = reminderMeta(task, timeZone);
+  const repeat = recurrenceMeta(task);
+  const namedTags = tags.filter((tag) => task.tagIds.includes(tag.id)).slice(0, 3);
+  const extraTags = Math.max(0, task.tagIds.length - namedTags.length);
   const done = task.status === 'done';
   const note = task.notes.replaceAll(/\s+/g, ' ').trim();
 
@@ -85,7 +88,7 @@ export function TaskRow({
       onDrop={onDrop}
       onClick={onSelect}
       onDoubleClick={onOpen}
-      className={`flex min-h-11 cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
+      className={`group flex min-h-11 cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-[background-color] duration-[var(--ease-out)] ${
         selected ? 'bg-surface-muted' : 'hover:bg-surface-muted'
       } ${depth === 1 ? 'ml-8' : ''}`}
     >
@@ -111,24 +114,52 @@ export function TaskRow({
             {note}
           </p>
         ) : null}
-        <p className="flex flex-wrap items-center gap-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)]">
+        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)]">
+          {due ? (
+            <span
+              data-task-meta="due"
+              className={overdue ? 'text-overdue' : soon ? 'text-due' : 'text-secondary'}
+            >
+              {due}
+            </span>
+          ) : null}
+          {reminder ? (
+            <span data-task-meta="reminder" className="text-muted">
+              {reminder}
+            </span>
+          ) : null}
+          {repeat ? (
+            <span data-task-meta="recurrence" className="text-muted">
+              {repeat}
+            </span>
+          ) : null}
           {listName ? (
-            <span data-task-meta="project" className="text-muted">
+            <span data-task-meta="project" className="text-tertiary">
               {listName}
             </span>
           ) : null}
-          {meta ? (
-            <span className={overdue ? 'text-overdue' : soon ? 'text-due' : 'text-muted'}>
-              {meta}
-            </span>
-          ) : null}
           {namedTags.map((tag) => (
-            <span key={tag.id} className="rounded-sm bg-surface-muted px-1.5 text-[length:var(--text-caption)] text-muted">
-              {tag.name}
+            <span
+              key={tag.id}
+              data-task-meta="tag"
+              className="text-tertiary"
+            >
+              #{tag.name}
             </span>
           ))}
+          {extraTags > 0 ? <span className="text-tertiary">+{extraTags}</span> : null}
         </p>
       </div>
+      <button
+        type="button"
+        className="mt-0.5 h-8 shrink-0 rounded-md px-2 text-[length:var(--text-caption)] text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-surface hover:text-fg"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen();
+        }}
+      >
+        {t.todos.openDetail}
+      </button>
     </div>
   );
 }

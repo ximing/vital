@@ -169,4 +169,34 @@ describe('recurrence flow', () => {
     expect(completed.json().task.recurrenceKind).toBe('legal_workdays');
     expect(completed.json().task.dueAt).toBe('2026-02-21T01:00:00.000Z');
   });
+
+  it('expands fixed recurrence into future calendar instances', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '晨间规划',
+        listId: inbox,
+        dueAt: '2026-09-07T09:00:00+08:00',
+        timezone: 'Asia/Shanghai',
+        recurrenceKind: 'daily',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const calendar = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks/calendar?from=2026-09-07T00:00:00.000Z&to=2026-09-09T23:59:59.000Z',
+      token: alice.token,
+    });
+    expect(calendar.statusCode).toBe(200);
+    expect(calendar.json().instances.map((item: { occurrenceAt: string }) => item.occurrenceAt)).toEqual([
+      '2026-09-07T01:00:00.000Z',
+      '2026-09-08T01:00:00.000Z',
+      '2026-09-09T01:00:00.000Z',
+    ]);
+  });
 });

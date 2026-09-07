@@ -1,4 +1,5 @@
 import { Bell, Palette, SlidersHorizontal, User } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { AccountSection } from '@/features/settings/AccountSection';
@@ -20,49 +21,87 @@ function isTab(value: string | null): (typeof TABS)[number]['id'] {
   return 'account';
 }
 
+export function SettingsBlock({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl bg-surface px-6 py-6">
+      <h2 className="text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-fg">
+        {title}
+      </h2>
+      {description ? (
+        <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+          {description}
+        </p>
+      ) : null}
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const [search, setSearch] = useSearchParams();
   const tab = isTab(search.get('tab'));
 
   return (
-    <div data-region="settings-canvas" className="mx-auto w-full max-w-5xl px-8 py-12 xl:px-10">
-      <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
-        {t.settings.title}
-      </h1>
-      <p className="mt-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-        {t.empty.settings}
-      </p>
+    <div data-region="settings-canvas" className="h-full min-h-0 w-full overflow-y-auto px-8 py-10 xl:px-12">
+      <div className="w-full max-w-6xl">
+        <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
+          {t.settings.title}
+        </h1>
+        <p className="mt-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          {t.empty.settings}
+        </p>
 
-      <div
-        className="mt-8 flex gap-1 rounded-lg border border-border bg-surface p-1"
-        role="tablist"
-        aria-label={t.settings.title}
-      >
-        {TABS.map((item) => {
-          const active = tab === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setSearch(item.id === 'account' ? {} : { tab: item.id })}
-              className={`inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)] ${
-                active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
-              }`}
-            >
-              <Icon icon={item.icon} size={15} />
-              {item.label}
-            </button>
-          );
-        })}
-      </div>
+        <div className="mt-8 flex flex-wrap gap-1" role="tablist" aria-label={t.settings.title}>
+          {TABS.map((item) => {
+            const active = tab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setSearch(item.id === 'account' ? {} : { tab: item.id })}
+                className={`inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)] ${
+                  active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
+                }`}
+              >
+                <Icon icon={item.icon} size={15} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
 
-      <div className="mt-8" role="tabpanel">
-        {tab === 'account' ? <AccountSection /> : null}
-        {tab === 'appearance' ? <ThemeToggle /> : null}
-        {tab === 'notifications' ? <NotificationsSection heading={false} /> : null}
-        {tab === 'prefs' ? <PrefsSection /> : null}
+        <div className="mt-6" role="tabpanel">
+          {tab === 'account' ? (
+            <SettingsBlock title={t.settings.account}>
+              <AccountSection />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'appearance' ? (
+            <SettingsBlock title={t.settings.appearance}>
+              <ThemeToggle />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'notifications' ? (
+            <SettingsBlock title={t.settings.notify.title} description={t.settings.notify.hint}>
+              <NotificationsSection heading={false} />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'prefs' ? (
+            <SettingsBlock title={t.settings.prefs}>
+              <PrefsSection />
+            </SettingsBlock>
+          ) : null}
+        </div>
       </div>
     </div>
   );

@@ -85,7 +85,7 @@ export function SecondaryPane({
   return (
     <aside
       data-region="library"
-      className="relative flex h-full shrink-0 flex-col bg-surface"
+      className="relative flex h-full min-h-0 shrink-0 flex-col self-stretch bg-surface"
       style={{ width }}
       aria-label={title}
     >

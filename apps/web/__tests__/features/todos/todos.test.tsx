@@ -220,6 +220,9 @@ describe('todos workspace', () => {
       listId: project.id,
       notes: '同步到下周行动计划',
       dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+      reminderMode: 'offset',
+      reminderOffsetMinutes: 15,
+      recurrenceKind: 'weekdays',
       tagIds: [focusTag.id],
     });
     vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox, project] });
@@ -231,8 +234,11 @@ describe('todos workspace', () => {
     const row = await screen.findByRole('option', { name: task.title });
     expect(within(row).getByText(project.name)).toBeInTheDocument();
     expect(within(row).getByText(task.notes)).toBeInTheDocument();
-    expect(within(row).getByText(focusTag.name)).toBeInTheDocument();
+    expect(within(row).getByText(`#${focusTag.name}`)).toBeInTheDocument();
     expect(within(row).getByText('今天')).toBeInTheDocument();
+    expect(within(row).getByText(t.todos.reminder15m)).toBeInTheDocument();
+    expect(within(row).getByText(t.todos.recurrenceWeekdays)).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: t.todos.openDetail })).toBeInTheDocument();
   });
 
   it('j selects the overdue row when it is painted above today', async () => {

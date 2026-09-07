@@ -6,13 +6,13 @@ import { useAuth } from '@/services/auth.service';
 import { Button } from '@/ui/button';
 import { DateField } from '@/ui/date-field';
 import { Icon, type LucideIcon } from '@/ui/icon';
+import { SelectField } from '@/ui/select-field';
 import { NotesEditor } from './NotesEditor';
 import { PriorityPicker } from './priority';
+import { RecurrenceField, ReminderField } from './schedule-fields';
 import {
   fromDatetimeLocal,
   inboxList,
-  recurrenceKind,
-  rruleForKind,
   toDateInput,
   toDatetimeLocal,
   userLists,
@@ -20,9 +20,6 @@ import {
 } from './model';
 import { TaskCheckbox } from './TaskRow';
 import { todosUi, useTodosUi } from './todos-ui.service';
-
-const controlClass =
-  'h-9 w-full rounded-xl border border-transparent bg-transparent px-2 text-[length:var(--text-meta)] text-fg hover:border-border focus:border-border';
 
 function PropRow({
   icon,
@@ -34,9 +31,9 @@ function PropRow({
   children: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)] items-center gap-x-2">
-      <Icon icon={icon} size={15} className="justify-self-center text-muted" />
-      <span className="truncate text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+    <div className="grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)] items-start gap-x-2">
+      <Icon icon={icon} size={15} className="mt-2.5 justify-self-center text-muted" />
+      <span className="mt-2.5 truncate text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
         {label}
       </span>
       <div className="min-w-0">{children}</div>
@@ -151,15 +148,13 @@ export function TaskDetail({
       : allDay
         ? toDateInput(task.startAt, zone)
         : toDatetimeLocal(task.startAt, zone);
-  const kind = recurrenceKind(task.recurrence);
-
   return (
     <aside
       data-region="detail"
-      className="flex h-full min-h-full w-full max-w-[25rem] shrink-0 flex-col bg-elevated"
+      className="flex h-full min-h-0 w-full max-w-[25rem] shrink-0 flex-col bg-elevated"
       aria-label={task.title}
     >
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+      <div className="flex items-center gap-2 px-3 py-2">
         <TaskCheckbox task={task} timeZone={zone} onToggle={() => onComplete(task)} />
         <button
           type="button"
@@ -186,33 +181,29 @@ export function TaskDetail({
 
           {movable ? (
             <PropRow icon={Folder} label={t.todos.list}>
-              <select
-                className={controlClass}
+              <SelectField
                 value={task.listId}
-                aria-label={t.todos.list}
-                onChange={(e) => onPatch({ listId: e.target.value })}
-              >
-                {inbox ? <option value={inbox.id}>{t.lists.inbox}</option> : null}
-                {userLists(lists).map((list) => (
-                  <option key={list.id} value={list.id}>
-                    {list.name}
-                  </option>
-                ))}
-              </select>
+                ariaLabel={t.todos.list}
+                options={[
+                  ...(inbox ? [{ value: inbox.id, label: t.lists.inbox }] : []),
+                  ...userLists(lists).map((list) => ({ value: list.id, label: list.name })),
+                ]}
+                onChange={(listId) => onPatch({ listId })}
+              />
             </PropRow>
           ) : null}
 
           {task.status !== 'done' ? (
             <PropRow icon={ListTodo} label={t.todos.status.todo}>
-              <select
-                className={controlClass}
+              <SelectField
                 value={task.status === 'doing' ? 'doing' : 'todo'}
-                aria-label={t.todos.status.todo}
-                onChange={(e) => onPatch({ status: e.target.value === 'doing' ? 'doing' : 'todo' })}
-              >
-                <option value="todo">{t.todos.status.todo}</option>
-                <option value="doing">{t.todos.status.doing}</option>
-              </select>
+                ariaLabel={t.todos.status.todo}
+                options={[
+                  { value: 'todo', label: t.todos.status.todo },
+                  { value: 'doing', label: t.todos.status.doing },
+                ]}
+                onChange={(status) => onPatch({ status })}
+              />
             </PropRow>
           ) : null}
 
@@ -250,61 +241,27 @@ export function TaskDetail({
 
           {task.dueAt === null && task.startAt === null ? (
             <PropRow icon={Folder} label={t.todos.timeBucket}>
-              <select
-                className={controlClass}
+              <SelectField
                 value={task.timeBucket}
-                aria-label={t.todos.timeBucket}
-                onChange={(e) =>
-                  onPatch({ timeBucket: e.target.value as TimeBucket, dueAt: null, startAt: null })
+                ariaLabel={t.todos.timeBucket}
+                options={[
+                  { value: 'anytime', label: t.lists.anytime },
+                  { value: 'someday', label: t.lists.someday },
+                  { value: 'dated', label: t.todos.due },
+                ]}
+                onChange={(timeBucket) =>
+                  onPatch({ timeBucket: timeBucket as TimeBucket, dueAt: null, startAt: null })
                 }
-              >
-                <option value="anytime">{t.lists.anytime}</option>
-                <option value="someday">{t.lists.someday}</option>
-                <option value="dated">{t.todos.due}</option>
-              </select>
+              />
             </PropRow>
           ) : null}
 
           <PropRow icon={Repeat} label={t.todos.recurrence}>
-            <select
-              className={controlClass}
-              value={kind === 'custom' ? 'custom' : kind}
-              aria-label={t.todos.recurrence}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value === 'none') onPatch({ recurrence: null });
-                else if (
-                  value === 'daily' ||
-                  value === 'weekly' ||
-                  value === 'monthly' ||
-                  value === 'yearly'
-                ) {
-                  onPatch({ recurrence: rruleForKind(value) });
-                }
-              }}
-            >
-              <option value="none">{t.todos.recurrenceNone}</option>
-              <option value="daily">{t.todos.recurrenceDaily}</option>
-              <option value="weekly">{t.todos.recurrenceWeekly}</option>
-              <option value="monthly">{t.todos.recurrenceMonthly}</option>
-              <option value="yearly">{t.todos.recurrenceYearly}</option>
-              {kind === 'custom' ? <option value="custom">{task.recurrence}</option> : null}
-            </select>
+            <RecurrenceField task={task} onPatch={onPatch} />
           </PropRow>
 
           <PropRow icon={Bell} label={t.todos.remind}>
-            <DateField
-              value={task.remindAt ? toDatetimeLocal(task.remindAt, zone) : ''}
-              kind="datetime-local"
-              ariaLabel={t.todos.remind}
-              zone={zone}
-              weekStartsOn={weekStartsOn}
-              onChange={(value) =>
-                onPatch({
-                  remindAt: value === '' ? null : fromDatetimeLocal(value, zone),
-                })
-              }
-            />
+            <ReminderField task={task} zone={zone} weekStartsOn={weekStartsOn} onPatch={onPatch} />
           </PropRow>
         </div>
 
@@ -334,7 +291,7 @@ export function TaskDetail({
           </div>
           <form onSubmit={(e) => void addTag(e)} className="mt-2">
             <input
-              className="h-8 w-full rounded-xl border border-border bg-canvas px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
+              className="h-[var(--field-h)] w-full rounded-md bg-surface-muted/70 px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted outline-none focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
               placeholder={t.todos.addTag}
@@ -380,7 +337,7 @@ export function TaskDetail({
               }}
             >
               <input
-                className="h-8 w-full rounded-xl border border-border bg-canvas px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
+                className="h-[var(--field-h)] w-full rounded-md bg-surface-muted/70 px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted outline-none focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]"
                 value={subTitle}
                 onChange={(e) => setSubTitle(e.target.value)}
                 placeholder={t.todos.addSubtask}

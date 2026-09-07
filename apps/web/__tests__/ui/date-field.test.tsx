@@ -23,5 +23,6 @@ describe('DateField', () => {
       'bg-elevated',
       'rounded-md',
     );
+    expect(screen.getByRole('option', { name: '9时' })).toBeInTheDocument();
   });
 });
