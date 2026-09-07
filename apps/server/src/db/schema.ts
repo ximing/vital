@@ -9,3 +9,4 @@ export * from './schema/entity-links.js';
 export * from './schema/reports.js';
 export * from './schema/notifications.js';
 export * from './schema/extension-auth.js';
+export * from './schema/holiday-calendar.js';

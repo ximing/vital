@@ -50,6 +50,13 @@
       "when": 1788710400000,
       "tag": "0006_user_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788742800000,
+      "tag": "0007_task_reminder_recurrence",
+      "breakpoints": true
     }
   ]
 }

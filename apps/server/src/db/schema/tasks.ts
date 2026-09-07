@@ -43,10 +43,14 @@ export const tasks = pgTable(
     dueAt: timestamp('due_at', { withTimezone: true, mode: 'date' }),
     startAt: timestamp('start_at', { withTimezone: true, mode: 'date' }),
     remindAt: timestamp('remind_at', { withTimezone: true, mode: 'date' }),
+    reminderMode: varchar('reminder_mode', { length: 16 }),
+    reminderOffsetMinutes: smallint('reminder_offset_minutes'),
+    reminderAt: timestamp('reminder_at', { withTimezone: true, mode: 'date' }),
     isAllDay: boolean('is_all_day').notNull().default(false),
     timezone: varchar('timezone', { length: 64 }).notNull(),
     timeBucket: varchar('time_bucket', { length: 16 }).notNull().default('anytime'),
     recurrenceRrule: text('recurrence_rrule'),
+    recurrenceKind: varchar('recurrence_kind', { length: 32 }),
     recurrenceDtstart: timestamp('recurrence_dtstart', { withTimezone: true, mode: 'date' }),
     completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }),
     sortOrder: bigint('sort_order', { mode: 'number' }).notNull().default(0),
@@ -69,6 +73,8 @@ export const tasks = pgTable(
     check('tasks_status_check', sql`${t.status} IN ('todo', 'doing', 'done', 'canceled')`),
     check('tasks_priority_check', sql`${t.priority} BETWEEN 0 AND 3`),
     check('tasks_time_bucket_check', sql`${t.timeBucket} IN ('dated', 'anytime', 'someday')`),
+    check('tasks_reminder_mode_check', sql`${t.reminderMode} IS NULL OR ${t.reminderMode} IN ('none', 'due', 'offset', 'custom')`),
+    check('tasks_recurrence_kind_check', sql`${t.recurrenceKind} IS NULL OR ${t.recurrenceKind} IN ('daily', 'weekly', 'monthly', 'yearly', 'weekdays', 'weekends', 'holidays', 'legal_workdays')`),
   ],
 );
 
