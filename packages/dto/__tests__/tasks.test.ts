@@ -14,6 +14,29 @@ describe('createTaskInputSchema', () => {
       false,
     );
   });
+
+  it('accepts fixed recurrence and supported reminder presets', () => {
+    const parsed = createTaskInputSchema.parse({
+      title: '发送周报',
+      listId: '11111111-1111-4111-8111-111111111111',
+      reminderMode: 'offset',
+      reminderOffsetMinutes: 15,
+      recurrenceKind: 'legal_workdays',
+    });
+    expect(parsed.reminderOffsetMinutes).toBe(15);
+    expect(parsed.recurrenceKind).toBe('legal_workdays');
+  });
+
+  it('rejects an unsupported reminder offset', () => {
+    expect(
+      createTaskInputSchema.safeParse({
+        title: '发送周报',
+        listId: '11111111-1111-4111-8111-111111111111',
+        reminderMode: 'offset',
+        reminderOffsetMinutes: 10,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('patchTaskInputSchema', () => {

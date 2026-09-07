@@ -17,6 +17,30 @@ export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 export const timeBucketSchema = z.enum(['dated', 'anytime', 'someday']);
 export type TimeBucket = z.infer<typeof timeBucketSchema>;
 
+export const reminderModeSchema = z.enum(['none', 'due', 'offset', 'custom']);
+export type ReminderMode = z.infer<typeof reminderModeSchema>;
+
+export const reminderOffsetMinutesSchema = z.union([
+  z.literal(5),
+  z.literal(15),
+  z.literal(30),
+  z.literal(60),
+  z.literal(1440),
+]);
+export type ReminderOffsetMinutes = z.infer<typeof reminderOffsetMinutesSchema>;
+
+export const recurrenceKindSchema = z.enum([
+  'daily',
+  'weekly',
+  'monthly',
+  'yearly',
+  'weekdays',
+  'weekends',
+  'holidays',
+  'legal_workdays',
+]);
+export type RecurrenceKind = z.infer<typeof recurrenceKindSchema>;
+
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 
 export interface Task {
@@ -30,10 +54,14 @@ export interface Task {
   dueAt: string | null;
   startAt: string | null;
   remindAt: string | null;
+  reminderMode?: ReminderMode | null;
+  reminderOffsetMinutes?: ReminderOffsetMinutes | null;
+  reminderAt?: string | null;
   isAllDay: boolean;
   timezone: string;
   timeBucket: TimeBucket;
   recurrence: string | null;
+  recurrenceKind?: RecurrenceKind | null;
   recurrenceDtstart: string | null;
   completedAt: string | null;
   sortOrder: number;
@@ -68,11 +96,22 @@ export const createTaskInputSchema = z.object({
   dueAt: isoDateTimeSchema.nullable().optional(),
   startAt: isoDateTimeSchema.nullable().optional(),
   remindAt: isoDateTimeSchema.nullable().optional(),
+  reminderMode: reminderModeSchema.optional(),
+  reminderOffsetMinutes: reminderOffsetMinutesSchema.nullable().optional(),
+  reminderAt: isoDateTimeSchema.nullable().optional(),
   isAllDay: z.boolean().optional(),
   timezone: ianaTimezoneSchema.optional(),
   timeBucket: timeBucketSchema.optional(),
   recurrence: z.string().trim().min(1).max(500).nullable().optional(),
+  recurrenceKind: recurrenceKindSchema.nullable().optional(),
   tagIds: tagIdsSchema.optional(),
+}).superRefine((value, ctx) => {
+  if (value.reminderMode === 'offset' && value.reminderOffsetMinutes === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reminderOffsetMinutes'], message: 'offset required' });
+  }
+  if (value.reminderMode === 'custom' && value.reminderAt === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reminderAt'], message: 'custom reminder required' });
+  }
 });
 export type CreateTaskInput = z.infer<typeof createTaskInputSchema>;
 
@@ -86,10 +125,14 @@ export const patchTaskInputSchema = z
     dueAt: isoDateTimeSchema.nullable().optional(),
     startAt: isoDateTimeSchema.nullable().optional(),
     remindAt: isoDateTimeSchema.nullable().optional(),
+    reminderMode: reminderModeSchema.nullable().optional(),
+    reminderOffsetMinutes: reminderOffsetMinutesSchema.nullable().optional(),
+    reminderAt: isoDateTimeSchema.nullable().optional(),
     isAllDay: z.boolean().optional(),
     timezone: ianaTimezoneSchema.optional(),
     timeBucket: timeBucketSchema.optional(),
     recurrence: z.string().trim().min(1).max(500).nullable().optional(),
+    recurrenceKind: recurrenceKindSchema.nullable().optional(),
     tagIds: tagIdsSchema.optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
