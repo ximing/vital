@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ApiError } from '@vital/api-client';
@@ -14,6 +14,7 @@ import {
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
+import { subscribeSync } from '../../lib/sync';
 import { copy } from '../../lib/copy';
 import { markOnboarding } from '../../lib/onboarding';
 import { humanError } from '../../lib/errors';
@@ -87,6 +88,14 @@ export function ReportEditor({ reportId }: { reportId: string }) {
       setError(humanError(err));
     }
   }, [applyReport, reportId]);
+
+  useEffect(() => {
+    return subscribeSync((changes) => {
+      const mine = changes.reports.some((row) => row.id === reportId);
+      if (!mine && changes.tasks.length === 0 && changes.inbox.length === 0) return;
+      void load();
+    });
+  }, [load, reportId]);
 
   useFocusReload(load);
 

@@ -1,3 +1,4 @@
+import '@fastify/websocket';
 import type { Database } from './db/index.js';
 
 export type AuthPrincipal = { id: string };

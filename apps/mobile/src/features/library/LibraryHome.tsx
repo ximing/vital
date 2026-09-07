@@ -44,7 +44,6 @@ export function LibraryHome() {
 
   const load = useCallback(async () => {
     try {
-      await client.syncHead().catch(() => undefined);
       const res = await client.listLists();
       setLists(res.items);
       setError(null);

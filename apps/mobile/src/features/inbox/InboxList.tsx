@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { mergeInboxItems } from '@vital/api-client';
 import type { InboxItem } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { client } from '../../lib/api';
+import { pullSync, subscribeSync } from '../../lib/sync';
 import { copy } from '../../lib/copy';
 import { humanError, isNetworkError } from '../../lib/errors';
 import { formatDateTime } from '../../lib/format';
@@ -42,10 +44,22 @@ export function InboxList() {
     }
   }, []);
 
+  const primed = useRef(false);
+
+  useEffect(() => {
+    return subscribeSync((changes) => {
+      if (changes.inbox.length === 0) return;
+      setItems((prev) => mergeInboxItems(prev, changes.inbox));
+    });
+  }, []);
+
   useFocusReload(
     useCallback(async () => {
-      await client.syncHead().catch(() => undefined);
-      await load(false);
+      await pullSync().catch(() => undefined);
+      if (!primed.current) {
+        primed.current = true;
+        await load(false);
+      }
     }, [load]),
   );
 

@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAuthRoutes } from './auth/auth.routes.js';
 import { config } from './config.js';
@@ -15,6 +16,7 @@ import { globalRateLimit } from './plugins/rate-limit.js';
 import { isTrustedProxy } from './plugins/trust-proxy.js';
 import { registerReportRoutes } from './reports/reports.routes.js';
 import { registerSearchRoutes } from './search/search.routes.js';
+import { maybePublish } from './sync/sync.hub.js';
 import { registerSyncRoutes } from './sync/sync.routes.js';
 import { setStorageAdapter, type UnifiedStorageAdapter } from './storage/factory.js';
 import { registerTagRoutes } from './tags/tags.routes.js';
@@ -50,6 +52,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   });
   await app.register(cookie, { secret: config.COOKIE_SECRET });
   await app.register(rateLimit, globalRateLimit);
+  await app.register(websocket, { options: { maxPayload: 64 * 1024 } });
 
   app.addHook('preHandler', populateUser);
   app.addHook('onSend', (req, reply, payload, done) => {
@@ -61,6 +64,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
       done();
       return;
     }
+    maybePublish(req.method, req.url, reply.statusCode, req.user?.id);
     logger.info('http_request', {
       method: req.method,
       url: req.url,

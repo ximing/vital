@@ -35,7 +35,12 @@ export function ipKey(ip: string): string {
 }
 
 export function ipFrom(req: FastifyRequest): string {
-  return ipKey(req.ip || '0.0.0.0');
+  try {
+    return ipKey(req.ip || '0.0.0.0');
+  } catch {
+    // injectWS / upgrade requests may have no socket, so `req.ip` throws.
+    return '0.0.0.0';
+  }
 }
 
 /** Same normalization as dto email schemas (trim + lower). */
@@ -65,6 +70,10 @@ export const globalRateLimit = {
   max: isTest ? 1000 : 120,
   timeWindow: 60_000,
   keyGenerator: (req: FastifyRequest) => ipFrom(req),
+  allowList: (req: FastifyRequest) => {
+    const path = req.url.split('?')[0];
+    return path === '/api/v1/sync/events';
+  },
   errorResponseBuilder: () => rateLimitError(),
 };
 

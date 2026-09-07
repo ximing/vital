@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router';
 import { App } from '@/App';
 import { t } from '@/copy';
 import { subscribeSystemTheme } from '@/lib/theme';
+import { startSync, stopSync } from '@/features/sync/sync-engine';
 import { authService, useAuth } from '@/services/auth.service';
 import { registerVitalServices } from '@/services/register';
 import { VitalMark } from '@/shell/VitalMark';
@@ -34,12 +35,22 @@ function BootScreen() {
 
 function Root() {
   const status = useAuth((s) => s.status);
+  const userId = useAuth((s) => s.user?.id ?? null);
 
   useEffect(() => {
     void authService().boot();
   }, []);
 
   useEffect(() => subscribeSystemTheme(), []);
+
+  useEffect(() => {
+    if (status !== 'ready' || userId === null) {
+      stopSync();
+      return;
+    }
+    startSync(queryClient);
+    return () => stopSync();
+  }, [status, userId]);
 
   if (status === 'booting') return <BootScreen />;
   return <App />;

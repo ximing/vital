@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -6,6 +6,7 @@ import type { ReportOverview, ReportType } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
+import { pullSync, subscribeSync } from '../../lib/sync';
 import { copy } from '../../lib/copy';
 import { markOnboarding } from '../../lib/onboarding';
 import { humanError, isNetworkError } from '../../lib/errors';
@@ -43,10 +44,25 @@ export function ReportList() {
     }
   }, []);
 
+  const primed = useRef(false);
+
+  useEffect(() => {
+    return subscribeSync((changes) => {
+      if (changes.tasks.length === 0 && changes.inbox.length === 0 && changes.reports.length === 0) {
+        return;
+      }
+      void load(type);
+    });
+  }, [load, type]);
+
   useFocusReload(
     useCallback(async () => {
-      await client.syncHead().catch(() => undefined);
-      await load(type);
+      await pullSync().catch(() => undefined);
+      if (!primed.current) {
+        primed.current = true;
+        await load(type);
+        return;
+      }
     }, [load, type]),
   );
 

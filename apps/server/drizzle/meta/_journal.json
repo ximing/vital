@@ -64,6 +64,13 @@
       "when": 1788829200000,
       "tag": "0008_drop_remind_at",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788915600000,
+      "tag": "0009_inbox_user_updated",
+      "breakpoints": true
     }
   ]
 }

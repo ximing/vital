@@ -67,6 +67,7 @@ export const inboxItems = pgTable(
       .on(t.userId, t.idempotencyKey)
       .where(sql`${t.idempotencyKey} IS NOT NULL`),
     index('idx_inbox_items_user_captured').on(t.userId, t.capturedAt),
+    index('idx_inbox_items_user_updated').on(t.userId, t.updatedAt),
     index('idx_inbox_items_search_tsv').using('gin', t.searchTsv),
     index('idx_inbox_items_title_trgm').using('gin', sql`${t.title} gin_trgm_ops`),
     check(

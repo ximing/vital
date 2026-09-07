@@ -1,12 +1,14 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List as ListIcon } from 'lucide-react-native';
+import { mergeTasksIntoList } from '@vital/api-client';
 import type { CalendarInstance, List, ListId, Tag, Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Icon } from '../../ui/icon';
 import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
+import { pullSync, subscribeSync } from '../../lib/sync';
 import { copy } from '../../lib/copy';
 import { humanError, isNetworkError } from '../../lib/errors';
 import { localDateStamp, nestTasks, zonedLocalMidnightIso } from '../../lib/format';
@@ -107,11 +109,33 @@ export function TaskList({
     }
   }, [tz, weekAnchor, weekStartsOn]);
 
+  const primed = useRef(false);
+
+  useEffect(() => {
+    return subscribeSync((changes) => {
+      if (changes.tasks.length === 0) return;
+      if (String(listId).startsWith('smart:')) {
+        void load(false);
+      } else {
+        setItems((prev) => mergeTasksIntoList(prev, changes.tasks, listId));
+      }
+      if (view === 'week') void loadWeek();
+    });
+  }, [listId, load, loadWeek, view]);
+
   useFocusReload(useCallback(async () => {
-    await client.syncHead().catch(() => undefined);
-    await load(false);
-    if (view === 'week') await loadWeek();
-  }, [load, loadWeek, view]));
+    const changes = await pullSync().catch(() => null);
+    if (!primed.current) {
+      primed.current = true;
+      await load(false);
+      if (view === 'week') await loadWeek();
+      return;
+    }
+    if (changes && changes.tasks.length > 0 && String(listId).startsWith('smart:')) {
+      await load(false);
+    }
+    if (view === 'week' && changes && changes.tasks.length > 0) await loadWeek();
+  }, [listId, load, loadWeek, view]));
 
   const nested = useMemo(() => nestTasks(items.filter((row) => row.deletedAt === null)), [items]);
   const resolvedCreateId = createListId ?? inboxCreateId;

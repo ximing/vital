@@ -46,6 +46,7 @@ import type {
   ReorderTasksInput,
   SearchInput,
   SearchResponse,
+  SyncChanges,
   SyncHead,
   TagCollection,
   Task,
@@ -138,6 +139,7 @@ export interface VitalClient {
   patchReport(id: string, input: PatchReportInput): Promise<Report>;
   fillReport(id: string, input: FillReportInput): Promise<Report>;
   syncHead(): Promise<SyncHead>;
+  syncChanges(query: { since: string; limit?: number }): Promise<SyncChanges>;
 }
 
 async function persistAuth(options: VitalClientOptions, data: unknown): Promise<AuthResponse> {
@@ -320,5 +322,10 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     fillReport: (id, input) =>
       http.request(`/api/v1/reports/${id}/fill`, { method: 'POST', body: input }),
     syncHead: () => http.request('/api/v1/sync/head'),
+    syncChanges: (query) => {
+      const q: Record<string, string | number | boolean | undefined> = { since: query.since };
+      if (query.limit !== undefined) q.limit = query.limit;
+      return http.request('/api/v1/sync/changes', { query: q });
+    },
   };
 }

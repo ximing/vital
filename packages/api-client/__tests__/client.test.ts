@@ -300,6 +300,7 @@ describe('createVitalClient reports + sync', () => {
     await client.getReportEmbeds('r1');
     await client.fillReport('r1', { revision: 1 });
     await client.syncHead();
+    await client.syncChanges({ since: '2026-09-01T00:00:00.000Z', limit: 50 });
     expect(urls).toEqual([
       'GET http://x/api/v1/reports/current?type=daily',
       'GET http://x/api/v1/reports/overview?type=daily',
@@ -307,6 +308,7 @@ describe('createVitalClient reports + sync', () => {
       'GET http://x/api/v1/reports/r1/embeds',
       'POST http://x/api/v1/reports/r1/fill',
       'GET http://x/api/v1/sync/head',
+      'GET http://x/api/v1/sync/changes?since=2026-09-01T00%3A00%3A00.000Z&limit=50',
     ]);
   });
 });
