@@ -20,6 +20,7 @@
     "@vital/dto": "workspace:*",
     "@vital/markdown": "workspace:*",
     "@vital/tokens": "workspace:*",
+    "babel-preset-expo": "~54.0.12",
     "expo": "~54.0.0",
     "expo-constants": "~18.0.5",
     "expo-file-system": "~19.0.5",
