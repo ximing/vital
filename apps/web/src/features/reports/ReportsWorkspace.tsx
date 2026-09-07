@@ -363,9 +363,9 @@ export function ReportsWorkspace() {
       <main
         id="main"
         data-region="reflection-canvas"
-        className="order-2 flex min-h-0 min-w-0 flex-1 flex-col bg-canvas lg:order-1"
+        className="order-2 flex min-h-0 min-w-0 flex-1 flex-col bg-canvas px-8 py-8 lg:order-1 xl:px-12"
       >
-        <div className="flex w-full max-w-[45rem] flex-1 flex-col">
+        <div className="flex w-full max-w-5xl flex-1 flex-col">
           <header className="flex shrink-0 items-end justify-between gap-3 pb-2">
             <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
               {t.reports.kicker}
@@ -477,7 +477,7 @@ export function ReportsWorkspace() {
       <aside
         data-region="calendar-pane"
         aria-label={t.reports.history}
-        className="order-1 shrink-0 border-b border-border bg-surface px-4 py-3 lg:order-2 lg:h-full lg:w-[17.5rem] lg:border-b-0 lg:border-l lg:px-3 lg:py-5"
+        className="order-1 shrink-0 bg-surface-muted px-5 py-5 lg:order-2 lg:h-full lg:w-[20rem] lg:px-5 lg:py-6"
       >
         <ReportsCalendar
           type={liveType}

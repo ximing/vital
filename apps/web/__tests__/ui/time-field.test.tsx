@@ -8,6 +8,6 @@ describe('TimeField', () => {
 
     const input = screen.getByLabelText('提醒时间');
     expect(input).toHaveAttribute('type', 'time');
-    expect(input).toHaveClass('rounded-md', 'border', 'border-border');
+    expect(input).toHaveClass('h-[var(--field-h)]', 'rounded-md', 'bg-surface-muted/70');
   });
 });

@@ -121,10 +121,14 @@ export async function discardUpload(userId: string, id: string): Promise<void> {
   }
 }
 
-export async function resolveAccessUrl(userId: string, id: string): Promise<string> {
+export async function resolveAccessUrl(userId: string, id: string, expiresIn?: number): Promise<string> {
   const row = await getOwnedAttachmentOr404(userId, id);
   if (row.status !== 'ready') throw AppError.of(404, 'ATTACHMENT_NOT_FOUND');
-  return getStorage().generateAccessUrl(row.s3Key, row.storageMeta, config.PRESIGN_GET_TTL_SECONDS);
+  return getStorage().generateAccessUrl(
+    row.s3Key,
+    row.storageMeta,
+    expiresIn ?? config.PRESIGN_GET_TTL_SECONDS,
+  );
 }
 
 export async function bindUpload(

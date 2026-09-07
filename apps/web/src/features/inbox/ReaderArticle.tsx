@@ -1,6 +1,5 @@
 import type { InboxAsset } from '@vital/dto';
 import { useEffect, useState } from 'react';
-import { client } from '@/api/client';
 import { t } from '@/copy';
 import { type ReaderSize } from './model';
 import { prepareReaderHtml, purifyInboxHtml, readerSourceHtml } from './purify';
@@ -21,7 +20,7 @@ function ReaderArticleBody({
   useEffect(() => {
     let cancelled = false;
     const urls: string[] = [];
-    void prepareReaderHtml(html, text, assets, (id) => client.fetchUploadBlob(id)).then(
+    void prepareReaderHtml(html, text, assets).then(
       (result) => {
         urls.push(...result.objectUrls);
         if (!cancelled) setOut(result.html);

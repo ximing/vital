@@ -69,7 +69,6 @@ export function readerSourceHtml(html: string | null, text: string | null): stri
 export async function rewriteInboxImages(
   html: string,
   assets: InboxAsset[],
-  fetchBlob: (id: string) => Promise<Blob>,
 ): Promise<{ html: string; objectUrls: string[] }> {
   if (html === '') return { html: '', objectUrls: [] };
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -85,10 +84,8 @@ export async function rewriteInboxImages(
     }
     if (attachmentId === null) continue;
     try {
-      const blob = await fetchBlob(attachmentId);
-      const url = URL.createObjectURL(blob);
-      objectUrls.push(url);
-      img.setAttribute('src', url);
+      const asset = assets.find((candidate) => candidate.attachmentId === attachmentId);
+      if (asset?.url) img.setAttribute('src', asset.url);
     } catch {
       // Keep the purified original src.
     }
@@ -104,8 +101,7 @@ export async function prepareReaderHtml(
   html: string | null,
   text: string | null,
   assets: InboxAsset[],
-  fetchBlob: (id: string) => Promise<Blob>,
 ): Promise<{ html: string; objectUrls: string[] }> {
   const purified = purifyInboxHtml(readerSourceHtml(html, text));
-  return rewriteInboxImages(purified, assets, fetchBlob);
+  return rewriteInboxImages(purified, assets);
 }

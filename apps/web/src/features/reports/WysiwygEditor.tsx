@@ -239,12 +239,12 @@ export function WysiwygEditor({
 
   return (
     <div
-      className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-surface"
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
       data-testid="report-wysiwyg"
       data-region="report-editor"
       onClick={onClick}
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b border-border px-2 py-1.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-0.5 rounded-md bg-surface-muted/65 px-2 py-1.5">
         <span className="mr-2 px-1 text-[length:var(--text-caption)] text-muted">
           {t.reports.writeToday}
         </span>
@@ -381,11 +381,11 @@ export function WysiwygEditor({
         />
       </div>
       {uploadError ? (
-        <p className="border-b border-border px-3 py-1.5 text-[length:var(--text-caption)] text-danger" role="alert">
+        <p className="mt-2 rounded-md bg-danger/10 px-3 py-1.5 text-[length:var(--text-caption)] text-danger" role="alert">
           {uploadError}
         </p>
       ) : null}
-      <div className="min-h-[16rem] min-w-0 flex-1 overflow-y-auto px-4 py-3">
+      <div className="min-h-[16rem] min-w-0 flex-1 overflow-y-auto py-5">
         <EditorContent editor={editor} />
       </div>
       {slash && editor ? (
@@ -396,7 +396,7 @@ export function WysiwygEditor({
 }
 
 function ToolbarSep() {
-  return <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden />;
+  return <span className="w-1 shrink-0" aria-hidden />;
 }
 
 function ToolbarBtn({

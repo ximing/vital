@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { prepareReaderHtml, purifyInboxHtml, readerSourceHtml, textToHtml } from '../../../src/features/inbox/purify';
 
 describe('purifyInboxHtml', () => {
@@ -26,8 +26,7 @@ describe('readerSourceHtml', () => {
 });
 
 describe('prepareReaderHtml', () => {
-  it('rewrites asset images to blob urls', async () => {
-    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:vital-img');
+  it('rewrites asset images to server-signed URLs', async () => {
     const html = await prepareReaderHtml(
       '<p>hi</p><img src="https://x.test/a.png" alt="">',
       null,
@@ -35,15 +34,14 @@ describe('prepareReaderHtml', () => {
         {
           id: 'as1',
           attachmentId: '11111111-1111-4111-8111-111111111111',
+          url: 'https://s3.test/signed-image',
           originalSrc: 'https://x.test/a.png',
           sortOrder: 0,
         },
       ],
-      async () => new Blob(['x'], { type: 'image/png' }),
     );
-    expect(html.html).toContain('blob:vital-img');
+    expect(html.html).toContain('https://s3.test/signed-image');
     expect(html.html).toContain('hi');
-    expect(html.objectUrls).toEqual(['blob:vital-img']);
-    create.mockRestore();
+    expect(html.objectUrls).toEqual([]);
   });
 });

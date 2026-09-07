@@ -4,6 +4,7 @@ import { t } from '@/copy';
 import { addMonthsYmd, monthGrid, ymdParts } from '@/lib/calendar-grid';
 import { formatHumanDay, toDateInput, todayYmd } from '@/features/todos/model';
 import { Icon } from '@/ui/icon';
+import { FIELD_CONTROL_CLASS, FIELD_POPOVER_CLASS } from '@/ui/field';
 
 export function DateField({
   value,
@@ -80,7 +81,7 @@ export function DateField({
           aria-label={ariaLabel}
           aria-expanded={open}
           onClick={toggleOpen}
-          className={`h-9 min-w-0 flex-1 truncate rounded-md px-2.5 text-left text-[length:var(--text-meta)] ${
+          className={`${FIELD_CONTROL_CLASS} min-w-0 flex-1 truncate px-2.5 text-left text-[length:var(--text-meta)] ${
             selectedYmd === '' ? 'text-muted' : 'text-fg'
           } hover:bg-surface-muted`}
         >
@@ -101,7 +102,11 @@ export function DateField({
         ) : null}
       </div>
       {open ? (
-        <div className="absolute right-0 z-[var(--z-dropdown)] mt-1 w-72 rounded-xl border border-border bg-elevated p-3 shadow-[var(--shadow)]">
+        <div
+          role="dialog"
+          aria-label="日期选择器"
+          className={`absolute right-0 z-[var(--z-dropdown)] mt-1 w-72 ${FIELD_POPOVER_CLASS}`}
+        >
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
@@ -159,7 +164,7 @@ export function DateField({
                   type="time"
                   value={selectedTime}
                   onChange={(e) => onChange(`${selectedYmd}T${e.target.value || '09:00'}`)}
-                  className="h-8 flex-1 rounded-md border border-border bg-surface-muted px-2 text-fg"
+                  className={`${FIELD_CONTROL_CLASS} h-8 flex-1 px-2 text-[length:var(--text-caption)]`}
                 />
               </label>
               <button

@@ -17,6 +17,7 @@ export function AccountSection() {
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const avatarInput = useRef<HTMLInputElement>(null);
 
   async function onAvatarChange(event: ChangeEvent<HTMLInputElement>) {
@@ -28,6 +29,7 @@ export function AccountSection() {
     try {
       const uploaded = await client.upload({ file, mime: file.type, size: file.size });
       await client.bindUpload(uploaded.id, { ownerType: 'user', ownerId: user.id });
+      setAvatarFailed(false);
       setUser(await client.updateMe({ avatarAttachmentId: uploaded.id }));
     } catch (err) {
       setError(humanError(err));
@@ -55,11 +57,12 @@ export function AccountSection() {
   return (
     <div>
       <div className="mb-8 flex items-center gap-4">
-        {user?.avatarAttachmentId ? (
+        {user?.avatarUrl && !avatarFailed ? (
           <img
-            src={client.uploadUrl(user.avatarAttachmentId)}
+            src={user.avatarUrl}
             alt="头像"
             className="h-16 w-16 rounded-full object-cover"
+            onError={() => setAvatarFailed(true)}
           />
         ) : (
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-subtle text-lg font-semibold text-accent-deep">

@@ -24,6 +24,7 @@ import { isUniqueViolation } from '../db/pg.js';
 import { extensionAuthCodes, lists, users, type User } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { inboxListValues } from '../lists/lists.service.js';
+import { resolveAccessUrl } from '../uploads/uploads.service.js';
 import { logger } from '../utils/logger.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { issueRefreshToken, revokeAllForUser, signAccessToken } from './token.service.js';
@@ -60,12 +61,16 @@ function notificationsOf(user: User): NotificationPrefs {
   };
 }
 
-export function toProfile(user: User): UserProfile {
+export async function toProfile(user: User): Promise<UserProfile> {
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
     avatarAttachmentId: user.avatarAttachmentId,
+    avatarUrl:
+      user.avatarAttachmentId === null
+        ? null
+        : await resolveAccessUrl(user.id, user.avatarAttachmentId, 21_600),
     timezone: user.timezone,
     locale: user.locale,
     themePreference: themeOf(user.themePreference),
@@ -96,7 +101,7 @@ export async function getUserEntity(userId: string): Promise<User> {
 }
 
 export async function getProfile(userId: string): Promise<UserProfile> {
-  return toProfile(await getUserEntity(userId));
+  return await toProfile(await getUserEntity(userId));
 }
 
 async function buildAuthResponse(
@@ -107,7 +112,7 @@ async function buildAuthResponse(
   const refreshToken = await issueRefreshToken(user.id, mode, deviceInfo);
   const accessToken = signAccessToken(user.id);
   return {
-    response: { user: toProfile(user), tokens: tokensFor(accessToken, refreshToken, mode) },
+    response: { user: await toProfile(user), tokens: tokensFor(accessToken, refreshToken, mode) },
     refreshToken,
   };
 }

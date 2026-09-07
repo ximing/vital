@@ -188,7 +188,9 @@ describe('inbox workspace', () => {
 
   it('marks the selected reader as a constrained reading canvas', async () => {
     renderAt('/inbox');
-    expect(await screen.findByRole('main')).toHaveAttribute('data-region', 'reading-canvas');
+    const canvas = await screen.findByRole('main');
+    expect(canvas).toHaveAttribute('data-region', 'reading-canvas');
+    expect(canvas).toHaveClass('min-h-0', 'min-w-0', 'flex-1');
   });
 
   it('shows later-read empty copy in the capture pane', async () => {

@@ -1,7 +1,10 @@
 import { useId, type InputHTMLAttributes } from 'react';
 
 export const FIELD_CONTROL_CLASS =
-  'h-[var(--field-h)] rounded-md border border-border bg-surface-muted/40 px-3 text-fg placeholder:text-muted outline-none transition-[border-color,background-color,box-shadow] duration-[var(--ease-out)] focus:border-focus focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]';
+  'h-[var(--field-h)] rounded-md bg-surface-muted/70 px-3 text-fg placeholder:text-muted outline-none transition-[background-color,box-shadow] duration-[var(--ease-out)] focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]';
+
+export const FIELD_POPOVER_CLASS =
+  'rounded-md bg-elevated p-3 shadow-[var(--shadow)]';
 
 export function Field({
   label,

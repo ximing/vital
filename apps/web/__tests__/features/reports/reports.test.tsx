@@ -266,6 +266,7 @@ describe('reports workspace', () => {
     expect(screen.getByTestId('streak-calendar')).toBeInTheDocument();
     expect(document.querySelector('[data-region="calendar-pane"]')).not.toBeNull();
     expect(screen.getByTestId('report-wysiwyg')).toHaveAttribute('data-region', 'report-editor');
+    expect(screen.getByTestId('report-wysiwyg')).not.toHaveClass('border', 'border-border');
     expect(screen.getByRole('button', { name: t.reports.image })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.reports.table })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.reports.attach })).toBeInTheDocument();

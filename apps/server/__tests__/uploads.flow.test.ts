@@ -174,6 +174,49 @@ describe('uploads', () => {
     expect(res.headers['cache-control']).toBe('private, max-age=300');
   });
 
+  it('returns a six-hour signed image URL in the user profile', async () => {
+    const alice = await register('avatar-profile');
+    const presigned = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/uploads/presign',
+      token: alice.token,
+      payload: { mime: 'image/jpeg', size: 1024 },
+    });
+    const id = presigned.json().id as string;
+    storage.headObject.mockResolvedValue({
+      size: 1024,
+      contentType: 'image/jpeg',
+      lastModified: new Date(),
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/bind`,
+      token: alice.token,
+      payload: { ownerType: 'user', ownerId: alice.id },
+    });
+
+    const res = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { avatarAttachmentId: id },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().avatarUrl).toBe('https://fake.local/presigned-get');
+    expect(storage.generateAccessUrl).toHaveBeenLastCalledWith(
+      expect.stringContaining(`${id}.jpeg`),
+      expect.anything(),
+      21_600,
+    );
+  });
+
   it('abort uploading is 204; other user is 404', async () => {
     const alice = await register('alice');
     const bob = await register('bob');

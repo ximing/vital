@@ -107,6 +107,8 @@ export interface UserProfile {
   email: string;
   displayName: string;
   avatarAttachmentId?: string | null;
+  /** Private S3 URL, signed by the server for six hours. */
+  avatarUrl?: string | null;
   timezone: string;
   locale: string;
   themePreference: ThemePreference;

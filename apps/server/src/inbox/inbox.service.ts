@@ -27,6 +27,7 @@ import { AppError } from '../errors.js';
 import { getInboxList } from '../lists/lists.service.js';
 import { createTask, getTask } from '../tasks/tasks.service.js';
 import { bindUpload } from '../uploads/uploads.service.js';
+import { getStorage, type StorageMetadata } from '../storage/factory.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import { idempotencyKeyForUrl } from './canonical.js';
 import { escapeParagraph, sanitizeExtractedHtml } from './sanitize.js';
@@ -91,15 +92,18 @@ export function toInboxDto(row: InboxItemRow, assets: InboxAsset[]): InboxItem {
   };
 }
 
-function toAssetDto(row: {
+async function toAssetDto(row: {
   id: string;
   attachmentId: string;
   originalSrc: string;
   sortOrder: number;
-}): InboxAsset {
+  s3Key: string;
+  storageMeta: StorageMetadata;
+}): Promise<InboxAsset> {
   return {
     id: row.id,
     attachmentId: row.attachmentId,
+    url: await getStorage().generateAccessUrl(row.s3Key, row.storageMeta, 21_600),
     originalSrc: row.originalSrc,
     sortOrder: row.sortOrder,
   };
@@ -112,10 +116,18 @@ export async function loadAssetsByItemIds(ids: string[]): Promise<Map<string, In
   const rows = await getDb()
     .select()
     .from(inboxAssets)
+    .innerJoin(attachments, eq(inboxAssets.attachmentId, attachments.id))
     .where(inArray(inboxAssets.inboxItemId, ids));
   for (const row of rows) {
-    const list = map.get(row.inboxItemId);
-    if (list) list.push(toAssetDto(row));
+    const list = map.get(row.inbox_assets.inboxItemId);
+    if (list) list.push(await toAssetDto({
+      id: row.inbox_assets.id,
+      attachmentId: row.inbox_assets.attachmentId,
+      originalSrc: row.inbox_assets.originalSrc,
+      sortOrder: row.inbox_assets.sortOrder,
+      s3Key: row.attachments.s3Key,
+      storageMeta: row.attachments.storageMeta,
+    }));
   }
   for (const list of map.values()) {
     list.sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
