@@ -1,8 +1,8 @@
-import type { Tag, Task, TaskPriority } from '@vital/dto';
+import type { List, Tag, Task, TaskPriority } from '@vital/dto';
 import type { DragEvent } from 'react';
 import { t } from '@/copy';
 import { EmptyTasks } from './EmptyTasks';
-import { splitByPriority, splitByStatus } from './model';
+import { listTitle, splitByPriority, splitByStatus } from './model';
 import { TaskRow } from './TaskRow';
 import { useTodosUi } from './todos-ui.service';
 
@@ -13,6 +13,7 @@ export function BoardView({
   listId,
   tasks,
   tags,
+  lists,
   timeZone,
   onComplete,
   onStatus,
@@ -21,6 +22,7 @@ export function BoardView({
   listId: string;
   tasks: Task[];
   tags: Tag[];
+  lists: List[];
   timeZone: string;
   onComplete: (task: Task) => void;
   onStatus: (task: Task, status: 'todo' | 'doing') => void;
@@ -52,6 +54,7 @@ export function BoardView({
         selected={selectedId === task.id}
         timeZone={timeZone}
         tags={tags}
+        listName={listId.startsWith('smart:') ? listTitle(task.listId, lists, '') : undefined}
         onSelect={() => openDetail(task.id)}
         onOpen={() => openDetail(task.id)}
         onComplete={() => onComplete(task)}

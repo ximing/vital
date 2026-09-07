@@ -1,4 +1,4 @@
-import { DEFAULT_NOTIFICATION_PREFS, type List, type Task, type UserProfile } from '@vital/dto';
+import { DEFAULT_NOTIFICATION_PREFS, type List, type Tag, type Task, type UserProfile } from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -71,6 +71,21 @@ const smartToday: List = {
   kind: 'smart',
   name: '今天',
   sortOrder: -5,
+};
+
+const project: List = {
+  ...inbox,
+  id: 'project-1',
+  kind: 'user',
+  name: '产品重构',
+  sortOrder: 1,
+};
+
+const focusTag: Tag = {
+  id: 'tag-1',
+  name: '深度工作',
+  color: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
 };
 
 function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
@@ -196,6 +211,28 @@ describe('todos workspace', () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(todayHeads.length).toBeGreaterThan(0);
+  });
+
+  it('shows a task context line with project, note, schedule, and tags', async () => {
+    const task = makeTask({
+      id: 'context-task',
+      title: '整理复盘结论',
+      listId: project.id,
+      notes: '同步到下周行动计划',
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+      tagIds: [focusTag.id],
+    });
+    vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox, project] });
+    vi.mocked(client.listTags).mockResolvedValue({ items: [focusTag] });
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [task], nextCursor: null });
+
+    renderAt('/todos/lists/smart:today');
+
+    const row = await screen.findByRole('option', { name: task.title });
+    expect(within(row).getByText(project.name)).toBeInTheDocument();
+    expect(within(row).getByText(task.notes)).toBeInTheDocument();
+    expect(within(row).getByText(focusTag.name)).toBeInTheDocument();
+    expect(within(row).getByText('今天')).toBeInTheDocument();
   });
 
   it('j selects the overdue row when it is painted above today', async () => {

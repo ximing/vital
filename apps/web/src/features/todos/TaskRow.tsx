@@ -44,6 +44,7 @@ export function TaskRow({
   selected,
   timeZone,
   tags,
+  listName,
   onSelect,
   onOpen,
   onComplete,
@@ -56,6 +57,7 @@ export function TaskRow({
   selected: boolean;
   timeZone: string;
   tags: Tag[];
+  listName?: string;
   onSelect: () => void;
   onOpen: () => void;
   onComplete: () => void;
@@ -68,6 +70,7 @@ export function TaskRow({
   const meta = dueMeta(task, timeZone);
   const namedTags = tags.filter((tag) => task.tagIds.includes(tag.id));
   const done = task.status === 'done';
+  const note = task.notes.replaceAll(/\s+/g, ' ').trim();
 
   return (
     <div
@@ -103,7 +106,17 @@ export function TaskRow({
           <PriorityMark priority={task.priority} className="mr-1.5 align-middle" />
           {task.title}
         </p>
+        {note !== '' ? (
+          <p className={`mt-0.5 truncate text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${done ? 'text-muted/70' : 'text-muted'}`}>
+            {note}
+          </p>
+        ) : null}
         <p className="flex flex-wrap items-center gap-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)]">
+          {listName ? (
+            <span data-task-meta="project" className="text-muted">
+              {listName}
+            </span>
+          ) : null}
           {meta ? (
             <span className={overdue ? 'text-overdue' : soon ? 'text-due' : 'text-muted'}>
               {meta}

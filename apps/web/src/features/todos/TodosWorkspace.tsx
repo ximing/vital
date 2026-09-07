@@ -265,6 +265,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 listId={listId}
                 tasks={tasks}
                 tags={tags}
+                lists={lists}
                 timeZone={timeZone}
                 onComplete={(task) => void actions.complete(task)}
                 onReorder={(input) => actions.reorder.mutate(input)}
@@ -274,6 +275,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 listId={listId}
                 tasks={tasks}
                 tags={tags}
+                lists={lists}
                 timeZone={timeZone}
                 onComplete={(task) => void actions.complete(task)}
                 onStatus={(task, status) => void actions.setStatus(task, status)}

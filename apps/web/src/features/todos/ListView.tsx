@@ -1,4 +1,4 @@
-import type { Tag, Task } from '@vital/dto';
+import type { List, Tag, Task } from '@vital/dto';
 import type { DragEvent } from 'react';
 import { t } from '@/copy';
 import { EmptyTasks } from './EmptyTasks';
@@ -6,6 +6,7 @@ import {
   flattenNodes,
   formatHumanDay,
   listSections,
+  listTitle,
   orderedAfterDrop,
   siblingIds,
   type ListSection,
@@ -38,6 +39,7 @@ export function ListView({
   listId,
   tasks,
   tags,
+  lists,
   timeZone,
   onComplete,
   onReorder,
@@ -45,6 +47,7 @@ export function ListView({
   listId: string;
   tasks: Task[];
   tags: Tag[];
+  lists: List[];
   timeZone: string;
   onComplete: (task: Task) => void;
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
@@ -84,6 +87,7 @@ export function ListView({
         selected={selectedId === task.id}
         timeZone={timeZone}
         tags={tags}
+        listName={listId.startsWith('smart:') ? listTitle(task.listId, lists, '') : undefined}
         onSelect={() => openDetail(task.id)}
         onOpen={() => openDetail(task.id)}
         onComplete={() => onComplete(task)}
