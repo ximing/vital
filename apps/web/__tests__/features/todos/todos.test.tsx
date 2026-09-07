@@ -1,6 +1,6 @@
 import { DEFAULT_NOTIFICATION_PREFS, type List, type Tag, type Task, type UserProfile } from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -153,9 +153,12 @@ describe('todos workspace', () => {
     resetTodosUi();
   });
 
-  it('keeps today in a focus canvas and does not reserve an empty detail pane', async () => {
+  it('keeps list as the third column with a reserved detail slot, not a centered pane', async () => {
     renderAt('/todos/lists/smart:today');
-    expect(await screen.findByRole('main')).toHaveAttribute('data-region', 'focus-canvas');
+    const main = await screen.findByRole('main');
+    expect(main).toHaveAttribute('data-region', 'focus-canvas');
+    expect(main.className).not.toMatch(/mx-auto/);
+    expect(document.querySelector('[data-region="detail-slot"]')).not.toBeNull();
     expect(screen.queryByLabelText(t.todos.pickTask)).not.toBeInTheDocument();
     expect(screen.getByLabelText(t.todos.quickAddPlaceholder)).toHaveClass('field-focus');
   });
@@ -237,7 +240,7 @@ describe('todos workspace', () => {
     const row = await screen.findByRole('option', { name: task.title });
     expect(within(row).getByText(project.name)).toBeInTheDocument();
     expect(within(row).getByText(task.notes)).toBeInTheDocument();
-    expect(within(row).getByText(`#${focusTag.name}`)).toBeInTheDocument();
+    expect(within(row).getByText(focusTag.name)).toBeInTheDocument();
     expect(within(row).getByText('今天')).toBeInTheDocument();
     expect(within(row).getByText(t.todos.reminder15m)).toBeInTheDocument();
     expect(within(row).getByText(t.todos.recurrenceWeekdays)).toBeInTheDocument();
@@ -399,8 +402,30 @@ describe('todos workspace', () => {
     expect(within(timed).getByText('14:00')).toBeInTheDocument();
   });
 
-  it('board empty uses spec copy and has status/priority columns', async () => {
+  it('board empty shows column composers instead of a dead empty state', async () => {
     renderAt('/todos/board?list=smart:today');
-    expect(await screen.findByText(t.empty.board)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: new RegExp(t.todos.status.todo) })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: new RegExp(t.todos.status.doing) })).toBeInTheDocument();
+    expect(screen.getAllByPlaceholderText(t.todos.composeWhat).length).toBeGreaterThan(0);
+    expect(screen.queryByText(t.empty.board)).not.toBeInTheDocument();
+  });
+
+  it('opens a task context menu on right-click and applies quick actions', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const task = makeTask({ id: 't1', title: '写周报' });
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [task], nextCursor: null });
+    vi.mocked(client.patchTask).mockResolvedValue(task);
+    renderAt('/todos/lists/smart:inbox');
+    const row = await screen.findByRole('option', { name: '写周报' });
+    fireEvent.contextMenu(row);
+    const menu = await screen.findByRole('menu', { name: '写周报' });
+    expect(within(menu).getByText(t.todos.scheduleTomorrow)).toBeInTheDocument();
+    expect(within(menu).getByText(t.todos.deleteTask)).toBeInTheDocument();
+    await user.click(within(menu).getByText(t.todos.scheduleToday));
+    expect(client.patchTask).toHaveBeenCalledWith(
+      't1',
+      expect.objectContaining({ startAt: null, isAllDay: true, dueAt: expect.any(String) }),
+    );
+    expect(screen.queryByRole('menu', { name: '写周报' })).not.toBeInTheDocument();
   });
 });

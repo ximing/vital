@@ -21,16 +21,35 @@ export type SchedulePlan = {
 
 const MISSED_GRACE_MS = 15 * 60 * 1000;
 
-function semanticReminderAt(task: TaskScheduleInput): Date | null {
+/** Timed dueAt, or the all-day notify clock on that local date. */
+function dueAnchor(
+  task: TaskScheduleInput,
+  allDayNotifyTime: string,
+): Date | null {
+  if (!task.dueAt) return null;
+  if (!task.isAllDay) return task.dueAt;
+  const { hour, minute } = parseHHmm(allDayNotifyTime);
+  return DateTime.fromJSDate(task.dueAt, { zone: task.timezone })
+    .startOf('day')
+    .set({ hour, minute, second: 0, millisecond: 0 })
+    .toJSDate();
+}
+
+function semanticReminderAt(
+  task: TaskScheduleInput,
+  allDayNotifyTime: string,
+): Date | null {
   switch (task.reminderMode) {
     case 'none':
       return null;
     case 'due':
-      return task.dueAt;
-    case 'offset':
-      return task.dueAt && task.reminderOffsetMinutes
-        ? new Date(task.dueAt.getTime() - task.reminderOffsetMinutes * 60_000)
+      return dueAnchor(task, allDayNotifyTime);
+    case 'offset': {
+      const anchor = dueAnchor(task, allDayNotifyTime);
+      return anchor && task.reminderOffsetMinutes
+        ? new Date(anchor.getTime() - task.reminderOffsetMinutes * 60_000)
         : null;
+    }
     case 'custom':
       return task.reminderAt ?? null;
     default:
@@ -46,7 +65,7 @@ export function planTaskNotification(
   if (task.deletedAt !== null) return null;
   if (task.status !== 'todo' && task.status !== 'doing') return null;
 
-  const remindAt = semanticReminderAt(task);
+  const remindAt = semanticReminderAt(task, prefs.allDayNotifyTime);
   if (remindAt && prefs.taskRemind) {
     if (remindAt.getTime() < now.getTime() - MISSED_GRACE_MS) return null;
     return {

@@ -1,45 +1,18 @@
-import type { List, PatchTaskInput, Tag, Task, TimeBucket } from '@vital/dto';
-import { Bell, Calendar, Folder, ListTodo, Repeat, Sun, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import type { List, PatchTaskInput, Tag, Task } from '@vital/dto';
+import { Ellipsis, Folder, Plus, X } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { useAuth } from '@/services/auth.service';
-import { Button } from '@/ui/button';
-import { DateField } from '@/ui/date-field';
-import { Icon, type LucideIcon } from '@/ui/icon';
-import { SelectField } from '@/ui/select-field';
+import { FIELD_POPOVER_CLASS } from '@/ui/field';
+import { Icon } from '@/ui/icon';
+import { usePopover } from '@/ui/use-popover';
 import { NotesEditor } from './NotesEditor';
-import { PriorityPicker } from './priority';
-import { RecurrenceField, ReminderField } from './schedule-fields';
-import {
-  fromDatetimeLocal,
-  inboxList,
-  toDateInput,
-  toDatetimeLocal,
-  userLists,
-  zonedLocalMidnightIso,
-} from './model';
+import { addDaysYmd, inboxList, todayYmd, userLists } from './model';
+import { PriorityMenu } from './priority';
+import { draftFromTask, draftToPatch, scheduleDayPatch } from './schedule-draft';
+import { SchedulePopover } from './SchedulePopover';
 import { TaskCheckbox } from './TaskRow';
 import { todosUi, useTodosUi } from './todos-ui.service';
-
-function PropRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: LucideIcon;
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-[1.25rem_3.5rem_minmax(0,1fr)] items-start gap-x-2">
-      <Icon icon={icon} size={15} className="mt-2.5 justify-self-center text-muted" />
-      <span className="mt-2.5 truncate text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-        {label}
-      </span>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
 
 export function TaskDetail({
   task,
@@ -71,6 +44,8 @@ export function TaskDetail({
   const [subTitle, setSubTitle] = useState('');
   const [tagDraft, setTagDraft] = useState('');
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreMenu = usePopover(moreRef);
 
   useEffect(() => {
     return () => {
@@ -80,7 +55,6 @@ export function TaskDetail({
 
   const inbox = inboxList(lists);
   const movable = task.parentId === null;
-  const allDay = task.isAllDay;
   const zone = task.timezone || timeZone;
 
   function saveTitle() {
@@ -95,24 +69,6 @@ export function TaskDetail({
     notesTimer.current = setTimeout(() => {
       if (next !== task.notes) onPatch({ notes: next });
     }, 600);
-  }
-
-  function setDue(value: string) {
-    if (value === '') {
-      onPatch({ dueAt: null });
-      return;
-    }
-    const iso = allDay ? zonedLocalMidnightIso(value, zone) : fromDatetimeLocal(value, zone);
-    onPatch({ dueAt: iso, isAllDay: allDay });
-  }
-
-  function setStart(value: string) {
-    if (value === '') {
-      onPatch({ startAt: null });
-      return;
-    }
-    const iso = allDay ? zonedLocalMidnightIso(value, zone) : fromDatetimeLocal(value, zone);
-    onPatch({ startAt: iso, isAllDay: allDay });
   }
 
   function toggleTag(id: string) {
@@ -136,162 +92,138 @@ export function TaskDetail({
     setTagDraft('');
   }
 
-  const dueValue =
-    task.dueAt === null
-      ? ''
-      : allDay
-        ? toDateInput(task.dueAt, zone)
-        : toDatetimeLocal(task.dueAt, zone);
-  const startValue =
-    task.startAt === null
-      ? ''
-      : allDay
-        ? toDateInput(task.startAt, zone)
-        : toDatetimeLocal(task.startAt, zone);
+  const schedule = draftFromTask(task, zone);
+  const listOptions = [
+    ...(inbox ? [{ id: inbox.id, name: t.lists.inbox }] : []),
+    ...userLists(lists).map((list) => ({ id: list.id, name: list.name })),
+  ];
+
   return (
     <aside
       data-region="detail"
-      className="flex h-full min-h-0 w-full max-w-[25rem] shrink-0 flex-col bg-elevated"
+      className="flex h-full min-h-0 w-full shrink-0 flex-col bg-surface"
       aria-label={task.title}
     >
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
         <TaskCheckbox task={task} timeZone={zone} onToggle={() => onComplete(task)} />
-        <button
-          type="button"
-          className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
-          onClick={() => closeDetail()}
-          aria-label={t.todos.closeDetail}
-        >
-          <Icon icon={X} size={16} />
-        </button>
+        <SchedulePopover
+          draft={schedule}
+          zone={zone}
+          weekStartsOn={weekStartsOn}
+          align="end"
+          onChange={(next) => onPatch(draftToPatch(next, zone))}
+        />
+        <div className="ml-auto flex items-center gap-0.5">
+          <PriorityMenu value={task.priority} onChange={(priority) => onPatch({ priority })} />
+          {movable ? (
+            <ListPicker
+              value={task.listId}
+              options={listOptions}
+              onChange={(listId) => onPatch({ listId })}
+            />
+          ) : null}
+          <div ref={moreRef} className="relative">
+            <button
+              type="button"
+              aria-label={t.todos.more}
+              aria-expanded={moreMenu.open}
+              onClick={() => moreMenu.toggle()}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
+            >
+              <Icon icon={Ellipsis} size={15} />
+            </button>
+            {moreMenu.open ? (
+              <div
+                role="menu"
+                className={`absolute right-0 z-[var(--z-dropdown)] mt-1 w-44 ${FIELD_POPOVER_CLASS} p-1`}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                  onClick={() => {
+                    onPatch(scheduleDayPatch(task, todayYmd(zone), zone));
+                    moreMenu.close();
+                  }}
+                >
+                  {t.todos.scheduleToday}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                  onClick={() => {
+                    onPatch(scheduleDayPatch(task, addDaysYmd(todayYmd(zone), 1), zone));
+                    moreMenu.close();
+                  }}
+                >
+                  {t.todos.scheduleTomorrow}
+                </button>
+                {task.dueAt !== null || task.startAt !== null ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                    onClick={() => {
+                      onPatch({ startAt: null, dueAt: null, isAllDay: true });
+                      moreMenu.close();
+                    }}
+                  >
+                    {t.todos.clearDate}
+                  </button>
+                ) : null}
+                <div className="mx-1 my-1 h-px bg-border/60" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] text-danger hover:bg-surface-muted"
+                  onClick={() => {
+                    onDelete();
+                    moreMenu.close();
+                  }}
+                >
+                  {t.todos.deleteTask}
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
+            onClick={() => closeDetail()}
+            aria-label={t.todos.closeDetail}
+          >
+            <Icon icon={X} size={16} />
+          </button>
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
         <textarea
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={saveTitle}
-          rows={2}
+          rows={1}
           className="w-full resize-none bg-transparent text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em] text-fg outline-none"
           aria-label={t.todos.title}
         />
 
-        <div className="mt-4 flex flex-col gap-1.5">
-          <PriorityPicker value={task.priority} onChange={(priority) => onPatch({ priority })} />
-
-          {movable ? (
-            <PropRow icon={Folder} label={t.todos.list}>
-              <SelectField
-                value={task.listId}
-                ariaLabel={t.todos.list}
-                options={[
-                  ...(inbox ? [{ value: inbox.id, label: t.lists.inbox }] : []),
-                  ...userLists(lists).map((list) => ({ value: list.id, label: list.name })),
-                ]}
-                onChange={(listId) => onPatch({ listId })}
-              />
-            </PropRow>
-          ) : null}
-
-          {task.status !== 'done' ? (
-            <PropRow icon={ListTodo} label={t.todos.status.todo}>
-              <SelectField
-                value={task.status === 'doing' ? 'doing' : 'todo'}
-                ariaLabel={t.todos.status.todo}
-                options={[
-                  { value: 'todo', label: t.todos.status.todo },
-                  { value: 'doing', label: t.todos.status.doing },
-                ]}
-                onChange={(status) => onPatch({ status })}
-              />
-            </PropRow>
-          ) : null}
-
-          <PropRow icon={Sun} label={t.todos.allDay}>
-            <label className="flex h-9 items-center gap-2 text-[length:var(--text-meta)]">
-              <input
-                type="checkbox"
-                checked={allDay}
-                onChange={(e) => onPatch({ isAllDay: e.target.checked })}
-              />
-              {t.todos.allDay}
-            </label>
-          </PropRow>
-
-          <PropRow icon={Calendar} label={t.todos.due}>
-            <DateField
-              value={dueValue}
-              kind={allDay ? 'date' : 'datetime-local'}
-              ariaLabel={t.todos.due}
-              zone={zone}
-              weekStartsOn={weekStartsOn}
-              onChange={setDue}
-            />
-          </PropRow>
-          <PropRow icon={Calendar} label={t.todos.start}>
-            <DateField
-              value={startValue}
-              kind={allDay ? 'date' : 'datetime-local'}
-              ariaLabel={t.todos.start}
-              zone={zone}
-              weekStartsOn={weekStartsOn}
-              onChange={setStart}
-            />
-          </PropRow>
-
-          {task.dueAt === null && task.startAt === null ? (
-            <PropRow icon={Folder} label={t.todos.timeBucket}>
-              <SelectField
-                value={task.timeBucket}
-                ariaLabel={t.todos.timeBucket}
-                options={[
-                  { value: 'anytime', label: t.lists.anytime },
-                  { value: 'someday', label: t.lists.someday },
-                  { value: 'dated', label: t.todos.due },
-                ]}
-                onChange={(timeBucket) =>
-                  onPatch({ timeBucket: timeBucket as TimeBucket, dueAt: null, startAt: null })
-                }
-              />
-            </PropRow>
-          ) : null}
-
-          <PropRow icon={Repeat} label={t.todos.recurrence}>
-            <RecurrenceField task={task} onPatch={onPatch} />
-          </PropRow>
-
-          <PropRow icon={Bell} label={t.todos.remind}>
-            <ReminderField task={task} zone={zone} weekStartsOn={weekStartsOn} onPatch={onPatch} />
-          </PropRow>
-        </div>
-
-        <div className="mt-5">
-          <p className="mb-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-            {t.todos.tags}
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {tags.length === 0 ? (
-              <p className="text-[length:var(--text-caption)] text-muted">{t.empty.tags}</p>
-            ) : null}
-            {tags.map((tag) => {
-              const on = task.tagIds.includes(tag.id);
-              return (
-                <button
-                  key={tag.id}
-                  type="button"
-                  className={`h-7 rounded-full px-2.5 text-[length:var(--text-caption)] ${
-                    on ? 'bg-accent-subtle text-fg' : 'bg-surface-muted text-muted hover:text-fg'
-                  }`}
-                  onClick={() => toggleTag(tag.id)}
-                >
-                  #{tag.name}
-                </button>
-              );
-            })}
-          </div>
-          <form onSubmit={(e) => void addTag(e)} className="mt-2">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {tags
+            .filter((tag) => task.tagIds.includes(tag.id))
+            .map((tag) => (
+              <button
+                key={tag.id}
+                type="button"
+                className="h-6 rounded-full bg-accent-subtle px-2 text-[length:var(--text-caption)] text-fg"
+                onClick={() => toggleTag(tag.id)}
+              >
+                #{tag.name}
+              </button>
+            ))}
+          <form onSubmit={(e) => void addTag(e)}>
             <input
-              className="h-[var(--field-h)] w-full rounded-md bg-surface-muted/70 px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted outline-none focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]"
+              className="h-6 w-28 rounded-full bg-transparent px-2 text-[length:var(--text-caption)] text-fg placeholder:text-muted outline-none hover:bg-surface-muted focus:bg-surface-muted"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
               placeholder={t.todos.addTag}
@@ -301,22 +233,33 @@ export function TaskDetail({
           </form>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
+          <p className="mb-1.5 text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-muted">
+            {t.todos.notes}
+          </p>
           <NotesEditor value={notes} onChange={queueNotes} />
         </div>
 
         {task.parentId === null ? (
-          <div className="mt-5">
-            <p className="mb-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+          <div className="mt-6 rounded-xl bg-canvas px-3 py-2.5 ring-1 ring-border/50">
+            <p className="mb-1 flex items-baseline gap-1.5 text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-fg">
               {t.todos.subtasks}
+              {subtasks.length > 0 ? (
+                <span className="text-[length:var(--text-caption)] font-normal text-tertiary">
+                  {subtasks.filter((child) => child.status === 'done').length}/{subtasks.length}
+                </span>
+              ) : null}
             </p>
             <ul className="flex flex-col">
               {subtasks.map((child) => (
-                <li key={child.id} className="flex min-h-9 items-center gap-2">
+                <li
+                  key={child.id}
+                  className="flex min-h-9 items-center gap-2.5 border-b border-border/50 last:border-b-0"
+                >
                   <TaskCheckbox task={child} timeZone={zone} onToggle={() => onComplete(child)} />
                   <button
                     type="button"
-                    className={`truncate text-left text-[length:var(--text-body)] ${
+                    className={`min-w-0 flex-1 truncate py-1.5 text-left text-[length:var(--text-body)] ${
                       child.status === 'done' ? 'text-muted line-through' : 'text-fg'
                     }`}
                     onClick={() => todosUi().openDetail(child.id)}
@@ -327,7 +270,6 @@ export function TaskDetail({
               ))}
             </ul>
             <form
-              className="mt-2"
               onSubmit={(e) => {
                 e.preventDefault();
                 const next = subTitle.trim();
@@ -336,22 +278,71 @@ export function TaskDetail({
                 setSubTitle('');
               }}
             >
-              <input
-                className="h-[var(--field-h)] w-full rounded-md bg-surface-muted/70 px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted outline-none focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]"
-                value={subTitle}
-                onChange={(e) => setSubTitle(e.target.value)}
-                placeholder={t.todos.addSubtask}
-                aria-label={t.todos.addSubtask}
-                maxLength={500}
-              />
+              <label className="flex h-9 items-center gap-2 text-accent">
+                <Icon icon={Plus} size={15} className="shrink-0" />
+                <input
+                  className="h-full min-w-0 flex-1 bg-transparent text-[length:var(--text-meta)] text-fg placeholder:text-accent/70 outline-none"
+                  value={subTitle}
+                  onChange={(e) => setSubTitle(e.target.value)}
+                  placeholder={t.todos.addSubtask}
+                  aria-label={t.todos.addSubtask}
+                  maxLength={500}
+                />
+              </label>
             </form>
           </div>
         ) : null}
 
-        <Button variant="quiet" className="mt-6 text-danger" onClick={() => onDelete()}>
-          {t.todos.deleteTask}
-        </Button>
       </div>
     </aside>
+  );
+}
+
+function ListPicker({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { id: string; name: string }[];
+  onChange: (id: string) => void;
+}) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popover = usePopover(popoverRef);
+  return (
+    <div ref={popoverRef} className="relative">
+      <button
+        type="button"
+        aria-label={t.todos.list}
+        aria-expanded={popover.open}
+        onClick={() => popover.toggle()}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
+      >
+        <Icon icon={Folder} size={15} />
+      </button>
+      {popover.open ? (
+        <div
+          role="menu"
+          className={`absolute left-0 z-[var(--z-dropdown)] mt-1 max-h-56 w-44 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
+        >
+          {options.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="menuitem"
+              className={`flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] hover:bg-surface-muted ${
+                item.id === value ? 'text-fg' : 'text-muted'
+              }`}
+              onClick={() => {
+                onChange(item.id);
+                popover.close();
+              }}
+            >
+              {item.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

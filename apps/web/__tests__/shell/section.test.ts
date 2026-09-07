@@ -3,11 +3,11 @@ import { listIdFrom, rhythmHref, sectionOf } from '../../src/shell/section';
 
 describe('app section', () => {
   it('maps routes to primary sections', () => {
-    expect(sectionOf('/todos/lists/smart:today', '')).toBe('rhythm');
-    expect(sectionOf('/todos/lists/smart:someday', '')).toBe('rhythm');
-    expect(sectionOf('/todos/calendar', 'list=smart:today')).toBe('rhythm');
-    expect(sectionOf('/todos/lists/smart:inbox', '')).toBe('lists');
-    expect(sectionOf('/todos/lists/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '')).toBe('lists');
+    expect(sectionOf('/todos/lists/smart:today', '')).toBe('todos');
+    expect(sectionOf('/todos/lists/smart:someday', '')).toBe('todos');
+    expect(sectionOf('/todos/calendar', 'list=smart:today')).toBe('todos');
+    expect(sectionOf('/todos/lists/smart:inbox', '')).toBe('todos');
+    expect(sectionOf('/todos/lists/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '')).toBe('todos');
     expect(sectionOf('/inbox', '')).toBe('capture');
     expect(sectionOf('/inbox/x', '')).toBe('capture');
     expect(sectionOf('/reports', '')).toBe('reflect');
@@ -16,7 +16,7 @@ describe('app section', () => {
     expect(sectionOf('/settings', '')).toBe('settings');
   });
 
-  it('keeps list/board/week when switching rhythm lists', () => {
+  it('keeps list/board/week when switching todo lists', () => {
     expect(listIdFrom('/todos/lists/smart:today', '')).toBe('smart:today');
     expect(rhythmHref('smart:upcoming', '/todos/lists/smart:today')).toBe(
       '/todos/lists/smart:upcoming',

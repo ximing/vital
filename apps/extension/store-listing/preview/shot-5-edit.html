@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        font-family: system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        background: #cfc9be;
+      }
+      .stage {
+        width: 1280px;
+        height: 800px;
+        display: grid;
+        place-items: center;
+        background: #d8d2c6;
+      }
+      .panel {
+        width: 380px;
+        min-height: 420px;
+        background: #14110c;
+        color: #fff6ea;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+        padding: 16px;
+        box-sizing: border-box;
+        font: 15px/1.5 system-ui, 'PingFang SC', sans-serif;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 650;
+      }
+      .ghost {
+        background: transparent;
+        color: #f5c84b;
+        border: 0;
+        font: inherit;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: #a39888;
+        margin: 10px 0 4px;
+      }
+      input,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px 10px;
+        border: 1px solid #3a3228;
+        border-radius: 8px;
+        background: #1e1a14;
+        color: #fff6ea;
+        font: inherit;
+      }
+      textarea {
+        min-height: 72px;
+      }
+      .modes {
+        display: flex;
+        gap: 16px;
+        margin: 12px 0;
+        font-size: 13px;
+      }
+      .primary {
+        margin-top: 8px;
+        width: 100%;
+        padding: 9px 12px;
+        background: #f5c84b;
+        color: #1c1914;
+        font-weight: 600;
+        border: 0;
+        border-radius: 8px;
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="panel">
+        <div class="row">
+          <h1>保存并编辑</h1>
+          <button class="ghost" type="button">取消</button>
+        </div>
+        <label>标题</label>
+        <input value="把这篇收进稍后读" />
+        <label>备注</label>
+        <textarea>https://example.com/essay</textarea>
+        <div class="modes">
+          <label><input type="radio" checked /> 存到稍后读</label>
+          <label><input type="radio" /> 存为待办</label>
+        </div>
+        <button class="primary" type="button">保存</button>
+      </div>
+    </div>
+  </body>
+</html>

@@ -75,6 +75,11 @@ export interface TaskCollection {
   nextCursor: string | null;
 }
 
+/** Open-task counts keyed by list id (user lists and smart:list ids). */
+export interface TaskCounts {
+  counts: Record<string, number>;
+}
+
 export interface CompleteTaskResponse {
   task: Task;
   undo: { completionId: string };

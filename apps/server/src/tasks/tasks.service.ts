@@ -9,7 +9,7 @@ import {
   type ReorderTasksInput,
   type Task,
   type TaskCollection,
-  type TaskPriority,
+  type TaskCounts,
   type TaskStatus,
   type TimeBucket,
   type UncompleteTaskInput,
@@ -18,6 +18,7 @@ import {
   and,
   asc,
   type Column,
+  count,
   desc,
   eq,
   gte,
@@ -64,7 +65,6 @@ import {
   asRecurrenceKind,
   asReminderMode,
   asReminderOffsetMinutes,
-  asStatus,
   toTaskDto,
 } from './task-dto.js';
 
@@ -288,6 +288,31 @@ export async function getTask(userId: string, id: string): Promise<Task> {
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }
 
+const COUNTED_SMART_IDS = [
+  'smart:inbox',
+  'smart:today',
+  'smart:upcoming',
+  'smart:anytime',
+  'smart:someday',
+] as const;
+
+export async function taskCounts(userId: string): Promise<TaskCounts> {
+  const user = await getUserEntity(userId);
+  const counts: Record<string, number> = {};
+  const perList = await getDb()
+    .select({ listId: tasks.listId, n: count() })
+    .from(tasks)
+    .where(openCond(userId))
+    .groupBy(tasks.listId);
+  for (const row of perList) counts[row.listId] = row.n;
+  for (const id of COUNTED_SMART_IDS) {
+    const where = await smartFilter(userId, id, user.timezone);
+    const [row] = await getDb().select({ n: count() }).from(tasks).where(where);
+    counts[id] = row?.n ?? 0;
+  }
+  return { counts };
+}
+
 export async function createTask(userId: string, input: CreateTaskInput): Promise<Task> {
   const user = await getUserEntity(userId);
   let listId = input.listId;
@@ -318,7 +343,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     reminderMode === 'custom' && input.reminderAt !== null && input.reminderAt !== undefined
       ? parseInstant(input.reminderAt, false, zone)
       : null;
-  if ((reminderMode === 'due' || reminderMode === 'offset') && (dueAt === null || isAllDay)) {
+  if ((reminderMode === 'due' || reminderMode === 'offset') && dueAt === null) {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
   if (
@@ -451,7 +476,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
       throw AppError.of(400, 'VALIDATION_ERROR');
     }
   }
-  if ((reminderMode === 'due' || reminderMode === 'offset') && (dueAt === null || isAllDay)) {
+  if ((reminderMode === 'due' || reminderMode === 'offset') && dueAt === null) {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
   if (

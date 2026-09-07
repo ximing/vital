@@ -233,4 +233,80 @@ describe('tasks', () => {
       recurrence: null,
     });
   });
+
+  it('accepts on-time and offset reminders on all-day dated tasks', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const dueAt = shanghaiDate('2026-09-08');
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '全天截止',
+        listId: inbox,
+        dueAt,
+        isAllDay: true,
+        reminderMode: 'due',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ isAllDay: true, reminderMode: 'due' });
+    const patched = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${created.json().id as string}`,
+      token: alice.token,
+      payload: { reminderMode: 'offset', reminderOffsetMinutes: 1440 },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json()).toMatchObject({
+      reminderMode: 'offset',
+      reminderOffsetMinutes: 1440,
+    });
+  });
+
+  it('counts open tasks per list and smart list', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const yesterday = DateTime.now().setZone('Asia/Shanghai').minus({ days: 1 }).toISODate();
+    await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'Plain', listId: inbox },
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: 'Overdue',
+        listId: inbox,
+        dueAt: shanghaiDate(yesterday ?? '2026-01-01'),
+        isAllDay: true,
+      },
+    });
+    const done = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'Finished', listId: inbox },
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${done.json().id as string}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks/counts',
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    const counts = res.json().counts as Record<string, number>;
+    expect(counts[inbox]).toBe(2);
+    expect(counts['smart:inbox']).toBe(2);
+    expect(counts['smart:today']).toBe(1);
+  });
 });

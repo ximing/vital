@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        font-family: system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        background: #cfc9be;
+      }
+      .stage {
+        width: 1280px;
+        height: 800px;
+        display: grid;
+        place-items: center;
+        background: #d8d2c6;
+      }
+      .panel {
+        width: 380px;
+        min-height: 420px;
+        background: #14110c;
+        color: #fff6ea;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+        padding: 16px;
+        box-sizing: border-box;
+        font: 15px/1.5 system-ui, 'PingFang SC', sans-serif;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 650;
+      }
+      .ghost {
+        background: transparent;
+        color: #f5c84b;
+        border: 0;
+        font: inherit;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 14px;
+      }
+      li {
+        border: 1px solid #3a3228;
+        background: #1e1a14;
+        border-radius: 10px;
+        margin-bottom: 8px;
+        padding: 10px 12px;
+      }
+      .title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .meta {
+        margin-top: 4px;
+        color: #a39888;
+        font-size: 12px;
+      }
+      .primary {
+        width: 100%;
+        padding: 9px 12px;
+        background: #f5c84b;
+        color: #1c1914;
+        font-weight: 600;
+        border: 0;
+        border-radius: 8px;
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="panel">
+        <div class="row">
+          <h1>最近保存</h1>
+          <button class="ghost" type="button">退出</button>
+        </div>
+        <ul>
+          <li>
+            <div class="title">把长文先收进来</div>
+            <div class="meta">稍后读 · 原文</div>
+          </li>
+          <li>
+            <div class="title">下周要处理的链接</div>
+            <div class="meta">待办 · 原文</div>
+          </li>
+          <li>
+            <div class="title">一张参考图</div>
+            <div class="meta">稍后读 · 原文</div>
+          </li>
+        </ul>
+        <button class="primary" type="button">打开网页版</button>
+      </div>
+    </div>
+  </body>
+</html>

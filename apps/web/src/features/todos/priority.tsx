@@ -1,7 +1,10 @@
 import { Circle, Flag } from 'lucide-react';
 import type { TaskPriority } from '@vital/dto';
-import { Icon } from '@/ui/icon';
+import { useRef } from 'react';
 import { t } from '@/copy';
+import { FIELD_POPOVER_CLASS } from '@/ui/field';
+import { Icon } from '@/ui/icon';
+import { usePopover } from '@/ui/use-popover';
 import { priorityLabel } from './model';
 
 const TONE: Record<TaskPriority, string> = {
@@ -46,6 +49,56 @@ export function PriorityMark({
     <span className={`inline-flex items-center ${TONE[priority]} ${className}`} title={label}>
       <Icon icon={Flag} size={12} fill={priority === 1 ? 'currentColor' : 'none'} />
     </span>
+  );
+}
+
+export function PriorityMenu({
+  value,
+  onChange,
+}: {
+  value: TaskPriority;
+  onChange: (p: TaskPriority) => void;
+}) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popover = usePopover(popoverRef);
+  return (
+    <div ref={popoverRef} className="relative">
+      <button
+        type="button"
+        aria-label={t.todos.priorityLabel}
+        aria-expanded={popover.open}
+        onClick={() => popover.toggle()}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface hover:text-fg ${
+          value < 3 ? TONE[value] : 'text-muted'
+        }`}
+      >
+        <Icon icon={Flag} size={15} fill={value === 1 ? 'currentColor' : 'none'} />
+      </button>
+      {popover.open ? (
+        <div
+          role="menu"
+          className={`absolute left-0 z-[var(--z-dropdown)] mt-1 w-36 ${FIELD_POPOVER_CLASS} p-1`}
+        >
+          {([0, 1, 2, 3] as TaskPriority[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="menuitem"
+              className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] hover:bg-surface-muted ${
+                value === p ? 'text-fg' : 'text-muted'
+              }`}
+              onClick={() => {
+                onChange(p);
+                popover.close();
+              }}
+            >
+              <PriorityMark priority={p} />
+              {t.todos.priority[priorityLabel(p)]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

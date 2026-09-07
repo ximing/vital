@@ -21,6 +21,7 @@ import {
   patchTask,
   reorderTasks,
   restoreTask,
+  taskCounts,
   uncompleteTask,
 } from './tasks.service.js';
 
@@ -38,6 +39,12 @@ export function registerTaskRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     await reorderTasks(user.id, reorderTasksInputSchema.parse(req.body));
     return reply.code(204).send();
+  });
+
+  app.get('/api/v1/tasks/counts', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    return taskCounts(user.id);
   });
 
   app.get('/api/v1/tasks', { preHandler: [requireAuth] }, async (req) => {

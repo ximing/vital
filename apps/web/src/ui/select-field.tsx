@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import {
   FIELD_CONTROL_CLASS,
   FIELD_CONTROL_OPEN_CLASS,
@@ -28,12 +29,13 @@ export function SelectField<T extends string>({
   disabled?: boolean;
   className?: string;
 }) {
-  const popover = usePopover();
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popover = usePopover(popoverRef);
   const selected = options.find((option) => option.value === value);
   const summary = selected?.label ?? placeholder ?? '';
 
   return (
-    <div ref={popover.root} className={`relative ${className}`}>
+    <div ref={popoverRef} className={`relative ${className}`}>
       <button
         type="button"
         aria-label={ariaLabel}

@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        font-family: system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        background: #d8d4cc;
+      }
+      .chrome {
+        width: 1280px;
+        height: 800px;
+        background: #faf8f3;
+        display: flex;
+        flex-direction: column;
+      }
+      .bar {
+        height: 44px;
+        background: #e3e0d8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border-bottom: 1px solid #d0ccc3;
+      }
+      .omni {
+        flex: 1;
+        height: 28px;
+        border-radius: 14px;
+        background: #f7f5f0;
+        color: #5c5850;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+      }
+      .page {
+        flex: 1;
+        padding: 64px 120px;
+        position: relative;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 28px;
+        color: #1c1914;
+      }
+      p {
+        color: #5a5348;
+        max-width: 36rem;
+        line-height: 1.7;
+      }
+      .menu {
+        position: absolute;
+        left: 420px;
+        top: 180px;
+        width: 280px;
+        background: #2b2722;
+        color: #f4efe6;
+        border-radius: 8px;
+        padding: 6px 0;
+        box-shadow: 0 16px 40px rgb(0 0 0 / 35%);
+        font-size: 13px;
+      }
+      .item {
+        padding: 8px 16px;
+      }
+      .item.on {
+        background: #3d3830;
+        color: #f5c84b;
+      }
+      .sep {
+        height: 1px;
+        background: #4a453c;
+        margin: 4px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chrome">
+      <div class="bar"><div class="omni">example.com/notes</div></div>
+      <div class="page">
+        <h1>在任意页面右键</h1>
+        <p>保存页面、链接、选中的文字或图片。也可以直接存成待办，或保存后改标题。</p>
+        <div class="menu">
+          <div class="item">保存到 Vital</div>
+          <div class="item">保存链接到 Vital</div>
+          <div class="item">保存所选文字</div>
+          <div class="item">保存图片到 Vital</div>
+          <div class="sep"></div>
+          <div class="item on">保存为待办到 Vital</div>
+          <div class="item">保存并编辑</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

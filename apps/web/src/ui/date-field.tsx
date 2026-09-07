@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { t } from '@/copy';
 import { addMonthsYmd, monthGrid, ymdParts } from '@/lib/calendar-grid';
 import { formatHumanDay, toDateInput, todayYmd } from '@/features/todos/model';
@@ -28,7 +28,8 @@ export function DateField({
   ariaLabel: string;
   onChange: (next: string) => void;
 }) {
-  const popover = usePopover();
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popover = usePopover(popoverRef);
   const today = todayYmd(zone);
   const selectedYmd = value === '' ? '' : value.slice(0, 10);
   const selectedTime = value.includes('T') ? value.slice(11, 16) : '09:00';
@@ -64,7 +65,7 @@ export function DateField({
         : `${formatHumanDay(selectedYmd, zone)} ${selectedTime}`;
 
   return (
-    <div ref={popover.root} className="relative">
+    <div ref={popoverRef} className="relative">
       <div className="flex items-center gap-1">
         <button
           type="button"

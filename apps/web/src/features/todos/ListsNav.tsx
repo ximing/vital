@@ -1,12 +1,45 @@
+import type { List } from '@vital/dto';
 import type { LucideIcon } from 'lucide-react';
 import { Folder, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
-import { NavLink, useNavigate } from 'react-router';
+import { NavLink, useLocation, useNavigate } from 'react-router';
 import { t } from '@/copy';
 import { RAIL_NAV, railNavClass } from '@/shell/rail-nav';
+import { listIdFrom, rhythmHref } from '@/shell/section';
 import { Icon } from '@/ui/icon';
 import { userLists } from './model';
-import { useListsQuery, useTodoActions } from './queries';
+import { useCountsQuery, useListsQuery, useTodoActions } from './queries';
+
+const EMOJI_RE = /^(\p{Extended_Pictographic}(?:️|⃣)?(?:‍\p{Extended_Pictographic}️?)*)\s*/u;
+
+/** Leading emoji (or list.icon) doubles as the row icon; stripped from the label. */
+function listBadge(list: List): { icon: string | null; name: string } {
+  if (list.icon !== null && list.icon !== '') return { icon: list.icon, name: list.name };
+  const match = EMOJI_RE.exec(list.name);
+  if (match?.[1]) return { icon: match[1], name: list.name.slice(match[0].length) };
+  return { icon: null, name: list.name };
+}
+
+function ListGlyph({ list, fallback }: { list: List; fallback: LucideIcon }) {
+  const { icon } = listBadge(list);
+  if (icon !== null) {
+    return (
+      <span aria-hidden className="w-4 shrink-0 text-center text-[14px] leading-none">
+        {icon}
+      </span>
+    );
+  }
+  return <Icon icon={fallback} className="shrink-0 opacity-80" />;
+}
+
+function CountBadge({ value }: { value: number | undefined }) {
+  if (!value) return null;
+  return (
+    <span className="ml-auto shrink-0 pl-2 text-[length:var(--text-caption)] tabular-nums text-tertiary">
+      {value > 99 ? '99+' : value}
+    </span>
+  );
+}
 
 export function UserListsNav({
   icon = Folder,
@@ -16,8 +49,11 @@ export function UserListsNav({
   addIcon?: LucideIcon;
 }) {
   const { data } = useListsQuery();
+  const counts = useCountsQuery().data ?? {};
   const { createList } = useTodoActions();
   const navigate = useNavigate();
+  const location = useLocation();
+  const current = listIdFrom(location.pathname, location.search);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const lists = userLists(data ?? []);
@@ -41,11 +77,12 @@ export function UserListsNav({
       {lists.map((list) => (
         <NavLink
           key={list.id}
-          to={`/todos/lists/${list.id}`}
-          className={({ isActive }) => railNavClass(isActive)}
+          to={rhythmHref(list.id, location.pathname)}
+          className={railNavClass(current === list.id)}
         >
-          <Icon icon={icon} className="shrink-0 opacity-80" />
-          <span className="truncate">{list.name}</span>
+          <ListGlyph list={list} fallback={icon} />
+          <span className="min-w-0 flex-1 truncate">{listBadge(list).name}</span>
+          <CountBadge value={counts[list.id]} />
         </NavLink>
       ))}
       {open ? (
@@ -73,6 +110,48 @@ export function UserListsNav({
           {t.todos.newList}
         </button>
       )}
+    </div>
+  );
+}
+
+/** Mockup-style favorite tiles: first few user lists as an emoji grid. */
+export function ListShortcuts() {
+  const { data } = useListsQuery();
+  const location = useLocation();
+  const lists = userLists(data ?? []).slice(0, 8);
+  if (lists.length < 2) return null;
+  const current = listIdFrom(location.pathname, location.search);
+  return (
+    <div className="grid grid-cols-4 gap-0.5 px-2 pb-2 pt-1">
+      {lists.map((list) => {
+        const badge = listBadge(list);
+        return (
+          <NavLink
+            key={list.id}
+            to={rhythmHref(list.id, location.pathname)}
+            title={badge.name}
+            className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 ${
+              current === list.id ? 'bg-accent-subtle' : 'hover:bg-surface-muted'
+            }`}
+          >
+            {badge.icon !== null ? (
+              <span aria-hidden className="text-[17px] leading-none">
+                {badge.icon}
+              </span>
+            ) : (
+              <span
+                aria-hidden
+                className="flex h-[17px] w-[17px] items-center justify-center rounded bg-accent-subtle text-[11px] font-medium text-fg"
+              >
+                {badge.name.trim().charAt(0) || '·'}
+              </span>
+            )}
+            <span className="w-full truncate text-center text-[11px] leading-tight text-secondary">
+              {badge.name}
+            </span>
+          </NavLink>
+        );
+      })}
     </div>
   );
 }

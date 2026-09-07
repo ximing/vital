@@ -54,12 +54,57 @@ describe('TaskDetail reminder and recurrence controls', () => {
       </RabRoot>,
     );
 
-    await user.click(screen.getByRole('button', { name: t.todos.remind }));
-    await user.click(screen.getByRole('option', { name: t.todos.reminder15m }));
-    expect(onPatch).toHaveBeenLastCalledWith({ reminderMode: 'offset', reminderOffsetMinutes: 15 });
+    await user.click(screen.getByRole('button', { name: t.todos.addDate }));
+    expect(screen.getByRole('button', { name: t.todos.datePoint })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.todos.dateRange })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: t.todos.reminderNone }));
+    await user.click(screen.getByRole('button', { name: t.todos.reminder15m }));
+    expect(onPatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ reminderMode: 'offset', reminderOffsetMinutes: 15 }),
+    );
 
-    await user.click(screen.getByRole('button', { name: t.todos.recurrence }));
-    await user.click(screen.getByRole('option', { name: t.todos.recurrenceLegalWorkdays }));
-    expect(onPatch).toHaveBeenLastCalledWith({ recurrence: null, recurrenceKind: 'legal_workdays' });
+    await user.click(screen.getByRole('button', { name: t.todos.recurrenceNone }));
+    await user.click(screen.getByRole('button', { name: t.todos.recurrenceLegalWorkdays }));
+    const recurrencePatch = onPatch.mock.lastCall?.[0] as Record<string, unknown>;
+    // The API rejects patches that carry both recurrence shapes at once.
+    expect(recurrencePatch).not.toHaveProperty('recurrence');
+    expect(recurrencePatch).toHaveProperty('recurrenceKind', 'legal_workdays');
+  });
+
+  it('keeps on-time and offset reminders for all-day dated tasks', async () => {
+    const user = userEvent.setup();
+    const onPatch = vi.fn();
+    render(
+      <RabRoot>
+        <TaskDetail
+          task={{ ...task, isAllDay: true, dueAt: '2026-09-07T16:00:00.000Z', startAt: '2026-09-06T16:00:00.000Z' }}
+          subtasks={[]}
+          lists={[]}
+          tags={[]}
+          timeZone="Asia/Shanghai"
+          onPatch={onPatch}
+          onComplete={vi.fn()}
+          onDelete={vi.fn()}
+          onAddSubtask={vi.fn()}
+          onCreateTag={vi.fn()}
+        />
+      </RabRoot>,
+    );
+
+    await user.click(screen.getByRole('button', { name: t.todos.addDate }));
+    await user.click(screen.getByRole('button', { name: t.todos.reminderNone }));
+    expect(screen.getByRole('button', { name: t.todos.reminderDue })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.todos.reminder5m })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.todos.reminder15m })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.todos.reminder30m })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.todos.reminder1d })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: t.todos.reminderDue }));
+    expect(onPatch).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        reminderMode: 'due',
+        reminderOffsetMinutes: null,
+        reminderAt: null,
+      }),
+    );
   });
 });

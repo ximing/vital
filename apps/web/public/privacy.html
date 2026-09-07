@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vital 扩展隐私政策</title>
+    <style>
+      body {
+        margin: 0 auto;
+        max-width: 40rem;
+        padding: 2.5rem 1.25rem 4rem;
+        font: 16px/1.65 system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        color: #272b27;
+        background: #f3f3ed;
+      }
+      h1 {
+        font-size: 1.5rem;
+        letter-spacing: -0.03em;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin-top: 2rem;
+      }
+      p,
+      li {
+        color: #3a4038;
+      }
+      a {
+        color: #425246;
+      }
+      .muted {
+        color: #697067;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Vital 浏览器扩展隐私政策</h1>
+    <p class="muted">生效日期：2026-09-07 · 适用产品：Chrome 扩展「Vital」</p>
+
+    <p>
+      本政策说明 Vital 扩展如何处理数据。扩展由 Vital（网站
+      <a href="https://vital.aimo.plus">https://vital.aimo.plus</a>）提供，用于在你主动操作时，把网页内容保存到你自己的 Vital 账号。
+    </p>
+
+    <h2>我们收集什么</h2>
+    <p>仅在你点击工具栏、使用快捷键或选择右键菜单时收集：</p>
+    <ul>
+      <li>你保存的页面网址、标题、抽出的正文、你选中的文字</li>
+      <li>你选择保存的图片文件</li>
+      <li>登录所需的邮箱，以及保存在 Chrome 存储中的访问令牌 / 刷新令牌</li>
+    </ul>
+    <p>我们不会在后台记录你未保存的浏览历史，也不会扫描其它标签页。</p>
+
+    <h2>用来做什么</h2>
+    <p>
+      只用于把内容写入你的 Vital 稍后读或待办，并在扩展里显示最近保存。不用于广告，不出售，不提供给与提供 Vital 服务无关的第三方。
+    </p>
+
+    <h2>存在哪里</h2>
+    <ul>
+      <li>账号与条目：Vital 服务器（https://vital.aimo.plus）</li>
+      <li>你保存的图片：Vital 使用的对象存储（https://s3.aimo.plus）</li>
+      <li>登录令牌：本机 <code>chrome.storage</code>（访问令牌在会话存储，刷新令牌在本地存储）</li>
+    </ul>
+
+    <h2>保留与删除</h2>
+    <p>
+      条目与图片随你的 Vital 账号保留，直到你在产品里删除或注销。卸载扩展会清除本机令牌，不会自动删除服务器上已保存的内容。
+    </p>
+
+    <h2>权限</h2>
+    <p>
+      storage、activeTab、scripting、contextMenus、offscreen 以及 Vital
+      域名主机权限，均只为完成「保存到 Vital」这一用途。扩展不加载远程托管的脚本。
+    </p>
+
+    <h2>联系</h2>
+    <p>隐私相关请求请通过 <a href="https://vital.aimo.plus">https://vital.aimo.plus</a> 账号体系联系运营方。</p>
+  </body>
+</html>

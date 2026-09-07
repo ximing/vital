@@ -1,8 +1,9 @@
 import type { List, Tag, Task, TaskPriority } from '@vital/dto';
 import type { DragEvent } from 'react';
 import { t } from '@/copy';
-import { EmptyTasks } from './EmptyTasks';
 import { listTitle, splitByPriority, splitByStatus } from './model';
+import { QuickAdd, type ComposeExtras } from './QuickAdd';
+import type { ScheduleDraft } from './schedule-draft';
 import { TaskRow } from './TaskRow';
 import { useTodosUi } from './todos-ui.service';
 
@@ -15,25 +16,35 @@ export function BoardView({
   tags,
   lists,
   timeZone,
+  weekStartsOn,
+  defaultListId,
+  listName,
+  disabled,
   onComplete,
   onStatus,
   onPriority,
+  onCreate,
+  onTaskMenu,
 }: {
   listId: string;
   tasks: Task[];
   tags: Tag[];
   lists: List[];
   timeZone: string;
+  weekStartsOn: 0 | 1;
+  defaultListId: string;
+  listName: string;
+  disabled?: boolean;
   onComplete: (task: Task) => void;
   onStatus: (task: Task, status: 'todo' | 'doing') => void;
   onPriority: (task: Task, priority: TaskPriority) => void;
+  onCreate: (title: string, draft: ScheduleDraft, extras: ComposeExtras) => void;
+  onTaskMenu?: (task: Task, x: number, y: number) => void;
 }) {
   const boardMode = useTodosUi((s) => s.boardMode);
+  const hideCompleted = useTodosUi((s) => s.hideCompleted);
   const selectedId = useTodosUi((s) => s.selectedId);
   const openDetail = useTodosUi((s) => s.openDetail);
-  const setBoardMode = useTodosUi((s) => s.setBoardMode);
-
-  if (tasks.length === 0) return <EmptyTasks listId={listId} kind="board" />;
 
   function dragStart(event: DragEvent<HTMLDivElement>, task: Task) {
     event.dataTransfer.setData('text/plain', task.id);
@@ -60,56 +71,38 @@ export function BoardView({
         onComplete={() => onComplete(task)}
         onDragStart={(event) => dragStart(event, task)}
         onDragOver={dragOver}
+        onContextMenu={
+          onTaskMenu
+            ? (event) => {
+                event.preventDefault();
+                onTaskMenu(task, event.clientX, event.clientY);
+              }
+            : undefined
+        }
       />
     );
   }
 
   const byStatus = splitByStatus(tasks);
   const byPriority = splitByPriority(tasks);
+  const statusCols = hideCompleted ? (['todo', 'doing'] as const) : STATUS_COLS;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex pb-3" role="radiogroup" aria-label={t.todos.views.board}>
-        <div className="flex rounded-md bg-surface p-0.5">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={boardMode === 'status'}
-            className={`h-8 rounded-xl px-3 text-[length:var(--text-meta)] ${
-              boardMode === 'status'
-                ? 'bg-accent-subtle text-fg'
-                : 'text-muted hover:text-fg'
-            }`}
-            onClick={() => setBoardMode('status')}
-          >
-            {t.todos.boardByStatus}
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={boardMode === 'priority'}
-            className={`h-8 rounded-xl px-3 text-[length:var(--text-meta)] ${
-              boardMode === 'priority'
-                ? 'bg-accent-subtle text-fg'
-                : 'text-muted hover:text-fg'
-            }`}
-            onClick={() => setBoardMode('priority')}
-          >
-            {t.todos.boardByPriority}
-          </button>
-        </div>
-      </div>
-
       <div
         className={`grid min-h-0 flex-1 auto-rows-fr gap-4 overflow-x-auto ${
-          boardMode === 'status' ? 'grid-cols-3' : 'grid-cols-4'
+          boardMode === 'status'
+            ? statusCols.length === 2
+              ? 'grid-cols-2'
+              : 'grid-cols-3'
+            : 'grid-cols-4'
         }`}
       >
         {boardMode === 'status'
-          ? STATUS_COLS.map((status) => (
+          ? statusCols.map((status, index) => (
               <section
                 key={status}
-                className="min-h-0 min-w-[12rem] overflow-y-auto rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
+                className="flex min-h-0 min-w-[14rem] flex-col overflow-visible rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
                 onDragOver={dragOver}
                 onDrop={(event) => {
                   event.preventDefault();
@@ -121,15 +114,30 @@ export function BoardView({
                 }}
               >
                 <h2 className="px-2 pb-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-                  {t.todos.status[status]}
+                  {t.todos.status[status]}{' '}
+                  <span className="text-tertiary">{byStatus[status].length}</span>
                 </h2>
-                {byStatus[status].map(card)}
+                {status !== 'done' ? (
+                  <QuickAdd
+                    variant="card"
+                    captureId={index === 0}
+                    onSubmit={onCreate}
+                    disabled={disabled}
+                    listName={listName}
+                    lists={lists}
+                    defaultListId={defaultListId}
+                    zone={timeZone}
+                    weekStartsOn={weekStartsOn}
+                    lockedStatus={status}
+                  />
+                ) : null}
+                <div className="min-h-0 flex-1 overflow-y-auto">{byStatus[status].map(card)}</div>
               </section>
             ))
-          : PRIORITY_COLS.map((priority) => (
+          : PRIORITY_COLS.map((priority, index) => (
               <section
                 key={priority}
-                className="min-h-0 min-w-[12rem] overflow-y-auto rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
+                className="flex min-h-0 min-w-[14rem] flex-col overflow-visible rounded-2xl bg-surface p-3 shadow-[var(--shadow)]"
                 onDragOver={dragOver}
                 onDrop={(event) => {
                   event.preventDefault();
@@ -140,9 +148,24 @@ export function BoardView({
                 }}
               >
                 <h2 className="px-2 pb-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-                  {t.todos.priority[`p${priority}` as 'p0' | 'p1' | 'p2' | 'p3']}
+                  {t.todos.priority[`p${priority}` as 'p0' | 'p1' | 'p2' | 'p3']}{' '}
+                  <span className="text-tertiary">{byPriority[priority].length}</span>
                 </h2>
-                {byPriority[priority].map(card)}
+                <QuickAdd
+                  variant="card"
+                  captureId={index === 0}
+                  onSubmit={onCreate}
+                  disabled={disabled}
+                  listName={listName}
+                  lists={lists}
+                  defaultListId={defaultListId}
+                  zone={timeZone}
+                  weekStartsOn={weekStartsOn}
+                  lockedPriority={priority}
+                />
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {byPriority[priority].map(card)}
+                </div>
               </section>
             ))}
       </div>

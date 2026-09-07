@@ -315,7 +315,7 @@ export function groupByDay(
 /** Same grouping ListView paints — j/k must walk this order, not raw sortOrder. */
 export type ListSection = {
   key: string;
-  heading: 'overdue' | 'today' | 'done' | 'anytime' | 'day' | null;
+  heading: 'pinned' | 'overdue' | 'today' | 'done' | 'anytime' | 'day' | null;
   ymd?: string;
   nodes: TaskNode[];
 };
@@ -336,9 +336,12 @@ export function listSections(
 
   if (listId === 'smart:today') {
     const { overdue, today } = partitionToday(openNodes, timeZone, now);
+    const pinned = today.filter((node) => node.task.priority === 0);
+    const rest = today.filter((node) => node.task.priority !== 0);
     return nonempty([
+      { key: 'pinned', heading: 'pinned', nodes: pinned },
       { key: 'overdue', heading: 'overdue', nodes: overdue },
-      { key: 'today', heading: 'today', nodes: today },
+      { key: 'today', heading: 'today', nodes: rest },
     ]);
   }
   if (listId === 'smart:upcoming') {
@@ -522,9 +525,9 @@ export function dueMeta(task: Task, timeZone: string, now = new Date()): string 
   const ymd = taskDayYmd(task, timeZone);
   if (ymd === null) return null;
   const day = formatHumanDay(ymd, timeZone, now);
-  if (task.isAllDay) return isOverdue(task, timeZone, now) ? `逾期 · ${day}` : day;
+  if (task.isAllDay) return day;
   const clock = formatHm(task.dueAt ?? task.startAt ?? '', timeZone);
-  return isOverdue(task, timeZone, now) ? `逾期 · ${day} ${clock}` : `${day} ${clock}`;
+  return `${day} ${clock}`;
 }
 
 export function recurrenceMeta(task: Task): string | null {

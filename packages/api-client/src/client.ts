@@ -51,6 +51,7 @@ import type {
   TagCollection,
   Task,
   TaskCollection,
+  TaskCounts,
   UncompleteTaskInput,
   UpdateMeInput,
   UpdateOnboardingInput,
@@ -100,6 +101,7 @@ export interface VitalClient {
   patchList(id: string, input: PatchListInput): Promise<List>;
   deleteList(id: string): Promise<void>;
   listTasks(query: { listId: string; cursor?: string; limit?: number }): Promise<TaskCollection>;
+  taskCounts(): Promise<TaskCounts>;
   createTask(input: CreateTaskInput): Promise<Task>;
   getTask(id: string): Promise<Task>;
   patchTask(id: string, input: PatchTaskInput): Promise<Task>;
@@ -259,6 +261,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       if (query.limit !== undefined) q.limit = query.limit;
       return http.request('/api/v1/tasks', { query: q });
     },
+    taskCounts: () => http.request('/api/v1/tasks/counts'),
     createTask: (input) => http.request('/api/v1/tasks', { method: 'POST', body: input }),
     getTask: (id) => http.request(`/api/v1/tasks/${id}`),
     patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),

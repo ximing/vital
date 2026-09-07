@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 440px;
+        height: 280px;
+        overflow: hidden;
+        background: #191c19;
+        color: #eaece4;
+        font-family: Inter, 'PingFang SC', 'Noto Sans SC', sans-serif;
+      }
+      .tile {
+        width: 440px;
+        height: 280px;
+        box-sizing: border-box;
+        padding: 28px 32px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        background: radial-gradient(120% 90% at 100% 0%, #425246 0%, #191c19 58%);
+      }
+      .mark {
+        width: 48px;
+        height: 48px;
+        color: #a0b497;
+      }
+      h1 {
+        margin: 0;
+        font-size: 42px;
+        font-weight: 650;
+        letter-spacing: -0.04em;
+      }
+      p {
+        margin: 8px 0 0;
+        font-size: 16px;
+        color: #dce3d7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="tile">
+      <svg class="mark" viewBox="0 0 32 32" fill="none">
+        <path d="M21.5 6.48A11 11 0 1 1 6.48 10.5" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M8 16.5L13 22.5L18.5 10.5L21.5 15.5L26 8" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <div>
+        <h1>Vital</h1>
+        <p>把网页收到稍后读</p>
+      </div>
+    </div>
+  </body>
+</html>

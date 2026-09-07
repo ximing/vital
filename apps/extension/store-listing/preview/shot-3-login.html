@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        font-family: system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        background: #cfc9be;
+      }
+      .stage {
+        width: 1280px;
+        height: 800px;
+        display: grid;
+        place-items: center;
+        background: #d8d2c6;
+      }
+      .panel {
+        width: 380px;
+        min-height: 420px;
+        background: #14110c;
+        color: #fff6ea;
+        border-radius: 12px;
+        box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+        padding: 16px;
+        box-sizing: border-box;
+        font: 15px/1.5 system-ui, 'PingFang SC', sans-serif;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        font-weight: 650;
+      }
+      .muted {
+        color: #a39888;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .primary {
+        margin-top: 14px;
+        width: 100%;
+        padding: 9px 12px;
+        background: #f5c84b;
+        color: #1c1914;
+        font-weight: 600;
+        border: 0;
+        border-radius: 8px;
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="panel">
+        <h1>Vital</h1>
+        <p class="muted">在网页登录后，点工具栏即可把当前页收到稍后读。快捷键 Alt+Shift+V。</p>
+        <button class="primary" type="button">在网页登录</button>
+      </div>
+    </div>
+  </body>
+</html>

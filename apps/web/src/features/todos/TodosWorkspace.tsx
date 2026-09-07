@@ -1,6 +1,6 @@
 import type { Task, TaskPriority } from '@vital/dto';
-import { CalendarDays, Columns3, List, Search } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Columns3, Ellipsis, EyeOff, List, PanelRightClose } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useParams, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
@@ -15,19 +15,24 @@ import { ListView } from './ListView';
 import {
   applyOptimisticComplete,
   boardVisibleIds,
-  circadianSlot,
   createPayload,
   filterTasks,
+  formatHm,
   formatHumanDay,
-  hourInZone,
+  fromDatetimeLocal,
   inboxList,
   listTitle,
   listVisibleIds,
   todayYmd,
   weekRangeIso,
+  zonedLocalMidnightIso,
   type TodoView,
 } from './model';
-import { QuickAdd } from './QuickAdd';
+import { applyDraftToCreate, type ScheduleDraft } from './schedule-draft';
+import { QuickAdd, type ComposeExtras } from './QuickAdd';
+import { TaskContextMenu } from './TaskContextMenu';
+import { FIELD_POPOVER_CLASS } from '@/ui/field';
+import { usePopover } from '@/ui/use-popover';
 import {
   useCalendarQuery,
   useListsQuery,
@@ -63,6 +68,9 @@ function viewHref(view: TodoView, listId: string): string {
   return `/todos/calendar?list=${encodeURIComponent(listId)}`;
 }
 
+const DETAIL_COL =
+  'flex h-full min-h-0 w-[clamp(24rem,40%,40rem)] shrink-0 border-l border-border/60';
+
 export function TodosWorkspace({ view }: { view: TodoView }) {
   const params = useParams();
   const [search] = useSearchParams();
@@ -94,6 +102,11 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const completingIds = useTodosUi((s) => s.completingIds);
   const completeUndo = useTodosUi((s) => s.completeUndo);
   const boardMode = useTodosUi((s) => s.boardMode);
+  const hideCompleted = useTodosUi((s) => s.hideCompleted);
+  const closeDetail = useTodosUi((s) => s.closeDetail);
+  const viewMenuRef = useRef<HTMLDivElement>(null);
+  const viewMenu = usePopover(viewMenuRef);
+  const [taskMenu, setTaskMenu] = useState<{ task: Task; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (filterFocusNonce > 0) document.getElementById(LIST_FILTER_ID)?.focus();
@@ -109,7 +122,11 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const inbox = inboxList(lists);
   const showId = completeUndo?.wantUndo ? completeUndo.taskId : null;
   const rawTasks = applyOptimisticComplete(tasksQuery.data ?? [], new Set(completingIds), showId);
-  const tasks = filterTasks(rawTasks, listFilter);
+  const filtered = filterTasks(rawTasks, listFilter);
+  const tasks =
+    hideCompleted && listId !== 'smart:done'
+      ? filtered.filter((task) => task.status !== 'done')
+      : filtered;
   const visibleIds =
     view === 'board' ? boardVisibleIds(tasks, boardMode) : listVisibleIds(listId, tasks, timeZone);
   const selected =
@@ -135,8 +152,6 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 : t.nav.todos,
   );
 
-  const kicker = t.todos.circadian[circadianSlot(hourInZone(timeZone))];
-
   useTodosKeyboard({
     visibleIds,
     selected,
@@ -146,11 +161,28 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   });
 
   const inboxId = inbox?.id;
-  async function handleCreate(name: string) {
+  const defaultListId = listId.startsWith('smart:') ? (inboxId ?? '') : listId;
+
+  /** Push every overdue task's due date to today, keeping its time-of-day. */
+  function postponeOverdue(overdue: Task[]) {
+    const today = todayYmd(timeZone);
+    for (const task of overdue) {
+      if (task.dueAt === null || task.status === 'done' || task.status === 'canceled') continue;
+      const dueAt = task.isAllDay
+        ? zonedLocalMidnightIso(today, timeZone)
+        : fromDatetimeLocal(`${today}T${formatHm(task.dueAt, timeZone)}`, timeZone);
+      actions.patch.mutate({ id: task.id, input: { dueAt } });
+    }
+  }
+
+  async function handleCreate(name: string, draft: ScheduleDraft, extras: ComposeExtras) {
     if (!inboxId) return;
-    await actions.create.mutateAsync(
-      createPayload(name, listId, inboxId, timeZone, new Date(), composeDay ?? undefined),
-    );
+    const base = createPayload(name, listId, inboxId, timeZone, new Date(), composeDay ?? undefined);
+    const next = applyDraftToCreate(base, draft, timeZone);
+    if (extras.listId) next.listId = extras.listId;
+    if (extras.priority !== 3) next.priority = extras.priority;
+    if (extras.status) next.status = extras.status;
+    await actions.create.mutateAsync(next);
     setComposeDay(null);
   }
 
@@ -175,57 +207,122 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
     { id: 'week', icon: CalendarDays },
   ];
 
+  const detailPanel =
+    detailOpen && detailTask ? (
+      <TaskDetail
+        key={detailTask.id}
+        task={detailTask}
+        subtasks={subtasks}
+        lists={lists}
+        tags={tags}
+        timeZone={timeZone}
+        onPatch={(input) => actions.patch.mutate({ id: detailTask.id, input })}
+        onComplete={(task: Task) => void actions.complete(task)}
+        onDelete={() => actions.remove.mutate(detailTask.id)}
+        onAddSubtask={(name) => {
+          void actions.create.mutateAsync({
+            title: name,
+            listId: detailTask.listId,
+            parentId: detailTask.id,
+          });
+        }}
+        onCreateTag={async (name) => actions.createTag.mutateAsync(name)}
+      />
+    ) : null;
+
   return (
     <div className="flex h-full min-h-0 bg-canvas">
-      <main id="main" data-region="focus-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-          <div className={view === 'list' ? 'mx-auto flex w-full max-w-[57.5rem] min-h-0 flex-1 flex-col' : 'flex min-h-0 min-w-0 flex-1 flex-col'}>
-          <header className="flex flex-wrap items-end justify-between gap-3 pb-1">
-            <div className="min-w-0">
-              <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-                {kicker}
-              </p>
-              <h1 className="truncate text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
-                {title}
-              </h1>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div
-                className="flex h-9 rounded-md bg-surface p-0.5"
-                role="tablist"
-                aria-label={t.nav.todos}
+      <main id="main" data-region="focus-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col px-4">
+          <header className="flex items-center justify-between gap-2 px-2 pb-2 pt-3">
+            <h1 className="truncate text-[1.3rem] font-bold leading-tight tracking-[-0.02em]">
+              {title}
+            </h1>
+            <div ref={viewMenuRef} className="relative">
+              <button
+                type="button"
+                aria-label={t.todos.viewMenu}
+                aria-expanded={viewMenu.open}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
+                onClick={() => viewMenu.toggle()}
               >
-                {viewTabs.map((tab) => (
-                  <NavLink
-                    key={tab.id}
-                    to={viewHref(tab.id, listId)}
-                    role="tab"
-                    aria-selected={view === tab.id}
-                    className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
-                      view === tab.id ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
-                    }`}
+                <Icon icon={Ellipsis} size={16} />
+              </button>
+              {viewMenu.open ? (
+                <div
+                  role="menu"
+                  className={`absolute right-0 z-[var(--z-dropdown)] mt-1 w-52 ${FIELD_POPOVER_CLASS} p-1`}
+                >
+                  <p className="px-2 py-1 text-[length:var(--text-caption)] text-muted">
+                    {t.todos.viewMenu}
+                  </p>
+                  <div className="mb-1 flex rounded-md bg-surface-muted p-0.5">
+                    {viewTabs.map((tab) => (
+                      <NavLink
+                        key={tab.id}
+                        to={viewHref(tab.id, listId)}
+                        role="menuitem"
+                        aria-label={t.todos.views[tab.id]}
+                        className={`inline-flex h-8 flex-1 items-center justify-center rounded-md ${
+                          view === tab.id ? 'bg-elevated text-fg' : 'text-muted hover:text-fg'
+                        }`}
+                        onClick={() => viewMenu.close()}
+                      >
+                        <Icon icon={tab.icon} size={14} />
+                      </NavLink>
+                    ))}
+                  </div>
+                  {view === 'board' ? (
+                    <div className="mb-1 flex rounded-md bg-surface-muted p-0.5">
+                      {(['status', 'priority'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          role="menuitem"
+                          className={`h-8 flex-1 rounded-md text-[length:var(--text-caption)] ${
+                            boardMode === mode ? 'bg-elevated text-fg' : 'text-muted hover:text-fg'
+                          }`}
+                          onClick={() => todosUi().setBoardMode(mode)}
+                        >
+                          {mode === 'status' ? t.todos.boardByStatus : t.todos.boardByPriority}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                    onClick={() => {
+                      todosUi().setHideCompleted(!hideCompleted);
+                      viewMenu.close();
+                    }}
                   >
-                    <Icon icon={tab.icon} size={14} />
-                    {t.todos.views[tab.id]}
-                  </NavLink>
-                ))}
-              </div>
-              <label className="relative">
-                <Icon
-                  icon={Search}
-                  size={14}
-                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
-                />
-                <input
-                  id={LIST_FILTER_ID}
-                  type="search"
-                  value={listFilter}
-                  onChange={(e) => setListFilter(e.target.value)}
-                  placeholder={t.todos.filterPlaceholder}
-                  aria-label={t.todos.filterPlaceholder}
-                  className="h-10 w-44 rounded-md border border-border bg-surface py-0 pl-8 pr-3 text-[length:var(--text-meta)] text-fg placeholder:text-muted field-focus"
-                />
-              </label>
+                    <Icon icon={EyeOff} size={14} className="text-muted" />
+                    {hideCompleted ? t.todos.showCompleted : t.todos.hideCompleted}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                    onClick={() => {
+                      closeDetail();
+                      viewMenu.close();
+                    }}
+                  >
+                    <Icon icon={PanelRightClose} size={14} className="text-muted" />
+                    {t.todos.hideDetail}
+                  </button>
+                </div>
+              ) : null}
             </div>
+            <input
+              id={LIST_FILTER_ID}
+              type="search"
+              value={listFilter}
+              onChange={(e) => setListFilter(e.target.value)}
+              className="sr-only"
+              aria-label={t.todos.filterPlaceholder}
+            />
           </header>
 
           {!online ? (
@@ -243,15 +340,23 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
             </div>
           ) : null}
 
-          <QuickAdd
-            onSubmit={handleCreate}
-            disabled={!online || !inboxId}
-            hint={
-              composeDay
-                ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}`
-                : undefined
-            }
-          />
+          {view !== 'board' ? (
+            <QuickAdd
+              variant="bar"
+              onSubmit={handleCreate}
+              disabled={!online || !inboxId || defaultListId === ''}
+              listName={title}
+              lists={lists}
+              defaultListId={defaultListId}
+              zone={timeZone}
+              weekStartsOn={weekStartsOn}
+              hint={
+                composeDay
+                  ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}`
+                  : undefined
+              }
+            />
+          ) : null}
 
           <div
             className={`flex min-h-0 flex-1 flex-col ${
@@ -269,6 +374,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 timeZone={timeZone}
                 onComplete={(task) => void actions.complete(task)}
                 onReorder={(input) => actions.reorder.mutate(input)}
+                onPostpone={postponeOverdue}
+                onTaskMenu={(task, x, y) => setTaskMenu({ task, x, y })}
               />
             ) : view === 'board' ? (
               <BoardView
@@ -277,11 +384,17 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 tags={tags}
                 lists={lists}
                 timeZone={timeZone}
+                weekStartsOn={weekStartsOn}
+                defaultListId={defaultListId}
+                listName={title}
+                disabled={!online || defaultListId === ''}
                 onComplete={(task) => void actions.complete(task)}
                 onStatus={(task, status) => void actions.setStatus(task, status)}
                 onPriority={(task, priority: TaskPriority) =>
                   void actions.setPriority(task, priority)
                 }
+                onCreate={handleCreate}
+                onTaskMenu={(task, x, y) => setTaskMenu({ task, x, y })}
               />
             ) : calendarQuery.isLoading ? (
               <TaskSkeleton />
@@ -308,32 +421,59 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
               />
             )}
           </div>
-          </div>
       </main>
 
-      {detailOpen && detailTask ? (
-        <TaskDetail
-          key={detailTask.id}
-          task={detailTask}
-          subtasks={subtasks}
+      {view === 'list' ? (
+        <div data-region="detail-slot" className={DETAIL_COL}>
+          {detailPanel}
+        </div>
+      ) : detailPanel ? (
+        <TaskDetailHost view={view} onClose={closeDetail}>
+          {detailPanel}
+        </TaskDetailHost>
+      ) : null}
+
+      {taskMenu ? (
+        <TaskContextMenu
+          task={taskMenu.task}
+          x={taskMenu.x}
+          y={taskMenu.y}
           lists={lists}
-          tags={tags}
           timeZone={timeZone}
-          onPatch={(input) => actions.patch.mutate({ id: detailTask.id, input })}
-          onComplete={(task: Task) => void actions.complete(task)}
-          onDelete={() => actions.remove.mutate(detailTask.id)}
-          onAddSubtask={(name) => {
-            void actions.create.mutateAsync({
-              title: name,
-              listId: detailTask.listId,
-              parentId: detailTask.id,
-            });
-          }}
-          onCreateTag={async (name) => actions.createTag.mutateAsync(name)}
+          onClose={() => setTaskMenu(null)}
+          onOpen={() => openDetail(taskMenu.task.id)}
+          onComplete={(task) => void actions.complete(task)}
+          onPatch={(task, input) => actions.patch.mutate({ id: task.id, input })}
+          onDelete={(task) => actions.remove.mutate(task.id)}
         />
       ) : null}
 
       <UndoToast onUndo={() => void actions.undoComplete()} />
+    </div>
+  );
+}
+
+function TaskDetailHost({
+  view,
+  onClose,
+  children,
+}: {
+  view: TodoView;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  if (view === 'list') return children;
+  return (
+    <div
+      className="fixed inset-0 z-[var(--z-overlay)] flex justify-end bg-fg/25"
+      onClick={onClose}
+    >
+      <div
+        className="h-full w-full max-w-[40rem] bg-surface shadow-[var(--shadow)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children}
+      </div>
     </div>
   );
 }

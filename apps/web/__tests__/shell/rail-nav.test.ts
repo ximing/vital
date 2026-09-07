@@ -9,9 +9,9 @@ describe('rail-nav', () => {
     expect(initialsOf('')).toBe('?');
   });
 
-  it('uses a square selected state without rounding', () => {
+  it('uses a plain rounded selected state', () => {
     expect(railNavClass(true)).toContain('rounded-md');
     expect(railNavClass(true)).toContain('bg-accent-subtle');
-    expect(railNavClass(true)).toContain('before:bg-accent');
+    expect(railNavClass(true)).not.toContain('before:');
   });
 });

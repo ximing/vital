@@ -1,6 +1,8 @@
 import type { List, Tag, Task } from '@vital/dto';
-import type { DragEvent } from 'react';
+import { ChevronDown, ChevronRight, Pin } from 'lucide-react';
+import { useState, type DragEvent } from 'react';
 import { t } from '@/copy';
+import { Icon } from '@/ui/icon';
 import { EmptyTasks } from './EmptyTasks';
 import {
   flattenNodes,
@@ -14,19 +16,63 @@ import {
 import { TaskRow } from './TaskRow';
 import { useTodosUi } from './todos-ui.service';
 
-function GroupHeading({ children, tone }: { children: string; tone?: 'overdue' | 'muted' }) {
+function GroupHeading({
+  children,
+  count,
+  tone,
+  first,
+  collapsed,
+  onToggle,
+  action,
+}: {
+  children: string;
+  count: number;
+  tone?: 'overdue' | 'pinned' | 'muted';
+  first?: boolean;
+  collapsed: boolean;
+  onToggle: () => void;
+  action?: { label: string; onClick: () => void };
+}) {
   return (
-    <h2
-      className={`px-3 pb-1.5 pt-6 text-[length:var(--text-caption)] font-medium leading-[var(--text-caption-lh)] ${
-        tone === 'overdue' ? 'text-overdue' : 'text-muted'
+    <div
+      className={`group/heading flex items-center gap-1 px-2 pb-1 ${
+        first ? 'pt-1' : 'pt-3'
       }`}
     >
-      {children}
-    </h2>
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={onToggle}
+        className={`flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] ${
+          tone === 'overdue' ? 'text-overdue' : 'text-fg'
+        }`}
+      >
+        <Icon
+          icon={collapsed ? ChevronRight : ChevronDown}
+          size={13}
+          className="shrink-0 text-tertiary"
+        />
+        {tone === 'pinned' ? (
+          <Icon icon={Pin} size={12} className="shrink-0 text-due" fill="currentColor" />
+        ) : null}
+        <span className="truncate">{children}</span>
+        <span className="shrink-0 font-normal text-tertiary">{count}</span>
+      </button>
+      {action ? (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="shrink-0 rounded px-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted hover:text-accent"
+        >
+          {action.label}
+        </button>
+      ) : null}
+    </div>
   );
 }
 
 function sectionTitle(section: ListSection, timeZone: string): string | null {
+  if (section.heading === 'pinned') return t.todos.pinned;
   if (section.heading === 'overdue') return t.todos.overdue;
   if (section.heading === 'today') return t.lists.today;
   if (section.heading === 'done') return t.lists.done;
@@ -43,6 +89,8 @@ export function ListView({
   timeZone,
   onComplete,
   onReorder,
+  onPostpone,
+  onTaskMenu,
 }: {
   listId: string;
   tasks: Task[];
@@ -51,9 +99,21 @@ export function ListView({
   timeZone: string;
   onComplete: (task: Task) => void;
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
+  onPostpone?: (tasks: Task[]) => void;
+  onTaskMenu?: (task: Task, x: number, y: number) => void;
 }) {
   const selectedId = useTodosUi((s) => s.selectedId);
   const openDetail = useTodosUi((s) => s.openDetail);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleSection(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   function handleDragStart(event: DragEvent<HTMLDivElement>, task: Task) {
     event.dataTransfer.setData('text/plain', task.id);
@@ -87,13 +147,25 @@ export function ListView({
         selected={selectedId === task.id}
         timeZone={timeZone}
         tags={tags}
-        listName={listId.startsWith('smart:') ? listTitle(task.listId, lists, '') : undefined}
+        listName={
+          listId.startsWith('smart:') && listId !== 'smart:inbox'
+            ? listTitle(task.listId, lists, '')
+            : undefined
+        }
         onSelect={() => openDetail(task.id)}
         onOpen={() => openDetail(task.id)}
         onComplete={() => onComplete(task)}
         onDragStart={(event) => handleDragStart(event, task)}
         onDragOver={handleDragOver}
         onDrop={(event) => handleDrop(event, task)}
+        onContextMenu={
+          onTaskMenu
+            ? (event) => {
+                event.preventDefault();
+                onTaskMenu(task, event.clientX, event.clientY);
+              }
+            : undefined
+        }
       />
     ));
   }
@@ -110,16 +182,38 @@ export function ListView({
 
   return (
     <div role="listbox" aria-label={boxLabel}>
-      {sections.map((section) => {
+      {sections.map((section, index) => {
         const heading = sectionTitle(section, timeZone);
+        const isCollapsed = collapsed.has(section.key);
+        const flat = flattenNodes(section.nodes);
         return (
           <section key={section.key}>
             {heading ? (
-              <GroupHeading tone={section.heading === 'overdue' ? 'overdue' : 'muted'}>
+              <GroupHeading
+                count={flat.length}
+                first={index === 0}
+                collapsed={isCollapsed}
+                onToggle={() => toggleSection(section.key)}
+                tone={
+                  section.heading === 'overdue'
+                    ? 'overdue'
+                    : section.heading === 'pinned'
+                      ? 'pinned'
+                      : 'muted'
+                }
+                action={
+                  section.heading === 'overdue' && onPostpone
+                    ? {
+                        label: t.todos.postpone,
+                        onClick: () => onPostpone(flat.map((node) => node.task)),
+                      }
+                    : undefined
+                }
+              >
                 {heading}
               </GroupHeading>
             ) : null}
-            {renderNodeList(section.nodes)}
+            {isCollapsed ? null : renderNodeList(section.nodes)}
           </section>
         );
       })}

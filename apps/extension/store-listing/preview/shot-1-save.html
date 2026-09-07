@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1280px;
+        height: 800px;
+        overflow: hidden;
+        font-family: system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        background: #d8d4cc;
+      }
+      .chrome {
+        width: 1280px;
+        height: 800px;
+        background: #eceae4;
+        display: flex;
+        flex-direction: column;
+      }
+      .bar {
+        height: 44px;
+        background: #e3e0d8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border-bottom: 1px solid #d0ccc3;
+      }
+      .dots span {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 99px;
+        background: #c5c0b6;
+        margin-right: 5px;
+      }
+      .omni {
+        flex: 1;
+        height: 28px;
+        border-radius: 14px;
+        background: #f7f5f0;
+        color: #5c5850;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+      }
+      .tb {
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        background: #0d1a1c;
+        display: grid;
+        place-items: center;
+      }
+      .tb svg {
+        width: 18px;
+        height: 18px;
+        color: #3d9b94;
+      }
+      .page {
+        flex: 1;
+        background: #faf8f3;
+        padding: 56px 120px 80px;
+        position: relative;
+      }
+      .page h1 {
+        margin: 0 0 12px;
+        font-size: 32px;
+        color: #1c1914;
+      }
+      .page p {
+        max-width: 42rem;
+        color: #5a5348;
+        line-height: 1.7;
+        font-size: 16px;
+      }
+      .toast {
+        position: absolute;
+        right: 24px;
+        bottom: 24px;
+        max-width: 360px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: #1c1914;
+        color: #fffbf5;
+        font: 13px/1.4 system-ui, 'PingFang SC', sans-serif;
+        box-shadow: 0 8px 24px rgb(28 25 20 / 28%);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 99px;
+        background: #e8a317;
+        flex: none;
+      }
+      .toast a {
+        color: #e8a317;
+        font-weight: 600;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chrome">
+      <div class="bar">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <div class="omni">example.com/essay</div>
+        <div class="tb" title="保存到 Vital">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M21.5 6.48A11 11 0 1 1 6.48 10.5" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" />
+            <path d="M8 16.5L13 22.5L18.5 10.5L21.5 15.5L26 8" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" />
+          </svg>
+        </div>
+      </div>
+      <div class="page">
+        <h1>一篇正在读的长文</h1>
+        <p>点击工具栏上的 Vital，或按下 Alt+Shift+V，当前页会收到稍后读。同一网址不会重复保存。</p>
+        <p>扩展只在你主动保存时读取这一页，不会在后台扫描其它标签。</p>
+        <div class="toast">
+          <span class="dot"></span>
+          <span>已保存到 Vital</span>
+          <a>打开</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

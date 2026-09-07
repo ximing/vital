@@ -17,6 +17,7 @@ export const todoKeys = {
   all: ['todos'] as const,
   lists: ['todos', 'lists'] as const,
   tags: ['todos', 'tags'] as const,
+  counts: ['todos', 'counts'] as const,
   tasks: (listId: string) => ['todos', 'tasks', listId] as const,
   calendar: (from: string, to: string) => ['todos', 'calendar', from, to] as const,
 };
@@ -50,6 +51,17 @@ export function useTagsQuery() {
       const res = await client.listTags();
       return res.items;
     },
+  });
+}
+
+export function useCountsQuery() {
+  return useQuery({
+    queryKey: todoKeys.counts,
+    queryFn: async (): Promise<Record<string, number>> => {
+      const res = await client.taskCounts();
+      return res.counts;
+    },
+    refetchInterval: 60_000,
   });
 }
 

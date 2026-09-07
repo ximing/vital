@@ -4,12 +4,13 @@ import { DateField } from '@/ui/date-field';
 import { SelectField, type SelectOption } from '@/ui/select-field';
 import { fromDatetimeLocal, recurrenceKind, toDatetimeLocal } from './model';
 
-type ReminderValue = 'none' | 'due' | 'custom' | '5' | '15' | '30' | '60' | '1440';
-type RecurrenceValue = RecurrenceKind | 'none' | 'custom';
+export type ReminderValue = 'none' | 'due' | 'custom' | '5' | '15' | '30' | '60' | '1440';
+export type RecurrenceValue = RecurrenceKind | 'none' | 'custom';
 
-const OFFSETS: ReminderOffsetMinutes[] = [5, 15, 30, 60, 1440];
+export const REMINDER_OFFSETS: ReminderOffsetMinutes[] = [5, 15, 30, 60, 1440];
+const OFFSETS = REMINDER_OFFSETS;
 
-function offsetLabel(minutes: ReminderOffsetMinutes): string {
+export function offsetLabel(minutes: ReminderOffsetMinutes): string {
   if (minutes === 5) return t.todos.reminder5m;
   if (minutes === 15) return t.todos.reminder15m;
   if (minutes === 30) return t.todos.reminder30m;
@@ -79,12 +80,12 @@ export function ReminderField({
   weekStartsOn: 0 | 1;
   onPatch: (input: PatchTaskInput) => void;
 }) {
-  const allDay = task.isAllDay;
   const mode = task.reminderMode ?? 'none';
   const value = reminderSelectValue(task);
+  const hasDue = task.dueAt !== null;
   const options: SelectOption<ReminderValue>[] = [
     { value: 'none', label: t.todos.reminderNone },
-    ...(!allDay
+    ...(hasDue
       ? ([
           { value: 'due', label: t.todos.reminderDue },
           ...OFFSETS.map((minutes) => ({

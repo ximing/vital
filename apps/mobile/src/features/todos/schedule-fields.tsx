@@ -61,12 +61,12 @@ export function ReminderField({
   weekStartsOn: 0 | 1;
   onPatch: (input: PatchTaskInput) => void;
 }) {
-  const allDay = task.isAllDay;
   const mode = task.reminderMode ?? 'none';
   const value = reminderSelectValue(task);
+  const hasDue = task.dueAt !== null;
   const options: SelectOption<ReminderValue>[] = [
     { value: 'none', label: copy.todos.reminderNone },
-    ...(!allDay
+    ...(hasDue
       ? ([
           { value: 'due', label: copy.todos.reminderDue },
           ...OFFSETS.map((minutes) => ({

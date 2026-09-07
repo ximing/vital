@@ -19,6 +19,7 @@ export class TodosUiService extends Service {
   listFilter = '';
   filterFocusNonce = 0;
   quickAddNonce = 0;
+  hideCompleted = true;
   boardMode: BoardMode = 'status';
   completeUndo: CompleteUndo | null = null;
   completingIds: string[] = [];
@@ -48,6 +49,10 @@ export class TodosUiService extends Service {
 
   requestQuickAdd(): void {
     this.quickAddNonce += 1;
+  }
+
+  setHideCompleted(hide: boolean): void {
+    this.hideCompleted = hide;
   }
 
   setBoardMode(mode: BoardMode): void {
@@ -110,6 +115,7 @@ export class TodosUiService extends Service {
     this.listFilter = '';
     this.filterFocusNonce = 0;
     this.quickAddNonce = 0;
+    this.hideCompleted = true;
     this.boardMode = 'status';
     this.completeUndo = null;
     this.completingIds = [];

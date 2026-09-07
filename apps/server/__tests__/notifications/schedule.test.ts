@@ -67,6 +67,32 @@ describe('planTaskNotification', () => {
     expect(plan?.scheduledAt.toISOString()).toBe(dueAt.toISOString());
   });
 
+  it('all-day due/offset reminders use allDayNotifyTime as the clock', () => {
+    const dueAt = DateTime.fromISO('2026-09-08', { zone: TZ }).startOf('day').toJSDate();
+    const now = DateTime.fromISO('2026-09-06T10:00:00.000Z').toJSDate();
+    const onTime = planTaskNotification(
+      task({ dueAt, isAllDay: true, reminderMode: 'due' }),
+      prefs,
+      now,
+    );
+    expect(onTime?.eventType).toBe('task.remind');
+    expect(onTime?.scheduledAt.toISOString()).toBe('2026-09-08T01:00:00.000Z');
+
+    const offset = planTaskNotification(
+      task({ dueAt, isAllDay: true, reminderMode: 'offset', reminderOffsetMinutes: 15 }),
+      prefs,
+      now,
+    );
+    expect(offset?.scheduledAt.toISOString()).toBe('2026-09-08T00:45:00.000Z');
+
+    const dayBefore = planTaskNotification(
+      task({ dueAt, isAllDay: true, reminderMode: 'offset', reminderOffsetMinutes: 1440 }),
+      prefs,
+      now,
+    );
+    expect(dayBefore?.scheduledAt.toISOString()).toBe('2026-09-07T01:00:00.000Z');
+  });
+
   it('all-day due today fires at allDayNotifyTime, or now if that already passed', () => {
     const dueAt = DateTime.fromISO('2026-09-06', { zone: TZ }).startOf('day').toJSDate();
     const morning = DateTime.fromISO('2026-09-06T01:00:00.000Z').toJSDate(); // 09:00 CST

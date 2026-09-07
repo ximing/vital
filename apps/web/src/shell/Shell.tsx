@@ -1,11 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, Calendar, Folder, Plus, Search, Sun } from 'lucide-react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { BookOpen, Calendar, CheckSquare, Search } from 'lucide-react';
+import { NavLink, Outlet, useLocation } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
-import { useInboxUi } from '@/features/inbox';
 import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
-import { useTodosUi } from '@/features/todos';
 import { AccountMenu } from '@/shell/AccountMenu';
 import { loadPaneWidth, RAIL_WIDTH, savePaneWidth } from '@/shell/chrome';
 import { SecondaryPane } from '@/shell/SecondaryPane';
@@ -15,17 +13,13 @@ import { Icon } from '@/ui/icon';
 import { useState } from 'react';
 
 const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
-  { id: 'rhythm', to: HOME_PATH, icon: Sun, label: t.rail.rhythm },
+  { id: 'todos', to: HOME_PATH, icon: CheckSquare, label: t.rail.todos },
   { id: 'capture', to: '/inbox', icon: BookOpen, label: t.rail.capture },
-  { id: 'lists', to: '/todos/lists/smart:inbox', icon: Folder, label: t.rail.lists },
   { id: 'reflect', to: '/reports', icon: Calendar, label: t.rail.reflect },
 ];
 
 export function Shell() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
-  const requestPaste = useInboxUi((s) => s.requestPaste);
   const section = sectionOf(location.pathname, location.search);
   const pane = showsPane(section);
   const onSearch = section === 'search';
@@ -43,39 +37,6 @@ export function Shell() {
           <NavLink to={HOME_PATH} className="flex items-center justify-center" title={t.brand.wordmark}>
             <VitalMark className="h-8 w-8 shrink-0 text-accent" />
           </NavLink>
-        </div>
-
-        <div className="px-1 pb-2">
-          <NavLink
-            to="/search"
-            title={t.nav.search}
-            aria-label={t.nav.search}
-            className={`flex h-9 items-center justify-center rounded-md text-[length:var(--text-meta)] ${
-              onSearch ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
-            }`}
-          >
-            <Icon icon={Search} size={16} className="shrink-0" />
-          </NavLink>
-        </div>
-
-        <div className="px-1 pb-3">
-          <button
-            type="button"
-            className="flex h-9 w-full items-center justify-center rounded-md bg-accent-deep text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
-            aria-label={t.nav.quickAdd}
-            title={t.nav.quickAdd}
-            onClick={() => {
-              if (section === 'capture') {
-                requestPaste();
-                if (!location.pathname.startsWith('/inbox')) navigate('/inbox');
-                return;
-              }
-              requestQuickAdd();
-              if (section !== 'rhythm' && section !== 'lists') navigate(HOME_PATH);
-            }}
-          >
-            <Icon icon={Plus} size={16} />
-          </button>
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2">
@@ -99,6 +60,18 @@ export function Shell() {
           })}
         </nav>
 
+        <div className="px-1 pb-1">
+          <NavLink
+            to="/search"
+            title={t.nav.search}
+            aria-label={t.nav.search}
+            className={`flex h-9 items-center justify-center rounded-md text-[length:var(--text-meta)] ${
+              onSearch ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
+            }`}
+          >
+            <Icon icon={Search} size={16} className="shrink-0" />
+          </NavLink>
+        </div>
         <AccountMenu collapsed railWidth={RAIL_WIDTH} />
       </aside>
 

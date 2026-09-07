@@ -1,11 +1,9 @@
 export const RAIL_NAV =
-  'relative flex min-h-9 items-center gap-2 rounded-md px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
+  'my-0.5 flex min-h-9 items-center gap-2 rounded-md px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)]';
 
 export function railNavClass(active: boolean): string {
   return `${RAIL_NAV} ${
-    active
-      ? "bg-accent-subtle text-fg before:absolute before:inset-y-1 before:left-0 before:w-0.5 before:bg-accent before:content-['']"
-      : 'text-muted hover:bg-surface-muted hover:text-fg'
+    active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
   }`;
 }
 

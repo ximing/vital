@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
 import {
@@ -11,16 +12,90 @@ import { usePopover } from '@/ui/use-popover';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+const ITEM_H = 32;
 
 function partsOf(value: string): { hour: string; minute: string } {
   const [hour = '09', minute = '00'] = value.split(':');
   return { hour: hour.padStart(2, '0'), minute: minute.padStart(2, '0') };
 }
 
-function chipClass(active: boolean): string {
-  return `flex h-8 items-center justify-center rounded-md text-[length:var(--text-caption)] ${
-    active ? 'bg-accent text-on-accent' : 'text-fg hover:bg-surface-muted'
-  }`;
+function WheelColumn({
+  label,
+  values,
+  active,
+  onPick,
+}: {
+  label: string;
+  values: string[];
+  active: string;
+  onPick: (value: string) => void;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const programmatic = useRef(false);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const index = values.indexOf(active);
+    if (index < 0) return;
+    const target = index * ITEM_H;
+    if (Math.abs(list.scrollTop - target) < 1) return;
+    programmatic.current = true;
+    list.scrollTop = target;
+    timer.current = setTimeout(() => {
+      programmatic.current = false;
+    }, 150);
+    return () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    };
+  }, [active, values]);
+
+  function onScroll() {
+    if (programmatic.current) return;
+    if (timer.current !== null) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      const list = listRef.current;
+      if (!list) return;
+      const index = Math.max(0, Math.min(values.length - 1, Math.round(list.scrollTop / ITEM_H)));
+      const value = values[index];
+      if (value !== undefined && value !== active) onPick(value);
+    }, 120);
+  }
+
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="mb-1 text-center text-[length:var(--text-caption)] text-muted">{label}</p>
+      <div
+        ref={listRef}
+        role="listbox"
+        aria-label={label}
+        onScroll={onScroll}
+        className="h-40 overflow-y-auto rounded-lg"
+      >
+        <div aria-hidden className="h-16" />
+        {values.map((value) => (
+          <button
+            key={value}
+            type="button"
+            role="option"
+            tabIndex={-1}
+            aria-selected={value === active}
+            aria-label={`${Number(value)}${label}`}
+            className={`flex h-8 w-full items-center justify-center rounded-md text-[length:var(--text-meta)] tabular-nums ${
+              value === active
+                ? 'bg-accent text-on-accent'
+                : 'text-fg hover:bg-surface-muted'
+            }`}
+            onClick={() => onPick(value)}
+          >
+            {value}
+          </button>
+        ))}
+        <div aria-hidden className="h-16" />
+      </div>
+    </div>
+  );
 }
 
 export function TimePicker({
@@ -32,38 +107,56 @@ export function TimePicker({
 }) {
   const { hour, minute } = partsOf(value === '' ? '09:00' : value);
   const minutes = MINUTES.includes(minute) ? MINUTES : [...MINUTES, minute].sort();
+  const current = `${hour}:${minute}`;
+  // Draft is non-null only while the user is typing; otherwise the input tracks the picked value.
+  const [draft, setDraft] = useState<string | null>(null);
+
+  function commitText(raw: string) {
+    setDraft(null);
+    const match = /^(\d{1,2})\s*[:：.]?\s*(\d{0,2})$/.exec(raw.trim());
+    if (match === null) return;
+    const h = Math.max(0, Math.min(23, Number(match[1])));
+    const min = Math.max(
+      0,
+      Math.min(59, match[2] === '' || match[2] === undefined ? 0 : Number(match[2])),
+    );
+    onChange(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
+  }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-6 gap-1" role="listbox" aria-label="时">
-        {HOURS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            role="option"
-            aria-selected={item === hour}
-            aria-label={`${Number(item)}时`}
-            className={chipClass(item === hour)}
-            onClick={() => onChange(`${item}:${minute}`)}
-          >
-            {item}
-          </button>
-        ))}
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-center">
+        <input
+          value={draft ?? current}
+          inputMode="numeric"
+          aria-label={t.todos.timePicker}
+          className="h-8 w-20 rounded-md bg-surface-muted text-center text-[length:var(--text-body)] tabular-nums outline-none focus:ring-2 focus:ring-accent"
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={(event) => commitText(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              commitText(event.currentTarget.value);
+            } else if (event.key === 'Escape') {
+              event.preventDefault();
+              setDraft(null);
+            }
+          }}
+        />
       </div>
-      <div className="grid grid-cols-6 gap-1" role="listbox" aria-label="分">
-        {minutes.map((item) => (
-          <button
-            key={item}
-            type="button"
-            role="option"
-            aria-selected={item === minute}
-            aria-label={`${Number(item)}分`}
-            className={chipClass(item === minute)}
-            onClick={() => onChange(`${hour}:${item}`)}
-          >
-            {item}
-          </button>
-        ))}
+      <div className="flex gap-2">
+        <WheelColumn
+          label="时"
+          values={HOURS}
+          active={hour}
+          onPick={(next) => onChange(`${next}:${minute}`)}
+        />
+        <WheelColumn
+          label="分"
+          values={minutes}
+          active={minute}
+          onPick={(next) => onChange(`${hour}:${next}`)}
+        />
       </div>
     </div>
   );
@@ -84,12 +177,13 @@ export function TimeField({
   clearable?: boolean;
   className?: string;
 }) {
-  const popover = usePopover();
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const popover = usePopover(popoverRef);
   const empty = value === '';
   const summary = empty ? t.todos.addTime : value;
 
   return (
-    <div ref={popover.root} className={`relative ${className}`}>
+    <div ref={popoverRef} className={`relative ${className}`}>
       <p className="mb-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">{label}</p>
       <div className="flex items-center gap-1">
         <button

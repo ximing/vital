@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
-export function usePopover(): {
+/**
+ * Open/close state for a popover whose root wrapper is owned by the caller.
+ * Pass a ref created in the component (useRef) and attach it to the wrapper;
+ * this hook registers outside-click and Escape listeners while open.
+ */
+export function usePopover(root: RefObject<HTMLDivElement | null>): {
   open: boolean;
   setOpen: (open: boolean) => void;
   toggle: () => void;
   close: () => void;
-  root: RefObject<HTMLDivElement | null>;
 } {
   const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -24,13 +27,12 @@ export function usePopover(): {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, root]);
 
   return {
     open,
     setOpen,
     toggle: () => setOpen((prev) => !prev),
     close: () => setOpen(false),
-    root,
   };
 }
