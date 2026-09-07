@@ -54,10 +54,23 @@ function toTaskDto(row: TaskRow, tagIds: string[]): Task {
     dueAt: iso(row.dueAt),
     startAt: iso(row.startAt),
     remindAt: iso(row.remindAt),
+    reminderMode:
+      row.reminderMode === 'none' || row.reminderMode === 'due' || row.reminderMode === 'offset' || row.reminderMode === 'custom'
+        ? row.reminderMode
+        : null,
+    reminderOffsetMinutes:
+      row.reminderOffsetMinutes === 5 || row.reminderOffsetMinutes === 15 || row.reminderOffsetMinutes === 30 || row.reminderOffsetMinutes === 60 || row.reminderOffsetMinutes === 1440
+        ? row.reminderOffsetMinutes
+        : null,
+    reminderAt: iso(row.reminderAt),
     isAllDay: row.isAllDay,
     timezone: row.timezone,
     timeBucket: asBucket(row.timeBucket),
     recurrence: row.recurrenceRrule,
+    recurrenceKind:
+      row.recurrenceKind === 'daily' || row.recurrenceKind === 'weekly' || row.recurrenceKind === 'monthly' || row.recurrenceKind === 'yearly' || row.recurrenceKind === 'weekdays' || row.recurrenceKind === 'weekends' || row.recurrenceKind === 'holidays' || row.recurrenceKind === 'legal_workdays'
+        ? row.recurrenceKind
+        : null,
     recurrenceDtstart: iso(row.recurrenceDtstart),
     completedAt: iso(row.completedAt),
     sortOrder: row.sortOrder,

@@ -34,6 +34,26 @@ describe('planTaskNotification', () => {
     expect(plan?.occurrenceAt.toISOString()).toBe(dueAt.toISOString());
   });
 
+  it('calculates semantic offset and custom reminders before falling back to due', () => {
+    const dueAt = at('2026-09-06T14:00:00.000Z');
+    const offset = planTaskNotification(
+      task({ dueAt, reminderMode: 'offset', reminderOffsetMinutes: 15 }),
+      prefs,
+      now,
+    );
+    expect(offset?.eventType).toBe('task.remind');
+    expect(offset?.scheduledAt.toISOString()).toBe('2026-09-06T13:45:00.000Z');
+
+    const customAt = at('2026-09-06T12:30:00.000Z');
+    const custom = planTaskNotification(
+      task({ dueAt, reminderMode: 'custom', reminderAt: customAt }),
+      prefs,
+      now,
+    );
+    expect(custom?.eventType).toBe('task.remind');
+    expect(custom?.scheduledAt.toISOString()).toBe(customAt.toISOString());
+  });
+
   it('falls back to timed dueAt when no remind', () => {
     const dueAt = at('2026-09-06T14:00:00.000Z');
     const plan = planTaskNotification(task({ dueAt }), prefs, now);

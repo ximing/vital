@@ -3,6 +3,7 @@ import {
   attachments,
   entityLinks,
   extensionAuthCodes,
+  holidayCalendar,
   inboxAssets,
   inboxItems,
   lists,
@@ -54,6 +55,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(taskTags);
     await db.delete(taskCompletions);
     await db.delete(tasks);
+    await db.delete(holidayCalendar);
     await db.delete(tags);
     await db.delete(lists);
     await db.delete(attachments);

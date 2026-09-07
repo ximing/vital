@@ -22,6 +22,9 @@ export type TaskNotifyInput = {
   status?: string | undefined;
   dueAt?: Date | null | undefined;
   remindAt?: Date | null | undefined;
+  reminderMode?: string | null | undefined;
+  reminderOffsetMinutes?: number | null | undefined;
+  reminderAt?: Date | null | undefined;
   isAllDay?: boolean | undefined;
   timezone: string;
   deletedAt?: Date | null | undefined;
@@ -36,6 +39,15 @@ function asNotify(task: TaskNotifyInput) {
     status: task.status ?? 'todo',
     dueAt: task.dueAt ?? null,
     remindAt: task.remindAt ?? null,
+    reminderMode:
+      task.reminderMode === 'none' || task.reminderMode === 'due' || task.reminderMode === 'offset' || task.reminderMode === 'custom'
+        ? task.reminderMode
+        : null,
+    reminderOffsetMinutes:
+      task.reminderOffsetMinutes === 5 || task.reminderOffsetMinutes === 15 || task.reminderOffsetMinutes === 30 || task.reminderOffsetMinutes === 60 || task.reminderOffsetMinutes === 1440
+        ? task.reminderOffsetMinutes
+        : null,
+    reminderAt: task.reminderAt ?? null,
     isAllDay: task.isAllDay ?? false,
     timezone: task.timezone,
     deletedAt: task.deletedAt ?? null,

@@ -2,6 +2,8 @@ import { DateTime } from 'luxon';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
+import { db } from '../src/db/index.js';
+import { holidayCalendar } from '../src/db/schema.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -130,5 +132,41 @@ describe('recurrence flow', () => {
     });
     expect(second.statusCode).toBe(409);
     expect(second.json().error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('fixed legal-workday recurrence rolls one master task forward on complete', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    await db.insert(holidayCalendar).values({
+      region: 'CN',
+      date: '2026-02-21',
+      kind: 'workday',
+      sourceVersion: 'test',
+    });
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '日报',
+        listId: inbox,
+        dueAt: '2026-02-20T09:00:00+08:00',
+        timezone: 'Asia/Shanghai',
+        recurrenceKind: 'legal_workdays',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const completed = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${created.json().id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json().task.id).toBe(created.json().id);
+    expect(completed.json().task.status).toBe('todo');
+    expect(completed.json().task.recurrenceKind).toBe('legal_workdays');
+    expect(completed.json().task.dueAt).toBe('2026-02-21T01:00:00.000Z');
   });
 });

@@ -207,4 +207,31 @@ describe('tasks', () => {
     expect(noDue.statusCode).toBe(400);
     expect(noDue.json().error.code).toBe('RRULE_DUE_REQUIRED');
   });
+
+  it('persists semantic reminders and fixed recurrence while keeping legacy fields', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '发送周报',
+        listId: inbox,
+        dueAt: '2026-09-08T09:00:00+08:00',
+        reminderMode: 'offset',
+        reminderOffsetMinutes: 15,
+        recurrenceKind: 'legal_workdays',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({
+      reminderMode: 'offset',
+      reminderOffsetMinutes: 15,
+      reminderAt: null,
+      recurrenceKind: 'legal_workdays',
+      remindAt: null,
+      recurrence: null,
+    });
+  });
 });

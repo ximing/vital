@@ -7,6 +7,9 @@ export type TaskScheduleInput = {
   deletedAt: Date | null;
   dueAt: Date | null;
   remindAt: Date | null;
+  reminderMode?: string | null;
+  reminderOffsetMinutes?: number | null;
+  reminderAt?: Date | null;
   isAllDay: boolean;
   timezone: string;
 };
@@ -19,6 +22,23 @@ export type SchedulePlan = {
 
 const MISSED_GRACE_MS = 15 * 60 * 1000;
 
+function semanticReminderAt(task: TaskScheduleInput): Date | null {
+  switch (task.reminderMode) {
+    case 'none':
+      return null;
+    case 'due':
+      return task.dueAt;
+    case 'offset':
+      return task.dueAt && task.reminderOffsetMinutes
+        ? new Date(task.dueAt.getTime() - task.reminderOffsetMinutes * 60_000)
+        : null;
+    case 'custom':
+      return task.reminderAt ?? null;
+    default:
+      return task.remindAt;
+  }
+}
+
 export function planTaskNotification(
   task: TaskScheduleInput,
   prefs: Pick<NotificationPrefs, 'taskRemind' | 'taskDue' | 'allDayNotifyTime'>,
@@ -27,12 +47,13 @@ export function planTaskNotification(
   if (task.deletedAt !== null) return null;
   if (task.status !== 'todo' && task.status !== 'doing') return null;
 
-  if (task.remindAt && prefs.taskRemind) {
-    if (task.remindAt.getTime() < now.getTime() - MISSED_GRACE_MS) return null;
+  const remindAt = semanticReminderAt(task);
+  if (remindAt && prefs.taskRemind) {
+    if (remindAt.getTime() < now.getTime() - MISSED_GRACE_MS) return null;
     return {
       eventType: 'task.remind',
-      scheduledAt: task.remindAt,
-      occurrenceAt: task.dueAt ?? task.remindAt,
+      scheduledAt: remindAt,
+      occurrenceAt: task.dueAt ?? remindAt,
     };
   }
 

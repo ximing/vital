@@ -6,6 +6,9 @@ import {
   type CreateTaskInput,
   type ListTasksQuery,
   type PatchTaskInput,
+  type RecurrenceKind,
+  type ReminderMode,
+  type ReminderOffsetMinutes,
   type ReorderTasksInput,
   type Task,
   type TaskCollection,
@@ -51,6 +54,7 @@ import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import {
   allDayLocalMidnight,
   expandTask,
+  nextFixedOccurrenceAfter,
   nextOccurrenceAfter,
   nextOccurrenceOnOrAfter,
   parseRrule,
@@ -74,6 +78,29 @@ function asBucket(value: string): TimeBucket {
   return 'anytime';
 }
 
+function asReminderMode(value: string | null): ReminderMode | null {
+  return value === 'none' || value === 'due' || value === 'offset' || value === 'custom'
+    ? value
+    : null;
+}
+
+function asReminderOffsetMinutes(value: number | null): ReminderOffsetMinutes | null {
+  return value === 5 || value === 15 || value === 30 || value === 60 || value === 1440 ? value : null;
+}
+
+function asRecurrenceKind(value: string | null): RecurrenceKind | null {
+  return value === 'daily' ||
+    value === 'weekly' ||
+    value === 'monthly' ||
+    value === 'yearly' ||
+    value === 'weekdays' ||
+    value === 'weekends' ||
+    value === 'holidays' ||
+    value === 'legal_workdays'
+    ? value
+    : null;
+}
+
 function iso(d: Date | null): string | null {
   return d ? d.toISOString() : null;
 }
@@ -90,10 +117,14 @@ function toTaskDto(row: TaskRow, tagIds: string[]): Task {
     dueAt: iso(row.dueAt),
     startAt: iso(row.startAt),
     remindAt: iso(row.remindAt),
+    reminderMode: asReminderMode(row.reminderMode),
+    reminderOffsetMinutes: asReminderOffsetMinutes(row.reminderOffsetMinutes),
+    reminderAt: iso(row.reminderAt),
     isAllDay: row.isAllDay,
     timezone: row.timezone,
     timeBucket: asBucket(row.timeBucket),
     recurrence: row.recurrenceRrule,
+    recurrenceKind: asRecurrenceKind(row.recurrenceKind),
     recurrenceDtstart: iso(row.recurrenceDtstart),
     completedAt: iso(row.completedAt),
     sortOrder: row.sortOrder,
@@ -118,6 +149,10 @@ function toRecurrence(row: TaskRow): RecurrenceTask {
     status: row.status,
     priority: row.priority,
   };
+}
+
+function isRecurring(row: TaskRow): boolean {
+  return row.recurrenceRrule !== null || asRecurrenceKind(row.recurrenceKind) !== null;
 }
 
 async function tagIdsByTask(taskIds: string[]): Promise<Map<string, string[]>> {
@@ -348,6 +383,22 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
       ? null
       : parseInstant(input.remindAt, false, zone);
 
+  const reminderMode = input.reminderMode ?? null;
+  const reminderOffsetMinutes = reminderMode === 'offset' ? input.reminderOffsetMinutes ?? null : null;
+  const reminderAt =
+    reminderMode === 'custom' && input.reminderAt !== null && input.reminderAt !== undefined
+      ? parseInstant(input.reminderAt, false, zone)
+      : null;
+  if ((reminderMode === 'due' || reminderMode === 'offset') && (dueAt === null || isAllDay)) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
+  if (
+    (reminderMode === 'offset' && reminderOffsetMinutes === null) ||
+    (reminderMode === 'custom' && reminderAt === null)
+  ) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
+
   let recurrence: string | null = null;
   let recurrenceDtstart: Date | null = null;
   if (input.recurrence !== undefined && input.recurrence !== null) {
@@ -355,6 +406,10 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     parseRrule(input.recurrence);
     recurrence = input.recurrence;
     recurrenceDtstart = dueAt;
+  }
+  const recurrenceKind = input.recurrenceKind ?? null;
+  if (recurrenceKind !== null && (dueAt === null || input.recurrence !== undefined)) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
   }
 
   const now = new Date();
@@ -369,11 +424,15 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     priority: input.priority ?? 3,
     dueAt,
     startAt,
-    remindAt,
+    remindAt: reminderMode === 'custom' ? reminderAt : remindAt,
+    reminderMode,
+    reminderOffsetMinutes,
+    reminderAt,
     isAllDay,
     timezone: zone,
     timeBucket: bucketAfter(dueAt, startAt, input.timeBucket, 'anytime'),
     recurrenceRrule: recurrence,
+    recurrenceKind,
     recurrenceDtstart,
     completedAt: null,
     sortOrder: await nextSortOrder(listId, parentId),
@@ -393,6 +452,9 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
         status: row.status ?? 'todo',
         dueAt: row.dueAt ?? null,
         remindAt: row.remindAt ?? null,
+        reminderMode: row.reminderMode ?? null,
+        reminderOffsetMinutes: row.reminderOffsetMinutes ?? null,
+        reminderAt: row.reminderAt ?? null,
         isAllDay: row.isAllDay ?? false,
         timezone: row.timezone,
         deletedAt: row.deletedAt ?? null,
@@ -423,6 +485,9 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   let dueAt = task.dueAt;
   let startAt = task.startAt;
   let remindAt = task.remindAt;
+  let reminderMode = asReminderMode(task.reminderMode);
+  let reminderOffsetMinutes = asReminderOffsetMinutes(task.reminderOffsetMinutes);
+  let reminderAt = task.reminderAt;
   if (input.dueAt !== undefined) {
     dueAt = input.dueAt === null ? null : parseInstant(input.dueAt, isAllDay, zone);
   } else if (input.isAllDay !== undefined || input.timezone !== undefined) {
@@ -437,8 +502,52 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     remindAt = input.remindAt === null ? null : parseInstant(input.remindAt, false, zone);
   }
 
+  if (input.reminderMode !== undefined) {
+    reminderMode = input.reminderMode;
+    if (reminderMode === null || reminderMode === 'none' || reminderMode === 'due') {
+      reminderOffsetMinutes = null;
+      reminderAt = null;
+      remindAt = null;
+    }
+    if (reminderMode === 'offset') {
+      reminderOffsetMinutes = input.reminderOffsetMinutes ?? null;
+      reminderAt = null;
+      remindAt = null;
+    }
+    if (reminderMode === 'custom') {
+      reminderOffsetMinutes = null;
+      reminderAt =
+        input.reminderAt === null || input.reminderAt === undefined
+          ? null
+          : parseInstant(input.reminderAt, false, zone);
+      remindAt = reminderAt;
+    }
+  } else if (input.reminderOffsetMinutes !== undefined || input.reminderAt !== undefined) {
+    if (reminderMode === 'offset' && input.reminderOffsetMinutes !== undefined) {
+      reminderOffsetMinutes = input.reminderOffsetMinutes;
+    } else if (reminderMode === 'custom' && input.reminderAt !== undefined) {
+      reminderAt = input.reminderAt === null ? null : parseInstant(input.reminderAt, false, zone);
+      remindAt = reminderAt;
+    } else {
+      throw AppError.of(400, 'VALIDATION_ERROR');
+    }
+  }
+  if ((reminderMode === 'due' || reminderMode === 'offset') && (dueAt === null || isAllDay)) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
+  if (
+    (reminderMode === 'offset' && reminderOffsetMinutes === null) ||
+    (reminderMode === 'custom' && reminderAt === null)
+  ) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
+
   let recurrence = task.recurrenceRrule;
   let recurrenceDtstart = task.recurrenceDtstart;
+  let recurrenceKind = asRecurrenceKind(task.recurrenceKind);
+  if (input.recurrence !== undefined && input.recurrenceKind !== undefined) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
   if (input.recurrence !== undefined) {
     if (input.recurrence === null) {
       recurrence = null;
@@ -452,6 +561,12 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   } else if (recurrence && dueAt === null) {
     throw AppError.of(400, 'RRULE_DUE_REQUIRED');
   }
+  if (input.recurrenceKind !== undefined) {
+    recurrenceKind = input.recurrenceKind;
+    recurrence = null;
+    recurrenceDtstart = recurrenceKind === null ? null : dueAt;
+  }
+  if (recurrenceKind !== null && dueAt === null) throw AppError.of(400, 'VALIDATION_ERROR');
 
   const oldDue = task.dueAt;
   if (input.dueAt !== undefined && recurrence && dueAt) {
@@ -483,7 +598,11 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     dueAt,
     startAt,
     remindAt,
+    reminderMode,
+    reminderOffsetMinutes,
+    reminderAt,
     recurrenceRrule: recurrence,
+    recurrenceKind,
     recurrenceDtstart,
     timeBucket: bucketAfter(dueAt, startAt, input.timeBucket, asBucket(task.timeBucket)),
   };
@@ -512,6 +631,9 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
         status: patch.status ?? task.status,
         dueAt: patch.dueAt !== undefined ? patch.dueAt : task.dueAt,
         remindAt: patch.remindAt !== undefined ? patch.remindAt : task.remindAt,
+        reminderMode: patch.reminderMode ?? task.reminderMode,
+        reminderOffsetMinutes: patch.reminderOffsetMinutes ?? task.reminderOffsetMinutes,
+        reminderAt: patch.reminderAt !== undefined ? patch.reminderAt : task.reminderAt,
         isAllDay: patch.isAllDay ?? task.isAllDay,
         timezone: patch.timezone ?? task.timezone,
         deletedAt: task.deletedAt,
@@ -588,7 +710,7 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
 export async function completeTask(userId: string, id: string): Promise<CompleteTaskResponse> {
   const task = await getOwnedTaskOr404(userId, id);
   if (task.status === 'canceled') throw AppError.of(400, 'VALIDATION_ERROR');
-  if (task.status === 'done' && !task.recurrenceRrule) throw AppError.of(409, 'VALIDATION_ERROR');
+  if (task.status === 'done' && !isRecurring(task)) throw AppError.of(409, 'VALIDATION_ERROR');
   const user = await getUserEntity(userId);
 
   const now = new Date();
@@ -599,6 +721,7 @@ export async function completeTask(userId: string, id: string): Promise<Complete
   let nextDue = task.dueAt;
   let nextStart = task.startAt;
   let nextRemind = task.remindAt;
+  let nextReminderAt = task.reminderAt;
   let nextStatus: TaskStatus = 'done';
   let completedAt: Date | null = now;
 
@@ -609,6 +732,28 @@ export async function completeTask(userId: string, id: string): Promise<Complete
       nextDue = nxt;
       nextStart = shiftBy(task.startAt, delta);
       nextRemind = shiftBy(task.remindAt, delta);
+      nextReminderAt = shiftBy(task.reminderAt, delta);
+      nextStatus = 'todo';
+      completedAt = null;
+    }
+  }
+  const recurrenceKind = asRecurrenceKind(task.recurrenceKind);
+  if (recurrenceKind && task.dueAt) {
+    const nxt = await nextFixedOccurrenceAfter(
+      {
+        dueAt: task.dueAt,
+        timezone: task.timezone,
+        isAllDay: task.isAllDay,
+        recurrenceKind,
+      },
+      task.dueAt,
+    );
+    if (nxt) {
+      const delta = nxt.getTime() - task.dueAt.getTime();
+      nextDue = nxt;
+      nextStart = shiftBy(task.startAt, delta);
+      nextRemind = shiftBy(task.remindAt, delta);
+      nextReminderAt = shiftBy(task.reminderAt, delta);
       nextStatus = 'todo';
       completedAt = null;
     }
@@ -629,6 +774,7 @@ export async function completeTask(userId: string, id: string): Promise<Complete
           dueAt: nextDue,
           startAt: nextStart,
           remindAt: nextRemind,
+          reminderAt: nextReminderAt,
           status: nextStatus,
           completedAt,
           updatedAt: now,
@@ -651,6 +797,7 @@ export async function completeTask(userId: string, id: string): Promise<Complete
           ...task,
           dueAt: nextDue,
           remindAt: nextRemind,
+          reminderAt: nextReminderAt,
           status: nextStatus,
         },
         user,
@@ -691,14 +838,16 @@ export async function uncompleteTask(
   if (latest && latest.id !== completion.id) throw AppError.of(409, 'COMPLETION_NOT_LATEST');
 
   const now = new Date();
-  const restoreNull = completion.dueWasNull && !task.recurrenceRrule;
+  const restoreNull = completion.dueWasNull && !isRecurring(task);
   const dueAt: Date | null = restoreNull ? null : completion.occurrenceAt;
   let startAt = task.startAt;
   let remindAt = task.remindAt;
+  let reminderAt = task.reminderAt;
   if (!restoreNull && task.dueAt) {
     const delta = completion.occurrenceAt.getTime() - task.dueAt.getTime();
     startAt = shiftBy(task.startAt, delta);
     remindAt = shiftBy(task.remindAt, delta);
+    reminderAt = shiftBy(task.reminderAt, delta);
   }
 
   const user = await getUserEntity(userId);
@@ -712,6 +861,7 @@ export async function uncompleteTask(
         dueAt,
         startAt,
         remindAt,
+        reminderAt,
         updatedAt: now,
       })
       .where(eq(tasks.id, task.id));
@@ -721,6 +871,7 @@ export async function uncompleteTask(
         status: 'todo',
         dueAt,
         remindAt,
+        reminderAt,
       },
       user,
       now,
