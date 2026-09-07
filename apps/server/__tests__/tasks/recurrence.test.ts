@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allDayDates,
   matchesAllDay,
+  nextFixedOccurrenceAfter,
   nextAllDayAfter,
   parseRrule,
   type RecurrenceTask,
@@ -124,5 +125,17 @@ describe('all-day calendar-day walk', () => {
     expect(matchesAllDay(dtstart, dtstart, opts, 2)).toBe(true);
     expect(matchesAllDay(dtstart.plus({ days: 1 }), dtstart, opts, 2)).toBe(false);
     expect(matchesAllDay(dtstart.plus({ days: 2 }), dtstart, opts, 2)).toBe(true);
+  });
+});
+
+describe('fixed recurrence kinds', () => {
+  it('finds the next legal workday while respecting a make-up Saturday', async () => {
+    const dueAt = DateTime.fromISO('2026-02-20T09:00:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    const next = await nextFixedOccurrenceAfter(
+      { dueAt, timezone: 'Asia/Shanghai', isAllDay: false, recurrenceKind: 'legal_workdays' },
+      dueAt,
+      async (date) => (date === '2026-02-21' ? 'workday' : null),
+    );
+    expect(DateTime.fromJSDate(next as Date, { zone: 'Asia/Shanghai' }).toISO()).toContain('2026-02-21T09:00:00');
   });
 });

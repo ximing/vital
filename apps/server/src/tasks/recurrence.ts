@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { DateTime } from 'luxon';
 import type { Options, RRule as RRuleInstance } from 'rrule';
 import { AppError } from '../errors.js';
+import { matchesChinaRule, type ChinaCalendarLookup } from '../holidays/china-calendar.js';
 
 const { RRule } = createRequire(import.meta.url)('rrule') as {
   RRule: {
@@ -73,6 +74,20 @@ export interface CalendarInstance {
   status: 'todo' | 'doing' | 'done' | 'canceled';
   priority: number;
 }
+
+export type FixedRecurrenceKind =
+  | 'daily'
+  | 'weekly'
+  | 'monthly'
+  | 'yearly'
+  | 'weekdays'
+  | 'weekends'
+  | 'holidays'
+  | 'legal_workdays';
+
+export type FixedRecurrenceTask = Pick<RecurrenceTask, 'dueAt' | 'timezone' | 'isAllDay'> & {
+  recurrenceKind: FixedRecurrenceKind;
+};
 
 function invalid(): never {
   throw AppError.of(400, 'RRULE_INVALID');
@@ -344,6 +359,48 @@ export function nextOccurrenceAfter(task: RecurrenceTask, afterDue: Date): Date 
 export function nextOccurrenceOnOrAfter(task: RecurrenceTask, fromDue: Date): Date | null {
   if (!task.recurrenceRrule) return null;
   return task.isAllDay ? nextAllDayOnOrAfter(task, fromDue) : rruleOnOrAfter(task, fromDue);
+}
+
+function matchesFixedKind(
+  cursor: DateTime,
+  origin: DateTime,
+  kind: FixedRecurrenceKind,
+  lookup: ChinaCalendarLookup,
+): Promise<boolean> | boolean {
+  if (kind === 'daily') return true;
+  if (kind === 'weekly') return cursor.weekday === origin.weekday;
+  if (kind === 'monthly') return cursor.day === origin.day;
+  if (kind === 'yearly') return cursor.month === origin.month && cursor.day === origin.day;
+  if (kind === 'weekdays') return cursor.weekday <= 5;
+  if (kind === 'weekends') return cursor.weekday >= 6;
+  return matchesChinaRule(cursor.toISODate() ?? '', kind, lookup);
+}
+
+export async function nextFixedOccurrenceAfter(
+  task: FixedRecurrenceTask,
+  afterDue: Date,
+  lookup?: ChinaCalendarLookup,
+): Promise<Date | null> {
+  if (task.dueAt === null) return null;
+  const zone = task.timezone;
+  const origin = DateTime.fromJSDate(task.dueAt, { zone });
+  const after = DateTime.fromJSDate(afterDue, { zone });
+  const time = { hour: origin.hour, minute: origin.minute, second: origin.second, millisecond: origin.millisecond };
+  for (let day = 1; day <= 400; day += 1) {
+    const cursor = after.startOf('day').plus({ days: day }).set(time);
+    const matches =
+      task.recurrenceKind === 'holidays' || task.recurrenceKind === 'legal_workdays'
+        ? await matchesChinaRule(
+            cursor.toISODate() ?? '',
+            task.recurrenceKind,
+            lookup,
+          )
+        : await matchesFixedKind(cursor, origin, task.recurrenceKind, async () => null);
+    if (matches) {
+      return cursor.toJSDate();
+    }
+  }
+  return null;
 }
 
 function sameOccurrence(task: RecurrenceTask, a: Date, b: DateTime): boolean {
