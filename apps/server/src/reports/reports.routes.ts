@@ -31,21 +31,21 @@ export function registerReportRoutes(app: FastifyInstance): void {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { type, at } = reportOverviewQuerySchema.parse(req.query);
-    return getReportOverview(user, type, at);
+    return getReportOverview(user.id, type, at);
   });
 
   app.get('/api/v1/reports/current', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { type, at } = currentReportQuerySchema.parse(req.query);
-    return getCurrentReport(user, type, at);
+    return getCurrentReport(user.id, type, at);
   });
 
   app.get('/api/v1/reports/:id/review', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = reportIdParamsSchema.parse(req.params);
-    return getReportReview(user, id);
+    return getReportReview(user.id, id);
   });
 
   app.get('/api/v1/reports/:id/embeds', { preHandler: [requireAuth] }, async (req) => {
@@ -59,7 +59,7 @@ export function registerReportRoutes(app: FastifyInstance): void {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = reportIdParamsSchema.parse(req.params);
-    return fillReport(user, id, fillReportInputSchema.parse(req.body));
+    return fillReport(user.id, id, fillReportInputSchema.parse(req.body));
   });
 
   app.get('/api/v1/reports/:id', { preHandler: [requireAuth] }, async (req) => {

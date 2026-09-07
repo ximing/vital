@@ -17,7 +17,7 @@ export function recurrenceKind(
 }
 
 export function reminderSelectValue(task: Task): ReminderValue {
-  const mode = task.reminderMode ?? (task.remindAt ? 'custom' : 'none');
+  const mode = task.reminderMode ?? 'none';
   if (mode === 'offset') {
     const minutes = task.reminderOffsetMinutes ?? 15;
     return String(minutes) as ReminderValue;
@@ -68,14 +68,13 @@ export function recurrenceMeta(task: Task): string | null {
 }
 
 export function reminderMeta(task: Task, timeZone: string): string | null {
-  const mode = task.reminderMode ?? (task.remindAt ? 'custom' : 'none');
+  const mode = task.reminderMode ?? 'none';
   if (mode === 'none') return null;
   if (mode === 'due') return copy.todos.reminderDue;
   if (mode === 'offset') {
     return offsetLabel(task.reminderOffsetMinutes ?? 15);
   }
-  const at = task.reminderAt ?? task.remindAt;
-  if (at) return `${copy.todos.remind} ${formatHm(at, timeZone)}`;
+  if (task.reminderAt) return `${copy.todos.remind} ${formatHm(task.reminderAt, timeZone)}`;
   return copy.todos.remind;
 }
 

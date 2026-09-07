@@ -18,7 +18,7 @@ function offsetLabel(minutes: ReminderOffsetMinutes): string {
 }
 
 export function reminderSelectValue(task: Task): ReminderValue {
-  const mode = task.reminderMode ?? (task.remindAt ? 'custom' : 'none');
+  const mode = task.reminderMode ?? 'none';
   if (mode === 'offset') {
     const minutes = task.reminderOffsetMinutes ?? 15;
     return String(minutes) as ReminderValue;
@@ -80,7 +80,7 @@ export function ReminderField({
   onPatch: (input: PatchTaskInput) => void;
 }) {
   const allDay = task.isAllDay;
-  const mode = task.reminderMode ?? (task.remindAt ? 'custom' : 'none');
+  const mode = task.reminderMode ?? 'none';
   const value = reminderSelectValue(task);
   const options: SelectOption<ReminderValue>[] = [
     { value: 'none', label: t.todos.reminderNone },
@@ -114,7 +114,7 @@ export function ReminderField({
           if (next === 'custom') {
             onPatch({
               reminderMode: 'custom',
-              reminderAt: task.reminderAt ?? task.remindAt ?? task.dueAt ?? new Date().toISOString(),
+              reminderAt: task.reminderAt ?? task.dueAt ?? new Date().toISOString(),
             });
             return;
           }
@@ -127,9 +127,7 @@ export function ReminderField({
       {mode === 'custom' ? (
         <DateField
           value={
-            task.reminderAt || task.remindAt
-              ? toDatetimeLocal(task.reminderAt ?? task.remindAt ?? '', zone)
-              : ''
+            task.reminderAt ? toDatetimeLocal(task.reminderAt, zone) : ''
           }
           kind="datetime-local"
           ariaLabel={t.todos.reminderCustom}

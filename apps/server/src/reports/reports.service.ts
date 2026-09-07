@@ -25,8 +25,8 @@ import {
   type ReportTaskEmbed,
   type ReportType,
   type TaskStatus,
-  type UserProfile,
 } from '@vital/dto';
+import { getUserEntity } from '../auth/auth.service.js';
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
@@ -40,6 +40,13 @@ import {
 import { AppError } from '../errors.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import { currentPeriod, localDate, periodInstants, previousPeriodStart } from './period.js';
+
+export type ReportClock = { id: string; timezone: string; weekStartsOn: 0 | 1 };
+
+export async function loadReportClock(userId: string): Promise<ReportClock> {
+  const user = await getUserEntity(userId);
+  return { id: user.id, timezone: user.timezone, weekStartsOn: user.weekStartsOn === 0 ? 0 : 1 };
+}
 
 function asType(value: string): ReportType {
   const parsed = reportTypeSchema.safeParse(value);
@@ -238,10 +245,11 @@ export async function listReports(userId: string, query: ListReportsQuery): Prom
 }
 
 export async function getCurrentReport(
-  user: UserProfile,
+  userId: string,
   type: ReportType,
   at?: string,
 ): Promise<Report> {
+  const user = await loadReportClock(userId);
   const zoneNow = DateTime.now().setZone(user.timezone);
   const anchor = at
     ? DateTime.fromISO(at, { zone: user.timezone }).startOf('day')
@@ -377,10 +385,11 @@ function tokenOf(kind: EntityToken['kind'], id: string): EntityToken {
 }
 
 export async function fillReport(
-  user: UserProfile,
+  userId: string,
   id: string,
   input: FillReportInput,
 ): Promise<Report> {
+  const user = await loadReportClock(userId);
   const row = await getOwnedReportOr404(user.id, id);
   if (row.revision !== input.revision) throw AppError.of(409, 'REPORT_REVISION_CONFLICT');
   const type = asType(row.type);

@@ -39,7 +39,7 @@ export const attachments = pgTable(
     index('idx_attachments_owner').on(t.ownerType, t.ownerId),
     check(
       'attachments_owner_type_check',
-      sql`${t.ownerType} IN ('tmp', 'task', 'inbox', 'report')`,
+      sql`${t.ownerType} IN ('tmp', 'task', 'inbox', 'report', 'user')`,
     ),
     check('attachments_status_check', sql`${t.status} IN ('uploading', 'ready', 'orphaned')`),
   ],

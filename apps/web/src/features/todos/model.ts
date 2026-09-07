@@ -162,7 +162,20 @@ export function isOverdue(task: Task, timeZone: string, now = new Date()): boole
   return formatYmd(new Date(task.dueAt), timeZone) < todayYmd(timeZone, now);
 }
 
-/** All-day due today is due-soon; timed uses remindAt <= now < dueAt. */
+function reminderFireAt(task: Task): string | null {
+  const mode = task.reminderMode ?? 'none';
+  if (mode === 'none' || task.dueAt === null) {
+    return mode === 'custom' ? task.reminderAt : null;
+  }
+  if (mode === 'due') return task.dueAt;
+  if (mode === 'offset' && task.reminderOffsetMinutes) {
+    return new Date(new Date(task.dueAt).getTime() - task.reminderOffsetMinutes * 60_000).toISOString();
+  }
+  if (mode === 'custom') return task.reminderAt;
+  return null;
+}
+
+/** All-day due today is due-soon; timed uses reminder fire time <= now < dueAt. */
 export function isDueSoon(task: Task, timeZone: string, now = new Date()): boolean {
   if (!isOpen(task)) return false;
   if (task.isAllDay) {
@@ -170,9 +183,10 @@ export function isDueSoon(task: Task, timeZone: string, now = new Date()): boole
       task.dueAt !== null && formatYmd(new Date(task.dueAt), timeZone) === todayYmd(timeZone, now)
     );
   }
-  if (task.remindAt === null || task.dueAt === null) return false;
+  const fireAt = reminderFireAt(task);
+  if (fireAt === null || task.dueAt === null) return false;
   const ms = now.getTime();
-  return new Date(task.remindAt).getTime() <= ms && ms < new Date(task.dueAt).getTime();
+  return new Date(fireAt).getTime() <= ms && ms < new Date(task.dueAt).getTime();
 }
 
 export function taskDayYmd(task: Task, timeZone: string): string | null {
@@ -528,7 +542,7 @@ export function recurrenceMeta(task: Task): string | null {
 }
 
 export function reminderMeta(task: Task, timeZone: string): string | null {
-  const mode = task.reminderMode ?? (task.remindAt ? 'custom' : 'none');
+  const mode = task.reminderMode ?? 'none';
   if (mode === 'none') return null;
   if (mode === 'due') return t.todos.reminderDue;
   if (mode === 'offset') {
@@ -539,8 +553,7 @@ export function reminderMeta(task: Task, timeZone: string): string | null {
     if (minutes === 60) return t.todos.reminder1h;
     if (minutes === 1440) return t.todos.reminder1d;
   }
-  const at = task.reminderAt ?? task.remindAt;
-  if (at) return `${t.todos.remind} ${formatHm(at, timeZone)}`;
+  if (task.reminderAt) return `${t.todos.remind} ${formatHm(task.reminderAt, timeZone)}`;
   return t.todos.remind;
 }
 

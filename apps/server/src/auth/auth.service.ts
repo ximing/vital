@@ -100,6 +100,18 @@ export async function getUserEntity(userId: string): Promise<User> {
   return user;
 }
 
+export async function getAuthGate(
+  userId: string,
+): Promise<{ id: string; passwordChangedAt: Date | null }> {
+  const [row] = await getDb()
+    .select({ id: users.id, passwordChangedAt: users.passwordChangedAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!row) throw AppError.of(404, 'NOT_FOUND');
+  return row;
+}
+
 export async function getProfile(userId: string): Promise<UserProfile> {
   return await toProfile(await getUserEntity(userId));
 }

@@ -6,7 +6,6 @@ export type TaskScheduleInput = {
   status: string;
   deletedAt: Date | null;
   dueAt: Date | null;
-  remindAt: Date | null;
   reminderMode?: string | null;
   reminderOffsetMinutes?: number | null;
   reminderAt?: Date | null;
@@ -35,7 +34,7 @@ function semanticReminderAt(task: TaskScheduleInput): Date | null {
     case 'custom':
       return task.reminderAt ?? null;
     default:
-      return task.remindAt;
+      return null;
   }
 }
 

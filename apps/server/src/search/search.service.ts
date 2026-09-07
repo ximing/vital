@@ -4,7 +4,6 @@ import type {
   SearchHit,
   SearchInput,
   SearchResponse,
-  Task,
 } from '@vital/dto';
 import { and, desc, eq, inArray, isNull, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
@@ -19,67 +18,8 @@ import {
 } from '../db/schema.js';
 import { loadAssetsByItemIds, toInboxDto } from '../inbox/inbox.service.js';
 import { toReportListItem } from '../reports/reports.service.js';
+import { toTaskDto } from '../tasks/task-dto.js';
 import { decodeSearchCursor, encodeSearchCursor } from '../utils/cursor.js';
-
-function asStatus(value: string): Task['status'] {
-  if (value === 'todo' || value === 'doing' || value === 'done' || value === 'canceled') {
-    return value;
-  }
-  return 'todo';
-}
-
-function asPriority(value: number): Task['priority'] {
-  if (value === 0 || value === 1 || value === 2 || value === 3) return value;
-  return 3;
-}
-
-function asBucket(value: string): Task['timeBucket'] {
-  if (value === 'dated' || value === 'anytime' || value === 'someday') return value;
-  return 'anytime';
-}
-
-function iso(d: Date | null): string | null {
-  return d ? d.toISOString() : null;
-}
-
-function toTaskDto(row: TaskRow, tagIds: string[]): Task {
-  return {
-    id: row.id,
-    listId: row.listId,
-    parentId: row.parentId,
-    title: row.title,
-    notes: row.notesMd,
-    status: asStatus(row.status),
-    priority: asPriority(row.priority),
-    dueAt: iso(row.dueAt),
-    startAt: iso(row.startAt),
-    remindAt: iso(row.remindAt),
-    reminderMode:
-      row.reminderMode === 'none' || row.reminderMode === 'due' || row.reminderMode === 'offset' || row.reminderMode === 'custom'
-        ? row.reminderMode
-        : null,
-    reminderOffsetMinutes:
-      row.reminderOffsetMinutes === 5 || row.reminderOffsetMinutes === 15 || row.reminderOffsetMinutes === 30 || row.reminderOffsetMinutes === 60 || row.reminderOffsetMinutes === 1440
-        ? row.reminderOffsetMinutes
-        : null,
-    reminderAt: iso(row.reminderAt),
-    isAllDay: row.isAllDay,
-    timezone: row.timezone,
-    timeBucket: asBucket(row.timeBucket),
-    recurrence: row.recurrenceRrule,
-    recurrenceKind:
-      row.recurrenceKind === 'daily' || row.recurrenceKind === 'weekly' || row.recurrenceKind === 'monthly' || row.recurrenceKind === 'yearly' || row.recurrenceKind === 'weekdays' || row.recurrenceKind === 'weekends' || row.recurrenceKind === 'holidays' || row.recurrenceKind === 'legal_workdays'
-        ? row.recurrenceKind
-        : null,
-    recurrenceDtstart: iso(row.recurrenceDtstart),
-    completedAt: iso(row.completedAt),
-    sortOrder: row.sortOrder,
-    tagIds,
-    deletedAt: iso(row.deletedAt),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
 
 function escapeLike(q: string): string {
   return q.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');

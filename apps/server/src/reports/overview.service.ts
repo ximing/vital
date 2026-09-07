@@ -11,7 +11,6 @@ import {
   type ReportType,
   type TaskPriority,
   type TaskStatus,
-  type UserProfile,
 } from '@vital/dto';
 import { and, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
@@ -19,7 +18,7 @@ import { getDb } from '../db/index.js';
 import { inboxItems, lists, reports, taskCompletions, tasks } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { currentPeriod, localDate, periodInstants, previousPeriodStart } from './period.js';
-import { getOwnedReportOr404 } from './reports.service.js';
+import { getOwnedReportOr404, loadReportClock, type ReportClock } from './reports.service.js';
 
 function asPriority(value: number): TaskPriority {
   if (value === 0 || value === 1 || value === 2 || value === 3) return value;
@@ -48,7 +47,7 @@ function ymdAdd(ymd: string, days: number): string {
   return DateTime.fromISO(ymd, { zone: 'utc' }).plus({ days }).toISODate() ?? ymd;
 }
 
-function parseAnchor(user: UserProfile, at?: string): DateTime {
+function parseAnchor(user: ReportClock, at?: string): DateTime {
   const zoneNow = DateTime.now().setZone(user.timezone);
   const anchor = at
     ? DateTime.fromISO(at, { zone: user.timezone }).startOf('day')
@@ -140,10 +139,11 @@ function isCarried(
 }
 
 export async function getReportOverview(
-  user: UserProfile,
+  userId: string,
   type: ReportType,
   at?: string,
 ): Promise<ReportOverview> {
+  const user = await loadReportClock(userId);
   const tz = user.timezone;
   const weekStartsOn = user.weekStartsOn;
   const anchor = parseAnchor(user, at);
@@ -323,7 +323,8 @@ export async function getReportOverview(
   };
 }
 
-export async function getReportReview(user: UserProfile, id: string): Promise<ReportReview> {
+export async function getReportReview(userId: string, id: string): Promise<ReportReview> {
+  const user = await loadReportClock(userId);
   const row = await getOwnedReportOr404(user.id, id);
   const type = row.type as ReportType;
   const tz = user.timezone;

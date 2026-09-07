@@ -42,7 +42,6 @@ export const tasks = pgTable(
     priority: smallint('priority').notNull().default(3),
     dueAt: timestamp('due_at', { withTimezone: true, mode: 'date' }),
     startAt: timestamp('start_at', { withTimezone: true, mode: 'date' }),
-    remindAt: timestamp('remind_at', { withTimezone: true, mode: 'date' }),
     reminderMode: varchar('reminder_mode', { length: 16 }),
     reminderOffsetMinutes: smallint('reminder_offset_minutes'),
     reminderAt: timestamp('reminder_at', { withTimezone: true, mode: 'date' }),

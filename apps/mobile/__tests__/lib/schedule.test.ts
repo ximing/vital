@@ -23,11 +23,14 @@ function sample(over: Partial<Task> = {}): Task {
     priority: 3,
     dueAt: '2026-09-08T01:00:00.000Z',
     startAt: null,
-    remindAt: null,
+    reminderMode: null,
+    reminderOffsetMinutes: null,
+    reminderAt: null,
     isAllDay: false,
     timezone: TZ,
     timeBucket: 'dated',
     recurrence: null,
+    recurrenceKind: null,
     recurrenceDtstart: null,
     completedAt: null,
     sortOrder: 0,
@@ -52,9 +55,9 @@ describe('schedule semantic fields', () => {
     expect(recurrenceMeta(task)).toBe(copy.todos.recurrenceLegalWorkdays);
   });
 
-  it('falls back from legacy rrule and remindAt', () => {
+  it('falls back from an rrule when recurrenceKind is absent', () => {
     expect(recurrenceSelectValue(sample({ recurrence: 'FREQ=WEEKLY' }))).toBe('weekly');
-    expect(reminderSelectValue(sample({ remindAt: '2026-09-08T00:45:00.000Z' }))).toBe('custom');
+    expect(reminderSelectValue(sample({ reminderMode: 'custom' }))).toBe('custom');
   });
 
   it('shows due meta with today and overdue labels', () => {

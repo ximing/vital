@@ -208,7 +208,7 @@ describe('tasks', () => {
     expect(noDue.json().error.code).toBe('RRULE_DUE_REQUIRED');
   });
 
-  it('persists semantic reminders and fixed recurrence while keeping legacy fields', async () => {
+  it('persists semantic reminders and fixed recurrence', async () => {
     const alice = await registerUser(app);
     const inbox = await inboxId(app, alice.token);
     const created = await injectJson(app, {
@@ -230,7 +230,6 @@ describe('tasks', () => {
       reminderOffsetMinutes: 15,
       reminderAt: null,
       recurrenceKind: 'legal_workdays',
-      remindAt: null,
       recurrence: null,
     });
   });

@@ -7,6 +7,7 @@ describe('task reminder recurrence schema', () => {
     expect(tasks.reminderOffsetMinutes.name).toBe('reminder_offset_minutes');
     expect(tasks.reminderAt.name).toBe('reminder_at');
     expect(tasks.recurrenceKind.name).toBe('recurrence_kind');
+    expect(Object.keys(tasks)).not.toContain('remindAt');
     expect(holidayCalendar.region.name).toBe('region');
     expect(holidayCalendar.sourceVersion.name).toBe('source_version');
   });

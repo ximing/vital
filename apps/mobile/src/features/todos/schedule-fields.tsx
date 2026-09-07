@@ -62,7 +62,7 @@ export function ReminderField({
   onPatch: (input: PatchTaskInput) => void;
 }) {
   const allDay = task.isAllDay;
-  const mode = task.reminderMode ?? (task.remindAt ? 'custom' : 'none');
+  const mode = task.reminderMode ?? 'none';
   const value = reminderSelectValue(task);
   const options: SelectOption<ReminderValue>[] = [
     { value: 'none', label: copy.todos.reminderNone },
@@ -96,7 +96,7 @@ export function ReminderField({
           if (next === 'custom') {
             onPatch({
               reminderMode: 'custom',
-              reminderAt: task.reminderAt ?? task.remindAt ?? task.dueAt ?? new Date().toISOString(),
+              reminderAt: task.reminderAt ?? task.dueAt ?? new Date().toISOString(),
             });
             return;
           }
@@ -110,9 +110,7 @@ export function ReminderField({
         <DateField
           label={copy.todos.reminderCustom}
           value={
-            task.reminderAt || task.remindAt
-              ? toDatetimeLocal(task.reminderAt ?? task.remindAt ?? '', zone)
-              : ''
+            task.reminderAt ? toDatetimeLocal(task.reminderAt, zone) : ''
           }
           kind="datetime-local"
           zone={zone}

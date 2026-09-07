@@ -21,7 +21,6 @@ export type TaskNotifyInput = {
   title: string;
   status?: string | undefined;
   dueAt?: Date | null | undefined;
-  remindAt?: Date | null | undefined;
   reminderMode?: string | null | undefined;
   reminderOffsetMinutes?: number | null | undefined;
   reminderAt?: Date | null | undefined;
@@ -38,7 +37,6 @@ function asNotify(task: TaskNotifyInput) {
     title: task.title,
     status: task.status ?? 'todo',
     dueAt: task.dueAt ?? null,
-    remindAt: task.remindAt ?? null,
     reminderMode:
       task.reminderMode === 'none' || task.reminderMode === 'due' || task.reminderMode === 'offset' || task.reminderMode === 'custom'
         ? task.reminderMode
@@ -76,13 +74,14 @@ function payloadOf(
   task: ReturnType<typeof asNotify>,
   listName: string,
   eventType: 'task.remind' | 'task.due',
+  scheduledAt: Date,
 ): NotificationOutboxPayload {
   return {
     title: task.title,
     listId: task.listId,
     listName,
     dueAt: task.dueAt?.toISOString() ?? null,
-    remindAt: task.remindAt?.toISOString() ?? null,
+    remindAt: eventType === 'task.remind' ? scheduledAt.toISOString() : null,
     isAllDay: task.isAllDay,
     timezone: task.timezone,
     eventType,
@@ -129,7 +128,7 @@ export async function syncTaskNotifications(
   const key = idempotencyKey(plan.eventType, task.id, plan.occurrenceAt);
   await cancelLive(db, task.id, now, key);
   const listName = await listNameOf(db, task.listId);
-  const payload = payloadOf(task, listName, plan.eventType);
+  const payload = payloadOf(task, listName, plan.eventType, plan.scheduledAt);
   await db
     .insert(notificationOutbox)
     .values({

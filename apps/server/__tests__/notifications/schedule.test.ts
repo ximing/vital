@@ -14,7 +14,9 @@ function task(over: Partial<Parameters<typeof planTaskNotification>[0]>) {
     status: 'todo',
     deletedAt: null,
     dueAt: null,
-    remindAt: null,
+    reminderMode: null,
+    reminderOffsetMinutes: null,
+    reminderAt: null,
     isAllDay: false,
     timezone: TZ,
     ...over,
@@ -25,12 +27,16 @@ describe('planTaskNotification', () => {
   const now = at('2026-09-06T10:00:00.000Z');
   const prefs = DEFAULT_NOTIFICATION_PREFS;
 
-  it('uses remindAt when set', () => {
-    const remindAt = at('2026-09-06T12:00:00.000Z');
+  it('uses a custom reminderAt when set', () => {
+    const reminderAt = at('2026-09-06T12:00:00.000Z');
     const dueAt = at('2026-09-06T14:00:00.000Z');
-    const plan = planTaskNotification(task({ remindAt, dueAt }), prefs, now);
+    const plan = planTaskNotification(
+      task({ reminderMode: 'custom', reminderAt, dueAt }),
+      prefs,
+      now,
+    );
     expect(plan?.eventType).toBe('task.remind');
-    expect(plan?.scheduledAt.toISOString()).toBe(remindAt.toISOString());
+    expect(plan?.scheduledAt.toISOString()).toBe(reminderAt.toISOString());
     expect(plan?.occurrenceAt.toISOString()).toBe(dueAt.toISOString());
   });
 

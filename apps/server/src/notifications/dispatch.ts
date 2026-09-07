@@ -278,7 +278,11 @@ export async function healTaskNotifications(now = new Date()): Promise<number> {
       and(
         isNull(tasks.deletedAt),
         inArray(tasks.status, ['todo', 'doing']),
-        or(sql`${tasks.dueAt} IS NOT NULL`, sql`${tasks.remindAt} IS NOT NULL`),
+        or(
+          sql`${tasks.dueAt} IS NOT NULL`,
+          sql`${tasks.reminderAt} IS NOT NULL`,
+          sql`${tasks.reminderMode} IN ('due', 'offset', 'custom')`,
+        ),
       ),
     )
     .limit(200);

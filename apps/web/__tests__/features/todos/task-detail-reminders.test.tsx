@@ -16,7 +16,6 @@ const task: Task = {
   priority: 3,
   dueAt: '2026-09-08T01:00:00.000Z',
   startAt: null,
-  remindAt: null,
   reminderMode: 'none',
   reminderOffsetMinutes: null,
   reminderAt: null,

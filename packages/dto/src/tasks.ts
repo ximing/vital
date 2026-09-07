@@ -53,15 +53,14 @@ export interface Task {
   priority: TaskPriority;
   dueAt: string | null;
   startAt: string | null;
-  remindAt: string | null;
-  reminderMode?: ReminderMode | null;
-  reminderOffsetMinutes?: ReminderOffsetMinutes | null;
-  reminderAt?: string | null;
+  reminderMode: ReminderMode | null;
+  reminderOffsetMinutes: ReminderOffsetMinutes | null;
+  reminderAt: string | null;
   isAllDay: boolean;
   timezone: string;
   timeBucket: TimeBucket;
   recurrence: string | null;
-  recurrenceKind?: RecurrenceKind | null;
+  recurrenceKind: RecurrenceKind | null;
   recurrenceDtstart: string | null;
   completedAt: string | null;
   sortOrder: number;
@@ -95,7 +94,6 @@ export const createTaskInputSchema = z.object({
   priority: taskPrioritySchema.optional(),
   dueAt: isoDateTimeSchema.nullable().optional(),
   startAt: isoDateTimeSchema.nullable().optional(),
-  remindAt: isoDateTimeSchema.nullable().optional(),
   reminderMode: reminderModeSchema.optional(),
   reminderOffsetMinutes: reminderOffsetMinutesSchema.nullable().optional(),
   reminderAt: isoDateTimeSchema.nullable().optional(),
@@ -124,7 +122,6 @@ export const patchTaskInputSchema = z
     priority: taskPrioritySchema.optional(),
     dueAt: isoDateTimeSchema.nullable().optional(),
     startAt: isoDateTimeSchema.nullable().optional(),
-    remindAt: isoDateTimeSchema.nullable().optional(),
     reminderMode: reminderModeSchema.nullable().optional(),
     reminderOffsetMinutes: reminderOffsetMinutesSchema.nullable().optional(),
     reminderAt: isoDateTimeSchema.nullable().optional(),
