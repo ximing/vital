@@ -58,9 +58,10 @@ POST /api/v1/uploads/:id/complete        { parts: [{partNumber, etag}] }
   → { id, status: 'ready', mime, size, ownerType: 'tmp' }
      // completeMultipart（ETag 齐全性校验）→ HEAD 校验 size/contentType → ready
 POST /api/v1/uploads/:id/abort           → 204（abortMultipart + 状态 orphaned）
-GET  /api/v1/uploads/:id                 → 302 签名 URL（不变）
 POST /api/v1/uploads/:id/bind            → 不变
 DELETE /api/v1/uploads/:id               → 不变（discard）
+
+删除：`GET /api/v1/uploads/:id` 302 跳转端点（`resolveAccessUrl` service 函数保留，供内部生成签名 URL）。全站文件访问统一走签名 URL，不做 302 跳转。
 ```
 
 删除：`POST /uploads/presign` 路由与 `presignUpload` service；`presignPut` adapter 方法（含 base.adapter 抽象与 s3/local 实现）。
@@ -121,7 +122,8 @@ upload({ file? | fileUri?, mime, size, onProgress?, signal?, resumeId? })
   - `video/*` → `<video controls src={signedUrl}>`
   - `audio/*` → `<audio controls src={signedUrl}>`
   - 图片维持现行为（assets gallery）
-- 签名 URL：直接用现有 `GET /uploads/:id` 302 端点（无需预签名列表）；`<video>`/`<iframe>` 请求时浏览器自动跟随 302，携带同一认证会话的 cookie 不需要——该端点已 requireAuth + 302，媒体标签的匿名请求需确认。**备选**：reader 数据接口为 asset 附带签名 URL（服务端 `generateAccessUrl`，六小时），一次性下发。采用**备选**（媒体元素无法带 Authorization header，302 端点依赖 cookie 而扩展/web 的 API 走 bearer——直接下发签名 URL 最稳）。
+- 签名 URL：reader 数据接口为 asset 附带签名 URL（服务端 `generateAccessUrl`，六小时），一次性下发。媒体元素（`<video>`/`<iframe>`）无法带 Authorization header，签名 URL 直发是唯一可行方式。`InboxAsset` 返回体相应增加 `url` 字段（签名 URL）。
+- **全站统一**：删除 `GET /uploads/:id` 302 跳转端点与 `api-client.uploadUrl()`（无调用方）；avatar 已走 `toProfile` 的签名 URL（六小时）不变。所有文件访问一律签名 URL。
 
 ## ⑤ 错误与边界
 
@@ -153,6 +155,6 @@ upload({ file? | fileUri?, mime, size, onProgress?, signal?, resumeId? })
 ## 风险与权衡
 
 - **删旧 presign**：无用户，四个调用点同一 PR 内统一切换。风险集中在 api-client 重写，靠单测覆盖。
-- **302 端点 vs 签名 URL 直发**：媒体元素无法带 bearer header，采用 reader 下发签名 URL（六小时），302 端点保留给现有直接访问场景。
+- **签名 URL 有效期**：六小时（与 avatar 一致）。超时后 reader 重新拉取数据即刷新；扩展转存后的 Reader 访问不依赖转存时的 URL。
 - **SW 生命周期**：5GB 转存逐片串行可能超 SW 30s 空闲回收——每片上传的 fetch 活动会重置 SW 计时器（扩展 API 场景持续活动保活）；转存中断亦有续传兜底。
 - **断点续传以 S3 ListParts 为权威**：服务端不存分片状态表，GET /parts 实时查询。简单、无一致性风险。
