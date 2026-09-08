@@ -163,7 +163,7 @@ export function QuickAdd({
   }
 
   return (
-    <form onSubmit={(event) => void handle(event)} className="w-full min-w-0 self-stretch pb-2 pt-1">
+    <form onSubmit={(event) => void handle(event)} className="w-full min-w-0 self-stretch pb-4 pt-1">
       <div className="flex h-[46px] w-full min-w-0 items-center gap-2 rounded-[14px] border border-border bg-surface px-4 shadow-[var(--shadow-xs)]">
         <span aria-hidden className="shrink-0 text-[17px] font-medium leading-none text-accent">+</span>
         <input

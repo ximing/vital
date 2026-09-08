@@ -31,7 +31,7 @@ export function TaskCheckbox({
       ? 'border-overdue'
       : soon
         ? 'border-due'
-        : 'border-tertiary/60';
+        : 'border-tertiary';
   return (
     <button
       type="button"
@@ -90,6 +90,10 @@ export function TaskRow({
   const extraTags = Math.max(0, task.tagIds.length - namedTags.length);
   const done = task.status === 'done';
   const note = task.notes.replaceAll(/\s+/g, ' ').trim();
+  const metaParts: { key: 'project' | 'reminder' | 'recurrence'; text: string }[] = [];
+  if (listName) metaParts.push({ key: 'project', text: listName });
+  if (reminder) metaParts.push({ key: 'reminder', text: reminder });
+  if (repeat) metaParts.push({ key: 'recurrence', text: repeat });
 
   return (
     <div
@@ -111,60 +115,25 @@ export function TaskRow({
     >
       <TaskCheckbox task={task} timeZone={timeZone} onToggle={onComplete} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-3">
-          <p
-            className={`min-w-0 flex-1 truncate text-[length:var(--text-body)] font-medium leading-[var(--text-body-lh)] ${
-              done ? 'text-muted line-through' : 'text-fg'
-            }`}
-          >
-            <PriorityMark priority={task.priority} className="mr-1.5 align-middle" />
-            {task.title}
-          </p>
-          <p className="flex max-w-[46%] shrink-0 items-center justify-end gap-2 truncate text-right font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums">
-            {listName ? (
-              <span data-task-meta="project" className="truncate text-tertiary">
-                {listName}
-              </span>
-            ) : null}
-            {reminder ? (
-              <span data-task-meta="reminder" className="truncate text-muted">
-                {reminder}
-              </span>
-            ) : null}
-            {repeat ? (
-              <span data-task-meta="recurrence" className="truncate text-muted">
-                {repeat}
-              </span>
-            ) : null}
-            {due ? (
-              <span
-                data-task-meta="due"
-                className={`shrink-0 ${
-                  overdue
-                    ? 'text-overdue'
-                    : timedToday
-                      ? 'text-doing'
-                      : soon
-                        ? 'text-due'
-                        : 'text-secondary'
-                }`}
-              >
-                {due}
-              </span>
-            ) : null}
-          </p>
-        </div>
+        <p
+          className={`truncate text-[length:var(--text-body)] font-medium leading-[var(--text-body-lh)] ${
+            done ? 'text-muted line-through' : 'text-fg'
+          }`}
+        >
+          <PriorityMark priority={task.priority} className="mr-1.5 align-middle" />
+          {task.title}
+        </p>
         {note !== '' ? (
           <p
             className={`mt-0.5 truncate text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${
-              done ? 'text-muted/70' : 'text-muted'
+              done ? 'text-muted/70' : 'text-tertiary'
             }`}
           >
             {note}
           </p>
         ) : null}
         {namedTags.length > 0 ? (
-          <p className="mt-1 flex flex-wrap items-center gap-1">
+          <p className="mt-1.5 flex flex-wrap items-center gap-1">
             {namedTags.map((tag) => (
               <span
                 key={tag.id}
@@ -178,6 +147,36 @@ export function TaskRow({
           </p>
         ) : null}
       </div>
+      {metaParts.length > 0 || due ? (
+        <p className="mt-0.5 flex max-w-[46%] shrink-0 flex-col items-end gap-px text-right font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums">
+          {metaParts.length > 0 ? (
+            <span className="max-w-full truncate text-tertiary">
+              {metaParts.map((part, index) => (
+                <span key={part.key}>
+                  {index > 0 ? <span aria-hidden> · </span> : null}
+                  <span data-task-meta={part.key}>{part.text}</span>
+                </span>
+              ))}
+            </span>
+          ) : null}
+          {due ? (
+            <span
+              data-task-meta="due"
+              className={`shrink-0 ${
+                overdue
+                  ? 'text-overdue'
+                  : timedToday
+                    ? 'text-doing'
+                    : soon
+                      ? 'text-due'
+                      : 'text-tertiary'
+              }`}
+            >
+              {due}
+            </span>
+          ) : null}
+        </p>
+      ) : null}
       <button
         type="button"
         className="sr-only"
