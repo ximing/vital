@@ -1,4 +1,7 @@
+import type { CreateInboxInput } from '@vital/dto';
+import { clip, escapeParagraph } from './html.js';
 import { copy } from './i18n.js';
+import type { CapturePayload } from './messages.js';
 
 export type SaveKind = 'created' | 'existing' | 'task';
 
@@ -41,4 +44,37 @@ export function isTrustedWebOrigin(pageUrl: string | undefined, webUrl: string):
   } catch {
     return false;
   }
+}
+
+export function inboxInputFromCapture(
+  capture: CapturePayload,
+  title: string,
+  note: string,
+): CreateInboxInput {
+  return {
+    title,
+    originalUrl: capture.originalUrl,
+    extractedText: capture.extractedText,
+    extractedHtml: capture.extractedHtml,
+    excerpt: clip(note, 500) ?? capture.excerpt,
+    byline: capture.byline,
+    siteName: capture.siteName,
+    source: 'extension',
+  };
+}
+
+export function selectionInputFromCapture(
+  capture: CapturePayload,
+  title: string,
+): CreateInboxInput {
+  return {
+    title,
+    originalUrl: capture.originalUrl,
+    extractedText: clip(capture.selection, 2 * 1024 * 1024),
+    extractedHtml: escapeParagraph(capture.selection),
+    excerpt: clip(capture.selection, 500),
+    byline: null,
+    siteName: capture.siteName,
+    source: 'extension',
+  };
 }
