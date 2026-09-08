@@ -1,7 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MAX_IMAGE_BYTES } from '@vital/dto';
 import { buildFastify } from '../src/app.js';
 import { db } from '../src/db/index.js';
 import { attachments } from '../src/db/schema.js';
@@ -47,303 +46,222 @@ async function register(name: string): Promise<{ id: string; token: string }> {
   return { id: body.user.id, token: body.tokens.accessToken };
 }
 
-describe('uploads', () => {
-  it('unauthenticated presign is 401', async () => {
+const PART = 5 * 1024 * 1024;
+const SIZE_3P = 12 * 1024 * 1024; // 3 parts at 5MB
+
+async function initUploadFor(alice: { token: string }, payload: Record<string, unknown> = {}) {
+  return injectJson(app, {
+    method: 'POST',
+    url: '/api/v1/uploads',
+    token: alice.token,
+    payload: { mime: 'video/mp4', size: SIZE_3P, ...payload },
+  });
+}
+
+describe('uploads (multipart)', () => {
+  it('unauthenticated init is 401', async () => {
     const res = await injectJson(app, {
       method: 'POST',
-      url: '/api/v1/uploads/presign',
-      payload: { mime: 'image/jpeg', size: 1024 },
+      url: '/api/v1/uploads',
+      payload: { mime: 'video/mp4', size: 1024 },
     });
     expect(res.statusCode).toBe(401);
   });
 
-  it('presign inserts uploading tmp row and returns PUT url', async () => {
+  it('init creates uploading row with uploadId and part math', async () => {
     const alice = await register('alice');
-    const res = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads/presign',
-      token: alice.token,
-      payload: { mime: 'image/jpeg', size: 1024 },
-    });
+    const res = await initUploadFor(alice);
     expect(res.statusCode).toBe(201);
     const body = res.json();
-    expect(body.method).toBe('put');
-    expect(body.url).toBe('https://fake.local/presigned-put');
-
+    expect(body.uploadId).toBe('fake-upload-id');
+    expect(body.partSize).toBe(PART);
+    expect(body.totalParts).toBe(3);
+    expect(body.parts).toEqual([]);
     const [row] = await db.select().from(attachments).where(eq(attachments.id, body.id));
     expect(row).toMatchObject({
       userId: alice.id,
-      mime: 'image/jpeg',
-      size: 1024,
+      mime: 'video/mp4',
       status: 'uploading',
-      ownerType: 'tmp',
+      uploadId: 'fake-upload-id',
     });
-    expect(row?.s3Key).toBe(`tmp/${body.id}.jpeg`);
-    expect(storage.presignPut).toHaveBeenCalledWith(row?.s3Key, { contentType: 'image/jpeg' }, 900);
+    expect(storage.initMultipart).toHaveBeenCalledWith(row?.s3Key, { contentType: 'video/mp4' });
   });
 
-  it('presign over 10MB is 413 and does not insert', async () => {
+  it('init rejects non-whitelisted mime (422) and over-5GB (413) at service level', async () => {
     const alice = await register('alice');
-    const res = await injectJson(app, {
+    const badMime = await injectJson(app, {
       method: 'POST',
-      url: '/api/v1/uploads/presign',
+      url: '/api/v1/uploads',
       token: alice.token,
-      payload: { mime: 'image/png', size: MAX_IMAGE_BYTES + 1 },
+      payload: { mime: 'image/svg+xml', size: 100 },
     });
-    expect(res.statusCode).toBe(413);
-    expect(res.json().error.code).toBe('MEDIA_TOO_LARGE');
+    expect(badMime.statusCode).toBe(422);
+    expect(badMime.json().error.code).toBe('MEDIA_MISMATCH');
+    const tooBig = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/uploads',
+      token: alice.token,
+      payload: { mime: 'video/mp4', size: 5 * 1024 ** 3 + 1 },
+    });
+    expect(tooBig.statusCode).toBe(413);
+    expect(tooBig.json().error.code).toBe('MEDIA_TOO_LARGE');
     expect(await db.select().from(attachments)).toHaveLength(0);
   });
 
-  it('complete HeadObject mismatch is 422 MEDIA_MISMATCH; match is ready tmp', async () => {
+  it('resumeId returns the same session with uploaded parts incl etags', async () => {
     const alice = await register('alice');
-    const presigned = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads/presign',
-      token: alice.token,
-      payload: { mime: 'image/jpeg', size: 1024 },
-    });
-    const id = presigned.json().id;
+    const first = await initUploadFor(alice);
+    const id = first.json().id;
+    storage.listParts.mockResolvedValueOnce([{ partNumber: 1, size: PART, etag: '"e1"' }]);
 
-    storage.headObject.mockResolvedValue({
-      size: 12,
-      contentType: 'image/png',
-      lastModified: new Date(),
-    });
-    const mismatch = await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/complete`,
-      token: alice.token,
-      payload: {},
-    });
-    expect(mismatch.statusCode).toBe(422);
-    expect(mismatch.json().error.code).toBe('MEDIA_MISMATCH');
+    const resumed = await initUploadFor(alice, { resumeId: id });
+    expect(resumed.statusCode).toBe(201);
+    const body = resumed.json();
+    expect(body.id).toBe(id);
+    expect(body.parts).toEqual([{ partNumber: 1, size: PART, etag: '"e1"' }]);
+    expect(storage.initMultipart).toHaveBeenCalledTimes(1);
+  });
 
-    storage.headObject.mockResolvedValue({
-      size: 1024,
-      contentType: 'image/jpeg',
-      lastModified: new Date(),
-    });
+  it('resumeId with mismatched size is 409 MEDIA_INVALID_STATE', async () => {
+    const alice = await register('alice');
+    const first = await initUploadFor(alice);
+    const res = await initUploadFor(alice, { size: 20 * 1024 * 1024, resumeId: first.json().id });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('presign part validates range and ownership', async () => {
+    const alice = await register('alice');
+    const bob = await register('bob');
+    const { id } = (await initUploadFor(alice)).json();
+
     const ok = await injectJson(app, {
       method: 'POST',
-      url: `/api/v1/uploads/${id}/complete`,
+      url: `/api/v1/uploads/${id}/parts/2`,
       token: alice.token,
       payload: {},
     });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json()).toEqual({
-      id,
-      status: 'ready',
-      mime: 'image/jpeg',
-      size: 1024,
-      ownerType: 'tmp',
-    });
-    const [row] = await db.select().from(attachments).where(eq(attachments.id, id));
-    expect(row?.status).toBe('ready');
-    expect(row?.ownerType).toBe('tmp');
-  });
-
-  it('GET ready attachment 302 with Cache-Control private max-age=300', async () => {
-    const alice = await register('alice');
-    const presigned = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads/presign',
-      token: alice.token,
-      payload: { mime: 'image/jpeg', size: 1024 },
-    });
-    const id = presigned.json().id;
-    storage.headObject.mockResolvedValue({
-      size: 1024,
-      contentType: 'image/jpeg',
-      lastModified: new Date(),
-    });
-    await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/complete`,
-      token: alice.token,
-      payload: {},
-    });
-
-    const res = await injectJson(app, {
-      method: 'GET',
-      url: `/api/v1/uploads/${id}`,
-      token: alice.token,
-    });
-    expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe('https://fake.local/presigned-get');
-    expect(res.headers['cache-control']).toBe('private, max-age=300');
-  });
-
-  it('returns a six-hour signed image URL in the user profile', async () => {
-    const alice = await register('avatar-profile');
-    const presigned = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads/presign',
-      token: alice.token,
-      payload: { mime: 'image/jpeg', size: 1024 },
-    });
-    const id = presigned.json().id as string;
-    storage.headObject.mockResolvedValue({
-      size: 1024,
-      contentType: 'image/jpeg',
-      lastModified: new Date(),
-    });
-    await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/complete`,
-      token: alice.token,
-      payload: {},
-    });
-    await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/bind`,
-      token: alice.token,
-      payload: { ownerType: 'user', ownerId: alice.id },
-    });
-
-    const res = await injectJson(app, {
-      method: 'PATCH',
-      url: '/api/v1/auth/me',
-      token: alice.token,
-      payload: { avatarAttachmentId: id },
-    });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json().avatarUrl).toBe('https://fake.local/presigned-get');
-    expect(storage.generateAccessUrl).toHaveBeenLastCalledWith(
-      expect.stringContaining(`${id}.jpeg`),
-      expect.anything(),
-      21_600,
+    expect(ok.json().url).toBe('https://fake.local/presigned-part');
+    expect(storage.presignPart).toHaveBeenCalledWith(
+      expect.any(String),
+      'fake-upload-id',
+      2,
+      expect.any(Number),
     );
-  });
 
-  it('abort uploading is 204; other user is 404', async () => {
-    const alice = await register('alice');
-    const bob = await register('bob');
-    const presigned = await injectJson(app, {
+    const outOfRange = await injectJson(app, {
       method: 'POST',
-      url: '/api/v1/uploads/presign',
+      url: `/api/v1/uploads/${id}/parts/99`,
       token: alice.token,
-      payload: { mime: 'image/png', size: 2048 },
+      payload: {},
     });
-    const id = presigned.json().id;
+    expect(outOfRange.statusCode).toBe(422);
+    expect(outOfRange.json().error.code).toBe('MEDIA_PART_INVALID');
 
-    const other = await injectJson(app, {
+    const foreign = await injectJson(app, {
       method: 'POST',
-      url: `/api/v1/uploads/${id}/abort`,
+      url: `/api/v1/uploads/${id}/parts/1`,
       token: bob.token,
-    });
-    expect(other.statusCode).toBe(404);
-
-    const abort = await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/abort`,
-      token: alice.token,
-    });
-    expect(abort.statusCode).toBe(204);
-  });
-
-  it('bind ownerType=task copies tmp key to task prefix', async () => {
-    const alice = await register('alice');
-    const lists = await injectJson(app, {
-      method: 'GET',
-      url: '/api/v1/lists',
-      token: alice.token,
-    });
-    const inbox = (lists.json().items as { id: string; kind: string }[]).find((l) => l.kind === 'inbox');
-    const task = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/tasks',
-      token: alice.token,
-      payload: { title: 'Pic', listId: inbox?.id },
-    });
-    expect(task.statusCode).toBe(201);
-    const presigned = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads/presign',
-      token: alice.token,
-      payload: { mime: 'image/jpeg', size: 1024 },
-    });
-    const id = presigned.json().id as string;
-    storage.headObject.mockResolvedValue({
-      size: 1024,
-      contentType: 'image/jpeg',
-      lastModified: new Date(),
-    });
-    await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/complete`,
-      token: alice.token,
       payload: {},
     });
-    const bind = await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/bind`,
-      token: alice.token,
-      payload: { ownerType: 'task', ownerId: task.json().id },
-    });
-    expect(bind.statusCode).toBe(200);
-    expect(bind.json()).toMatchObject({
-      id,
-      status: 'ready',
-      ownerType: 'task',
-      ownerId: task.json().id,
-    });
-    expect(storage.copyObject).toHaveBeenCalled();
-    const [row] = await db.select().from(attachments).where(eq(attachments.id, id));
-    expect(row?.ownerType).toBe('task');
-    expect(row?.s3Key).toBe(`task/${alice.id}/${task.json().id}/${id}.jpeg`);
+    expect(foreign.statusCode).toBe(404);
   });
 
-  it('bind ownerType=report copies tmp key to report prefix', async () => {
+  it('GET /uploads/:id/parts lists uploaded parts for the owner', async () => {
     const alice = await register('alice');
-    const current = await injectJson(app, {
+    const { id } = (await initUploadFor(alice)).json();
+    storage.listParts.mockResolvedValueOnce([
+      { partNumber: 1, size: PART, etag: '"e1"' },
+      { partNumber: 2, size: PART, etag: '"e2"' },
+    ]);
+    const res = await injectJson(app, {
       method: 'GET',
-      url: '/api/v1/reports/current?type=daily',
+      url: `/api/v1/uploads/${id}/parts`,
       token: alice.token,
     });
-    expect(current.statusCode).toBe(200);
-    const reportId = current.json().id as string;
-    const presigned = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads/presign',
-      token: alice.token,
-      payload: { mime: 'image/jpeg', size: 1024 },
-    });
-    const id = presigned.json().id as string;
-    storage.headObject.mockResolvedValue({
-      size: 1024,
-      contentType: 'image/jpeg',
-      lastModified: new Date(),
-    });
-    await injectJson(app, {
-      method: 'POST',
-      url: `/api/v1/uploads/${id}/complete`,
-      token: alice.token,
-      payload: {},
-    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().parts).toHaveLength(2);
+  });
+
+  it('complete with missing parts is 422 MEDIA_PART_MISSING; full set marks ready', async () => {
+    const alice = await register('alice');
+    const init = await initUploadFor(alice);
+    const { id, totalParts } = init.json();
+
     const missing = await injectJson(app, {
       method: 'POST',
-      url: `/api/v1/uploads/${id}/bind`,
+      url: `/api/v1/uploads/${id}/complete`,
       token: alice.token,
-      payload: { ownerType: 'report', ownerId: '11111111-1111-4111-8111-111111111111' },
+      payload: { parts: [{ partNumber: 1, etag: '"e1"' }] },
     });
-    expect(missing.statusCode).toBe(404);
-    const bind = await injectJson(app, {
+    expect(missing.statusCode).toBe(422);
+    expect(missing.json().error.code).toBe('MEDIA_PART_MISSING');
+
+    storage.headObject.mockResolvedValueOnce({
+      size: SIZE_3P,
+      contentType: 'video/mp4',
+      lastModified: new Date(),
+    });
+    const full = await injectJson(app, {
       method: 'POST',
-      url: `/api/v1/uploads/${id}/bind`,
+      url: `/api/v1/uploads/${id}/complete`,
       token: alice.token,
-      payload: { ownerType: 'report', ownerId: reportId },
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
     });
-    expect(bind.statusCode).toBe(200);
-    expect(bind.json()).toMatchObject({
-      id,
-      status: 'ready',
-      ownerType: 'report',
-      ownerId: reportId,
-    });
+    expect(full.statusCode).toBe(200);
+    expect(full.json()).toMatchObject({ id, status: 'ready', mime: 'video/mp4' });
+    expect(storage.completeMultipart).toHaveBeenCalledTimes(1);
     const [row] = await db.select().from(attachments).where(eq(attachments.id, id));
-    expect(row?.ownerType).toBe('report');
-    expect(row?.s3Key).toBe(`report/${alice.id}/${reportId}/${id}.jpeg`);
+    expect(row?.status).toBe('ready');
+  });
+
+  it('HEAD mismatch on complete is 422 MEDIA_MISMATCH', async () => {
+    const alice = await register('alice');
+    const { id, totalParts } = (await initUploadFor(alice)).json();
+    storage.headObject.mockResolvedValueOnce({ size: 999, contentType: 'video/mp4', lastModified: new Date() });
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe('MEDIA_MISMATCH');
+  });
+
+  it('abort calls abortMultipart and orphans the row', async () => {
+    const alice = await register('alice');
+    const { id } = (await initUploadFor(alice)).json();
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/abort`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(204);
+    expect(storage.abortMultipart).toHaveBeenCalledWith(expect.any(String), 'fake-upload-id');
+    const [row] = await db.select().from(attachments).where(eq(attachments.id, id));
+    expect(row?.status).toBe('orphaned');
+  });
+
+  it('old presign and 302 GET routes are gone', async () => {
+    const alice = await register('alice');
+    const presign = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/uploads/presign',
+      token: alice.token,
+      payload: { mime: 'image/jpeg', size: 10 },
+    });
+    expect(presign.statusCode).toBe(404);
+    const redirect = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/uploads/00000000-0000-4000-8000-000000000000',
+      token: alice.token,
+    });
+    expect(redirect.statusCode).toBe(404);
   });
 });

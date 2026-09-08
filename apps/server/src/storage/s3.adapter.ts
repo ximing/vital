@@ -189,18 +189,6 @@ export class S3UnifiedStorageAdapter extends BaseUnifiedStorageAdapter {
     );
   }
 
-  async presignPut(key: string, meta: PutMeta, expiresIn: number): Promise<string> {
-    return getSignedUrl(
-      this.client,
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: this.full(key),
-        ContentType: meta.contentType,
-      }),
-      { expiresIn },
-    );
-  }
-
   async initMultipart(key: string, meta: PutMeta): Promise<string> {
     const res = await this.client.send(
       new CreateMultipartUploadCommand({

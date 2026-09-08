@@ -16,9 +16,6 @@ export function installMockStorage(): MockStorage {
     generateAccessUrl: vi
       .fn<UnifiedStorageAdapter['generateAccessUrl']>()
       .mockResolvedValue('https://fake.local/presigned-get'),
-    presignPut: vi
-      .fn<UnifiedStorageAdapter['presignPut']>()
-      .mockResolvedValue('https://fake.local/presigned-put'),
     initMultipart: vi
       .fn<UnifiedStorageAdapter['initMultipart']>()
       .mockResolvedValue('fake-upload-id'),

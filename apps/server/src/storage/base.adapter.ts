@@ -41,7 +41,6 @@ export interface UnifiedStorageAdapter {
     expiresIn?: number,
     signingDate?: Date,
   ): Promise<string>;
-  presignPut(key: string, meta: PutMeta, expiresIn: number): Promise<string>;
   initMultipart(key: string, meta: PutMeta): Promise<string>;
   presignPart(
     key: string,
@@ -67,7 +66,6 @@ export abstract class BaseUnifiedStorageAdapter implements UnifiedStorageAdapter
     expiresIn?: number,
     signingDate?: Date,
   ): Promise<string>;
-  abstract presignPut(key: string, meta: PutMeta, expiresIn: number): Promise<string>;
   abstract initMultipart(key: string, meta: PutMeta): Promise<string>;
   abstract presignPart(
     key: string,

@@ -20,6 +20,8 @@ export const ERROR_MESSAGES = {
   ATTACHMENT_NOT_FOUND: '附件不存在',
   MEDIA_TOO_LARGE: '文件过大',
   MEDIA_INVALID_STATE: '上传状态不允许此操作',
+  MEDIA_PART_INVALID: '分片号不合法',
+  MEDIA_PART_MISSING: '缺少分片上传记录',
   LIST_NOT_FOUND: '清单不存在',
   TAG_NOT_FOUND: '标签不存在',
   CHANNEL_NOT_FOUND: '通知渠道不存在',

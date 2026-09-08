@@ -62,14 +62,14 @@ afterAll(async () => {
 });
 
 async function readyImage(token: string, size = 1024): Promise<string> {
-  const presigned = await injectJson(app, {
+  const init = await injectJson(app, {
     method: 'POST',
-    url: '/api/v1/uploads/presign',
+    url: '/api/v1/uploads',
     token,
     payload: { mime: 'image/jpeg', size },
   });
-  expect(presigned.statusCode).toBe(201);
-  const id = presigned.json().id as string;
+  expect(init.statusCode).toBe(201);
+  const { id, totalParts } = init.json();
   storage.headObject.mockResolvedValue({
     size,
     contentType: 'image/jpeg',
@@ -79,7 +79,9 @@ async function readyImage(token: string, size = 1024): Promise<string> {
     method: 'POST',
     url: `/api/v1/uploads/${id}/complete`,
     token,
-    payload: {},
+    payload: {
+      parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+    },
   });
   expect(complete.statusCode).toBe(200);
   return id;

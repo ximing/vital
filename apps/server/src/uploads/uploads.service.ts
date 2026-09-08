@@ -1,12 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import mime from 'mime-types';
 import {
-  MAX_IMAGE_BYTES,
+  MAX_UPLOAD_BYTES,
+  isUploadableMime,
+  partSizeFor,
+  totalPartsFor,
+  type PartPresignResponse,
   type UploadBindInput,
   type UploadBindResponse,
+  type UploadCompletePartsInput,
   type UploadCompleteResponse,
-  type UploadPresignInput,
-  type UploadPresignResponse,
+  type UploadInitInput,
+  type UploadInitResponse,
+  type UploadPartsResponse,
 } from '@vital/dto';
 import { and, eq } from 'drizzle-orm';
 import { config } from '../config.js';
@@ -24,18 +30,40 @@ async function getOwnedAttachmentOr404(userId: string, id: string): Promise<Atta
   return row;
 }
 
-export async function presignUpload(
-  userId: string,
-  input: UploadPresignInput,
-): Promise<UploadPresignResponse> {
-  if (input.size > MAX_IMAGE_BYTES) {
+export async function initUpload(userId: string, input: UploadInitInput): Promise<UploadInitResponse> {
+  if (!isUploadableMime(input.mime)) {
+    throw AppError.of(422, 'MEDIA_MISMATCH');
+  }
+  if (input.size > MAX_UPLOAD_BYTES) {
     throw AppError.of(413, 'MEDIA_TOO_LARGE');
+  }
+  const partSize = partSizeFor(input.size);
+  const totalParts = totalPartsFor(input.size);
+
+  if (input.resumeId !== undefined) {
+    const [row] = await getDb()
+      .select()
+      .from(attachments)
+      .where(eq(attachments.id, input.resumeId))
+      .limit(1);
+    if (
+      row &&
+      row.userId === userId &&
+      row.status === 'uploading' &&
+      row.uploadId !== null &&
+      row.mime === input.mime &&
+      row.size === input.size
+    ) {
+      const parts = await getStorage().listParts(row.s3Key, row.uploadId);
+      return { id: row.id, uploadId: row.uploadId, partSize, totalParts, parts };
+    }
+    throw AppError.of(409, 'MEDIA_INVALID_STATE');
   }
 
   const id = randomUUID();
   const ext = mime.extension(input.mime) || 'bin';
   const tmpKey = `tmp/${id}.${ext}`;
-
+  const uploadId = await getStorage().initMultipart(tmpKey, { contentType: input.mime });
   await getDb().insert(attachments).values({
     id,
     userId,
@@ -46,33 +74,68 @@ export async function presignUpload(
     size: input.size,
     status: 'uploading',
     storageMeta: currentStorageMeta(),
-    uploadId: null,
+    uploadId,
     sortOrder: 0,
   });
-
-  const url = await getStorage().presignPut(
-    tmpKey,
-    { contentType: input.mime },
-    config.PRESIGN_PUT_TTL_SECONDS,
-  );
-  return { id, method: 'put', url, expiresIn: config.PRESIGN_PUT_TTL_SECONDS };
+  return { id, uploadId, partSize, totalParts, parts: [] };
 }
 
-export async function completeUpload(userId: string, id: string): Promise<UploadCompleteResponse> {
+export async function listUploadedParts(userId: string, id: string): Promise<UploadPartsResponse> {
+  const row = await getOwnedAttachmentOr404(userId, id);
+  if (row.status !== 'uploading' || row.uploadId === null) {
+    throw AppError.of(409, 'MEDIA_INVALID_STATE');
+  }
+  return { parts: await getStorage().listParts(row.s3Key, row.uploadId) };
+}
+
+export async function presignPartUpload(
+  userId: string,
+  id: string,
+  partNumber: number,
+): Promise<PartPresignResponse> {
+  const row = await getOwnedAttachmentOr404(userId, id);
+  if (row.status !== 'uploading' || row.uploadId === null) {
+    throw AppError.of(409, 'MEDIA_INVALID_STATE');
+  }
+  if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > totalPartsFor(row.size)) {
+    throw AppError.of(422, 'MEDIA_PART_INVALID');
+  }
+  const url = await getStorage().presignPart(
+    row.s3Key,
+    row.uploadId,
+    partNumber,
+    config.PRESIGN_PUT_TTL_SECONDS,
+  );
+  return { url, expiresIn: config.PRESIGN_PUT_TTL_SECONDS };
+}
+
+export async function completeMultipartUpload(
+  userId: string,
+  id: string,
+  input: UploadCompletePartsInput,
+): Promise<UploadCompleteResponse> {
   const started = Date.now();
   const row = await getOwnedAttachmentOr404(userId, id);
   if (row.status === 'ready') {
     return { id: row.id, status: 'ready', mime: row.mime, size: row.size, ownerType: 'tmp' };
   }
-  if (row.status !== 'uploading') {
+  if (row.status !== 'uploading' || row.uploadId === null) {
     throw AppError.of(409, 'MEDIA_INVALID_STATE');
   }
-
+  const totalParts = totalPartsFor(row.size);
+  const seen = new Set(input.parts.map((p) => p.partNumber));
+  for (let n = 1; n <= totalParts; n += 1) {
+    if (!seen.has(n)) throw AppError.of(422, 'MEDIA_PART_MISSING');
+  }
+  await getStorage().completeMultipart(
+    row.s3Key,
+    row.uploadId,
+    input.parts.map((p) => ({ partNumber: p.partNumber, etag: p.etag })),
+  );
   const head = await getStorage().headObject(row.s3Key);
   if (!head || head.size !== row.size || head.contentType !== row.mime) {
     throw AppError.of(422, 'MEDIA_MISMATCH');
   }
-
   const updated = await getDb()
     .update(attachments)
     .set({ status: 'ready' })

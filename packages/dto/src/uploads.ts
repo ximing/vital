@@ -64,32 +64,6 @@ export type AttachmentOwnerType = z.infer<typeof attachmentOwnerTypeSchema>;
 export const attachmentStatusSchema = z.enum(['uploading', 'ready', 'orphaned']);
 export type AttachmentStatus = z.infer<typeof attachmentStatusSchema>;
 
-/** @deprecated removed in Task 3 */
-export const uploadPresignInputSchema = z
-  .object({
-    mime: z.string().min(3).max(100),
-    size: z.number().int().positive(),
-  })
-  .superRefine((val, ctx) => {
-    if (!(ATTACHMENT_MIME_TYPES as readonly string[]).includes(val.mime)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'MIME_KIND_MISMATCH',
-        path: ['mime'],
-      });
-    }
-  });
-/** @deprecated removed in Task 3 */
-export type UploadPresignInput = z.infer<typeof uploadPresignInputSchema>;
-
-/** @deprecated removed in Task 3 */
-export interface UploadPresignResponse {
-  id: string;
-  method: 'put';
-  url: string;
-  expiresIn: number;
-}
-
 export const uploadCompleteInputSchema = z.object({}).default({});
 export type UploadCompleteInput = z.infer<typeof uploadCompleteInputSchema>;
 
