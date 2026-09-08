@@ -1,7 +1,6 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { badgeText } from '../src/capture-helpers.js';
 import {
-  handleActionClick,
   handleCommand,
   handleContextMenu,
   registerMenus,
@@ -23,10 +22,6 @@ export default defineBackground({
     void registerMenus();
     chrome.runtime.onInstalled.addListener(() => {
       void registerMenus();
-    });
-
-    chrome.action.onClicked.addListener((tab) => {
-      void handleActionClick(tab);
     });
 
     chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -66,9 +61,10 @@ export default defineBackground({
                 alive = false;
               }
             }
-            // Popup closed mid-commit: degrade progress to the toolbar badge; the
-            // commit itself keeps running so no data is lost.
+            // Popup closed mid-commit: degrade progress and errors to the
+            // toolbar badge; the commit itself keeps running so no data is lost.
             if (event.type === 'progress') await setBadge(badgeText('progress', event));
+            if (event.type === 'error') await setBadge(badgeText('fail'));
           };
           try {
             const { commitCapture } = await import('../src/capture.js');

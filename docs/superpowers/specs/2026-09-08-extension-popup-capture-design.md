@@ -73,8 +73,8 @@
 
 `PanelRequest` 调整：
 
-- 新增 `{ type: 'capture-active-tab' }`：background 收集 payload + offscreen 解析，返回结构化结果（`CaptureDraft` 形状 + 解析元信息）。
-- 新增 `{ type: 'commit-capture'; title; note; mode; listId?; payload: CaptureDraft }`：background 执行创建 + 图片转存。弹窗直接持有完整数据，**无草稿中转**。
+- 新增 `{ type: 'capture-active-tab' }`：background 收集 payload + offscreen 解析，返回结构化结果（`CapturePayload` 形状 + 解析元信息）。
+- 新增 `{ type: 'commit-capture'; title; note; mode; listId?; capture: CapturePayload }`：background 执行创建 + 图片转存。弹窗直接持有完整数据，**无草稿中转**。
 - 删除 `load-draft` / `clear-draft` / `commit-draft`；**保留 `exchange-code`**（popup 以标签页打开时的 `?code=` 登录回退路径）。
 - 保留：`session` / `logout` / `recent` / `open-web` / `open-login` / `lists`。
 

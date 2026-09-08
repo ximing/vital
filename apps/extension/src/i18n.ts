@@ -1,6 +1,6 @@
-/** Chinese-first UI copy. Spec §12 / empty states. */
+/** Chinese-first UI copy. Only keys referenced from code live here; the popup
+ * HTML carries the static skeleton text. Spec §12 / empty states. */
 export const copy = {
-  actionTitle: '保存到 Vital',
   menuPage: '保存到 Vital',
   menuLink: '保存链接到 Vital',
   menuSelection: '保存所选文字',
@@ -16,26 +16,5 @@ export const copy = {
   toastLogin: '请先登录 Vital',
   toastRestricted: '无法保存此页',
   toastFailed: '保存失败',
-  openWeb: '打开网页版',
-  openOriginal: '原文',
-  login: '登录',
-  loginWeb: '在网页登录',
-  logout: '退出',
-  brand: 'Vital',
-  recent: '最近保存',
-  popupLoading: '正在解析页面…',
-  popupLoginHint: '在网页登录后，点工具栏即可把当前页收进来。快捷键 Alt+Shift+V。',
-  popupLoginDone: '已登录。关闭此页，点工具栏图标开始收集。',
-  popupModeArticle: '文章',
-  popupModeSelection: '选区',
-  popupModeTask: '待办',
-  popupTitle: '标题',
-  popupNote: '备注',
-  popupList: '清单',
-  popupSave: '保存',
-  popupBack: '返回',
-  popupRetry: '重试',
   popupCannotCapture: '无法收集此页，试试右键菜单或快捷键。',
-  popupDone: '完成',
-  popupLogout: '退出登录',
 } as const;

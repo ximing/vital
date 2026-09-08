@@ -49,6 +49,12 @@ let capture: CapturePayload | null = null;
 let mode: PopupMode = 'article';
 let lists: List[] | null = null;
 let savedKind: 'created' | 'existing' | 'task' = 'created';
+// One-shot: this popup was opened as the `?code=` login-fallback tab. The
+// exchange-code RPC makes the background broadcast `session-changed`, whose
+// handler would re-boot us — but a re-boot has no code and the active tab is
+// this chrome-extension:// page, so capture-active-tab would fail and clobber
+// the logged-in view. Ignore that echo; other session changes still re-boot.
+let handshakeDone = false;
 
 function setView(view: View): void {
   for (const v of VIEWS) show($(`view-${v}`), v === view);
@@ -70,7 +76,8 @@ function renderCapture(): void {
 
 async function loadLists(): Promise<void> {
   const res = await rpc({ type: 'lists' });
-  lists = res.ok && 'lists' in res ? res.lists : [];
+  if (!res.ok || !('lists' in res)) return;
+  lists = res.lists;
   const select = $<HTMLSelectElement>('capture-list');
   select.replaceChildren();
   for (const list of lists) {
@@ -97,6 +104,16 @@ function commit(): void {
   };
   $<HTMLButtonElement>('save').disabled = true;
   const port = chrome.runtime.connect({ name: COMMIT_PORT_NAME });
+  let settled = false;
+  // The port died before done/error arrived (background crashed or was
+  // suspended): surface the failure instead of leaving save disabled forever.
+  port.onDisconnect.addListener(() => {
+    if (settled) return;
+    settled = true;
+    $<HTMLButtonElement>('save').disabled = false;
+    $('error-message').textContent = copy.toastFailed;
+    setView('error');
+  });
   port.onMessage.addListener((raw: unknown) => {
     if (typeof raw !== 'object' || raw === null) return;
     const ev = raw as CommitPortEvent;
@@ -115,11 +132,13 @@ function commit(): void {
       return;
     }
     if (ev.type === 'done') {
+      settled = true;
       $('saved-title').textContent = savedLabel(savedKind, ev.failed);
       show($('saved-progress'), false);
       return;
     }
     if (ev.type === 'error') {
+      settled = true;
       $<HTMLButtonElement>('save').disabled = false;
       $('error-message').textContent = ev.message;
       setView('error');
@@ -156,6 +175,9 @@ async function boot(): Promise<void> {
   const code = params.get('code');
   if (code !== null && code.length >= 20) {
     // Opened as a tab by the web login fallback: finish the handshake, then stop.
+    // Arm the guard before awaiting — the background broadcasts session-changed
+    // before this RPC resolves, so the echo would beat a post-await assignment.
+    handshakeDone = true;
     history.replaceState({}, '', location.pathname);
     const res = await rpc({ type: 'exchange-code', code });
     setView(res.ok ? 'login-done' : 'login');
@@ -200,6 +222,12 @@ $('logout').addEventListener('click', () => {
   void rpc({ type: 'logout' }).then(() => setView('login'));
 });
 $('error-retry').addEventListener('click', () => {
+  // No capture in hand (e.g. capture-active-tab failed on a restricted page):
+  // re-boot instead of showing an empty capture skeleton.
+  if (capture === null) {
+    void boot();
+    return;
+  }
   $<HTMLButtonElement>('save').disabled = false;
   setView('capture');
 });
@@ -211,6 +239,7 @@ chrome.runtime.onMessage.addListener((message) => {
     'type' in message &&
     message.type === 'session-changed'
   ) {
+    if (handshakeDone) return;
     void boot();
   }
 });
