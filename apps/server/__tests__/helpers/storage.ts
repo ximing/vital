@@ -25,6 +25,7 @@ export function installMockStorage(): MockStorage {
     presignPart: vi
       .fn<UnifiedStorageAdapter['presignPart']>()
       .mockResolvedValue('https://fake.local/presigned-part'),
+    listParts: vi.fn<UnifiedStorageAdapter['listParts']>().mockResolvedValue([]),
     completeMultipart: vi
       .fn<UnifiedStorageAdapter['completeMultipart']>()
       .mockResolvedValue(undefined),

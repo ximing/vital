@@ -6,12 +6,15 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListPartsCommand,
+  type ListPartsCommandOutput,
   PutObjectCommand,
   S3Client,
   type S3ClientConfig,
   UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { UploadedPart } from '@vital/dto';
 import { logger } from '../utils/logger.js';
 import {
   BaseUnifiedStorageAdapter,
@@ -226,6 +229,30 @@ export class S3UnifiedStorageAdapter extends BaseUnifiedStorageAdapter {
       }),
       { expiresIn },
     );
+  }
+
+  async listParts(key: string, uploadId: string): Promise<UploadedPart[]> {
+    const parts: UploadedPart[] = [];
+    let marker: string | undefined = undefined;
+    // ListParts paginates at 1000 entries per call.
+    for (;;) {
+      const res: ListPartsCommandOutput = await this.client.send(
+        new ListPartsCommand({
+          Bucket: this.bucket,
+          Key: this.full(key),
+          UploadId: uploadId,
+          PartNumberMarker: marker,
+        }),
+      );
+      for (const p of res.Parts ?? []) {
+        if (p.PartNumber === undefined || p.Size === undefined) continue;
+        parts.push({ partNumber: p.PartNumber, size: p.Size, etag: p.ETag ?? '' });
+      }
+      if (res.IsTruncated !== true || res.NextPartNumberMarker === undefined) break;
+      marker = res.NextPartNumberMarker;
+    }
+    parts.sort((a, b) => a.partNumber - b.partNumber);
+    return parts;
   }
 
   async completeMultipart(key: string, uploadId: string, parts: CompletedPart[]): Promise<void> {

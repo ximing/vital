@@ -1,3 +1,4 @@
+import type { UploadedPart } from '@vital/dto';
 import mime from 'mime-types';
 
 /**
@@ -48,6 +49,7 @@ export interface UnifiedStorageAdapter {
     partNumber: number,
     expiresIn: number,
   ): Promise<string>;
+  listParts(key: string, uploadId: string): Promise<UploadedPart[]>;
   completeMultipart(key: string, uploadId: string, parts: CompletedPart[]): Promise<void>;
   abortMultipart(key: string, uploadId: string): Promise<void>;
   getObject(key: string, metadata: StorageMetadata, maxBytes: number): Promise<Buffer>;
@@ -73,6 +75,7 @@ export abstract class BaseUnifiedStorageAdapter implements UnifiedStorageAdapter
     partNumber: number,
     expiresIn: number,
   ): Promise<string>;
+  abstract listParts(key: string, uploadId: string): Promise<UploadedPart[]>;
   abstract completeMultipart(key: string, uploadId: string, parts: CompletedPart[]): Promise<void>;
   abstract abortMultipart(key: string, uploadId: string): Promise<void>;
   abstract getObject(key: string, metadata: StorageMetadata, maxBytes: number): Promise<Buffer>;
