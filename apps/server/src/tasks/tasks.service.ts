@@ -3,6 +3,7 @@ import {
   type CalendarQuery,
   type CalendarResponse,
   type CompleteTaskResponse,
+  type CreateTaskFromTextInput,
   type CreateTaskInput,
   type ListTasksQuery,
   type PatchTaskInput,
@@ -45,9 +46,11 @@ import {
   type TaskRow,
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
-import { getInboxList, getOwnedListOr404, SORT_GAP } from '../lists/lists.service.js';
+import { getInboxList, getOwnedListOr404, listLists, SORT_GAP } from '../lists/lists.service.js';
+import { llmCredentialsOf } from '../llm/client.js';
+import { buildCreateInputFromIntent, interpretTaskText, type ExtractedTask } from '../llm/parse-task.js';
 import { syncTaskNotifications } from '../notifications/outbox.js';
-import { assertOwnedTagIds } from '../tags/tags.service.js';
+import { assertOwnedTagIds, listTags } from '../tags/tags.service.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import {
   allDayLocalMidnight,
@@ -419,6 +422,41 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
   const [created] = await getDb().select().from(tasks).where(eq(tasks.id, row.id)).limit(1);
   if (!created) throw AppError.of(500, 'INTERNAL_ERROR');
   return dtoOf(created);
+}
+
+export async function createTaskFromText(
+  userId: string,
+  input: CreateTaskFromTextInput,
+): Promise<Task> {
+  const user = await getUserEntity(userId);
+  const inbox = await getInboxList(userId);
+  if (input.listId !== undefined) await getOwnedListOr404(userId, input.listId);
+  const creds = llmCredentialsOf(user);
+  const lists = await listLists(userId);
+  const tags = await listTags(userId);
+  const zone = input.timezone ?? user.timezone;
+  const now = new Date();
+  let extracted: ExtractedTask | null = null;
+  if (creds) {
+    extracted = await interpretTaskText({
+      text: input.text,
+      apiBase: creds.apiBase,
+      apiKey: creds.apiKey,
+      model: creds.model,
+      timezone: zone,
+      now,
+      lists: lists.items,
+      tags: tags.items,
+      ...(input.smartListId !== undefined ? { smartListId: input.smartListId } : {}),
+    });
+  }
+  const payload = buildCreateInputFromIntent(input, extracted, {
+    lists: lists.items,
+    tags: tags.items,
+    inboxId: inbox.id,
+    now,
+  });
+  return createTask(userId, payload);
 }
 
 export async function patchTask(userId: string, id: string, input: PatchTaskInput): Promise<Task> {

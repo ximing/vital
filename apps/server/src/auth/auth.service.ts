@@ -23,6 +23,8 @@ import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
 import { extensionAuthCodes, lists, users, type User } from '../db/schema.js';
 import { AppError } from '../errors.js';
+import { assertLlmApiBase, llmPublicOf } from '../llm/client.js';
+import { encryptSecret } from '../llm/crypto.js';
 import { inboxListValues } from '../lists/lists.service.js';
 import { resolveAccessUrl } from '../uploads/uploads.service.js';
 import { logger } from '../utils/logger.js';
@@ -78,6 +80,7 @@ export async function toProfile(user: User): Promise<UserProfile> {
     convertArchiveOnComplete: user.convertArchiveOnComplete,
     notifications: notificationsOf(user),
     onboarding: onboardingOf(user.onboarding),
+    llm: llmPublicOf(user),
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
@@ -159,6 +162,9 @@ export async function registerUser(
     quietHoursEnd: null,
     allDayNotifyTime: '09:00',
     onboarding: {},
+    llmApiBase: null,
+    llmApiKey: null,
+    llmModel: null,
     passwordChangedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -243,6 +249,16 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
     if (input.notifications.quietHoursEnd !== undefined) patch.quietHoursEnd = nextEnd;
     if (input.notifications.allDayNotifyTime !== undefined) {
       patch.allDayNotifyTime = input.notifications.allDayNotifyTime;
+    }
+  }
+  if (input.llm !== undefined) {
+    if (input.llm.apiBase !== undefined) {
+      if (input.llm.apiBase !== null) assertLlmApiBase(input.llm.apiBase);
+      patch.llmApiBase = input.llm.apiBase;
+    }
+    if (input.llm.model !== undefined) patch.llmModel = input.llm.model;
+    if (input.llm.apiKey !== undefined) {
+      patch.llmApiKey = input.llm.apiKey === null ? null : encryptSecret(input.llm.apiKey);
     }
   }
   await getDb().update(users).set(patch).where(eq(users.id, userId));

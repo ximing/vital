@@ -78,6 +78,13 @@
       "when": 1789002000000,
       "tag": "0010_inbox_source_wechat",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789088400000,
+      "tag": "0011_user_llm",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 import {
   calendarQuerySchema,
+  createTaskFromTextInputSchema,
   createTaskInputSchema,
   listTasksQuerySchema,
   patchTaskInputSchema,
@@ -11,10 +12,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
+import { limitLlm } from '../plugins/rate-limit.js';
 import {
   calendar,
   completeTask,
   createTask,
+  createTaskFromText,
   deleteTask,
   getTask,
   listTasks,
@@ -51,6 +54,13 @@ export function registerTaskRoutes(app: FastifyInstance): void {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     return listTasks(user.id, listTasksQuerySchema.parse(req.query));
+  });
+
+  app.post('/api/v1/tasks/from-text', { preHandler: [requireAuth, limitLlm] }, async (req, reply) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const created = await createTaskFromText(user.id, createTaskFromTextInputSchema.parse(req.body));
+    return reply.code(201).send(created);
   });
 
   app.post('/api/v1/tasks', { preHandler: [requireAuth] }, async (req, reply) => {
