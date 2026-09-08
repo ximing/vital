@@ -2,6 +2,7 @@ import {
   ERROR_MESSAGES,
   MAX_UPLOAD_BYTES,
   isUploadableMime,
+  type PartPresignResponse,
   type UploadCompleteResponse,
   type UploadInitResponse,
 } from '@vital/dto';
@@ -69,6 +70,8 @@ export async function uploadImpl(
   const etags = new Map<number, string>();
   let loaded = 0;
   for (const p of init.parts) {
+    // An empty etag means the part never finished server-side: re-upload it.
+    if (p.etag === '') continue;
     etags.set(p.partNumber, p.etag);
     loaded += p.size; // resumed base so progress does not restart from 0
   }
@@ -78,7 +81,7 @@ export async function uploadImpl(
     if (etags.has(n)) continue;
     const start = (n - 1) * init.partSize;
     const end = Math.min(n * init.partSize, input.size);
-    const presigned = await http.request<{ url: string }>(
+    const presigned = await http.request<PartPresignResponse>(
       `/api/v1/uploads/${init.id}/parts/${n}`,
       { method: 'POST', body: {} },
     );

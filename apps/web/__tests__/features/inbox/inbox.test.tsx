@@ -38,7 +38,6 @@ vi.mock('@/api/client', async (importOriginal) => {
       patchInbox: vi.fn(),
       convertInbox: vi.fn(),
       deleteInbox: vi.fn(),
-      fetchUploadBlob: vi.fn(),
       completeTask: vi.fn(),
       uncompleteTask: vi.fn(),
       updateOnboarding: vi.fn(),
@@ -177,7 +176,6 @@ describe('inbox workspace', () => {
     vi.mocked(client.patchInbox).mockImplementation(async (id, _input) =>
       makeItem({ id, title: 'x', readAt: '2026-09-06T00:01:00.000Z' }),
     );
-    vi.mocked(client.fetchUploadBlob).mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
     vi.mocked(client.updateOnboarding).mockResolvedValue({
       ...mockUser,
       onboarding: { capturedInbox: true },
@@ -308,7 +306,6 @@ describe('inbox reader', () => {
   beforeEach(() => {
     resetInboxUi();
     setAuthForTest(mockUser);
-    vi.mocked(client.fetchUploadBlob).mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
     vi.mocked(client.patchInbox).mockImplementation(async (id) =>
       makeItem({ id, title: 'Example Domain', readAt: '2026-09-06T00:01:00.000Z' }),
     );

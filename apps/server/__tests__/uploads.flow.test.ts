@@ -284,6 +284,115 @@ describe('uploads (multipart)', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('complete is idempotent: an already-ready attachment returns ready without re-assembling', async () => {
+    const alice = await register('alice');
+    const { id, totalParts } = (await initUploadFor(alice)).json();
+    storage.headObject.mockResolvedValueOnce({
+      size: SIZE_3P,
+      contentType: 'video/mp4',
+      lastModified: new Date(),
+    });
+    const parts = Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` }));
+    const first = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: { parts },
+    });
+    expect(first.statusCode).toBe(200);
+    const again = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: { parts },
+    });
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ id, status: 'ready', mime: 'video/mp4' });
+    expect(storage.completeMultipart).toHaveBeenCalledTimes(1);
+  });
+
+  it('complete rejects duplicate or out-of-range part numbers with 422 MEDIA_PART_INVALID', async () => {
+    const alice = await register('alice');
+    const { id, totalParts } = (await initUploadFor(alice)).json();
+    const full = Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` }));
+
+    const dup = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: { parts: [...full, { partNumber: 1, etag: '"dup"' }] },
+    });
+    expect(dup.statusCode).toBe(422);
+    expect(dup.json().error.code).toBe('MEDIA_PART_INVALID');
+
+    const outOfRange = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: { parts: [...full, { partNumber: totalParts + 1, etag: '"x"' }] },
+    });
+    expect(outOfRange.statusCode).toBe(422);
+    expect(outOfRange.json().error.code).toBe('MEDIA_PART_INVALID');
+    expect(storage.completeMultipart).not.toHaveBeenCalled();
+  });
+
+  it('presign part after abort is 409 MEDIA_INVALID_STATE', async () => {
+    const alice = await register('alice');
+    const { id } = (await initUploadFor(alice)).json();
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/abort`,
+      token: alice.token,
+      payload: {},
+    });
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/parts/1`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('MEDIA_INVALID_STATE');
+  });
+
+  it('resumeId with mismatched mime is 409 MEDIA_INVALID_STATE', async () => {
+    const alice = await register('alice');
+    const first = await initUploadFor(alice);
+    const res = await initUploadFor(alice, { mime: 'video/webm', resumeId: first.json().id });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe('MEDIA_INVALID_STATE');
+  });
+
+  it('avatar PATCH after init+complete renders a 6h signed url', async () => {
+    const alice = await register('alice');
+    const { id, totalParts } = (await initUploadFor(alice, { mime: 'image/png', size: PART })).json();
+    storage.headObject.mockResolvedValueOnce({
+      size: PART,
+      contentType: 'image/png',
+      lastModified: new Date(),
+    });
+    const complete = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
+    });
+    expect(complete.statusCode).toBe(200);
+
+    const patch = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { avatarAttachmentId: id },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect(patch.json().avatarAttachmentId).toBe(id);
+    expect(patch.json().avatarUrl).toBe('https://fake.local/presigned-get');
+    expect(storage.generateAccessUrl).toHaveBeenCalledWith(expect.any(String), expect.anything(), 21_600);
+  });
+
   it('old presign and 302 GET routes are gone', async () => {
     const alice = await register('alice');
     const presign = await injectJson(app, {

@@ -3,15 +3,7 @@ import { useEffect, useState } from 'react';
 import { t } from '@/copy';
 import { type ReaderSize } from './model';
 import { prepareReaderHtml, purifyInboxHtml, readerSourceHtml } from './purify';
-import { ReaderFileAsset } from './ReaderFileAsset';
-
-function isFileAsset(a: InboxAsset) {
-  return (
-    a.mime === 'application/pdf' ||
-    a.mime.startsWith('video/') ||
-    a.mime.startsWith('audio/')
-  );
-}
+import { isFileAsset, ReaderFileAsset } from './ReaderFileAsset';
 
 function ReaderArticleBody({
   html,

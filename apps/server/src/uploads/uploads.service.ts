@@ -124,7 +124,12 @@ export async function completeMultipartUpload(
     throw AppError.of(409, 'MEDIA_INVALID_STATE');
   }
   const totalParts = totalPartsFor(row.size);
+  // Harden the assembly list before it reaches S3: every part number must be
+  // in range and unique (a duplicate would silently pick the last etag).
   const seen = new Set(input.parts.map((p) => p.partNumber));
+  if (seen.size !== input.parts.length || input.parts.some((p) => p.partNumber > totalParts)) {
+    throw AppError.of(422, 'MEDIA_PART_INVALID');
+  }
   for (let n = 1; n <= totalParts; n += 1) {
     if (!seen.has(n)) throw AppError.of(422, 'MEDIA_PART_MISSING');
   }

@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-/** User attach max 10MB. Shared by server and clients. */
-export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-
 /** Single-file upload cap (5GB). */
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024;
 /** S3 multipart: every part except the last must be at least 5MB. */
@@ -63,9 +60,6 @@ export type AttachmentOwnerType = z.infer<typeof attachmentOwnerTypeSchema>;
 
 export const attachmentStatusSchema = z.enum(['uploading', 'ready', 'orphaned']);
 export type AttachmentStatus = z.infer<typeof attachmentStatusSchema>;
-
-export const uploadCompleteInputSchema = z.object({}).default({});
-export type UploadCompleteInput = z.infer<typeof uploadCompleteInputSchema>;
 
 export interface UploadCompleteResponse {
   id: string;

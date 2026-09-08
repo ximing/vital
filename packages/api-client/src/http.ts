@@ -13,7 +13,7 @@ export interface RequestOptions {
   /** true = 401 does not trigger refresh (auth endpoints; prevents loops). */
   skipAuthRefresh?: boolean;
   signal?: AbortSignal;
-  /** Override; `requestBlob` forces `omit` so a followed S3 302 never gets cookies. */
+  /** Override the default credentials mode (cookie: include, bearer: omit). */
   credentials?: RequestCredentials;
   headers?: Record<string, string>;
 }
@@ -172,29 +172,6 @@ export class Http {
   ): Promise<{ status: number; data: unknown }> {
     const res = await this.send(path, options);
     return { status: res.status, data: await parseBody(res) };
-  }
-
-  /**
-   * GET /uploads/:id → 302 S3. Always `credentials: 'omit'` (default follow).
-   * API hop is Bearer only; the cross-origin S3 hop then has no cookies and
-   * browsers strip Authorization. Do not use `redirect: 'manual'` (opaque).
-   */
-  async requestBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
-    const blobOpts: RequestOptions = { ...options, credentials: 'omit' };
-    const first = await this.doFetch(path, blobOpts);
-    if (first.status === 401 && (await this.shouldAttemptRefresh(options))) {
-      const refreshed = await this.refresh();
-      const second = await this.doFetch(path, blobOpts, refreshed.tokens.accessToken);
-      if (!second.ok) {
-        if (second.status === 401) {
-          await settle(this.tokenStore.clear());
-        }
-        throw await toApiError(second);
-      }
-      return second.blob();
-    }
-    if (!first.ok) throw await toApiError(first);
-    return first.blob();
   }
 
   /** Single-flight: concurrent 401s share one refresh. Failure clears the store. */

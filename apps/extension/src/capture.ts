@@ -1,7 +1,7 @@
 import {
   IMAGE_MIME_TYPES,
-  MAX_IMAGE_BYTES,
   MAX_INBOX_ASSETS,
+  MAX_UPLOAD_BYTES,
   partSizeFor,
   totalPartsFor,
   type CreateInboxInput,
@@ -162,7 +162,7 @@ async function fetchOneFromSw(src: string): Promise<FetchedImage | null> {
     const res = await fetch(src, { credentials: 'omit' });
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
-    if (buf.byteLength < MIN_IMAGE_BYTES || buf.byteLength > MAX_IMAGE_BYTES) return null;
+    if (buf.byteLength < MIN_IMAGE_BYTES || buf.byteLength > MAX_UPLOAD_BYTES) return null;
     const header = res.headers.get('content-type') ?? '';
     const mime = normalizeMime(header, buf);
     return {
@@ -181,7 +181,7 @@ async function fetchFromPage(tabId: number, urls: string[]): Promise<FetchedImag
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: fetchImagesInPage,
-      args: [urls, MAX_IMAGE_BYTES, MIN_IMAGE_BYTES],
+      args: [urls, MAX_UPLOAD_BYTES, MIN_IMAGE_BYTES],
     });
     const rows = results[0]?.result ?? [];
     const out: FetchedImage[] = [];
@@ -229,7 +229,7 @@ async function prepareUpload(image: FetchedImage): Promise<FetchedImage | null> 
     }
   }
   if (!(IMAGE_MIME_TYPES as readonly string[]).includes(mime)) return null;
-  if (blob.size < MIN_IMAGE_BYTES || blob.size > MAX_IMAGE_BYTES) return null;
+  if (blob.size < MIN_IMAGE_BYTES || blob.size > MAX_UPLOAD_BYTES) return null;
   return { src: image.src, mime, blob };
 }
 

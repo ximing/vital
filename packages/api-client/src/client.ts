@@ -58,8 +58,6 @@ import type {
   UploadBindInput,
   UploadBindResponse,
   UploadCompleteResponse,
-  UploadInitInput,
-  UploadInitResponse,
   UploadUrlResponse,
   UserProfile,
 } from '@vital/dto';
@@ -88,10 +86,8 @@ export interface VitalClient {
   testNotificationChannel(id: string): Promise<void>;
   updateOnboarding(input: UpdateOnboardingInput): Promise<UserProfile>;
   changePassword(input: ChangePasswordInput): Promise<void>;
-  initUpload(input: UploadInitInput): Promise<UploadInitResponse>;
   abortUpload(id: string): Promise<void>;
   discardUpload(id: string): Promise<void>;
-  fetchUploadBlob(id: string): Promise<Blob>;
   upload(input: UploadInput): Promise<UploadCompleteResponse>;
   bindUpload(id: string, input: UploadBindInput): Promise<UploadBindResponse>;
   getUploadUrl(id: string): Promise<UploadUrlResponse>;
@@ -238,11 +234,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
         // Server already revoked every session.
       }
     },
-    initUpload: (input) =>
-      http.request('/api/v1/uploads', { method: 'POST', body: input }),
     abortUpload: (id) => http.request(`/api/v1/uploads/${id}/abort`, { method: 'POST' }),
     discardUpload: (id) => http.request(`/api/v1/uploads/${id}`, { method: 'DELETE' }),
-    fetchUploadBlob: (id) => http.requestBlob(`/api/v1/uploads/${id}`),
     upload: (input) => uploadImpl(http, options, input),
     bindUpload: (id, input) =>
       http.request(`/api/v1/uploads/${id}/bind`, { method: 'POST', body: input }),

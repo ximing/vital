@@ -157,7 +157,6 @@ describe('createVitalClient auth + upload methods', () => {
     await client.listNotificationChannels();
     await client.createNotificationChannel({ type: 'meow', config: { nickname: 'Ada' } });
     await client.updateOnboarding({ createdTask: true });
-    await client.initUpload({ mime: 'image/jpeg', size: 12 });
     await client.abortUpload('att1');
     await client.discardUpload('att1');
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
@@ -166,12 +165,10 @@ describe('createVitalClient auth + upload methods', () => {
       'GET http://x/api/v1/notification-channels',
       'POST http://x/api/v1/notification-channels',
       'PATCH http://x/api/v1/auth/onboarding',
-      'POST http://x/api/v1/uploads',
       'POST http://x/api/v1/uploads/att1/abort',
       'DELETE http://x/api/v1/uploads/att1',
     ]);
     expect(calls[3]?.body).toEqual({ type: 'meow', config: { nickname: 'Ada' } });
-    expect(calls[5]?.body).toEqual({ mime: 'image/jpeg', size: 12 });
   });
 
   it('lists/tasks/tags/search/bind methods hit the spec routes', async () => {

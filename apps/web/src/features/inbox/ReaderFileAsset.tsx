@@ -1,11 +1,20 @@
 import type { InboxAsset } from '@vital/dto';
 
+/** Non-image assets the reader renders as standalone widgets (PDF / video / audio). */
+export function isFileAsset(asset: InboxAsset): boolean {
+  return (
+    asset.mime === 'application/pdf' ||
+    asset.mime.startsWith('video/') ||
+    asset.mime.startsWith('audio/')
+  );
+}
+
 /**
  * Inline-renders non-image file assets (PDF / video / audio) from a signed URL.
  * Image assets are handled by the reader article body and are ignored here.
  */
 export function ReaderFileAsset({ asset }: { asset: InboxAsset }) {
-  if (!asset.url) return null;
+  if (!isFileAsset(asset) || !asset.url) return null;
 
   if (asset.mime === 'application/pdf') {
     return (

@@ -98,6 +98,46 @@ describe('upload (multipart)', () => {
     expect(progress[0]?.[0]).toBe(PART);
   });
 
+  it('resume re-uploads parts whose server etag is empty', async () => {
+    const blob = new Blob([new Uint8Array(PART + 100)]);
+    const putPartNumbers: number[] = [];
+    const progress: Array<[number, number]> = [];
+    const client = makeClient((url, init) => {
+      const u = urlOf(url);
+      if (u.startsWith('https://s3')) {
+        putPartNumbers.push(1);
+        return Promise.resolve(s3Put('"e1-new"'));
+      }
+      if (u === '/api/v1/uploads') {
+        return respond(201, {
+          id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2,
+          // part 1 listed but etag-less (aborted mid-PUT): must be re-uploaded
+          parts: [{ partNumber: 1, size: PART, etag: '' }, { partNumber: 2, size: 100, etag: '"e2"' }],
+        });
+      }
+      if (u === '/api/v1/uploads/att1/parts/1') {
+        return respond(200, { url: 'https://s3/1', expiresIn: 900 });
+      }
+      if (u === '/api/v1/uploads/att1/complete') {
+        const body = bodyOf(init) as { parts: Array<{ partNumber: number; etag: string }> };
+        expect(body.parts).toEqual([
+          { partNumber: 1, etag: '"e1-new"' }, // fresh PUT etag, not the empty one
+          { partNumber: 2, etag: '"e2"' },
+        ]);
+        return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
+      }
+      return respond(200, {});
+    });
+    const res = await client.upload({
+      file: blob, mime: 'application/pdf', size: blob.size, resumeId: 'att1',
+      onProgress: (loaded, total) => progress.push([loaded, total]),
+    });
+    expect(res.status).toBe('ready');
+    expect(putPartNumbers).toEqual([1]); // only the etag-less part
+    // progress base counts only the part with a real etag
+    expect(progress[0]?.[0]).toBe(100);
+  });
+
   it('resume 409 falls back to a fresh init without resumeId', async () => {
     const blob = new Blob([new Uint8Array(10)]);
     let initCalls = 0;
@@ -174,5 +214,12 @@ describe('upload (multipart)', () => {
     await expect(
       client.upload({ file: new Blob(), mime: 'video/mp4', size: 5 * 1024 ** 3 + 1 }),
     ).rejects.toMatchObject({ status: 413 });
+  });
+
+  it('non-whitelisted mime fails client-side with 422 before any request', async () => {
+    const client = makeClient(() => respond(200, {}));
+    await expect(
+      client.upload({ file: new Blob(), mime: 'image/svg+xml', size: 10 }),
+    ).rejects.toMatchObject({ status: 422 });
   });
 });
