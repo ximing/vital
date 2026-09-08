@@ -60,6 +60,7 @@ import type {
   UploadCompleteResponse,
   UploadInitInput,
   UploadInitResponse,
+  UploadUrlResponse,
   UserProfile,
 } from '@vital/dto';
 import { Http, isAuthResponse, tokensForStore } from './http.js';
@@ -93,6 +94,7 @@ export interface VitalClient {
   fetchUploadBlob(id: string): Promise<Blob>;
   upload(input: UploadInput): Promise<UploadCompleteResponse>;
   bindUpload(id: string, input: UploadBindInput): Promise<UploadBindResponse>;
+  getUploadUrl(id: string): Promise<UploadUrlResponse>;
   listLists(): Promise<ListCollection>;
   createList(input: CreateListInput): Promise<List>;
   reorderLists(input: ReorderListsInput): Promise<ListCollection>;
@@ -244,6 +246,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     upload: (input) => uploadImpl(http, options, input),
     bindUpload: (id, input) =>
       http.request(`/api/v1/uploads/${id}/bind`, { method: 'POST', body: input }),
+    getUploadUrl: (id) => http.request(`/api/v1/uploads/${id}/url`),
     listLists: () => http.request('/api/v1/lists'),
     createList: (input) => http.request('/api/v1/lists', { method: 'POST', body: input }),
     reorderLists: (input) => http.request('/api/v1/lists/reorder', { method: 'PUT', body: input }),

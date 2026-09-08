@@ -13,6 +13,7 @@ import {
   type UploadInitInput,
   type UploadInitResponse,
   type UploadPartsResponse,
+  type UploadUrlResponse,
 } from '@vital/dto';
 import { and, eq } from 'drizzle-orm';
 import { config } from '../config.js';
@@ -192,6 +193,12 @@ export async function resolveAccessUrl(userId: string, id: string, expiresIn?: n
     row.storageMeta,
     expiresIn ?? config.PRESIGN_GET_TTL_SECONDS,
   );
+}
+
+/** Signed GET url for a ready attachment — the 302 replacement clients render from. */
+export async function getUploadUrl(userId: string, id: string): Promise<UploadUrlResponse> {
+  const url = await resolveAccessUrl(userId, id);
+  return { url, expiresIn: config.PRESIGN_GET_TTL_SECONDS };
 }
 
 export async function bindUpload(

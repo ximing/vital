@@ -12,6 +12,7 @@ import {
   bindUpload,
   completeMultipartUpload,
   discardUpload,
+  getUploadUrl,
   initUpload,
   listUploadedParts,
   presignPartUpload,
@@ -66,6 +67,13 @@ export function registerUploadRoutes(app: FastifyInstance): void {
     const { id } = idParams.parse(req.params);
     await discardUpload(user.id, id);
     return reply.code(204).send();
+  });
+
+  app.get('/api/v1/uploads/:id/url', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    return getUploadUrl(user.id, id);
   });
 
   app.post('/api/v1/uploads/:id/bind', { preHandler: [requireAuth] }, async (req) => {

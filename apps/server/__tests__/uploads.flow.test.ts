@@ -248,6 +248,42 @@ describe('uploads (multipart)', () => {
     expect(row?.status).toBe('orphaned');
   });
 
+  it('GET /uploads/:id/url returns a signed url for a ready attachment', async () => {
+    const alice = await register('alice');
+    const { id, totalParts } = (await initUploadFor(alice)).json();
+    storage.headObject.mockResolvedValueOnce({
+      size: SIZE_3P,
+      contentType: 'video/mp4',
+      lastModified: new Date(),
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
+    });
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/uploads/${id}/url`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ url: 'https://fake.local/presigned-get', expiresIn: expect.any(Number) });
+  });
+
+  it('GET /uploads/:id/url for a non-ready attachment is 404', async () => {
+    const alice = await register('alice');
+    const { id } = (await initUploadFor(alice)).json();
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/uploads/${id}/url`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
   it('old presign and 302 GET routes are gone', async () => {
     const alice = await register('alice');
     const presign = await injectJson(app, {

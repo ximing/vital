@@ -1,3 +1,4 @@
+import type { NodeView, NodeViewRendererProps } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
@@ -34,10 +35,62 @@ import { withStubEmbed, type SlashHit } from './model';
 import { insertChip, slashFromEditor } from './slash';
 import { SlashMenu } from './SlashMenu';
 import { reportUi, useReportUi } from './report-ui.service';
+import { fetchUploadUrl, uploadIdOf, useUploadUrls } from './upload-url';
 
 function asPm(md: string): PmNode {
   return parseMarkdownToPmJSON(md);
 }
+
+/**
+ * Live id → signed-url map shared with the pure-DOM image node views:
+ * node views read `urls` on (re)build and re-sync whenever the map is replaced.
+ */
+const imageNodeUrlState: {
+  urls: Record<string, string>;
+  listeners: Set<() => void>;
+} = { urls: {}, listeners: new Set() };
+
+const UploadedImage = Image.extend({
+  addNodeView() {
+    return ({ node }: NodeViewRendererProps): NodeView => {
+      let current = node;
+      const img = document.createElement('img');
+      const sync = (): void => {
+        const src = typeof current.attrs.src === 'string' ? current.attrs.src : '';
+        const id = uploadIdOf(src);
+        img.src = (id !== null ? imageNodeUrlState.urls[id] : undefined) ?? src;
+        if (typeof current.attrs.alt === 'string' && current.attrs.alt !== '') {
+          img.alt = current.attrs.alt;
+        } else {
+          img.removeAttribute('alt');
+        }
+        if (typeof current.attrs.title === 'string' && current.attrs.title !== '') {
+          img.title = current.attrs.title;
+        } else {
+          img.removeAttribute('title');
+        }
+      };
+      const onUrls = sync;
+      sync();
+      imageNodeUrlState.listeners.add(onUrls);
+      return {
+        dom: img,
+        update: (updated) => {
+          if (updated.type !== current.type) return false;
+          current = updated;
+          sync();
+          return true;
+        },
+        destroy: () => {
+          imageNodeUrlState.listeners.delete(onUrls);
+        },
+      };
+    };
+  },
+}).configure({
+  inline: true,
+  allowBase64: false,
+});
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif';
 const FILE_ACCEPT = `${IMAGE_ACCEPT},application/pdf,text/plain,text/markdown,.pdf,.txt,.md`;
@@ -67,8 +120,15 @@ export function WysiwygEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [liveMd, setLiveMd] = useState(bodyMd);
   const [, bump] = useState(0);
   const ingestRef = useRef<(files: FileList | File[]) => Promise<void>>(async () => undefined);
+  const uploadUrls = useUploadUrls(liveMd);
+
+  useEffect(() => {
+    imageNodeUrlState.urls = uploadUrls;
+    for (const sync of imageNodeUrlState.listeners) sync();
+  }, [uploadUrls]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -86,6 +146,11 @@ export function WysiwygEditor({
       for (const file of list) {
         const uploaded = await uploadReportFile(file, reportId);
         if (isImageMime(uploaded.mime)) {
+          const id = uploadIdOf(uploaded.src);
+          if (id !== null) {
+            // Warm the cache so the freshly inserted image renders signed immediately.
+            await fetchUploadUrl(id).catch(() => undefined);
+          }
           instance.chain().focus().setImage({ src: uploaded.src, alt: uploaded.name }).run();
         } else {
           instance
@@ -122,10 +187,7 @@ export function WysiwygEditor({
         openOnClick: false,
         autolink: true,
       }),
-      Image.configure({
-        inline: true,
-        allowBase64: false,
-      }),
+      UploadedImage,
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
@@ -174,6 +236,7 @@ export function WysiwygEditor({
     },
     onUpdate: ({ editor: instance }) => {
       const md = serializePmJSONToMarkdown(instance.getJSON());
+      setLiveMd(md);
       if (hydrated.current) onChangeRef.current(md);
       setSlash(slashFromEditor(instance));
     },
@@ -209,6 +272,23 @@ export function WysiwygEditor({
   function onClick(event: MouseEvent<HTMLDivElement>): void {
     const target = event.target;
     if (!(target instanceof Element)) return;
+    const anchor = target.closest('a');
+    if (anchor) {
+      const href = anchor.getAttribute('href');
+      const id = href !== null ? uploadIdOf(href) : null;
+      if (id !== null) {
+        // Upload refs persist as /api/v1/uploads/<id>; open the signed url instead.
+        const resolved = uploadUrls[id];
+        if (resolved !== undefined) {
+          window.open(resolved, '_blank', 'noopener');
+        } else {
+          void fetchUploadUrl(id)
+            .then((url) => window.open(url, '_blank', 'noopener'))
+            .catch(() => undefined);
+        }
+        return;
+      }
+    }
     const toggle = target.closest('[data-chip-toggle]');
     if (!toggle) return;
     const chip = toggle.closest('[data-kind="task"][data-id]');
