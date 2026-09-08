@@ -102,6 +102,22 @@ describe('updateMeInputSchema', () => {
     expect(ok.weekStartsOn).toBe(0);
     expect(() => updateMeInputSchema.parse({ timezone: 'Not/AZone' })).toThrow();
   });
+
+  it('accepts OpenAI-compatible LLM settings; empty patch still rejected', () => {
+    const ok = updateMeInputSchema.parse({
+      llm: {
+        apiBase: 'https://open.bigmodel.cn/api/paas/v4',
+        apiKey: 'sk-test',
+        model: 'glm-4-flash',
+      },
+    });
+    expect(ok.llm?.apiBase).toBe('https://open.bigmodel.cn/api/paas/v4');
+    expect(ok.llm?.model).toBe('glm-4-flash');
+    expect(() => updateMeInputSchema.parse({ llm: {} })).toThrow();
+    expect(() =>
+      updateMeInputSchema.parse({ llm: { apiBase: 'not-a-url' } }),
+    ).toThrow();
+  });
 });
 
 describe('updateOnboardingInputSchema', () => {

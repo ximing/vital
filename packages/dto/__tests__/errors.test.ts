@@ -23,5 +23,9 @@ describe('ERROR_MESSAGES', () => {
     expect(ERROR_MESSAGES.CHANNEL_DELIVERY_FAILED).toBe('通知发送失败');
     expect(ERROR_MESSAGES.MEOW_NICKNAME_INVALID).toBe('MeoW 昵称不合法');
     expect(ERROR_MESSAGES.AUTH_CODE_INVALID).toBe('授权码无效或已过期');
+    expect(ERROR_MESSAGES.LLM_NOT_CONFIGURED).toBe('还没有配置大模型');
+    expect(ERROR_MESSAGES.LLM_UNAVAILABLE).toBe(
+      '大模型暂时不可用，请检查 API Base、密钥和模型名称',
+    );
   });
 });

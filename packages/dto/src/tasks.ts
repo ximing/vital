@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ianaTimezoneSchema } from './auth.js';
-import { listIdSchema, uuidSchema } from './lists.js';
+import { listIdSchema, smartListIdSchema, uuidSchema } from './lists.js';
 import { tagIdsSchema } from './tags.js';
 
 export const taskStatusSchema = z.enum(['todo', 'doing', 'done', 'canceled']);
@@ -179,3 +179,17 @@ export const reorderTasksInputSchema = z.object({
   orderedIds: z.array(uuidSchema).min(1),
 });
 export type ReorderTasksInput = z.infer<typeof reorderTasksInputSchema>;
+
+const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/** Natural-language create: server fills title/due/priority/notes via the user's LLM. */
+export const createTaskFromTextInputSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+  listId: uuidSchema.optional(),
+  smartListId: smartListIdSchema.optional(),
+  timezone: ianaTimezoneSchema.optional(),
+  status: z.enum(['todo', 'doing']).optional(),
+  priority: taskPrioritySchema.optional(),
+  dueYmd: ymdSchema.optional(),
+});
+export type CreateTaskFromTextInput = z.infer<typeof createTaskFromTextInputSchema>;

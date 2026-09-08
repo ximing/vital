@@ -29,6 +29,8 @@ export const ERROR_MESSAGES = {
   CHANNEL_TYPE_UNSUPPORTED: '不支持的通知渠道',
   MEOW_NICKNAME_INVALID: 'MeoW 昵称不合法',
   CHANNEL_DELIVERY_FAILED: '通知发送失败',
+  LLM_NOT_CONFIGURED: '还没有配置大模型',
+  LLM_UNAVAILABLE: '大模型暂时不可用，请检查 API Base、密钥和模型名称',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

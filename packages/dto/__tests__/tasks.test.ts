@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createTaskInputSchema, patchTaskInputSchema, uncompleteTaskInputSchema } from '../src/tasks.js';
+import {
+  createTaskFromTextInputSchema,
+  createTaskInputSchema,
+  patchTaskInputSchema,
+  uncompleteTaskInputSchema,
+} from '../src/tasks.js';
 
 describe('createTaskInputSchema', () => {
   it('requires title and list uuid; P0 is 0', () => {
@@ -54,5 +59,20 @@ describe('uncompleteTaskInputSchema', () => {
       uncompleteTaskInputSchema.parse({ completionId: '11111111-1111-4111-8111-111111111111' })
         .completionId,
     ).toBe('11111111-1111-4111-8111-111111111111');
+  });
+});
+
+describe('createTaskFromTextInputSchema', () => {
+  it('requires text; accepts optional list and smart list', () => {
+    const parsed = createTaskFromTextInputSchema.parse({
+      text: '明天下午三点开会',
+      listId: '11111111-1111-4111-8111-111111111111',
+      smartListId: 'smart:today',
+    });
+    expect(parsed.text).toBe('明天下午三点开会');
+    expect(createTaskFromTextInputSchema.safeParse({ text: '' }).success).toBe(false);
+    expect(createTaskFromTextInputSchema.safeParse({ text: 'x', smartListId: 'smart:nope' }).success).toBe(
+      false,
+    );
   });
 });

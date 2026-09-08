@@ -74,6 +74,43 @@ export const changePasswordInputSchema = z.object({
 });
 export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
 
+/** OpenAI-compatible Chat Completions root, e.g. https://open.bigmodel.cn/api/paas/v4 */
+export const llmApiBaseSchema = z
+  .string()
+  .trim()
+  .max(512)
+  .regex(/^https?:\/\/\S+$/i, { message: 'INVALID_LLM_API_BASE' });
+
+export const llmModelSchema = z.string().trim().min(1).max(128);
+
+export const patchLlmSettingsSchema = z
+  .object({
+    apiBase: z.union([llmApiBaseSchema, z.null()]).optional(),
+    /** Omit to keep; `null` clears the stored key. Never returned on profile. */
+    apiKey: z.string().min(1).max(512).nullable().optional(),
+    model: z.union([llmModelSchema, z.null()]).optional(),
+  })
+  .refine((value) => Object.values(value).some((item) => item !== undefined), {
+    message: 'at least one field required',
+  });
+export type PatchLlmSettings = z.infer<typeof patchLlmSettingsSchema>;
+
+export interface LlmSettingsPublic {
+  apiBase: string | null;
+  model: string | null;
+  apiKeySet: boolean;
+}
+
+export const DEFAULT_LLM_SETTINGS: LlmSettingsPublic = {
+  apiBase: null,
+  model: null,
+  apiKeySet: false,
+};
+
+export function llmReady(llm: LlmSettingsPublic | null | undefined): boolean {
+  return Boolean(llm?.apiKeySet && llm.apiBase && llm.model);
+}
+
 export const updateMeInputSchema = z
   .object({
     displayName: z.string().trim().min(1).max(50).optional(),
@@ -84,6 +121,7 @@ export const updateMeInputSchema = z
     weekStartsOn: weekStartsOnSchema.optional(),
     convertArchiveOnComplete: z.boolean().optional(),
     notifications: patchNotificationPrefsSchema.optional(),
+    llm: patchLlmSettingsSchema.optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',
@@ -116,6 +154,7 @@ export interface UserProfile {
   convertArchiveOnComplete: boolean;
   notifications: NotificationPrefs;
   onboarding: OnboardingState;
+  llm: LlmSettingsPublic;
   createdAt: string;
   updatedAt: string;
 }
