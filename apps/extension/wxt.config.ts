@@ -34,11 +34,13 @@ export default defineConfig({
     return {
       name: 'Vital',
       description: '把网页、选区和图片收到稍后读',
-      minimum_chrome_version: '116',
+      minimum_chrome_version: '127',
       permissions: ['storage', 'activeTab', 'scripting', 'contextMenus', 'offscreen'],
       host_permissions: hostPermissions,
       externally_connectable: { matches: webMatches },
-      web_accessible_resources: [{ resources: ['options.html'], matches: webMatches }],
+      web_accessible_resources: [
+        { resources: ['options.html', 'popup.html'], matches: webMatches },
+      ],
       commands: {
         'save-page': {
           suggested_key: { default: 'Alt+Shift+V' },
@@ -49,6 +51,7 @@ export default defineConfig({
         },
       },
       action: {
+        default_popup: 'popup.html',
         default_title: '保存到 Vital',
         default_icon: {
           16: '/icon-16.png',

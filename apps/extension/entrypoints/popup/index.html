@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vital</title>
+    <script type="module" src="./main.ts"></script>
+    <style>
+      :root {
+        --bg: #fffbf5;
+        --surface: #ffffff;
+        --fg: #1c1914;
+        --muted: #6b6358;
+        --border: #eadfce;
+        --accent: #e8a317;
+        --accent-hover: #c4890f;
+        --on-accent: #1c1914;
+        --danger: #c45c6a;
+        --font: system-ui, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14110c;
+          --surface: #1e1a14;
+          --fg: #fff6ea;
+          --muted: #a39888;
+          --border: #3a3228;
+          --accent: #f5c84b;
+          --accent-hover: #e8a317;
+          --on-accent: #1c1914;
+          --danger: #e07a86;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 340px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.5 var(--font);
+      }
+      main {
+        display: flex;
+        flex-direction: column;
+        min-height: 240px;
+        max-height: 560px;
+      }
+      section {
+        padding: 14px 16px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 650;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      .center {
+        display: flex;
+        flex: 1;
+        align-items: center;
+        justify-content: center;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin: 10px 0 4px;
+      }
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--fg);
+        font: inherit;
+      }
+      textarea {
+        min-height: 64px;
+        resize: vertical;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+        border-radius: 8px;
+        border: 0;
+      }
+      button:disabled {
+        cursor: default;
+        opacity: 0.5;
+      }
+      .primary {
+        padding: 9px 14px;
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 600;
+      }
+      .primary:hover:not(:disabled) {
+        background: var(--accent-hover);
+      }
+      .ghost {
+        background: transparent;
+        color: var(--accent);
+        padding: 6px 0;
+      }
+      .modes {
+        display: flex;
+        gap: 6px;
+      }
+      .modes button {
+        flex: 1;
+        padding: 6px 0;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .modes button.active {
+        border-color: var(--accent);
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .meta {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .saved-title {
+        margin: 0 0 6px;
+        font-weight: 650;
+        font-size: 15px;
+      }
+      a.primary {
+        display: inline-block;
+        margin-top: 10px;
+        text-decoration: none;
+        text-align: center;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      li {
+        border: 1px solid var(--border);
+        background: var(--surface);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        padding: 8px 12px;
+      }
+      a.item {
+        display: block;
+        color: inherit;
+        text-decoration: none;
+      }
+      a.item:hover .title {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+      }
+      .title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      footer {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 16px 14px;
+        border-top: 1px solid var(--border);
+      }
+      footer .primary {
+        flex: 1;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section id="view-loading" class="center">
+        <p class="muted">正在解析页面…</p>
+      </section>
+      <section id="view-login" hidden>
+        <h1>Vital</h1>
+        <p class="muted">在网页登录后，点工具栏即可把当前页收进来。快捷键 Alt+Shift+V。</p>
+        <button id="login-web" class="primary" type="button">在网页登录</button>
+      </section>
+      <section id="view-login-done" hidden>
+        <h1>Vital</h1>
+        <p class="muted">已登录。关闭此页，点工具栏图标开始收集。</p>
+      </section>
+      <section id="view-capture" hidden>
+        <div class="modes" role="tablist" aria-label="保存模式">
+          <button type="button" id="mode-article">文章</button>
+          <button type="button" id="mode-selection">选区</button>
+          <button type="button" id="mode-task">待办</button>
+        </div>
+        <label for="capture-title">标题</label>
+        <input id="capture-title" maxlength="500" />
+        <p id="capture-meta" class="meta"></p>
+        <label for="capture-note">备注</label>
+        <textarea id="capture-note" maxlength="500"></textarea>
+        <div id="capture-list-wrap" hidden>
+          <label for="capture-list">清单</label>
+          <select id="capture-list"></select>
+        </div>
+      </section>
+      <section id="view-saved" hidden>
+        <p id="saved-title" class="saved-title"></p>
+        <p id="saved-progress" class="meta" hidden></p>
+        <a id="saved-open" class="primary" target="_blank" rel="noreferrer">打开</a>
+        <button id="saved-done" class="ghost" type="button">完成</button>
+      </section>
+      <section id="view-error" hidden>
+        <p id="error-message" class="muted"></p>
+        <button id="error-retry" class="primary" type="button">重试</button>
+      </section>
+      <section id="view-recent" hidden>
+        <div class="row">
+          <h1>最近保存</h1>
+          <button id="recent-back" class="ghost" type="button">返回</button>
+        </div>
+        <p id="recent-empty" class="muted" hidden>还没有保存。</p>
+        <ul id="recent-items"></ul>
+        <button id="logout" class="ghost" type="button">退出登录</button>
+      </section>
+      <footer id="footer" hidden>
+        <button id="save" class="primary" type="button">保存</button>
+        <button id="open-recent" class="ghost" type="button">最近保存</button>
+      </footer>
+    </main>
+  </body>
+</html>
