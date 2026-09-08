@@ -12,6 +12,7 @@ import {
   type PopupMode,
 } from '../../src/messages.js';
 import {
+  fileMetaLine,
   initialMode,
   metaLine,
   modeDisabled,
@@ -63,13 +64,18 @@ function setView(view: View): void {
 
 function renderCapture(): void {
   if (capture === null) return;
-  for (const m of ['article', 'selection', 'task'] as const) {
+  for (const m of ['article', 'selection', 'task', 'file'] as const) {
     const btn = $<HTMLButtonElement>(`mode-${m}`);
+    // Direct-file pages have no selection or task content to offer.
+    show(btn, !(mode === 'file' && (m === 'selection' || m === 'task')));
     btn.classList.toggle('active', m === mode);
-    btn.disabled = modeDisabled(m, capture.selection);
+    btn.disabled = m === 'file' ? capture.file === null : modeDisabled(m, capture.selection);
   }
   $<HTMLInputElement>('capture-title').value = titleForMode(capture, mode);
-  $('capture-meta').textContent = metaLine(capture, mode);
+  $('capture-meta').textContent =
+    mode === 'file' && capture.file !== null
+      ? fileMetaLine(capture.file)
+      : metaLine(capture, mode);
   show($('capture-list-wrap'), mode === 'task');
   if (mode === 'task' && lists === null) void loadLists();
 }
@@ -196,12 +202,12 @@ async function boot(): Promise<void> {
     return;
   }
   capture = cap.capture;
-  mode = initialMode(capture.selection);
+  mode = initialMode(capture);
   renderCapture();
   setView('capture');
 }
 
-for (const m of ['article', 'selection', 'task'] as const) {
+for (const m of ['article', 'selection', 'task', 'file'] as const) {
   $(`mode-${m}`).addEventListener('click', () => {
     mode = m;
     renderCapture();

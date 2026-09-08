@@ -17,6 +17,7 @@ const payload: CapturePayload = {
   imageSrcs: [],
   selection: '',
   tabId: null,
+  file: null,
 };
 
 describe('message guards', () => {
@@ -40,6 +41,15 @@ describe('message guards', () => {
         title: 't',
         note: '',
         mode: 'article',
+      }),
+    ).toBe(true);
+    expect(
+      isCommitPortMessage({
+        type: 'commit-capture',
+        capture: payload,
+        title: 't',
+        note: '',
+        mode: 'file',
       }),
     ).toBe(true);
     expect(

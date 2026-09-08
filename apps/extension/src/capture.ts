@@ -2,11 +2,13 @@ import {
   IMAGE_MIME_TYPES,
   MAX_IMAGE_BYTES,
   MAX_INBOX_ASSETS,
+  partSizeFor,
+  totalPartsFor,
   type CreateInboxInput,
   type InboxItem,
 } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
-import { idempotencyKeyForUrl } from './canonical.js';
+import { canonicalizeUrl, idempotencyKeyForUrl, sha256Hex } from './canonical.js';
 import {
   extensionLoginUrl,
   feedbackView,
@@ -20,6 +22,7 @@ import {
 } from './capture-helpers.js';
 import { getClient, requireAuth } from './client.js';
 import { WEB_URL } from './config.js';
+import { fileKindOf, fileModeFromResponse, type DirectFile } from './file-kind.js';
 import { clip, escapeParagraph, hostnameOf, isHttpUrl } from './html.js';
 import { copy } from './i18n.js';
 import {
@@ -34,6 +37,7 @@ import type { CapturePayload, PopupMode } from './messages.js';
 import { convertInOffscreen, parseInOffscreen } from './offscreen.js';
 import { collectPagePayload, fetchImagesInPage, showInPageToast } from './page-scripts.js';
 import { titleForMode } from './popup-state.js';
+import { createStreamPartSource } from './stream-rehost.js';
 
 const MENU = {
   page: 'vital-save-page',
@@ -286,6 +290,79 @@ async function announceSaved(report: Announce, outcome: CaptureOutcome) {
   await report({ type: 'saved', kind: outcome.kind }, outcomeAction(outcome));
 }
 
+interface RehostState {
+  attachmentId: string;
+  size: number;
+  mime: string;
+}
+
+/** Stream a direct file straight into multipart uploads, no full download in
+ * memory. The resume handle in session storage survives a crashed worker. */
+async function rehostDirectFile(
+  file: DirectFile,
+  onProgress?: (loaded: number, total: number) => Promise<void> | void,
+): Promise<{ attachmentId: string | null; failed: number }> {
+  const resumeKey = `vital.rehost.${await sha256Hex(canonicalizeUrl(file.url))}`;
+  const stored = await chrome.storage.session.get(resumeKey);
+  const prior = stored[resumeKey] as RehostState | undefined;
+  try {
+    const res = await fetch(file.url, { credentials: 'omit' });
+    if (!res.ok || res.body === null) return { attachmentId: null, failed: 1 };
+    const source = createStreamPartSource(res.body);
+    const uploaded = await getClient().upload({
+      partSource: (start, end) => source.partSource(start, end),
+      mime: file.mime,
+      size: file.size,
+      resumeId: prior?.attachmentId,
+      onProgress: (loaded, total) => {
+        void onProgress?.(loaded, total);
+      },
+      onAttachmentId: (id) => {
+        void chrome.storage.session.set({
+          [resumeKey]: { attachmentId: id, size: file.size, mime: file.mime } satisfies RehostState,
+        });
+      },
+    });
+    await chrome.storage.session.remove(resumeKey);
+    return { attachmentId: uploaded.id, failed: 0 };
+  } catch {
+    return { attachmentId: null, failed: 1 }; // resume state stays for retry
+  }
+}
+
+async function saveDirectFile(file: DirectFile, report: Announce): Promise<CaptureOutcome> {
+  const result = await createExtensionItem({
+    title: fileNameFromUrl(file.url),
+    originalUrl: file.url,
+    source: 'extension',
+  });
+  const outcome: CaptureOutcome = {
+    kind: result.created ? 'created' : 'existing',
+    id: result.item.id,
+  };
+  await announceSaved(report, outcome);
+  if (!result.created) return outcome;
+  const totalParts = totalPartsFor(file.size);
+  const rehosted = await rehostDirectFile(file, (loaded) => {
+    const done = Math.min(totalParts, Math.ceil(loaded / partSizeFor(file.size)));
+    return report({ type: 'upload', done, total: totalParts });
+  });
+  if (rehosted.attachmentId !== null) {
+    try {
+      await getClient().patchInboxAssets(result.item.id, {
+        assets: [{ attachmentId: rehosted.attachmentId, originalSrc: file.url, sortOrder: 0 }],
+      });
+    } catch {
+      // Item already saved; the asset patch is best-effort.
+    }
+  }
+  await report(
+    { type: 'imagesDone', failed: rehosted.attachmentId !== null ? 0 : 1 },
+    outcomeAction(outcome),
+  );
+  return outcome;
+}
+
 async function rehostWithFeedback(
   report: Announce,
   item: InboxItem,
@@ -379,6 +456,31 @@ async function savePage(
   return outcome;
 }
 
+/** HEAD-probe a candidate direct link; null → not a rehostable file. */
+async function probeDirectFile(url: string): Promise<DirectFile | null> {
+  try {
+    const res = await fetch(url, { method: 'HEAD', credentials: 'omit' });
+    if (!res.ok) return null;
+    const len = res.headers.get('content-length');
+    return fileModeFromResponse(
+      url,
+      res.headers.get('content-type') ?? '',
+      len === null ? null : Number(len),
+    );
+  } catch {
+    return null; // CORS or network → article mode
+  }
+}
+
+function fileNameFromUrl(url: string): string {
+  try {
+    const name = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+    return name === '' ? url : name;
+  } catch {
+    return url;
+  }
+}
+
 async function saveLink(
   info: chrome.contextMenus.OnClickData,
   tab: chrome.tabs.Tab | undefined,
@@ -386,6 +488,10 @@ async function saveLink(
 ): Promise<CaptureOutcome> {
   const href = info.linkUrl;
   if (href === undefined || !isHttpUrl(href)) throw new Error(copy.toastRestricted);
+  if (fileKindOf(href) !== null) {
+    const direct = await probeDirectFile(href);
+    if (direct !== null) return saveDirectFile(direct, report);
+  }
   const title = clip(info.selectionText, 80) ?? clip(tab?.title, 500) ?? hostnameOf(href) ?? href;
   const result = await createExtensionItem({
     title,
@@ -447,6 +553,26 @@ async function saveTask(
 export async function extractCapture(tab: chrome.tabs.Tab): Promise<CapturePayload> {
   const tabId = tab.id;
   if (tabId === undefined) throw new Error(copy.toastFailed);
+  const tabUrl = tab.url ?? '';
+  if (isHttpUrl(tabUrl) && fileKindOf(tabUrl) !== null) {
+    const direct = await probeDirectFile(tabUrl);
+    if (direct !== null) {
+      return {
+        title: fileNameFromUrl(direct.url),
+        originalUrl: direct.url,
+        extractedText: null,
+        extractedHtml: null,
+        excerpt: null,
+        byline: null,
+        siteName: null,
+        imageSrcs: [],
+        selection: '',
+        tabId,
+        file: direct,
+      };
+    }
+    // .pdf route serving html → fall through to article mode
+  }
   const page = await collectFromTab(tabId);
   const originalUrl = isHttpUrl(page.url) ? page.url : tab.url;
   if (originalUrl === undefined || !isHttpUrl(originalUrl)) {
@@ -463,6 +589,7 @@ export async function extractCapture(tab: chrome.tabs.Tab): Promise<CapturePaylo
     imageSrcs: [],
     selection: page.selection.trim(),
     tabId,
+    file: null,
   };
   try {
     const parsed = await parseInOffscreen(page.outerHTML, originalUrl);
@@ -503,6 +630,38 @@ export async function commitCapture(input: {
 }): Promise<CommitResult> {
   const { capture } = input;
   const title = input.title.trim() === '' ? titleForMode(capture, input.mode) : input.title.trim();
+  if (input.mode === 'file' && capture.file !== null) {
+    const file = capture.file;
+    const result = await createExtensionItem({ title, originalUrl: file.url, source: 'extension' });
+    const outcome: CaptureOutcome = {
+      kind: result.created ? 'created' : 'existing',
+      id: result.item.id,
+    };
+    await input.onCreated?.(outcome);
+    let failed = 0;
+    if (result.created) {
+      const totalParts = totalPartsFor(file.size);
+      const rehosted = await rehostDirectFile(file, (loaded) => {
+        // Convert byte progress to part counts for the n/N progress UI.
+        const done = Math.min(totalParts, Math.ceil(loaded / partSizeFor(file.size)));
+        return input.onProgress?.(done, totalParts);
+      });
+      if (rehosted.attachmentId !== null) {
+        try {
+          await getClient().patchInboxAssets(result.item.id, {
+            assets: [
+              { attachmentId: rehosted.attachmentId, originalSrc: file.url, sortOrder: 0 },
+            ],
+          });
+        } catch {
+          failed = 1; // item is saved; only the asset attach failed
+        }
+      } else {
+        failed = 1;
+      }
+    }
+    return { outcome, failed };
+  }
   if (input.mode === 'task') {
     const task = await getClient().createTask({
       title,

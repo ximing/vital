@@ -3,8 +3,9 @@ import { copy } from './i18n.js';
 import type { CapturePayload, PopupMode } from './messages.js';
 import { savedAfterImagesToast, type SaveKind } from './capture-helpers.js';
 
-export function initialMode(selection: string): PopupMode {
-  return selection.trim() !== '' ? 'selection' : 'article';
+export function initialMode(capture: CapturePayload): PopupMode {
+  if (capture.file !== null) return 'file';
+  return capture.selection.trim() !== '' ? 'selection' : 'article';
 }
 
 export function modeDisabled(mode: PopupMode, selection: string): boolean {
@@ -28,8 +29,31 @@ export function metaLine(capture: CapturePayload, mode: PopupMode): string {
   return parts.join(' · ');
 }
 
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function formatBytes(size: number): string {
+  if (size >= 1024 ** 3) return `${round1(size / 1024 ** 3)}GB`;
+  if (size >= 1024 ** 2) return `${round1(size / 1024 ** 2)}MB`;
+  if (size >= 1024) return `${round1(size / 1024)}KB`;
+  return `${size}B`;
+}
+
+/** Direct-file meta line: kind (video/audio/PDF) plus human-readable size. */
+export function fileMetaLine(file: { mime: string; size: number }): string {
+  const kind = file.mime.startsWith('video/')
+    ? '视频'
+    : file.mime.startsWith('audio/')
+      ? '音频'
+      : file.mime.endsWith('/pdf') || file.mime.endsWith('+pdf')
+        ? 'PDF'
+        : '文件';
+  return `${kind} · ${formatBytes(file.size)}`;
+}
+
 export function progressLabel(done: number, total: number): string {
-  return `转存图片 ${done}/${total}`;
+  return `${done}/${total}`;
 }
 
 export function savedLabel(kind: SaveKind, failed: number): string {

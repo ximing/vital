@@ -1,7 +1,8 @@
 import type { InboxItem, List, UserProfile } from '@vital/dto';
 import type { SaveKind } from './capture-helpers.js';
+import type { DirectFile } from './file-kind.js';
 
-export type PopupMode = 'article' | 'selection' | 'task';
+export type PopupMode = 'article' | 'selection' | 'task' | 'file';
 
 export interface CapturePayload {
   title: string;
@@ -14,6 +15,7 @@ export interface CapturePayload {
   imageSrcs: string[];
   selection: string;
   tabId: number | null;
+  file: DirectFile | null;
 }
 
 export const COMMIT_PORT_NAME = 'vital-commit';
@@ -117,7 +119,14 @@ export function isCommitPortMessage(value: unknown): value is CommitPortMessage 
   const rec = value as Record<string, unknown>;
   if (rec.type !== 'commit-capture') return false;
   if (typeof rec.title !== 'string' || typeof rec.note !== 'string') return false;
-  if (rec.mode !== 'article' && rec.mode !== 'selection' && rec.mode !== 'task') return false;
+  if (
+    rec.mode !== 'article' &&
+    rec.mode !== 'selection' &&
+    rec.mode !== 'task' &&
+    rec.mode !== 'file'
+  ) {
+    return false;
+  }
   if (rec.listId !== undefined && typeof rec.listId !== 'string') return false;
   if (typeof rec.capture !== 'object' || rec.capture === null) return false;
   const cap = rec.capture as Record<string, unknown>;

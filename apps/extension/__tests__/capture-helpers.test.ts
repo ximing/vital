@@ -23,6 +23,7 @@ const capture: CapturePayload = {
   imageSrcs: ['https://ex.com/1.png'],
   selection: '一段<script>选区',
   tabId: 7,
+  file: null,
 };
 
 describe('inboxReaderUrl', () => {
