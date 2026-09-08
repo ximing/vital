@@ -8,10 +8,11 @@ import {
 import { ApiError } from '@vital/api-client';
 import { idempotencyKeyForUrl } from './canonical.js';
 import {
+  feedbackView,
   inboxListUrl,
   inboxReaderUrl,
-  saveToast,
   taskNotesFromCapture,
+  type SaveFeedbackEvent,
   type SaveKind,
 } from './capture-helpers.js';
 import { getClient, requireAuth } from './client.js';
@@ -50,6 +51,11 @@ export interface CaptureOutcome {
   id: string;
 }
 
+type Announce = (
+  event: SaveFeedbackEvent,
+  action?: { label: string; url: string },
+) => Promise<void>;
+
 export async function registerMenus(): Promise<void> {
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({ id: MENU.page, title: copy.menuPage, contexts: ['page'] });
@@ -87,23 +93,54 @@ async function toast(
   tabId: number | undefined,
   text: string,
   action?: { label: string; url: string },
-): Promise<void> {
-  if (tabId === undefined) return;
+): Promise<boolean> {
+  if (tabId === undefined) return false;
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
       func: showInPageToast,
       args: [text, action?.label ?? '', action?.url ?? ''],
     });
+    return true;
   } catch {
     // chrome:// and other restricted pages cannot show an in-page toast.
+    return false;
   }
 }
 
-async function notify(tab: chrome.tabs.Tab | undefined, outcome: CaptureOutcome): Promise<void> {
-  const shown = saveToast(outcome.kind);
+let badgeClearTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function setBadge(text: string): Promise<void> {
+  try {
+    await chrome.action.setBadgeText({ text });
+    if (text !== '') {
+      await chrome.action.setBadgeBackgroundColor({
+        color: text === '!' ? '#b42318' : '#111111',
+      });
+    }
+    if (badgeClearTimer !== undefined) clearTimeout(badgeClearTimer);
+    if (text === '') return;
+    badgeClearTimer = setTimeout(() => {
+      void chrome.action.setBadgeText({ text: '' });
+    }, 4200);
+  } catch {
+    // Missing action API in tests / some browsers.
+  }
+}
+
+function outcomeAction(outcome: CaptureOutcome): { label: string; url: string } {
   const url = outcome.kind === 'task' ? inboxListUrl(WEB_URL) : inboxReaderUrl(WEB_URL, outcome.id);
-  await toast(tab?.id, shown.text, { label: shown.actionLabel, url });
+  return { label: copy.toastOpen, url };
+}
+
+async function announce(
+  tab: chrome.tabs.Tab | undefined,
+  event: SaveFeedbackEvent,
+  action?: { label: string; url: string },
+): Promise<void> {
+  const view = feedbackView(event);
+  const shown = await toast(tab?.id, view.text, action);
+  if (!shown) await setBadge(view.badge);
 }
 
 async function collectFromTab(tabId: number) {
@@ -200,16 +237,25 @@ async function prepareUpload(image: FetchedImage): Promise<FetchedImage | null> 
   return { src: image.src, mime, blob };
 }
 
-async function rehostImages(item: InboxItem, images: FetchedImage[]): Promise<InboxItem> {
-  if (images.length === 0) return item;
-  if (item.assets.length > 0) return item;
+async function rehostImages(
+  item: InboxItem,
+  images: FetchedImage[],
+  onProgress?: (done: number, total: number) => Promise<void>,
+): Promise<{ item: InboxItem; failed: number }> {
+  if (images.length === 0) return { item, failed: 0 };
+  if (item.assets.length > 0) return { item, failed: 0 };
   const assets: Array<{ attachmentId: string; originalSrc: string; sortOrder: number }> = [];
   const client = getClient();
+  let failed = 0;
   for (let i = 0; i < images.length; i += 1) {
     const raw = images[i];
     if (raw === undefined) continue;
     const prepared = await prepareUpload(raw);
-    if (prepared === null) continue;
+    if (prepared === null) {
+      failed += 1;
+      await onProgress?.(i + 1, images.length);
+      continue;
+    }
     try {
       const uploaded = await client.upload({
         file: prepared.blob,
@@ -222,10 +268,11 @@ async function rehostImages(item: InboxItem, images: FetchedImage[]): Promise<In
         sortOrder: assets.length,
       });
     } catch {
-      // Image ingest is best-effort; the item itself is already persisted.
+      failed += 1;
     }
+    await onProgress?.(i + 1, images.length);
   }
-  if (assets.length === 0) return item;
+  if (assets.length === 0) return { item, failed };
   const rewritten = rewriteExtractedImageSrcs(
     item.extractedHtml ?? '',
     assets.map((asset) => ({
@@ -240,7 +287,24 @@ async function rehostImages(item: InboxItem, images: FetchedImage[]): Promise<In
       // Reader can still map originalSrc via assets.
     }
   }
-  return client.patchInboxAssets(item.id, { assets });
+  return { item: await client.patchInboxAssets(item.id, { assets }), failed };
+}
+
+async function announceSaved(report: Announce, outcome: CaptureOutcome) {
+  await report({ type: 'saved', kind: outcome.kind }, outcomeAction(outcome));
+}
+
+async function rehostWithFeedback(
+  report: Announce,
+  item: InboxItem,
+  images: FetchedImage[],
+  outcome: CaptureOutcome,
+): Promise<void> {
+  if (images.length === 0) return;
+  const { failed } = await rehostImages(item, images, async (done, total) => {
+    await report({ type: 'upload', done, total });
+  });
+  await report({ type: 'imagesDone', failed }, outcomeAction(outcome));
 }
 
 async function createExtensionItem(
@@ -261,7 +325,11 @@ async function inboxListId(): Promise<string> {
   return inbox.id;
 }
 
-async function savePage(tab: chrome.tabs.Tab, selectionOnly: boolean): Promise<CaptureOutcome> {
+async function savePage(
+  tab: chrome.tabs.Tab,
+  selectionOnly: boolean,
+  report: Announce,
+): Promise<CaptureOutcome> {
   const tabId = tab.id;
   if (tabId === undefined) throw new Error(copy.toastFailed);
   const page = await collectFromTab(tabId);
@@ -281,7 +349,9 @@ async function savePage(tab: chrome.tabs.Tab, selectionOnly: boolean): Promise<C
       extractedHtml: escapeParagraph(selection),
       source: 'extension',
     });
-    return { kind: result.created ? 'created' : 'existing', id: result.item.id };
+    const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
+    await announceSaved(report, outcome);
+    return outcome;
   }
 
   let parsed;
@@ -308,16 +378,19 @@ async function savePage(tab: chrome.tabs.Tab, selectionOnly: boolean): Promise<C
     siteName: parsed.siteName,
     source: 'extension',
   });
+  const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
+  await announceSaved(report, outcome);
   if (result.created) {
     const images = await gatherImages(tabId, parsed.imageSrcs);
-    await rehostImages(result.item, images);
+    await rehostWithFeedback(report, result.item, images, outcome);
   }
-  return { kind: result.created ? 'created' : 'existing', id: result.item.id };
+  return outcome;
 }
 
 async function saveLink(
   info: chrome.contextMenus.OnClickData,
-  tab?: chrome.tabs.Tab,
+  tab: chrome.tabs.Tab | undefined,
+  report: Announce,
 ): Promise<CaptureOutcome> {
   const href = info.linkUrl;
   if (href === undefined || !isHttpUrl(href)) throw new Error(copy.toastRestricted);
@@ -328,12 +401,15 @@ async function saveLink(
     excerpt: tab?.url && isHttpUrl(tab.url) ? tab.url : null,
     source: 'extension',
   });
-  return { kind: result.created ? 'created' : 'existing', id: result.item.id };
+  const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
+  await announceSaved(report, outcome);
+  return outcome;
 }
 
 async function saveImage(
   info: chrome.contextMenus.OnClickData,
-  tab?: chrome.tabs.Tab,
+  tab: chrome.tabs.Tab | undefined,
+  report: Announce,
 ): Promise<CaptureOutcome> {
   const pageUrl = info.pageUrl ?? tab?.url;
   if (pageUrl === undefined || !isHttpUrl(pageUrl)) throw new Error(copy.toastRestricted);
@@ -346,16 +422,19 @@ async function saveImage(
     excerpt: src ?? null,
     source: 'extension',
   });
+  const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
+  await announceSaved(report, outcome);
   if (result.created && src !== undefined && !isTrackingPixel({ src })) {
     const images = await gatherImages(tab?.id, [src]);
-    await rehostImages(result.item, images);
+    await rehostWithFeedback(report, result.item, images, outcome);
   }
-  return { kind: result.created ? 'created' : 'existing', id: result.item.id };
+  return outcome;
 }
 
 async function saveTask(
   info: chrome.contextMenus.OnClickData | undefined,
   tab: chrome.tabs.Tab,
+  report: Announce,
 ): Promise<CaptureOutcome> {
   const link = info?.linkUrl;
   const pageUrl = (link !== undefined && isHttpUrl(link) ? link : undefined) ?? tab.url;
@@ -368,7 +447,9 @@ async function saveTask(
     notes: taskNotesFromCapture(pageUrl, selection),
     timeBucket: 'anytime',
   });
-  return { kind: 'task', id: task.id };
+  const outcome = { kind: 'task' as const, id: task.id };
+  await announceSaved(report, outcome);
+  return outcome;
 }
 
 async function saveAndEdit(tab: chrome.tabs.Tab, selectionOnly: boolean): Promise<void> {
@@ -453,12 +534,13 @@ export async function commitDraft(input: {
     siteName: draft.siteName,
     source: 'extension',
   });
+  const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
   if (result.created) {
     const images = await gatherImages(draft.tabId ?? undefined, draft.imageSrcs);
     await rehostImages(result.item, images);
   }
   await clearDraft();
-  return { kind: result.created ? 'created' : 'existing', id: result.item.id };
+  return outcome;
 }
 
 function failMessage(err: unknown): string {
@@ -469,19 +551,21 @@ function failMessage(err: unknown): string {
 
 async function withAuth(
   tab: chrome.tabs.Tab | undefined,
-  run: () => Promise<CaptureOutcome | void>,
+  run: (report: Announce) => Promise<void>,
+  opts: { saving?: boolean } = {},
 ): Promise<void> {
   const loggedIn = await requireAuth();
   if (!loggedIn) {
-    await toast(tab?.id, copy.toastLogin);
+    await announce(tab, { type: 'fail', message: copy.toastLogin });
     await openPanel();
     return;
   }
+  const report: Announce = (event, action) => announce(tab, event, action);
+  if (opts.saving !== false) await report({ type: 'saving' });
   try {
-    const outcome = await run();
-    if (outcome !== undefined) await notify(tab, outcome);
+    await run(report);
   } catch (err) {
-    await toast(tab?.id, failMessage(err));
+    await report({ type: 'fail', message: failMessage(err) });
   }
 }
 
@@ -491,7 +575,9 @@ async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
 }
 
 export async function handleActionClick(tab: chrome.tabs.Tab): Promise<void> {
-  await withAuth(tab, () => savePage(tab, false));
+  await withAuth(tab, async (report) => {
+    await savePage(tab, false, report);
+  });
 }
 
 export async function handleCommand(command: string): Promise<void> {
@@ -502,7 +588,13 @@ export async function handleCommand(command: string): Promise<void> {
     return;
   }
   if (command === COMMAND.saveEdit) {
-    await withAuth(tab, () => saveAndEdit(tab, false));
+    await withAuth(
+      tab,
+      async () => {
+        await saveAndEdit(tab, false);
+      },
+      { saving: false },
+    );
   }
 }
 
@@ -514,24 +606,36 @@ export async function handleContextMenu(
     await openPanel();
     return;
   }
-  await withAuth(tab, async () => {
+  if (info.menuItemId === MENU.edit) {
+    await withAuth(
+      tab,
+      async () => {
+        if (tab === undefined) throw new Error(copy.toastFailed);
+        await saveAndEdit(tab, info.selectionText !== undefined && info.selectionText !== '');
+      },
+      { saving: false },
+    );
+    return;
+  }
+  await withAuth(tab, async (report) => {
     switch (info.menuItemId) {
       case MENU.page:
         if (tab === undefined) throw new Error(copy.toastFailed);
-        return savePage(tab, false);
+        await savePage(tab, false, report);
+        return;
       case MENU.selection:
         if (tab === undefined) throw new Error(copy.toastFailed);
-        return savePage(tab, true);
+        await savePage(tab, true, report);
+        return;
       case MENU.link:
-        return saveLink(info, tab);
+        await saveLink(info, tab, report);
+        return;
       case MENU.image:
-        return saveImage(info, tab);
+        await saveImage(info, tab, report);
+        return;
       case MENU.task:
         if (tab === undefined) throw new Error(copy.toastFailed);
-        return saveTask(info, tab);
-      case MENU.edit:
-        if (tab === undefined) throw new Error(copy.toastFailed);
-        await saveAndEdit(tab, info.selectionText !== undefined && info.selectionText !== '');
+        await saveTask(info, tab, report);
         return;
       default:
         return;

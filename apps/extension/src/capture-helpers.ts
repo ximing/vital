@@ -30,6 +30,59 @@ export function saveToast(kind: SaveKind): { text: string; actionLabel: string }
   return { text: copy.toastSaved, actionLabel: copy.toastOpen };
 }
 
+export function uploadProgressToast(done: number, total: number): string {
+  return `上传图片 ${done}/${total}`;
+}
+
+export function savedAfterImagesToast(failed: number): string {
+  if (failed === 0) return copy.toastDone;
+  return `已保存，${failed} 张图失败`;
+}
+
+export function badgeText(
+  kind: 'ok' | 'fail' | 'progress',
+  progress?: { done: number; total: number },
+): string {
+  if (kind === 'ok') return '✓';
+  if (kind === 'fail') return '!';
+  const done = progress?.done ?? 0;
+  const total = progress?.total ?? 0;
+  const text = `${done}/${total}`;
+  return text.length <= 4 ? text : String(done).slice(0, 4);
+}
+
+export type SaveFeedbackEvent =
+  | { type: 'saving' }
+  | { type: 'saved'; kind: SaveKind }
+  | { type: 'upload'; done: number; total: number }
+  | { type: 'imagesDone'; failed: number }
+  | { type: 'fail'; message: string };
+
+export function feedbackView(event: SaveFeedbackEvent): {
+  text: string;
+  badge: string;
+  actionLabel?: string;
+} {
+  if (event.type === 'saving') return { text: copy.toastSaving, badge: '…' };
+  if (event.type === 'saved') {
+    const shown = saveToast(event.kind);
+    return { text: shown.text, badge: badgeText('ok'), actionLabel: shown.actionLabel };
+  }
+  if (event.type === 'upload') {
+    return {
+      text: uploadProgressToast(event.done, event.total),
+      badge: badgeText('progress', { done: event.done, total: event.total }),
+    };
+  }
+  if (event.type === 'imagesDone') {
+    return {
+      text: savedAfterImagesToast(event.failed),
+      badge: event.failed > 0 ? badgeText('fail') : badgeText('ok'),
+    };
+  }
+  return { text: event.message, badge: badgeText('fail') };
+}
+
 export function isTrustedWebOrigin(pageUrl: string | undefined, webUrl: string): boolean {
   if (pageUrl === undefined || pageUrl === '') return false;
   try {

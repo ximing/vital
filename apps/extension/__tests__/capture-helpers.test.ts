@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { CapturePayload } from '../src/messages.js';
 import {
-  inboxInputFromCapture,
+  badgeText,
+  feedbackView,
   inboxReaderUrl,
+  inboxInputFromCapture,
   saveToast,
+  savedAfterImagesToast,
   selectionInputFromCapture,
   taskNotesFromCapture,
+  uploadProgressToast,
 } from '../src/capture-helpers.js';
 
 const capture: CapturePayload = {
@@ -44,6 +48,34 @@ describe('saveToast', () => {
       actionLabel: '打开',
     });
     expect(saveToast('task')).toEqual({ text: '已保存为待办', actionLabel: '打开' });
+  });
+});
+
+describe('save progress copy', () => {
+  it('covers saving, upload n/N, done, and image failures', () => {
+    expect(feedbackView({ type: 'saving' })).toEqual({ text: '正在保存…', badge: '…' });
+    expect(uploadProgressToast(3, 12)).toBe('上传图片 3/12');
+    expect(savedAfterImagesToast(0)).toBe('已保存');
+    expect(savedAfterImagesToast(2)).toBe('已保存，2 张图失败');
+  });
+
+  it('fits the toolbar badge into four characters', () => {
+    expect(badgeText('ok')).toBe('✓');
+    expect(badgeText('fail')).toBe('!');
+    expect(badgeText('progress', { done: 3, total: 12 })).toBe('3/12');
+    expect(badgeText('progress', { done: 12, total: 12 }).length).toBeLessThanOrEqual(4);
+    expect(feedbackView({ type: 'upload', done: 3, total: 12 })).toEqual({
+      text: '上传图片 3/12',
+      badge: '3/12',
+    });
+    expect(feedbackView({ type: 'imagesDone', failed: 0 })).toEqual({
+      text: '已保存',
+      badge: '✓',
+    });
+    expect(feedbackView({ type: 'imagesDone', failed: 2 })).toEqual({
+      text: '已保存，2 张图失败',
+      badge: '!',
+    });
   });
 });
 
