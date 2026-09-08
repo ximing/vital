@@ -1,4 +1,5 @@
 import {
+  DEFAULT_LLM_SETTINGS,
   DEFAULT_NOTIFICATION_PREFS,
   type AuthMode,
   type AuthResponse,
@@ -28,6 +29,7 @@ const user: UserProfile = {
   convertArchiveOnComplete: true,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
+  llm: DEFAULT_LLM_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

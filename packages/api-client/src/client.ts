@@ -22,6 +22,7 @@ import type {
   NotificationChannelCollection,
   PatchNotificationChannelInput,
   CreateTagInput,
+  CreateTaskFromTextInput,
   CreateTaskInput,
   ExtractInboxInput,
   InboxCollection,
@@ -99,6 +100,8 @@ export interface VitalClient {
   listTasks(query: { listId: string; cursor?: string; limit?: number }): Promise<TaskCollection>;
   taskCounts(): Promise<TaskCounts>;
   createTask(input: CreateTaskInput): Promise<Task>;
+  createTaskFromText(input: CreateTaskFromTextInput): Promise<Task>;
+  testLlm(): Promise<{ ok: true }>;
   getTask(id: string): Promise<Task>;
   patchTask(id: string, input: PatchTaskInput): Promise<Task>;
   deleteTask(id: string): Promise<void>;
@@ -253,6 +256,9 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     },
     taskCounts: () => http.request('/api/v1/tasks/counts'),
     createTask: (input) => http.request('/api/v1/tasks', { method: 'POST', body: input }),
+    createTaskFromText: (input) =>
+      http.request('/api/v1/tasks/from-text', { method: 'POST', body: input }),
+    testLlm: () => http.request('/api/v1/llm/test', { method: 'POST', body: {} }),
     getTask: (id) => http.request(`/api/v1/tasks/${id}`),
     patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),
     deleteTask: (id) => http.request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),
