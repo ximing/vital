@@ -1,21 +1,6 @@
 import type { InboxItem, List, UserProfile } from '@vital/dto';
 import type { SaveKind } from './capture-helpers.js';
 
-export interface CaptureDraft {
-  title: string;
-  note: string;
-  originalUrl: string;
-  extractedText: string | null;
-  extractedHtml: string | null;
-  excerpt: string | null;
-  byline: string | null;
-  siteName: string | null;
-  imageSrcs: string[];
-  selection: string;
-  tabId: number | null;
-  mode: 'inbox' | 'task';
-}
-
 export type PopupMode = 'article' | 'selection' | 'task';
 
 export interface CapturePayload {
@@ -56,22 +41,12 @@ export type PanelRequest =
   | { type: 'open-login' }
   | { type: 'exchange-code'; code: string }
   | { type: 'lists' }
-  | { type: 'load-draft' }
-  | { type: 'clear-draft' }
-  | { type: 'capture-active-tab' }
-  | {
-      type: 'commit-draft';
-      title: string;
-      note: string;
-      mode: 'inbox' | 'task';
-      listId?: string;
-    };
+  | { type: 'capture-active-tab' };
 
 export type PanelResponse =
   | { ok: true; session: { loggedIn: false } | { loggedIn: true; profile: UserProfile } }
   | { ok: true; items: InboxItem[] }
   | { ok: true; lists: List[] }
-  | { ok: true; draft: CaptureDraft | null }
   | { ok: true; capture: CapturePayload | null }
   | { ok: true }
   | { ok: false; error: string };
@@ -101,10 +76,7 @@ export function isPanelRequest(value: unknown): value is PanelRequest {
     value.type === 'open-login' ||
     value.type === 'exchange-code' ||
     value.type === 'lists' ||
-    value.type === 'load-draft' ||
-    value.type === 'clear-draft' ||
-    value.type === 'capture-active-tab' ||
-    value.type === 'commit-draft'
+    value.type === 'capture-active-tab'
   );
 }
 

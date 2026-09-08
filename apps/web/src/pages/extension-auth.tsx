@@ -66,7 +66,7 @@ export function ExtensionAuthPage() {
           return;
         }
         window.location.assign(
-          `chrome-extension://${extensionId}/options.html?code=${encodeURIComponent(issued.code)}`,
+          `chrome-extension://${extensionId}/popup.html?code=${encodeURIComponent(issued.code)}`,
         );
       })
       .catch((err: unknown) => {

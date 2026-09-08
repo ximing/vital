@@ -39,7 +39,7 @@ export default defineConfig({
       host_permissions: hostPermissions,
       externally_connectable: { matches: webMatches },
       web_accessible_resources: [
-        { resources: ['options.html', 'popup.html'], matches: webMatches },
+        { resources: ['popup.html'], matches: webMatches },
       ],
       commands: {
         'save-page': {

@@ -75,7 +75,7 @@
 
 - 新增 `{ type: 'capture-active-tab' }`：background 收集 payload + offscreen 解析，返回结构化结果（`CaptureDraft` 形状 + 解析元信息）。
 - 新增 `{ type: 'commit-capture'; title; note; mode; listId?; payload: CaptureDraft }`：background 执行创建 + 图片转存。弹窗直接持有完整数据，**无草稿中转**。
-- 删除 `load-draft` / `clear-draft` / `commit-draft` / `exchange-code`（授权统一走网页流）。
+- 删除 `load-draft` / `clear-draft` / `commit-draft`；**保留 `exchange-code`**（popup 以标签页打开时的 `?code=` 登录回退路径）。
 - 保留：`session` / `logout` / `recent` / `open-web` / `open-login` / `lists`。
 
 ### 图片转存进度
@@ -124,4 +124,4 @@
 
 - **推翻一期「无弹窗」决定**：快捷键静默快存保留，覆盖不想被打断的场景；这是与用户确认过的方向。
 - **`chrome.action.openPopup()` 需要用户手势**：右键菜单点击算手势，命令（键盘快捷键）在多数版本可用；均带回退（静默快存或打开网页版）。
-- **popup 生命周期短**（点击别处即关）：保存中误关弹窗会丢失进度。缓解：保存动作先发出请求再渲染成功态；popup 关闭后 background 继续完成转存（进度反馈退化为 badge），数据不丢。
+- **popup 生命周期短**（点击别处即关）：保存中误关弹窗会丢失进度。缓解：保存动作先发出请求再渲染成功态；popup 关闭后 background 继续完成转存，进度反馈退化为工具栏 badge（`setBadge`），数据不丢。

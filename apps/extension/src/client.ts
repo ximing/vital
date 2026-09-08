@@ -2,7 +2,6 @@ import { ApiError, createVitalClient, fetchPut, type VitalClient } from '@vital/
 import type { AuthResponse, UserProfile } from '@vital/dto';
 import { extensionLoginUrl, isTrustedWebOrigin } from './capture-helpers.js';
 import { API_URL, WEB_URL } from './config.js';
-import { clearDraft, readDraft } from './draft-store.js';
 import { copy } from './i18n.js';
 import { isExternalAuthMessage, type PanelRequest, type PanelResponse } from './messages.js';
 import { chromeTokenStore, readProfileJson, storeProfileJson } from './token-store.js';
@@ -152,33 +151,12 @@ export async function handlePanelMessage(message: PanelRequest): Promise<PanelRe
         return { ok: false, error: errorMessage(err) };
       }
     }
-    case 'load-draft': {
-      return { ok: true, draft: await readDraft() };
-    }
-    case 'clear-draft': {
-      await clearDraft();
-      return { ok: true };
-    }
     case 'capture-active-tab': {
       try {
         const { captureActiveTabPayload } = await import('./capture.js');
         return { ok: true, capture: await captureActiveTabPayload() };
       } catch {
         return { ok: true, capture: null };
-      }
-    }
-    case 'commit-draft': {
-      try {
-        const { commitDraft } = await import('./capture.js');
-        await commitDraft({
-          title: message.title,
-          note: message.note,
-          mode: message.mode,
-          listId: message.listId,
-        });
-        return { ok: true };
-      } catch (err) {
-        return { ok: false, error: errorMessage(err) };
       }
     }
   }

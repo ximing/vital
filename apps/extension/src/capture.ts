@@ -550,45 +550,6 @@ async function promptLogin(tab: chrome.tabs.Tab | undefined): Promise<void> {
   }
 }
 
-export async function commitDraft(input: {
-  title: string;
-  note: string;
-  mode: 'inbox' | 'task';
-  listId?: string;
-}): Promise<CaptureOutcome> {
-  const { readDraft, clearDraft } = await import('./draft-store.js');
-  const draft = await readDraft();
-  if (draft === null) throw new Error(copy.toastFailed);
-  const title = input.title.trim() === '' ? draft.title : input.title.trim();
-  if (input.mode === 'task') {
-    const task = await getClient().createTask({
-      title,
-      listId: input.listId ?? (await inboxListId()),
-      notes: taskNotesFromCapture(draft.originalUrl, input.note || draft.selection),
-      timeBucket: 'anytime',
-    });
-    await clearDraft();
-    return { kind: 'task', id: task.id };
-  }
-  const result = await createExtensionItem({
-    title,
-    originalUrl: draft.originalUrl,
-    extractedText: draft.extractedText,
-    extractedHtml: draft.extractedHtml,
-    excerpt: clip(input.note, 500) ?? draft.excerpt,
-    byline: draft.byline,
-    siteName: draft.siteName,
-    source: 'extension',
-  });
-  const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
-  if (result.created) {
-    const images = await gatherImages(draft.tabId ?? undefined, draft.imageSrcs);
-    await rehostImages(result.item, images);
-  }
-  await clearDraft();
-  return outcome;
-}
-
 function failMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error && err.message !== '') return err.message;
