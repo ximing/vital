@@ -1,9 +1,10 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
+import { useState } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { resolveTheme, type ThemeChoice } from '@/lib/theme';
 import { useAuth } from '@/services/auth.service';
-import { useThemeService } from '@/services/theme.service';
+import { themeService } from '@/services/theme.service';
 import { Icon } from '@/ui/icon';
 
 const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
@@ -12,18 +13,38 @@ const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: t.theme.dark, icon: Moon },
 ];
 
-export function ThemeSwitch() {
-  const choice = useThemeService((s) => s.choice);
-  const setChoice = useThemeService((s) => s.setChoice);
+function persistTheme(next: ThemeChoice, signedIn: boolean): void {
+  themeService().setChoice(next);
+  if (signedIn) {
+    void client.updateMe({ themePreference: next }).catch(() => undefined);
+  }
+}
+
+export function ThemeSwitch({ variant = 'menu' }: { variant?: 'menu' | 'rail' }) {
   const user = useAuth((s) => s.user);
+  const [choice, setChoice] = useState(() => themeService().choice);
   const dark = resolveTheme(choice) === 'dark';
 
   function toggle() {
-    const next = dark ? 'light' : 'dark';
+    const next = resolveTheme(themeService().choice) === 'dark' ? 'light' : 'dark';
+    persistTheme(next, Boolean(user));
     setChoice(next);
-    if (user) {
-      void client.updateMe({ themePreference: next }).catch(() => undefined);
-    }
+  }
+
+  if (variant === 'rail') {
+    return (
+      <button
+        type="button"
+        role="switch"
+        aria-checked={dark}
+        aria-label={t.theme.switch}
+        title={dark ? t.theme.dark : t.theme.light}
+        onClick={toggle}
+        className="relative mx-1 flex h-9 items-center justify-center rounded-md text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg"
+      >
+        <Icon icon={dark ? Moon : Sun} className="shrink-0" />
+      </button>
+    );
   }
 
   return (
@@ -55,15 +76,12 @@ export function ThemeSwitch() {
 }
 
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
-  const choice = useThemeService((s) => s.choice);
-  const setChoice = useThemeService((s) => s.setChoice);
   const user = useAuth((s) => s.user);
+  const [choice, setChoice] = useState(() => themeService().choice);
 
   function onChoose(next: ThemeChoice) {
+    persistTheme(next, Boolean(user));
     setChoice(next);
-    if (user) {
-      void client.updateMe({ themePreference: next }).catch(() => undefined);
-    }
   }
 
   if (compact) {

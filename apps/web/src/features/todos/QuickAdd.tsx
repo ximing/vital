@@ -100,7 +100,7 @@ export function QuickAdd({
       ? t.todos.composeIntent
       : card
         ? t.todos.composeWhat
-        : `+ ${t.todos.composeTo} “${listName}”`);
+        : `${t.todos.composeTo} “${listName}”`);
   const tools = (
     <>
       {intent ? null : (
@@ -110,12 +110,13 @@ export function QuickAdd({
           weekStartsOn={weekStartsOn}
           onChange={setDraft}
           compact
-          triggerClassName="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
+          align="end"
+          triggerClassName="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
           ariaLabel={t.todos.addDate}
         />
       )}
       {intent || lockedPriority !== undefined ? null : (
-        <PriorityMenu value={priority} onChange={setPriority} />
+        <PriorityMenu value={priority} onChange={setPriority} align="end" />
       )}
       <ListMenu lists={lists} value={listId} onChange={setListId} />
     </>
@@ -162,8 +163,9 @@ export function QuickAdd({
   }
 
   return (
-    <form onSubmit={(event) => void handle(event)} className="w-full min-w-0 self-stretch pb-1 pt-1">
-      <div className="flex h-10 w-full min-w-0 items-center gap-1 rounded-lg bg-surface-muted px-2.5">
+    <form onSubmit={(event) => void handle(event)} className="w-full min-w-0 self-stretch pb-2 pt-1">
+      <div className="flex h-[46px] w-full min-w-0 items-center gap-2 rounded-[14px] border border-border bg-surface px-4 shadow-[var(--shadow-xs)]">
+        <span aria-hidden className="shrink-0 text-[17px] font-medium leading-none text-accent">+</span>
         <input
           id={captureId ? QUICK_ADD_ID : undefined}
           ref={inputRef}
@@ -176,7 +178,7 @@ export function QuickAdd({
           aria-busy={busy || undefined}
           className="field-focus h-8 min-w-0 flex-1 border-0 bg-transparent px-0.5 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
         />
-        <div className="ml-auto flex shrink-0 items-center gap-0.5 text-muted">{tools}</div>
+        <div className="ml-auto flex shrink-0 items-center gap-1 text-muted">{tools}</div>
         <button type="submit" disabled={blocked} className="sr-only">
           {t.todos.add}
         </button>
@@ -209,14 +211,14 @@ function ListMenu({
         aria-label={t.todos.list}
         aria-expanded={popover.open}
         onClick={() => popover.toggle()}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
       >
         <Icon icon={Folder} size={15} />
       </button>
       {popover.open ? (
         <div
           role="menu"
-          className={`absolute left-0 z-[var(--z-dropdown)] mt-1 max-h-56 w-44 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
+          className={`absolute right-0 z-[var(--z-dropdown)] mt-1 max-h-56 w-44 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
         >
           {options.map((item) => (
             <button

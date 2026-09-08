@@ -132,7 +132,7 @@ export function CommandPalette() {
         role="dialog"
         aria-modal="true"
         aria-label={t.nav.palette}
-        className="w-full max-w-xl overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow)]"
+        className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-elevated shadow-[var(--shadow)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <input

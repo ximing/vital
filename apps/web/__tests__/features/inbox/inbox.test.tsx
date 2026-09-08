@@ -260,8 +260,9 @@ describe('inbox workspace', () => {
     });
     const user = userEvent.setup();
     renderAt('/inbox');
-    await screen.findByLabelText(t.inbox.pasteUrl);
-    await user.type(screen.getByLabelText(t.inbox.pasteUrl), 'https://example.com/a');
+    await user.click(await screen.findByRole('button', { name: t.inbox.pasteUrl }));
+    await screen.findByLabelText(t.inbox.pastePlaceholder);
+    await user.type(screen.getByLabelText(t.inbox.pastePlaceholder), 'https://example.com/a');
     await user.click(screen.getByRole('button', { name: t.inbox.extract }));
     expect(await screen.findByRole('button', { name: t.inbox.save })).toBeInTheDocument();
     expect(screen.getByText(t.inbox.preview)).toBeInTheDocument();
@@ -290,8 +291,9 @@ describe('inbox workspace', () => {
     );
     const user = userEvent.setup();
     renderAt('/inbox');
-    await screen.findByLabelText(t.inbox.pasteUrl);
-    await user.type(screen.getByLabelText(t.inbox.pasteUrl), 'https://example.com/a');
+    await user.click(await screen.findByRole('button', { name: t.inbox.pasteUrl }));
+    await screen.findByLabelText(t.inbox.pastePlaceholder);
+    await user.type(screen.getByLabelText(t.inbox.pastePlaceholder), 'https://example.com/a');
     await user.click(screen.getByRole('button', { name: t.inbox.extract }));
     expect(await screen.findByText(t.inbox.processing)).toBeInTheDocument();
     expect(rejectExtract).toBeDefined();

@@ -72,7 +72,8 @@ describe('NotificationsSection', () => {
     expect(canvas).not.toBeNull();
     expect(canvas).toHaveClass('w-full');
     expect(screen.getByRole('heading', { name: t.settings.title }).parentElement).toHaveClass(
-      'max-w-6xl',
+      'max-w-2xl',
+      'mx-auto',
     );
     expect(screen.getByRole('button', { name: t.nav.logout })).toHaveClass('text-muted');
     expect(screen.getByLabelText(t.settings.displayName).closest('form')).toHaveClass('max-w-2xl');

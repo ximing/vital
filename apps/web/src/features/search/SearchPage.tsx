@@ -59,10 +59,10 @@ export function SearchPage() {
   const empty = q === '' || items === null;
 
   return (
-    <div data-region="search-canvas" className="h-full min-h-0 w-full overflow-y-auto px-8 py-10 xl:px-12">
-      <div className="w-full max-w-6xl">
+    <div data-region="search-canvas" className="h-full min-h-0 w-full overflow-y-auto px-6 py-12">
+      <div className="mx-auto w-full max-w-2xl">
       <EmptyArt />
-      <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
+      <h1 className="font-display text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
         {t.nav.search}
       </h1>
       <p className="mt-2 text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
@@ -75,7 +75,7 @@ export function SearchPage() {
         onChange={(event) => setQuery(event.target.value)}
         placeholder={t.search.placeholder}
         aria-label={t.search.placeholder}
-        className="mt-6 h-[var(--field-h)] w-full rounded-md bg-surface px-3 text-fg placeholder:text-muted outline-none focus:shadow-[0_0_0_3px_var(--focus-ring)]"
+        className="mt-6 h-11 w-full rounded-[14px] border border-border bg-surface px-4 text-fg shadow-[var(--shadow-xs)] placeholder:text-muted outline-none focus:border-focus focus:shadow-[0_0_0_3px_var(--focus-ring)]"
       />
       {error ? (
         <div className="mt-4">
@@ -95,10 +95,10 @@ export function SearchPage() {
             <li key={hrefOf(hit)}>
               <Link
                 to={hrefOf(hit)}
-                className="flex min-h-[var(--touch-min)] items-center justify-between rounded-md px-3 hover:bg-surface-muted"
+                className="flex min-h-[var(--touch-min)] items-center justify-between rounded-lg px-3 transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
               >
-                <span>{titleOf(hit)}</span>
-                <span className="text-[length:var(--text-caption)] text-muted">{kindOf(hit)}</span>
+                <span className="font-medium">{titleOf(hit)}</span>
+                <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-[length:var(--text-caption)] font-medium text-accent">{kindOf(hit)}</span>
               </Link>
             </li>
           ))}

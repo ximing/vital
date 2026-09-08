@@ -1,11 +1,11 @@
 import { useId, type InputHTMLAttributes } from 'react';
 
 export const FIELD_CONTROL_CLASS =
-  'h-[var(--field-h)] rounded-md bg-surface-muted/70 px-3 text-fg placeholder:text-muted outline-none transition-[background-color,box-shadow] duration-[var(--ease-out)] hover:bg-surface-muted focus:bg-surface focus:shadow-[0_0_0_3px_var(--focus-ring)]';
+  'h-[var(--field-h)] rounded-md border border-border bg-surface px-3 text-fg shadow-[var(--shadow-xs)] placeholder:text-muted outline-none transition-[background-color,box-shadow,border-color] duration-[var(--ease-out)] hover:border-tertiary/50 focus:bg-elevated focus:border-focus focus:shadow-[0_0_0_3px_var(--focus-ring)]';
 
-export const FIELD_CONTROL_OPEN_CLASS = 'bg-surface shadow-[0_0_0_3px_var(--focus-ring)]';
+export const FIELD_CONTROL_OPEN_CLASS = 'bg-elevated border-focus shadow-[0_0_0_3px_var(--focus-ring)]';
 
-export const FIELD_POPOVER_CLASS = 'rounded-md bg-elevated p-3 shadow-[var(--shadow)]';
+export const FIELD_POPOVER_CLASS = 'rounded-xl border border-border bg-elevated p-3 shadow-[var(--shadow)]';
 
 export const FIELD_CLEAR_CLASS =
   'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg';

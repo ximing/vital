@@ -55,9 +55,11 @@ export function PriorityMark({
 export function PriorityMenu({
   value,
   onChange,
+  align = 'start',
 }: {
   value: TaskPriority;
   onChange: (p: TaskPriority) => void;
+  align?: 'start' | 'end';
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const popover = usePopover(popoverRef);
@@ -68,7 +70,7 @@ export function PriorityMenu({
         aria-label={t.todos.priorityLabel}
         aria-expanded={popover.open}
         onClick={() => popover.toggle()}
-        className={`inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface hover:text-fg ${
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface-muted hover:text-fg ${
           value < 3 ? TONE[value] : 'text-muted'
         }`}
       >
@@ -77,7 +79,7 @@ export function PriorityMenu({
       {popover.open ? (
         <div
           role="menu"
-          className={`absolute left-0 z-[var(--z-dropdown)] mt-1 w-36 ${FIELD_POPOVER_CLASS} p-1`}
+          className={`absolute ${align === 'end' ? 'right-0' : 'left-0'} z-[var(--z-dropdown)] mt-1 w-36 ${FIELD_POPOVER_CLASS} p-1`}
         >
           {([0, 1, 2, 3] as TaskPriority[]).map((p) => (
             <button

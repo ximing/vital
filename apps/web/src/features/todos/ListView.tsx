@@ -35,28 +35,34 @@ function GroupHeading({
 }) {
   return (
     <div
-      className={`group/heading flex items-center gap-1 px-2 pb-1 ${
-        first ? 'pt-1' : 'pt-3'
+      className={`group/heading flex items-center gap-1 px-2 pb-2 ${
+        first ? 'pt-2' : 'pt-6'
       }`}
     >
       <button
         type="button"
         aria-expanded={!collapsed}
         onClick={onToggle}
-        className={`flex min-w-0 flex-1 items-center gap-1.5 rounded text-left text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] ${
-          tone === 'overdue' ? 'text-overdue' : 'text-fg'
+        className={`eyebrow eyebrow-rule min-w-0 flex-1 rounded text-left ${
+          tone === 'overdue'
+            ? 'eyebrow-danger'
+            : tone === 'pinned'
+              ? 'eyebrow-accent'
+              : ''
         }`}
       >
         <Icon
           icon={collapsed ? ChevronRight : ChevronDown}
-          size={13}
-          className="shrink-0 text-tertiary"
+          size={12}
+          className="shrink-0 opacity-70"
         />
         {tone === 'pinned' ? (
-          <Icon icon={Pin} size={12} className="shrink-0 text-due" fill="currentColor" />
+          <Icon icon={Pin} size={11} className="shrink-0" fill="currentColor" />
         ) : null}
         <span className="truncate">{children}</span>
-        <span className="shrink-0 font-normal text-tertiary">{count}</span>
+        <span className="shrink-0 font-mono font-normal normal-case tracking-normal tabular-nums opacity-80">
+          {count}
+        </span>
       </button>
       {action ? (
         <button

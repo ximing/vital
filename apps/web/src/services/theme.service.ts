@@ -5,8 +5,8 @@ export class ThemeService extends Service {
   choice: ThemeChoice = typeof window === 'undefined' ? 'system' : getThemeChoice();
 
   setChoice(choice: ThemeChoice): void {
-    setThemeChoice(choice);
     this.choice = choice;
+    setThemeChoice(choice);
   }
 
   reset(): void {

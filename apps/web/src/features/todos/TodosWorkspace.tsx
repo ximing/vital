@@ -249,11 +249,16 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
 
   return (
     <div className="flex h-full min-h-0 bg-canvas">
-      <main id="main" data-region="focus-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col px-4">
-          <header className="flex items-center justify-between gap-2 px-2 pb-2 pt-3">
-            <h1 className="truncate text-[1.3rem] font-bold leading-tight tracking-[-0.02em]">
-              {title}
-            </h1>
+      <main id="main" data-region="focus-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col px-6 md:px-8">
+          <header className="flex items-baseline justify-between gap-3 px-2 pb-4 pt-5">
+            <div className="flex min-w-0 items-baseline gap-3">
+              <h1 className="font-display truncate text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
+                {title}
+              </h1>
+              <span className="shrink-0 font-mono text-[length:var(--text-caption)] uppercase tracking-wide text-tertiary">
+                {todayYmd(timeZone)} · {new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone }).format(new Date())}
+              </span>
+            </div>
             <div ref={viewMenuRef} className="relative">
               <button
                 type="button"

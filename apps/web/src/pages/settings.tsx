@@ -43,8 +43,8 @@ export function SettingsBlock({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl bg-surface px-6 py-6">
-      <h2 className="text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-fg">
+    <section className="rounded-[18px] border border-border bg-surface px-6 py-6 shadow-[var(--shadow-xs)]">
+      <h2 className="text-[length:var(--text-body)] font-semibold leading-[var(--text-body-lh)] text-fg">
         {title}
       </h2>
       {description ? (
@@ -62,16 +62,16 @@ export function SettingsPage() {
   const tab = isTab(search.get('tab'));
 
   return (
-    <div data-region="settings-canvas" className="h-full min-h-0 w-full overflow-y-auto px-8 py-10 xl:px-12">
-      <div className="w-full max-w-6xl">
-        <h1 className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
+    <div data-region="settings-canvas" className="h-full min-h-0 w-full overflow-y-auto px-6 py-12">
+      <div className="mx-auto w-full max-w-2xl">
+        <h1 className="font-display text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
           {t.settings.title}
         </h1>
         <p className="mt-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
           {t.empty.settings}
         </p>
 
-        <div className="mt-8 flex flex-wrap gap-1" role="tablist" aria-label={t.settings.title}>
+        <div className="mt-8 inline-flex flex-wrap gap-1 rounded-full bg-surface-muted p-1" role="tablist" aria-label={t.settings.title}>
           {TABS.map((item) => {
             const active = tab === item.id;
             return (
@@ -81,8 +81,10 @@ export function SettingsPage() {
                 role="tab"
                 aria-selected={active}
                 onClick={() => setSearch(item.id === 'account' ? {} : { tab: item.id })}
-                className={`inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color] duration-[var(--ease-out)] ${
-                  active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
+                className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color,box-shadow] duration-[var(--ease-out)] ${
+                  active
+                    ? 'bg-elevated font-medium text-fg shadow-[var(--shadow-xs)]'
+                    : 'text-muted hover:text-fg'
                 }`}
               >
                 <Icon icon={item.icon} size={15} />

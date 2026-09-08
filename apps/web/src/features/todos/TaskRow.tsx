@@ -31,14 +31,14 @@ export function TaskCheckbox({
       ? 'border-overdue'
       : soon
         ? 'border-due'
-        : 'border-border';
+        : 'border-tertiary/60';
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={done}
       aria-label={t.todos.complete}
-      className={`mt-0.5 h-[1.125rem] w-[1.125rem] shrink-0 rounded-full border ${ring}`}
+      className={`mt-0.5 h-[1.125rem] w-[1.125rem] shrink-0 rounded-full border-[1.5px] ${ring}`}
       onClick={(event) => {
         event.stopPropagation();
         onToggle();
@@ -105,22 +105,22 @@ export function TaskRow({
       onClick={onSelect}
       onDoubleClick={onOpen}
       onContextMenu={onContextMenu}
-      className={`group flex cursor-pointer items-start gap-2.5 px-2 py-[0.45rem] ${
-        selected ? 'rounded-lg bg-surface-muted' : 'rounded-lg hover:bg-surface-muted/50'
+      className={`group flex cursor-pointer items-start gap-2.5 px-3 py-2.5 ${
+        selected ? 'rounded-lg bg-surface-muted' : 'rounded-lg hover:bg-surface'
       } ${depth === 1 ? 'ml-7' : ''}`}
     >
       <TaskCheckbox task={task} timeZone={timeZone} onToggle={onComplete} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-3">
           <p
-            className={`min-w-0 flex-1 truncate text-[length:var(--text-body)] leading-[var(--text-body-lh)] ${
+            className={`min-w-0 flex-1 truncate text-[length:var(--text-body)] font-medium leading-[var(--text-body-lh)] ${
               done ? 'text-muted line-through' : 'text-fg'
             }`}
           >
             <PriorityMark priority={task.priority} className="mr-1.5 align-middle" />
             {task.title}
           </p>
-          <p className="flex max-w-[46%] shrink-0 items-center justify-end gap-2 truncate text-right text-[length:var(--text-caption)] leading-[var(--text-caption-lh)]">
+          <p className="flex max-w-[46%] shrink-0 items-center justify-end gap-2 truncate text-right font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums">
             {listName ? (
               <span data-task-meta="project" className="truncate text-tertiary">
                 {listName}
@@ -169,7 +169,7 @@ export function TaskRow({
               <span
                 key={tag.id}
                 data-task-meta="tag"
-                className="inline-flex h-5 items-center rounded-md bg-accent-subtle px-1.5 text-[length:var(--text-caption)] text-secondary"
+                className="inline-flex h-5 items-center rounded-full bg-accent-subtle px-2 text-[length:var(--text-caption)] font-medium text-accent"
               >
                 {tag.name}
               </span>

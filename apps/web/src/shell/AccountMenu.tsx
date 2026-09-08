@@ -31,15 +31,15 @@ export function AccountMenu({ collapsed, railWidth }: { collapsed: boolean; rail
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative shrink-0 border-t border-border p-2">
+    <div ref={rootRef} className="relative mx-1">
       <button
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
         title={user?.displayName}
         onClick={() => setOpen((value) => !value)}
-        className={`flex min-h-[var(--touch-min)] w-full items-center gap-2 px-1 text-left hover:bg-surface-muted ${
-          collapsed ? 'justify-center' : ''
+        className={`flex h-9 w-full items-center rounded-md text-left text-muted hover:bg-surface-muted hover:text-fg ${
+          collapsed ? 'justify-center' : 'gap-2 px-1'
         }`}
       >
         <span
@@ -57,7 +57,7 @@ export function AccountMenu({ collapsed, railWidth }: { collapsed: boolean; rail
       {open ? (
         <div
           role="menu"
-          className="fixed z-[var(--z-lightbox)] w-56 border border-border bg-surface py-1 shadow-[var(--shadow)]"
+          className="fixed z-[var(--z-lightbox)] w-56 overflow-hidden rounded-xl border border-border bg-elevated py-1 shadow-[var(--shadow)]"
           style={{ left: collapsed ? railWidth + 8 : 8, bottom: 8 }}
         >
           <div className="border-b border-border px-3 py-2">

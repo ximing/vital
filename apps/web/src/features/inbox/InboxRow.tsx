@@ -71,7 +71,7 @@ function StatusChip({ status }: { status: 'favorite' | 'archived' | 'converted' 
         : 'bg-surface-muted text-tertiary';
   return (
     <span
-      className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-px text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${tone}`}
+      className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${tone}`}
     >
       <Icon icon={glyph} size={11} />
       {t.inbox[status]}
@@ -121,7 +121,7 @@ export function SaveRow({
     <Link
       to={`/inbox/${item.id}`}
       data-density="reading-row"
-      className={`group relative flex gap-2.5 px-3 py-2.5 transition-[background-color] duration-[var(--ease-out)] ${
+      className={`group relative mx-1 flex gap-2.5 rounded-lg px-3 py-2.5 transition-[background-color] duration-[var(--ease-out)] ${
         selected ? 'bg-surface-muted' : 'hover:bg-surface-muted'
       }`}
     >

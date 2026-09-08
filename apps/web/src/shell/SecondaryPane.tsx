@@ -16,6 +16,7 @@ import { useRef, type PointerEvent } from 'react';
 import { NavLink, useLocation } from 'react-router';
 import { t } from '@/copy';
 import { REPORT_TYPES } from '@/features/reports/model';
+import { useReportCountsQuery } from '@/features/reports/queries';
 import { ListShortcuts, UserListsNav } from '@/features/todos';
 import { useCountsQuery } from '@/features/todos/queries';
 import { CapturePane } from '@/shell/CapturePane';
@@ -79,7 +80,7 @@ export function SecondaryPane({
   return (
     <aside
       data-region="library"
-      className="relative flex h-full min-h-0 shrink-0 flex-col self-stretch bg-surface"
+      className="relative flex h-full min-h-0 shrink-0 flex-col self-stretch border-r border-border bg-surface"
       style={{ width }}
       aria-label={title}
     >
@@ -133,15 +134,14 @@ function TodosNav({ pathname, search }: { pathname: string; search: string }) {
             <Icon icon={item.icon} className="shrink-0 opacity-80" />
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             {count ? (
-              <span className="ml-auto shrink-0 pl-2 text-[length:var(--text-caption)] tabular-nums text-tertiary">
+              <span className="ml-auto shrink-0 pl-2 font-mono text-[length:var(--text-caption)] tabular-nums text-tertiary">
                 {count > 99 ? '99+' : count}
               </span>
             ) : null}
           </NavLink>
         );
       })}
-      <div className="mx-3 my-3 h-px bg-border/80" />
-      <p className="px-3 pb-1.5 pt-0.5 text-[length:var(--text-caption)] text-muted">{t.rail.lists}</p>
+      <p className="eyebrow eyebrow-rule px-3 pb-2 pt-3">{t.rail.lists}</p>
       <UserListsNav icon={Folder} addIcon={Plus} />
     </>
   );
@@ -149,18 +149,27 @@ function TodosNav({ pathname, search }: { pathname: string; search: string }) {
 
 function ReflectNav({ search }: { search: string }) {
   const current = reportTypeOf(search);
+  const counts = useReportCountsQuery().data;
   return (
     <>
-      {REPORT_TYPES.map((type) => (
-        <NavLink
-          key={type}
-          to={type === 'daily' ? '/reports' : `/reports?type=${type}`}
-          className={railNavClass(current === type)}
-        >
-          <Icon icon={REPORT_ICONS[type]} className="shrink-0 opacity-80" />
-          <span className="truncate">{t.reports[type]}</span>
-        </NavLink>
-      ))}
+      {REPORT_TYPES.map((type) => {
+        const count = counts?.[type] ?? 0;
+        return (
+          <NavLink
+            key={type}
+            to={type === 'daily' ? '/reports' : `/reports?type=${type}`}
+            className={railNavClass(current === type)}
+          >
+            <Icon icon={REPORT_ICONS[type]} className="shrink-0 opacity-80" />
+            <span className="min-w-0 flex-1 truncate">{t.reports[type]}</span>
+            {count ? (
+              <span className="ml-auto shrink-0 pl-2 font-mono text-[length:var(--text-caption)] tabular-nums text-tertiary">
+                {count > 99 ? '99+' : count}
+              </span>
+            ) : null}
+          </NavLink>
+        );
+      })}
     </>
   );
 }

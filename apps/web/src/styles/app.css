@@ -29,10 +29,12 @@
   --color-src-manual: var(--src-manual);
   --font-sans:
     Inter, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --font-display:
+    Sora, Inter, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
   --shadow-focus: 0 0 0 3px var(--focus-ring);
   --spacing-rail: 56px;
   --spacing-pane: 248px;
@@ -63,6 +65,39 @@ body {
 
 :focus:not(:focus-visible) {
   outline: none;
+}
+
+/* Editorial group label — 11px 大写宽字距，杂志感的低成本来源 */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.eyebrow-accent {
+  color: var(--accent-primary);
+}
+.eyebrow-danger {
+  color: var(--status-overdue);
+}
+/* Eyebrow with a trailing hairline — the editorial group divider */
+.eyebrow-rule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.eyebrow-rule::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 @keyframes pulse-breath {
@@ -313,8 +348,32 @@ body {
   outline: none;
 }
 
+.report-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.report-paper {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow);
+}
+
+.report-paper::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-primary), transparent 70%);
+  opacity: 0.85;
+}
+
 .report-paper .report-doc {
   min-height: 100%;
+  padding: var(--space-4) var(--space-5);
 }
 
 .report-source {

@@ -17,11 +17,11 @@ describe('DateField', () => {
     );
 
     const trigger = screen.getByRole('button', { name: '提醒时间' });
-    expect(trigger).toHaveClass('h-[var(--field-h)]', 'rounded-md');
+    expect(trigger).toHaveClass('h-[var(--field-h)]', 'rounded-md', 'border-border', 'bg-surface');
     await user.click(trigger);
     expect(screen.getByRole('dialog', { name: '日期选择器' })).toHaveClass(
       'bg-elevated',
-      'rounded-md',
+      'rounded-xl',
     );
     expect(screen.getByRole('option', { name: '9时' })).toBeInTheDocument();
   });

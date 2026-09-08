@@ -101,10 +101,10 @@ export function TaskDetail({
   return (
     <aside
       data-region="detail"
-      className="flex h-full min-h-0 w-full shrink-0 flex-col bg-surface"
+      className="flex h-full min-h-0 w-full shrink-0 flex-col border-l border-border bg-surface"
       aria-label={task.title}
     >
-      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
         <TaskCheckbox task={task} timeZone={zone} onToggle={() => onComplete(task)} />
         <SchedulePopover
           draft={schedule}
@@ -113,7 +113,7 @@ export function TaskDetail({
           align="end"
           onChange={(next) => onPatch(draftToPatch(next, zone))}
         />
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex items-center gap-1">
           <PriorityMenu value={task.priority} onChange={(priority) => onPatch({ priority })} />
           {movable ? (
             <ListPicker
@@ -128,7 +128,7 @@ export function TaskDetail({
               aria-label={t.todos.more}
               aria-expanded={moreMenu.open}
               onClick={() => moreMenu.toggle()}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
             >
               <Icon icon={Ellipsis} size={15} />
             </button>
@@ -172,7 +172,7 @@ export function TaskDetail({
                     {t.todos.clearDate}
                   </button>
                 ) : null}
-                <div className="mx-1 my-1 h-px bg-border/60" />
+                <div className="mx-1 my-1 h-px bg-border" />
                 <button
                   type="button"
                   role="menuitem"
@@ -189,7 +189,7 @@ export function TaskDetail({
           </div>
           <button
             type="button"
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
             onClick={() => closeDetail()}
             aria-label={t.todos.closeDetail}
           >
@@ -198,13 +198,13 @@ export function TaskDetail({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-4">
         <textarea
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={saveTitle}
           rows={1}
-          className="w-full resize-none bg-transparent text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em] text-fg outline-none"
+          className="font-display w-full resize-none bg-transparent text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] text-fg outline-none"
           aria-label={t.todos.title}
         />
 
@@ -215,7 +215,7 @@ export function TaskDetail({
               <button
                 key={tag.id}
                 type="button"
-                className="h-6 rounded-full bg-accent-subtle px-2 text-[length:var(--text-caption)] text-fg"
+                className="h-6 rounded-full bg-accent-subtle px-2.5 text-[length:var(--text-caption)] font-medium text-accent transition-opacity duration-[var(--ease-out)] hover:opacity-75"
                 onClick={() => toggleTag(tag.id)}
               >
                 #{tag.name}
@@ -223,7 +223,7 @@ export function TaskDetail({
             ))}
           <form onSubmit={(e) => void addTag(e)}>
             <input
-              className="h-6 w-28 rounded-full bg-transparent px-2 text-[length:var(--text-caption)] text-fg placeholder:text-muted outline-none hover:bg-surface-muted focus:bg-surface-muted"
+              className="h-6 w-28 rounded-full border border-dashed border-border bg-transparent px-2.5 text-[length:var(--text-caption)] text-fg outline-none transition-[background-color,border-color] duration-[var(--ease-out)] placeholder:text-muted hover:border-tertiary/50 focus:border-focus focus:bg-surface"
               value={tagDraft}
               onChange={(e) => setTagDraft(e.target.value)}
               placeholder={t.todos.addTag}
@@ -233,63 +233,65 @@ export function TaskDetail({
           </form>
         </div>
 
-        <div className="mt-6">
-          <p className="mb-1.5 text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-muted">
+        <div className="mt-7">
+          <p className="eyebrow eyebrow-rule mb-2.5">
             {t.todos.notes}
           </p>
           <NotesEditor value={notes} onChange={queueNotes} />
         </div>
 
         {task.parentId === null ? (
-          <div className="mt-6 rounded-xl bg-canvas px-3 py-2.5 ring-1 ring-border/50">
-            <p className="mb-1 flex items-baseline gap-1.5 text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-fg">
+          <div className="mt-7">
+            <p className="eyebrow eyebrow-rule mb-2.5">
               {t.todos.subtasks}
               {subtasks.length > 0 ? (
-                <span className="text-[length:var(--text-caption)] font-normal text-tertiary">
+                <span className="font-mono normal-case tracking-normal tabular-nums opacity-80">
                   {subtasks.filter((child) => child.status === 'done').length}/{subtasks.length}
                 </span>
               ) : null}
             </p>
-            <ul className="flex flex-col">
-              {subtasks.map((child) => (
-                <li
-                  key={child.id}
-                  className="flex min-h-9 items-center gap-2.5 border-b border-border/50 last:border-b-0"
-                >
-                  <TaskCheckbox task={child} timeZone={zone} onToggle={() => onComplete(child)} />
-                  <button
-                    type="button"
-                    className={`min-w-0 flex-1 truncate py-1.5 text-left text-[length:var(--text-body)] ${
-                      child.status === 'done' ? 'text-muted line-through' : 'text-fg'
-                    }`}
-                    onClick={() => todosUi().openDetail(child.id)}
+            <div className="rounded-[14px] border border-border bg-canvas px-3 py-1.5">
+              <ul className="flex flex-col">
+                {subtasks.map((child) => (
+                  <li
+                    key={child.id}
+                    className="flex min-h-10 items-center gap-2.5 border-b border-border/60 last:border-b-0"
                   >
-                    {child.title}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const next = subTitle.trim();
-                if (next === '') return;
-                onAddSubtask(next);
-                setSubTitle('');
-              }}
-            >
-              <label className="flex h-9 items-center gap-2 text-accent">
-                <Icon icon={Plus} size={15} className="shrink-0" />
-                <input
-                  className="h-full min-w-0 flex-1 bg-transparent text-[length:var(--text-meta)] text-fg placeholder:text-accent/70 outline-none"
-                  value={subTitle}
-                  onChange={(e) => setSubTitle(e.target.value)}
-                  placeholder={t.todos.addSubtask}
-                  aria-label={t.todos.addSubtask}
-                  maxLength={500}
-                />
-              </label>
-            </form>
+                    <TaskCheckbox task={child} timeZone={zone} onToggle={() => onComplete(child)} />
+                    <button
+                      type="button"
+                      className={`min-w-0 flex-1 truncate py-1.5 text-left text-[length:var(--text-body)] ${
+                        child.status === 'done' ? 'text-muted line-through' : 'text-fg'
+                      }`}
+                      onClick={() => todosUi().openDetail(child.id)}
+                    >
+                      {child.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const next = subTitle.trim();
+                  if (next === '') return;
+                  onAddSubtask(next);
+                  setSubTitle('');
+                }}
+              >
+                <label className="flex h-10 items-center gap-2 text-accent">
+                  <Icon icon={Plus} size={15} className="shrink-0" />
+                  <input
+                    className="h-full min-w-0 flex-1 bg-transparent text-[length:var(--text-meta)] text-fg placeholder:text-accent/70 outline-none"
+                    value={subTitle}
+                    onChange={(e) => setSubTitle(e.target.value)}
+                    placeholder={t.todos.addSubtask}
+                    aria-label={t.todos.addSubtask}
+                    maxLength={500}
+                  />
+                </label>
+              </form>
+            </div>
           </div>
         ) : null}
 
@@ -316,14 +318,14 @@ function ListPicker({
         aria-label={t.todos.list}
         aria-expanded={popover.open}
         onClick={() => popover.toggle()}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
       >
         <Icon icon={Folder} size={15} />
       </button>
       {popover.open ? (
         <div
           role="menu"
-          className={`absolute left-0 z-[var(--z-dropdown)] mt-1 max-h-56 w-44 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
+          className={`absolute right-0 z-[var(--z-dropdown)] mt-1 max-h-56 w-44 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
         >
           {options.map((item) => (
             <button

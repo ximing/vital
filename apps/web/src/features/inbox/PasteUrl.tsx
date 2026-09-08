@@ -94,8 +94,8 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
               if (preview) setPreview(null);
             }}
             placeholder={t.inbox.pastePlaceholder}
-            aria-label={t.inbox.pasteUrl}
-            className="h-9 w-full min-w-0 rounded-md border border-border bg-canvas pl-8 pr-9 text-[length:var(--text-meta)] text-fg placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            aria-label={t.inbox.pastePlaceholder}
+            className="h-10 w-full min-w-0 rounded-[12px] border border-border bg-canvas pl-8 pr-9 text-[length:var(--text-meta)] text-fg placeholder:text-tertiary focus-visible:outline-none focus-visible:border-focus focus-visible:ring-2 focus-visible:ring-accent/40"
           />
           <button
             type="submit"
@@ -118,7 +118,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
         </div>
       ) : null}
       {preview ? (
-        <div className="mt-3 min-w-0 rounded-md border border-border bg-surface px-3 py-3">
+        <div className="mt-3 min-w-0 rounded-lg border border-border bg-surface px-3.5 py-3.5 shadow-[var(--shadow-xs)]">
           <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
             {t.inbox.preview}
           </p>
