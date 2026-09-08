@@ -1,4 +1,5 @@
 import type { InboxItem, List, UserProfile } from '@vital/dto';
+import type { SaveKind } from './capture-helpers.js';
 
 export interface CaptureDraft {
   title: string;
@@ -15,6 +16,38 @@ export interface CaptureDraft {
   mode: 'inbox' | 'task';
 }
 
+export type PopupMode = 'article' | 'selection' | 'task';
+
+export interface CapturePayload {
+  title: string;
+  originalUrl: string;
+  extractedText: string | null;
+  extractedHtml: string | null;
+  excerpt: string | null;
+  byline: string | null;
+  siteName: string | null;
+  imageSrcs: string[];
+  selection: string;
+  tabId: number | null;
+}
+
+export const COMMIT_PORT_NAME = 'vital-commit';
+
+export interface CommitPortMessage {
+  type: 'commit-capture';
+  capture: CapturePayload;
+  title: string;
+  note: string;
+  mode: PopupMode;
+  listId?: string;
+}
+
+export type CommitPortEvent =
+  | { type: 'created'; kind: SaveKind; id: string }
+  | { type: 'progress'; done: number; total: number }
+  | { type: 'done'; failed: number }
+  | { type: 'error'; message: string };
+
 export type PanelRequest =
   | { type: 'session' }
   | { type: 'logout' }
@@ -25,6 +58,7 @@ export type PanelRequest =
   | { type: 'lists' }
   | { type: 'load-draft' }
   | { type: 'clear-draft' }
+  | { type: 'capture-active-tab' }
   | {
       type: 'commit-draft';
       title: string;
@@ -38,6 +72,7 @@ export type PanelResponse =
   | { ok: true; items: InboxItem[] }
   | { ok: true; lists: List[] }
   | { ok: true; draft: CaptureDraft | null }
+  | { ok: true; capture: CapturePayload | null }
   | { ok: true }
   | { ok: false; error: string };
 
@@ -68,6 +103,7 @@ export function isPanelRequest(value: unknown): value is PanelRequest {
     value.type === 'lists' ||
     value.type === 'load-draft' ||
     value.type === 'clear-draft' ||
+    value.type === 'capture-active-tab' ||
     value.type === 'commit-draft'
   );
 }
@@ -101,5 +137,22 @@ export function isExternalAuthMessage(
   const rec = value as Record<string, unknown>;
   return (
     rec.type === 'vital-extension-auth' && typeof rec.code === 'string' && rec.code.length >= 20
+  );
+}
+
+export function isCommitPortMessage(value: unknown): value is CommitPortMessage {
+  if (typeof value !== 'object' || value === null) return false;
+  const rec = value as Record<string, unknown>;
+  if (rec.type !== 'commit-capture') return false;
+  if (typeof rec.title !== 'string' || typeof rec.note !== 'string') return false;
+  if (rec.mode !== 'article' && rec.mode !== 'selection' && rec.mode !== 'task') return false;
+  if (rec.listId !== undefined && typeof rec.listId !== 'string') return false;
+  if (typeof rec.capture !== 'object' || rec.capture === null) return false;
+  const cap = rec.capture as Record<string, unknown>;
+  return (
+    typeof cap.title === 'string' &&
+    typeof cap.originalUrl === 'string' &&
+    Array.isArray(cap.imageSrcs) &&
+    typeof cap.selection === 'string'
   );
 }
