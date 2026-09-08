@@ -29,6 +29,8 @@ const httpUrlSchema = z
 export interface InboxAsset {
   id: string;
   attachmentId: string;
+  /** MIME type of the underlying attachment, e.g. `application/pdf`. */
+  mime: string;
   /** Private S3 URL, signed by the server for six hours. */
   url?: string;
   originalSrc: string;

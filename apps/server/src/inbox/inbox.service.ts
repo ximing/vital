@@ -101,6 +101,7 @@ export function toInboxDto(row: InboxItemRow, assets: InboxAsset[]): InboxItem {
 async function toAssetDto(row: {
   id: string;
   attachmentId: string;
+  mime: string;
   originalSrc: string;
   sortOrder: number;
   s3Key: string;
@@ -109,6 +110,7 @@ async function toAssetDto(row: {
   return {
     id: row.id,
     attachmentId: row.attachmentId,
+    mime: row.mime,
     url: await getStorage().generateAccessUrl(row.s3Key, row.storageMeta, 21_600),
     originalSrc: row.originalSrc,
     sortOrder: row.sortOrder,
@@ -129,6 +131,7 @@ export async function loadAssetsByItemIds(ids: string[]): Promise<Map<string, In
     if (list) list.push(await toAssetDto({
       id: row.inbox_assets.id,
       attachmentId: row.inbox_assets.attachmentId,
+      mime: row.attachments.mime,
       originalSrc: row.inbox_assets.originalSrc,
       sortOrder: row.inbox_assets.sortOrder,
       s3Key: row.attachments.s3Key,
