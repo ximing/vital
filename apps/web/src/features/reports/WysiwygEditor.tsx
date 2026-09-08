@@ -278,6 +278,9 @@ export function WysiwygEditor({
       const id = href !== null ? uploadIdOf(href) : null;
       if (id !== null) {
         // Upload refs persist as /api/v1/uploads/<id>; open the signed url instead.
+        // preventDefault: in read-only mode the browser would otherwise follow the
+        // raw href, and the 302 route no longer exists (current tab would 404).
+        event.preventDefault();
         const resolved = uploadUrls[id];
         if (resolved !== undefined) {
           window.open(resolved, '_blank', 'noopener');
