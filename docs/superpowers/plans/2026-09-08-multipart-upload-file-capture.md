@@ -98,8 +98,9 @@ describe('part sizing', () => {
 
   it('huge files stay within the 10000-part S3 limit', () => {
     const size = MAX_UPLOAD_BYTES;
-    const partSize = partSizeFor(size);
-    expect(partSize).toBe(Math.ceil(size / MAX_UPLOAD_PARTS));
+    // 5GB / 10000 = ~524KB < 5MB, so the 5MB floor wins at the cap.
+    expect(partSizeFor(size)).toBe(MIN_UPLOAD_PART_BYTES);
+    expect(totalPartsFor(size)).toBe(Math.ceil(size / MIN_UPLOAD_PART_BYTES));
     expect(totalPartsFor(size)).toBeLessThanOrEqual(MAX_UPLOAD_PARTS);
   });
 });
@@ -166,7 +167,7 @@ export function isUploadableMime(mime: string): boolean {
 }
 ```
 
-3. 新协议类型（替换 `uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse`——这三个删除）：
+3. 新协议类型（新增；旧 `uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse` 本任务保留、各标 `/** @deprecated removed in Task 3 */`，Task 3 随 service 重写删除——避免 T1-T3 之间 server 编译断裂）：
 
 ```ts
 export interface UploadedPart {
@@ -227,7 +228,7 @@ export interface UploadUrlResponse {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @vital/dto test && pnpm --filter @vital/server typecheck`
-Expected: dto PASS；server typecheck PASS（`UploadPresignInput` 被删，server 还在 import 会红——**所以本步同时把 `apps/server/src/uploads/uploads.service.ts`/`uploads.routes.ts` 里对已删类型的 import 改为 `import type { ... } from '@vital/dto'` 的最小修补**？不行——这会把 T3 的工作提前。**改法：保留旧三类型不删**（`uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse` 标 `@deprecated`），Task 3 删。dto 只做纯增量。）
+Expected: dto PASS；server typecheck PASS（旧三类型保留至 Task 3，server 现有 import 不断裂）。
 
 - [ ] **Step 5: Commit**
 
@@ -784,6 +785,8 @@ describe('inbox asset mime', () => {
 
 （`users`/`inboxItems`/`inboxAssets` 的必填列以 schema 实际为准——先读 `apps/server/src/db/schema/users.ts` 和 `inbox.ts`；`source` 枚举在 6334a0a 后含 `wechat`，用 `'extension'` 安全。）
 
+**rev3 修订**：3. 新协议类型段落措辞统一为——旧 `uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse` **保留不删**（标 `/** @deprecated removed in Task 3 */` 注释），Task 3 随 service 重写一并删除。
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @vital/server test -- inbox/asset-mime`
@@ -1204,7 +1207,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - Produces:
   - `fileKindOf(url): 'pdf' | 'video' | 'audio' | null`
   - `fileModeFromResponse(url, contentType, contentLength): { url; mime; size } | null`（**未知长度一律 null**——协议 size 必须正数；MIME 收紧为 pdf/video/audio 三类，image/* 不算文件模式）
-  - `createStreamPartSource(url: string, partSize: number, totalSize: number): { partSource: (start, end) => Promise<Blob>; knownLength: () => number }` — **字节对齐**：内部 reader 跟踪 `consumed` 字节；请求的 `start > consumed` 时先丢弃 `start - consumed` 字节再取；`start < consumed`（不应发生）抛错；流提前结束抛 `UPLOAD_STREAM_SHORT`
+  - `createStreamPartSource(stream: ReadableStream<Uint8Array>): StreamPartSource`（`StreamPartSource = { partSource: (start: number, end: number) => Promise<Blob> }`）— **字节对齐**：内部 reader 跟踪 `consumed` 字节；请求的 `start > consumed` 时先丢弃 `start - consumed` 字节再取；`start < consumed`（不应发生）抛 `UPLOAD_STREAM_REWIND`；流提前结束抛 `UPLOAD_STREAM_SHORT`
   - `PopupMode` 加 `'file'`；`CapturePayload` 加 `file: { url: string; mime: string; size: number } | null`
   - `initialMode(capture: CapturePayload): PopupMode` — file 优先，其次 selection，再次 article
   - `commitCapture` file 分支：createExtensionItem → 流式 rehost（resume：`chrome.storage.session` key `vital.rehost.<sha256(canonicalUrl)>` 存 `{ attachmentId, size, mime }`）→ patchInboxAssets
@@ -1267,7 +1270,7 @@ function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
 describe('createStreamPartSource', () => {
   it('sequential slices consume the stream in order', async () => {
     const blob = new Blob(['aaaabbbbcccc']);
-    const src = createStreamPartSourceFromBlob(blob, 4);
+    const src = createStreamPartSourceFromBlob(blob);
     expect(await (await src.partSource(0, 4)).text()).toBe('aaaa');
     expect(await (await src.partSource(4, 8)).text()).toBe('bbbb');
     expect(await (await src.partSource(8, 12)).text()).toBe('cccc');
@@ -1277,26 +1280,26 @@ describe('createStreamPartSource', () => {
     // Simulate a resumed upload: parts 1 already done, next request is (8, 12)
     // on a FRESH stream that starts at byte 0.
     const blob = new Blob(['aaaabbbbcccc']);
-    const src = createStreamPartSourceFromBlob(blob, 4);
+    const src = createStreamPartSourceFromBlob(blob);
     expect(await (await src.partSource(8, 12)).text()).toBe('cccc'); // aaaabbbb discarded
   });
 
   it('start behind the current position throws (cannot rewind a stream)', async () => {
     const blob = new Blob(['aaaabbbb']);
-    const src = createStreamPartSourceFromBlob(blob, 4);
+    const src = createStreamPartSourceFromBlob(blob);
     await src.partSource(4, 8);
     await expect(src.partSource(0, 4)).rejects.toThrow();
   });
 
   it('stream ending early throws UPLOAD_STREAM_SHORT', async () => {
     const blob = new Blob(['aaaa']);
-    const src = createStreamPartSourceFromBlob(blob, 4);
+    const src = createStreamPartSourceFromBlob(blob);
     await expect(src.partSource(4, 8)).rejects.toThrow(/short/i);
   });
 });
 ```
 
-（测试通过 `createStreamPartSourceFromBlob` 辅助——真实实现 `createStreamPartSource(url, ...)` 内部 fetch；为可测，导出一个接受任意 `ReadableStream<Uint8Array>` 的内核函数。**接口设计**：`createStreamPartSource(stream: ReadableStream<Uint8Array>): StreamPartSource`，`StreamPartSource.partSource(start, end)` 字节对齐；capture.ts 里 `fetch(url).then(r => r.body)` 传入。测试直接构造 stream——上面 `createStreamPartSourceFromBlob` 就是 `createStreamPartSource(blob.stream())`。）
+（测试通过 `createStreamPartSourceFromBlob` 辅助：`const createStreamPartSourceFromBlob = (blob: Blob) => createStreamPartSource(blob.stream());`。真实调用方 capture.ts 里 `fetch(url).then(r => r.body)` 取流后传 `createStreamPartSource(stream)`。）
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -1486,7 +1489,7 @@ async function rehostDirectFile(
   file: DirectFile,
   onProgress?: (loaded: number, total: number) => Promise<void> | void,
 ): Promise<{ attachmentId: string | null; failed: number }> {
-  const resumeKey = `vital.rehost.${await sha256Hex(file.url)}`;
+  const resumeKey = `vital.rehost.${await sha256Hex(canonicalizeUrl(file.url))}`;
   const stored = await chrome.storage.session.get(resumeKey);
   const prior = stored[resumeKey] as RehostState | undefined;
   try {
@@ -1515,7 +1518,7 @@ async function rehostDirectFile(
 }
 ```
 
-（`sha256Hex` 从 canonical.ts 已导出。CORS 拒绝 → fetch 抛错 → failed=1，item 已建不丢——降级收录。）
+（`sha256Hex`/`canonicalizeUrl` 从 canonical.ts 已导出——resume key 用 canonical URL（spec ③），utm 参数不产生新 key。CORS 拒绝 → fetch 抛错 → failed=1，item 已建不丢——降级收录。）
 
 3. `commitCapture` 加 file 分支（在 task 分支之前）：
 
@@ -1530,7 +1533,12 @@ async function rehostDirectFile(
     await input.onCreated?.(outcome);
     let failed = 0;
     if (result.created) {
-      const rehosted = await rehostDirectFile(file, input.onProgress);
+      const totalParts = totalPartsFor(file.size);
+      const rehosted = await rehostDirectFile(file, (loaded, total) => {
+        // Convert byte progress to part counts for the n/N progress UI.
+        const done = Math.min(totalParts, Math.ceil(loaded / partSizeFor(file.size)));
+        return input.onProgress?.(done, totalParts);
+      });
       if (rehosted.attachmentId !== null) {
         await getClient().patchInboxAssets(result.item.id, {
           assets: [{ attachmentId: rehosted.attachmentId, originalSrc: file.url, sortOrder: 0 }],
@@ -1685,7 +1693,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - Modify: `apps/server/src/uploads/uploads.routes.ts`（`GET /api/v1/uploads/:id/url`）
 - Modify: `packages/api-client/src/client.ts`（`getUploadUrl(id): Promise<UploadUrlResponse>`）
 - Modify: `apps/web/src/features/reports/WysiwygEditor.tsx`（图片 nodeView 的 src 换签名 URL + 缓存 hook）
-- Create: `apps/web/src/features/reports/upload-url.ts`（`useUploadUrls`：批量解析 bodyMd 中的 uploads id → 签名 URL 的 hook，带模块级 Map 缓存 + 6 小时 TTL）
+- Create: `apps/web/src/features/reports/upload-url.ts`（`useUploadUrls(liveMd: string): Record<string, string>` 批量解析 uploads id → 签名 URL 的 hook，带模块级 Map 缓存 + 6 小时 TTL；另导出 `fetchUploadUrl(id: string): Promise<string>` 供插入时立即解析并写缓存）
 - Test: `apps/web/__tests__/features/reports/upload-url.test.ts(x)`（新建）
 
 **Interfaces:**
@@ -1760,7 +1768,12 @@ export function useUploadUrls(bodyMd: string): Record<string, string> {
 }
 ```
 
-`WysiwygEditor.tsx`：图片渲染处（tiptap Image 的 props 或全局替换）——最简实现：`useUploadUrls(bodyMd)` 得到映射后，一个 `resolveSrc(src)` 函数把 `/api/v1/uploads/<id>` 替换为映射里的签名 URL（查不到则原样，后续解析完成重渲染）；tiptap `Image.configure({})` 的默认渲染直接用 attrs.src——**通过 editorProps 或自定义 Image extension nodeView** 成本高，**采用**：在内容进入 editor 前（`asPm(bodyMd)` 产出后）遍历 PM JSON 把 image src 与 link href 中的 uploads 路径替换为签名 URL，序列化回 md 前再还原（`serializePmJSONToMarkdown` 的 `safeImageSrc` 对绝对 https URL 也放行，但**序列化输出会把签名 URL 持久化**——不行！）。**最终采用 nodeView**：自定义 `Image` extension，`addNodeView` 返回一个 `<img src={resolveSrc(node.attrs.src)}>` 的 DOM node view（ReactNodeViewRenderer 或纯 DOM——纯 DOM 简单），原始 attrs.src 不变（markdown 持久化不变），仅显示层替换。链接 href：tiptap Link 的 `HTMLAttributes` 钩子里映射（`Link.configure({ HTMLAttributes: ... })` 是静态的，改用 editor 的 `transformOutgoing`/装饰太重——**链接场景从简**：WysiwygEditor 的 setLink/toggleLink 不变，href 持久化 uploads 路径，编辑器内点击跳转交给浏览器（相对路径 `/api/v1/uploads/...` 在 dev/prod 会 404——**从简处理：链接点击事件拦截，`resolveSrc(href)` 后 window.open**，一处事件监听）。
+`WysiwygEditor.tsx`：图片渲染处——`useUploadUrls` 的数据源**不是静态 bodyMd prop，而是 editor 的实时内容**（否则会话内新插入的图片解析不到）：
+
+1. WysiwygEditor 维护 `liveMd` state（现有 onUpdate 里已有序列化逻辑产出 md——`serializePmJSONToMarkdown(instance.getJSON())`，把该结果同时 setState）；`useUploadUrls(liveMd)` 以实时内容为键，新插图（`uploadReportFile → setImage({src:'/api/v1/uploads/<id>'})`）的 id 进入下一次解析。
+2. nodeView：自定义 `Image` extension（`Image.extend({ addNodeView() { ... } })`，现有 `Image.configure({inline:true, allowBase64:false})` 改为 extend 形式），nodeView 渲染 `<img src={resolveSrc(node.attrs.src)}>`（纯 DOM node view；`resolveSrc` 查 `useUploadUrls` 的映射，查不到时先渲染原 src，映射到位后由 React 重渲染触发 nodeView 更新——nodeView 内部监听映射版本号或用 `editor.view.dispatch` 触发；若纯 DOM nodeView 的更新链路卡住，fallback 到 ReactNodeViewRenderer）。原始 `attrs.src` 不变（markdown 持久化不变）。
+3. **新插图立即解析**：`uploadReportFile` 返回后、`setImage` 之前，调 `upload-url.ts` 导出的 `fetchUploadUrl(id)`（该函数同时写入模块级缓存）取签名 URL 并更新映射 state——新插图无需等 liveMd 重解析。
+4. 链接 href：编辑器容器上一处 `click` 拦截——命中 `/api/v1/uploads/<id>` 形态的 href 时 `resolveSrc(href)` 后 `window.open`；持久化的 markdown 不动。
 
 （以上实现路径写明给实现者；若 nodeView 实现遇阻，fallback：`editorProps.transformPHTML` 不存在——**次选方案**：编辑器 container 上一个全局 `click` 拦截 + 图片走 nodeView。实现者按首选做，卡住按次选，都不行则回报 BLOCKED 而非自造方案。）
 
@@ -1795,7 +1808,7 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 - [ ] **Step 1: 残留清理**
 
 ```bash
-grep -rn "MAX_IMAGE_BYTES\|uploadPresignInputSchema\|presignPut\|xhrPut\|fetchPut\|putWithProgress\|fileUri" \
+grep -rn "MAX_IMAGE_BYTES\|uploadPresignInputSchema\|presignPut\|xhrPut\|fetchPut\|putWithProgress\|fileUri\|fetchUploadBlob\|completeUpload" \
   packages apps --include="*.ts" --include="*.tsx" | grep -v node_modules | grep -v dist | grep -v ".wxt"
 ```
 
@@ -1803,6 +1816,8 @@ grep -rn "MAX_IMAGE_BYTES\|uploadPresignInputSchema\|presignPut\|xhrPut\|fetchPu
 
 - `MAX_IMAGE_BYTES`：`packages/dto/src/uploads.ts` 删除该常量与 `@deprecated` 注释；引用方（`apps/extension/src/capture.ts` 的图片转存 size 上限、page-scripts.ts 的 `fetchImagesInPage` 参数）改为 `MAX_UPLOAD_BYTES`（图片转存上限随协议放宽——`MIN_IMAGE_BYTES` 保留防 tracking pixel）。
 - `uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse`：DTO 里删除（T1 标记 deprecated 的旧类型）。
+- `client.fetchUploadBlob`（GET 已删的 302 路由，apps 源码零调用方）：api-client client.ts 删除该接口方法与实现；`apps/web/__tests__/features/inbox/inbox.test.tsx` 的陈旧 mock 与 `packages/api-client/__tests__/http.test.ts` 的 requestBlob 相关断言同步删除/更新。
+- `client.completeUpload`（api-client 暴露的裸方法，POST `{}` 到新 complete 路由——新协议必须有 parts，语义已坏）：client.ts 接口与实现删除（multipart complete 只由 upload() 内部调用）。
 - 其余项应已在前序任务清零——grep 结果非空则逐个清。
 
 - [ ] **Step 2: 全量验证**
