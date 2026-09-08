@@ -219,6 +219,37 @@ describe('inbox workspace', () => {
     expect(screen.queryByText('未整理的任务')).not.toBeInTheDocument();
   });
 
+  it('shows a channel tag for plugin and wechat saves', async () => {
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: [
+        makeItem({ id: 'i1', title: '插件页', source: 'extension' }),
+        makeItem({ id: 'i2', title: '微信页', source: 'wechat' }),
+      ],
+      nextCursor: null,
+    });
+    renderAt('/inbox');
+    expect(await screen.findByText('插件页')).toBeInTheDocument();
+    expect(screen.getByText('插件收藏')).toBeInTheDocument();
+    expect(screen.getByText('微信收藏')).toBeInTheDocument();
+  });
+
+  it('lets the capture pane open archived saves', async () => {
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: [
+        makeItem({ id: 'i1', title: '未读文章' }),
+        makeItem({ id: 'i2', title: '归档文章', status: 'archived' }),
+      ],
+      nextCursor: null,
+    });
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    expect(await screen.findByText('未读文章')).toBeInTheDocument();
+    expect(screen.queryByText('归档文章')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '查看归档' }));
+    expect(await screen.findByText('归档文章')).toBeInTheDocument();
+    expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
+  });
+
   it('previews a pasted URL then creates with originalUrl', async () => {
     const created = makeItem({ id: 'i1', title: 'Example Domain' });
     vi.mocked(client.extractInbox).mockResolvedValue(preview);

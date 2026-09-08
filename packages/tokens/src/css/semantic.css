@@ -62,6 +62,13 @@
   --danger: #c95454;
   --scrim: rgb(39 43 39 / 28%);
 
+  /* Inbox source hues — kept muted to sit inside mineral garden */
+  --src-extension: #6a5cd0;
+  --src-wechat: #229e4e;
+  --src-web: #4d82d8;
+  --src-mobile: #b97922;
+  --src-manual: #2c9c8c;
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -145,6 +152,12 @@
   --danger: #eb7777;
   --scrim: rgb(0 0 0 / 48%);
   --shadow: 0 12px 32px rgb(0 0 0 / 28%);
+
+  --src-extension: #9d8ef0;
+  --src-wechat: #5ccf82;
+  --src-web: #7fa8f0;
+  --src-mobile: #e3ae55;
+  --src-manual: #5cc9b8;
 
   color-scheme: dark;
 }

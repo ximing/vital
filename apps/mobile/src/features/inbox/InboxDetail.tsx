@@ -70,7 +70,8 @@ export function InboxDetail({ inboxId }: { inboxId: string }) {
     <Screen scroll>
       <Stack.Screen options={{ title: item.title }} />
       <Text style={styles.kicker}>
-        {item.siteName ?? item.source}
+        {copy.inbox.source[item.source]}
+        {item.siteName ? ` · ${item.siteName}` : ''}
         {item.byline ? ` · ${item.byline}` : ''}
       </Text>
       {item.originalUrl ? (

@@ -22,6 +22,11 @@
   --color-overdue: var(--status-overdue);
   --color-done: var(--status-done);
   --color-doing: var(--status-doing);
+  --color-src-extension: var(--src-extension);
+  --color-src-wechat: var(--src-wechat);
+  --color-src-web: var(--src-web);
+  --color-src-mobile: var(--src-mobile);
+  --color-src-manual: var(--src-manual);
   --font-sans:
     Inter, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   --radius-sm: 6px;
@@ -204,7 +209,6 @@ body {
 }
 
 .reader-article {
-  max-width: 43.75rem;
   font-family: var(--font-sans);
   color: var(--fg-primary);
   font-size: 16px;

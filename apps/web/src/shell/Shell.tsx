@@ -5,7 +5,7 @@ import { HOME_PATH, t } from '@/copy';
 import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { AccountMenu } from '@/shell/AccountMenu';
-import { loadPaneWidth, RAIL_WIDTH, savePaneWidth } from '@/shell/chrome';
+import { loadPaneWidth, RAIL_WIDTH, savePaneWidth, type PaneSection } from '@/shell/chrome';
 import { SecondaryPane } from '@/shell/SecondaryPane';
 import { sectionOf, showsPane, type AppSection } from '@/shell/section';
 import { VitalMark } from '@/shell/VitalMark';
@@ -21,9 +21,13 @@ const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[]
 export function Shell() {
   const location = useLocation();
   const section = sectionOf(location.pathname, location.search);
-  const pane = showsPane(section);
+  const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
   const onSearch = section === 'search';
-  const [paneWidth, setPaneWidth] = useState(loadPaneWidth);
+  const [paneWidths, setPaneWidths] = useState<Record<PaneSection, number>>(() => ({
+    todos: loadPaneWidth('todos'),
+    capture: loadPaneWidth('capture'),
+    reflect: loadPaneWidth('reflect'),
+  }));
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas text-fg" data-layout="mineral-garden">
@@ -75,13 +79,13 @@ export function Shell() {
         <AccountMenu collapsed railWidth={RAIL_WIDTH} />
       </aside>
 
-      {pane ? (
+      {paneSection ? (
         <SecondaryPane
-          section={section}
-          width={paneWidth}
+          section={paneSection}
+          width={paneWidths[paneSection]}
           onResize={(next) => {
-            setPaneWidth(next);
-            savePaneWidth(next);
+            setPaneWidths((widths) => ({ ...widths, [paneSection]: next }));
+            savePaneWidth(paneSection, next);
           }}
         />
       ) : null}

@@ -1,21 +1,74 @@
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowUpRight,
+  FilePlus2,
+  ListTodo,
+  Star,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { todosUi } from '@/features/todos/todos-ui.service';
 import { humanError } from '@/lib/errors';
+import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
+import { Icon, type LucideIcon } from '@/ui/icon';
 import { EmptyReader, InboxSkeleton } from './EmptyInbox';
-import { canPatchStatus, isFavorite, nextFavoriteStatus, READER_SIZES } from './model';
+import { inboxSourceIcon, inboxSourceTextClass } from './InboxRow';
+import {
+  canPatchStatus,
+  formatCapturedAt,
+  hostLabel,
+  isFavorite,
+  nextFavoriteStatus,
+  READER_SIZES,
+} from './model';
 import { useOnline } from './online';
 import { useInboxActions, useInboxItemQuery } from './queries';
 import { ReaderArticle } from './ReaderArticle';
 import { useInboxUi } from './inbox-ui.service';
 
+const CONTENT_WIDTH = 'mx-auto w-full max-w-[64rem] px-8';
+
+function ActionButton({
+  label,
+  icon,
+  active = false,
+  activeClass = '',
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  icon: LucideIcon;
+  active?: boolean;
+  activeClass?: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={active || undefined}
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? activeClass : 'text-muted hover:bg-surface-muted hover:text-fg'
+      }`}
+    >
+      <Icon icon={icon} size={15} />
+    </button>
+  );
+}
+
 export function InboxReader() {
   const { id = '' } = useParams();
   const online = useOnline();
+  const timeZone = useAuth((s) => s.user?.timezone) ?? 'UTC';
   const query = useInboxItemQuery(id);
   const actions = useInboxActions();
   const fontSize = useInboxUi((s) => s.fontSize);
@@ -85,66 +138,88 @@ export function InboxReader() {
 
   return (
     <main id="main" data-region="reading-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-canvas">
-      <header className="sticky top-0 z-[var(--z-sticky)] bg-canvas/95 px-6 py-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1">
-            <Button
-              variant="quiet"
+      <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-canvas/90 backdrop-blur-sm">
+        <div className={`${CONTENT_WIDTH} flex h-12 items-center gap-3`}>
+          {item ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
+              <Icon
+                icon={inboxSourceIcon(item.source)}
+                size={13}
+                className={`shrink-0 ${inboxSourceTextClass(item.source)}`}
+              />
+              <span className="min-w-0 truncate">
+                {[
+                  hostLabel(item.originalUrl) ?? item.siteName,
+                  formatCapturedAt(item.capturedAt, timeZone),
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </span>
+          ) : null}
+          <div
+            className="ml-auto flex shrink-0 items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5"
+            role="group"
+            aria-label={t.inbox.actions}
+          >
+            <ActionButton
+              label={item?.status === 'archived' ? t.inbox.unarchive : t.inbox.archive}
+              icon={item?.status === 'archived' ? ArchiveRestore : Archive}
               disabled={!online || !patchable}
               onClick={() => void onArchive()}
-            >
-              {item?.status === 'archived' ? t.inbox.unarchive : t.inbox.archive}
-            </Button>
-            <Button
-              variant="quiet"
+            />
+            <ActionButton
+              label={item && isFavorite(item) ? t.inbox.unfavorite : t.inbox.favorite}
+              icon={Star}
+              active={item ? isFavorite(item) : false}
+              activeClass="bg-due/12 text-due"
               disabled={!online || !patchable}
-              aria-pressed={item ? isFavorite(item) : false}
               onClick={() => void onFavorite()}
-            >
-              {item && isFavorite(item) ? t.inbox.unfavorite : t.inbox.favorite}
-            </Button>
-            <Button
-              variant="quiet"
+            />
+            <ActionButton
+              label={converted ? t.inbox.converted : t.inbox.convert}
+              icon={ListTodo}
+              active={converted}
+              activeClass="bg-done/12 text-done"
               disabled={!online || converted || !item}
               onClick={() => void onConvert()}
-            >
-              {converted ? t.inbox.converted : t.inbox.convert}
-            </Button>
-            <Button variant="quiet" onClick={() => setReportHint(true)}>
-              {t.inbox.addToReport}
-            </Button>
-          </div>
-          <div
-            className="ml-auto flex rounded-md bg-surface p-0.5"
-            role="group"
-            aria-label={t.inbox.fontSize}
-          >
-            {READER_SIZES.map((size) => (
-              <button
-                key={size}
-                type="button"
-                aria-pressed={fontSize === size}
-                aria-label={t.inbox.font[size]}
-                className={`min-h-[var(--touch-min)] rounded-md px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
-                  fontSize === size ? 'bg-accent-subtle text-fg' : 'text-muted hover:text-fg'
-                }`}
-                onClick={() => setFontSize(size)}
-              >
-                {t.inbox.font[size]}
-              </button>
-            ))}
+            />
+            <ActionButton
+              label={t.inbox.addToReport}
+              icon={FilePlus2}
+              onClick={() => setReportHint(true)}
+            />
+            <span aria-hidden="true" className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+            <div role="group" aria-label={t.inbox.fontSize} className="flex items-center gap-0.5">
+              {READER_SIZES.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  aria-pressed={fontSize === size}
+                  aria-label={t.inbox.font[size]}
+                  className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] transition-[background-color,color] duration-[var(--ease-out)] ${
+                    fontSize === size
+                      ? 'bg-accent-subtle text-fg'
+                      : 'text-muted hover:bg-surface-muted hover:text-fg'
+                  }`}
+                  onClick={() => setFontSize(size)}
+                >
+                  {t.inbox.font[size]}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>
 
       {!online ? (
-        <div className="px-4 pt-3">
+        <div className={`${CONTENT_WIDTH} pt-3`}>
           <Banner>{t.todos.offline}</Banner>
         </div>
       ) : null}
 
       {query.error ? (
-        <div className="flex items-center gap-3 px-4 py-3">
+        <div className={`${CONTENT_WIDTH} flex items-center gap-3 py-3`}>
           <Banner>{humanError(query.error)}</Banner>
           <Button variant="ghost" onClick={() => void query.refetch()}>
             {t.inbox.retry}
@@ -153,7 +228,7 @@ export function InboxReader() {
       ) : null}
 
       {actionError ? (
-        <div className="px-4 pt-3">
+        <div className={`${CONTENT_WIDTH} pt-3`}>
           <Banner>{actionError}</Banner>
         </div>
       ) : null}
@@ -161,7 +236,7 @@ export function InboxReader() {
       {reportHint ? (
         <p
           role="status"
-          className="px-4 pt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted"
+          className={`${CONTENT_WIDTH} pt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted`}
         >
           {t.inbox.addToReportStub}
         </p>
@@ -170,7 +245,7 @@ export function InboxReader() {
       {convertNote ? (
         <p
           role="status"
-          className="px-4 pt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted"
+          className={`${CONTENT_WIDTH} pt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted`}
         >
           {convertNote}{' '}
           <Link
@@ -183,7 +258,7 @@ export function InboxReader() {
       ) : null}
 
       <div className="reader-progress w-full" aria-hidden="true" />
-      <div className="mx-auto w-full max-w-[43.75rem] flex-1 px-6 py-8">
+      <div className={`${CONTENT_WIDTH} flex-1 py-10`}>
         {query.isLoading ? (
           <InboxSkeleton />
         ) : !item ? (
@@ -193,26 +268,28 @@ export function InboxReader() {
             <h1 className="text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em]">
               {item.title}
             </h1>
-            <p className="mt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
-              <span className="text-muted">{t.inbox.originalUrl} · </span>
-              {originalUrl ? (
+            {originalUrl ? (
+              <p className="mt-3 flex items-center gap-1.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
+                <span className="shrink-0 text-muted">{t.inbox.originalUrl} · </span>
                 <a
                   href={originalUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="break-all text-accent underline-offset-4 hover:underline"
+                  className="inline-flex min-w-0 items-baseline gap-1 break-all text-accent underline-offset-4 hover:underline"
                 >
                   {originalUrl}
+                  <Icon icon={ArrowUpRight} size={12} className="shrink-0 self-center" />
                 </a>
-              ) : (
-                <span className="text-muted">{t.inbox.noOriginalUrl}</span>
-              )}
-            </p>
-            {item.byline || item.siteName ? (
-              <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-                {[item.byline, item.siteName].filter(Boolean).join(' · ')}
               </p>
             ) : null}
+            <p className="mt-1.5 flex items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              <Icon
+                icon={inboxSourceIcon(item.source)}
+                size={13}
+                className={`shrink-0 ${inboxSourceTextClass(item.source)}`}
+              />
+              {[t.inbox.source[item.source], item.byline, item.siteName].filter(Boolean).join(' · ')}
+            </p>
             <div className="mt-8">
               <ReaderArticle
                 html={item.extractedHtml}

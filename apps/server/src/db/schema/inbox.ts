@@ -76,7 +76,7 @@ export const inboxItems = pgTable(
     ),
     check(
       'inbox_items_source_check',
-      sql`${t.source} IN ('extension', 'web', 'mobile', 'manual')`,
+      sql`${t.source} IN ('extension', 'wechat', 'web', 'mobile', 'manual')`,
     ),
   ],
 );

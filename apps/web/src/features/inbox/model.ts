@@ -39,14 +39,19 @@ export function unprocessedTodos(tasks: Task[]): Task[] {
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
 }
 
+function newestFirst(items: InboxItem[]): InboxItem[] {
+  return items.slice().sort((a, b) => {
+    if (a.capturedAt === b.capturedAt) return b.id.localeCompare(a.id);
+    return a.capturedAt < b.capturedAt ? 1 : -1;
+  });
+}
+
 export function visibleSaves(items: InboxItem[]): InboxItem[] {
-  return items
-    .filter((item) => item.status !== 'archived' && item.deletedAt === null)
-    .slice()
-    .sort((a, b) => {
-      if (a.capturedAt === b.capturedAt) return b.id.localeCompare(a.id);
-      return a.capturedAt < b.capturedAt ? 1 : -1;
-    });
+  return newestFirst(items.filter((item) => item.status !== 'archived' && item.deletedAt === null));
+}
+
+export function archivedSaves(items: InboxItem[]): InboxItem[] {
+  return newestFirst(items.filter((item) => item.status === 'archived' && item.deletedAt === null));
 }
 
 export function isFavorite(item: InboxItem): boolean {
@@ -93,6 +98,44 @@ export function formatCapturedAt(iso: string, timeZone: string): string {
     minute: '2-digit',
     hourCycle: 'h23',
   }).format(new Date(iso));
+}
+
+export type DayGroupKey = 'today' | 'yesterday' | 'week' | 'earlier';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function dayGroupKey(iso: string, timeZone: string, now: Date = new Date()): DayGroupKey {
+  const dayFmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const day = dayFmt.format(new Date(iso));
+  if (day === dayFmt.format(now)) return 'today';
+  if (day === dayFmt.format(new Date(now.getTime() - DAY_MS))) return 'yesterday';
+  if (now.getTime() - new Date(iso).getTime() < 7 * DAY_MS) return 'week';
+  return 'earlier';
+}
+
+export function groupSavesByDay(
+  items: InboxItem[],
+  timeZone: string,
+): { key: DayGroupKey; items: InboxItem[] }[] {
+  const order: DayGroupKey[] = ['today', 'yesterday', 'week', 'earlier'];
+  const buckets = new Map<DayGroupKey, InboxItem[]>();
+  for (const item of items) {
+    const key = dayGroupKey(item.capturedAt, timeZone);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(item);
+    else buckets.set(key, [item]);
+  }
+  const groups: { key: DayGroupKey; items: InboxItem[] }[] = [];
+  for (const key of order) {
+    const bucket = buckets.get(key);
+    if (bucket) groups.push({ key, items: bucket });
+  }
+  return groups;
 }
 
 export function statusLabelKey(

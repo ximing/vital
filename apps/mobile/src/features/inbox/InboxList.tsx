@@ -26,13 +26,14 @@ export function InboxList() {
   const [offline, setOffline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = useCallback(async (refresh: boolean) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
     try {
       const page = await client.listInbox();
-      setItems(page.items.filter((row) => row.deletedAt === null && row.status !== 'archived'));
+      setItems(page.items.filter((row) => row.deletedAt === null));
       setError(null);
       setOffline(false);
     } catch (err) {
@@ -65,6 +66,10 @@ export function InboxList() {
 
   if (loading && items.length === 0) return <Loading />;
 
+  const archived = items.filter((row) => row.status === 'archived');
+  const viewingArchived = showArchived && archived.length > 0;
+  const data = viewingArchived ? archived : items.filter((row) => row.status !== 'archived');
+
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
       <TabHeader
@@ -82,7 +87,7 @@ export function InboxList() {
         </Banner>
       ) : null}
       <FlatList
-        data={items}
+        data={data}
         keyExtractor={(row) => row.id}
         refreshControl={
           <RefreshControl
@@ -92,10 +97,19 @@ export function InboxList() {
           />
         }
         ListEmptyComponent={
-          <EmptyState
-            title={copy.empty.inbox}
-            action={{ label: copy.actions.create, onPress: () => router.push('/inbox/new') }}
-          />
+          archived.length > 0 ? null : (
+            <EmptyState
+              title={copy.empty.inbox}
+              action={{ label: copy.actions.create, onPress: () => router.push('/inbox/new') }}
+            />
+          )
+        }
+        ListFooterComponent={
+          archived.length > 0 ? (
+            <Button variant="secondary" onPress={() => setShowArchived((value) => !value)}>
+              {viewingArchived ? copy.inbox.hideArchived : copy.inbox.showArchived}
+            </Button>
+          ) : null
         }
         renderItem={({ item }) => (
           <Pressable
@@ -113,7 +127,8 @@ export function InboxList() {
               </Text>
             ) : null}
             <Text style={styles.meta}>
-              {item.siteName ?? item.source}
+              {copy.inbox.source[item.source]}
+              {item.siteName ? ` · ${item.siteName}` : ''}
               {` · ${formatDateTime(item.capturedAt)}`}
             </Text>
           </Pressable>

@@ -124,6 +124,17 @@ export const copy = {
     archived: '已归档',
     converted: '已转换',
   },
+  inbox: {
+    showArchived: '查看归档',
+    hideArchived: '返回收藏',
+    source: {
+      extension: '插件收藏',
+      wechat: '微信收藏',
+      web: '网页收藏',
+      mobile: '手机收藏',
+      manual: '手动',
+    },
+  },
   priority: {
     0: 'P0',
     1: 'P1',

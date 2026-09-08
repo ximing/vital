@@ -1,6 +1,7 @@
 import type { InboxItem, InboxPreview, Task } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import {
+  archivedSaves,
   createInputFromPreview,
   hostLabel,
   normalizePasteUrl,
@@ -86,6 +87,32 @@ describe('unprocessedTodos / visibleSaves', () => {
     });
     const archived = makeItem({ id: 'c', title: 'C', status: 'archived' });
     expect(visibleSaves([archived, later, unread]).map((item) => item.id)).toEqual(['a', 'b']);
+  });
+
+  it('exposes archived saves so the list can open them again', () => {
+    const unread = makeItem({ id: 'a', title: 'A', capturedAt: '2026-09-06T02:00:00.000Z' });
+    const archived = makeItem({
+      id: 'c',
+      title: 'C',
+      status: 'archived',
+      capturedAt: '2026-09-06T03:00:00.000Z',
+    });
+    const older = makeItem({
+      id: 'd',
+      title: 'D',
+      status: 'archived',
+      capturedAt: '2026-09-06T01:00:00.000Z',
+    });
+    const deleted = makeItem({
+      id: 'e',
+      title: 'E',
+      status: 'archived',
+      deletedAt: '2026-09-06T04:00:00.000Z',
+    });
+    expect(archivedSaves([deleted, unread, archived, older]).map((item) => item.id)).toEqual([
+      'c',
+      'd',
+    ]);
   });
 });
 

@@ -14,7 +14,7 @@ export const MAX_INBOX_ASSETS = 200;
 export const inboxStatusSchema = z.enum(['unread', 'later', 'archived', 'converted']);
 export type InboxStatus = z.infer<typeof inboxStatusSchema>;
 
-export const inboxSourceSchema = z.enum(['extension', 'web', 'mobile', 'manual']);
+export const inboxSourceSchema = z.enum(['extension', 'wechat', 'web', 'mobile', 'manual']);
 export type InboxSource = z.infer<typeof inboxSourceSchema>;
 
 const httpUrlSchema = z

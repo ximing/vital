@@ -34,6 +34,10 @@ describe('createInboxInputSchema', () => {
       createInboxInputSchema.safeParse({ title: 'x', originalUrl: 'javascript:alert(1)' }).success,
     ).toBe(false);
   });
+
+  it('accepts wechat as a collector source', () => {
+    expect(createInboxInputSchema.parse({ title: '收藏', source: 'wechat' }).source).toBe('wechat');
+  });
 });
 
 describe('patchInboxInputSchema', () => {

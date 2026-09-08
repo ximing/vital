@@ -24,9 +24,8 @@ import {
   listIdFrom,
   reportTypeOf,
   rhythmHref,
-  type AppSection,
 } from '@/shell/section';
-import { clampPaneWidth } from '@/shell/chrome';
+import { clampPaneWidth, type PaneSection } from '@/shell/chrome';
 import { Icon } from '@/ui/icon';
 
 const SMART_ITEMS: { id: string; icon: typeof Sun; label: string }[] = [
@@ -50,7 +49,7 @@ export function SecondaryPane({
   width,
   onResize,
 }: {
-  section: AppSection;
+  section: PaneSection;
   width: number;
   onResize: (width: number) => void;
 }) {
@@ -67,7 +66,7 @@ export function SecondaryPane({
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
     if (!drag.current) return;
-    onResize(clampPaneWidth(drag.current.startW + event.clientX - drag.current.startX));
+    onResize(clampPaneWidth(drag.current.startW + event.clientX - drag.current.startX, section));
   }
 
   function onPointerUp(event: PointerEvent<HTMLDivElement>) {

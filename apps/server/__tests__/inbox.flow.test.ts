@@ -172,6 +172,18 @@ describe('inbox', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('wechat collector create is 201 without Idempotency-Key', async () => {
+    const alice = await registerUser(app);
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: '微信收藏', extractedText: '一段收藏', source: 'wechat' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().source).toBe('wechat');
+  });
+
   it('selection payload stores escaped html and source=extension', async () => {
     const alice = await registerUser(app);
     const page = 'https://example.com/article';

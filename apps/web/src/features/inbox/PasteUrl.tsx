@@ -1,9 +1,11 @@
+import { Link2, LoaderCircle, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
+import { Icon } from '@/ui/icon';
 import { hostLabel, normalizePasteUrl, PASTE_URL_ID } from './model';
 import { useInboxActions } from './queries';
 import { useInboxUi } from './inbox-ui.service';
@@ -71,27 +73,44 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
   return (
     <div className="min-w-0 px-3 pb-3 pt-1">
       <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-2">
-        <input
-          id={PASTE_URL_ID}
-          ref={inputRef}
-          type="text"
-          name="url"
-          inputMode="url"
-          autoComplete="url"
-          maxLength={2048}
-          disabled={disabled || busy}
-          value={displayed}
-          onChange={(e) => {
-            setValue(e.target.value);
-            if (preview) setPreview(null);
-          }}
-          placeholder={t.inbox.pastePlaceholder}
-          aria-label={t.inbox.pasteUrl}
-          className="h-9 w-full min-w-0 rounded-md border border-border bg-surface px-2.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
-        />
-        <Button type="submit" loading={extracting} disabled={disabled || busy} className="h-10 w-full">
-          {extracting ? t.inbox.extracting : t.inbox.extract}
-        </Button>
+        <div className="relative">
+          <Icon
+            icon={Link2}
+            size={14}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-tertiary"
+          />
+          <input
+            id={PASTE_URL_ID}
+            ref={inputRef}
+            type="text"
+            name="url"
+            inputMode="url"
+            autoComplete="url"
+            maxLength={2048}
+            disabled={disabled || busy}
+            value={displayed}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (preview) setPreview(null);
+            }}
+            placeholder={t.inbox.pastePlaceholder}
+            aria-label={t.inbox.pasteUrl}
+            className="h-9 w-full min-w-0 rounded-md border border-border bg-canvas pl-8 pr-9 text-[length:var(--text-meta)] text-fg placeholder:text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          />
+          <button
+            type="submit"
+            aria-label={extracting ? t.inbox.extracting : t.inbox.extract}
+            title={t.inbox.extract}
+            disabled={disabled || busy || displayed.trim() === ''}
+            className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-tertiary transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Icon
+              icon={extracting ? LoaderCircle : Sparkles}
+              size={14}
+              className={extracting ? 'animate-spin' : undefined}
+            />
+          </button>
+        </div>
       </form>
       {error ? (
         <div className="mt-2">

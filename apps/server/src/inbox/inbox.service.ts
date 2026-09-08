@@ -40,7 +40,13 @@ function asStatus(value: string): InboxStatus {
 }
 
 function asSource(value: string): InboxSource {
-  if (value === 'extension' || value === 'web' || value === 'mobile' || value === 'manual') {
+  if (
+    value === 'extension' ||
+    value === 'wechat' ||
+    value === 'web' ||
+    value === 'mobile' ||
+    value === 'manual'
+  ) {
     return value;
   }
   return 'manual';
