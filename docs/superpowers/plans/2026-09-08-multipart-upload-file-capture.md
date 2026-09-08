@@ -1,55 +1,58 @@
-# 统一分片上传 + 直链文件转存收录 Implementation Plan
+# 统一分片上传 + 直链文件转存收录 Implementation Plan (rev 2)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 全端统一 S3 multipart 分片上传（5GB 上限、断点续传、删除旧 presign 单 PUT 与 302 端点），扩展识别直链文件（PDF/视频/音频）转存收录，web Reader 内嵌播放/预览。
 
-**Architecture:** DTO 定义新协议常量与 schema → storage 层补 `listParts` 删 `presignPut` → server uploads service 四路由（init/presign-part/complete/abort）→ api-client `upload()` 重写为分片循环（resumeId 续传）→ 扩展 `file-kind.ts` 识别 + SW 流式转存 + popup file 模式 → web Reader mime 分支渲染。协议以 S3 ListParts 为续传权威，服务端不存分片状态。
+**Architecture:** DTO 定义新协议常量与 schema → storage 层补 `listParts` 删 `presignPut` → server uploads service 四路由（init/presign-part/complete/abort）+ 签名 URL JSON 端点 → api-client `upload()` 重写为分片循环（resumeId 续传 + 409 回退 + 注入 fetch）→ 扩展 `file-kind.ts` 识别 + SW 流式转存（字节对齐的 partSource）+ popup file 模式 → web Reader mime 分支渲染 + 报告编辑器渲染层换签名 URL → mobile partSource 适配。
 
 **Tech Stack:** zod、drizzle、AWS SDK v3（S3 presigner）、vitest、WXT MV3 service worker。
 
-**Spec:** `docs/superpowers/specs/2026-09-08-multipart-upload-file-capture-design.md`
+**Spec:** `docs/superpowers/specs/2026-09-08-multipart-upload-file-capture-design.md`（含 rev2 修订：报告 302 迁移方案见 Task 8，历史数据零迁移）
 
 ## Global Constraints
 
-- **工作区有大量用户未提交 WIP**（apps/web/features/inbox、apps/server、apps/mobile、packages/dto、packages/tokens 等 inbox wechat 相关）。提交时**只 `git add` 本任务明确列出的文件**，绝不用 `git add -A`。动共享文件（packages/dto/src/inbox.ts、apps/server/src/inbox/inbox.service.ts、apps/server/__tests__/inbox.flow.test.ts、apps/web/src/features/inbox/ 等）前先 `git diff <file>` 看 WIP；若任务改动与 WIP 交叠，按文件级 surgical 拆分（参照此前 Task 2 的教训）。
+- ~~工作区有用户未提交 WIP~~ **rev2：用户 WIP（inbox wechat）已落盘为 commit `6334a0a`，工作区干净。** 提交时仍只 `git add` 本任务列出的文件（防御性习惯）。
 - **分片大小**：`MIN_UPLOAD_PART_BYTES = 5MB`，`MAX_UPLOAD_PARTS = 10000`，`MAX_UPLOAD_BYTES = 5GB`。partSize 由服务端算：`max(5MB, ceil(size/10000))`。
 - **MIME 集合**：`ATTACHMENT_MIME_TYPES` = 现有六图 + `application/pdf` + `text/plain` + `text/markdown`（已有）+ 新增 `video/mp4, video/webm, video/quicktime, video/x-matroska, audio/mpeg, audio/mp4, audio/aac, audio/ogg, audio/wav, audio/flac`。SVG 仍排除。
-- **不留兼容**：删 `presignUpload`/presign 路由/`presignPut` adapter 方法/`xhrPut`/`fetchPut` 双轨/`putWithProgress` 选项/`GET /uploads/:id` 302 路由/`api-client.uploadUrl()`。
-- **全站文件访问一律签名 URL**（avatar 走 `toProfile` 的六小时签名不变）。
-- 测试命令（仓库根）：`pnpm --filter @vital/dto test`、`pnpm --filter @vital/api-client test`、`pnpm --filter @vital/server test`、`pnpm --filter @vital/extension test`、`pnpm --filter @vital/web test`；server 还有 `typecheck`。各包名用 `pnpm --filter` 前缀（@vital/dto、@vital/api-client、@vital/server、@vital/extension、@vital/web）。
+- **错误码约定**（server service 层显式抛，不依赖 zod 映射——zod 全部映射 400 VALIDATION_ERROR）：mime 白名单 → 422 `MEDIA_MISMATCH`；size 超限 → 413 `MEDIA_TOO_LARGE`；状态非法/不匹配 → 409 `MEDIA_INVALID_STATE`；分片号越界 → 422 `MEDIA_PART_INVALID`；complete 缺 ETag → 422 `MEDIA_PART_MISSING`；HEAD 不符 → 422 `MEDIA_MISMATCH`。
+- **`UploadedPart` 统一定义（含 ETag，全链路唯一权威）**：`{ partNumber: number; size: number; etag: string }`。S3 ListPartsCommand 的 `Part.ETag` 是 complete 需要全量 ETag 的唯一来源，续传跳片的 ETag 由 init/parts 响应携带。
+- **不留兼容**：删 `presignUpload`/presign 路由/`presignPut` adapter 方法/`xhrPut`/`fetchPut`/`putWithProgress` 选项/`fileUri` 形态/`GET /uploads/:id` 302 路由/`api-client.uploadUrl()`。
+- **文件访问一律签名 URL**；报告 markdown 里持久化的是稳定引用 `/api/v1/uploads/<id>`（**不迁移历史数据**），渲染层换签名 URL（新 JSON 端点）。
+- 测试命令（仓库根）：`pnpm --filter @vital/dto test`、`pnpm --filter @vital/api-client test`、`pnpm --filter @vital/server test`、`pnpm --filter @vital/extension test`、`pnpm --filter @vital/web test`；typecheck 各包 `pnpm --filter <pkg> typecheck`。
 - 扩展不引入 React；文案中文集中 `apps/extension/src/i18n.ts`。
 - 提交信息 conventional commits + `Co-Authored-By: Claude Code <noreply@anthropic.com>`。
-- server 测试基建：`apps/server/__tests__/helpers/storage.ts` 的 `installMockStorage()` mock 全部 adapter 方法；flow 测试用 `injectJson(app, {method, url, token, payload})`。
-- api-client 测试基建：`packages/api-client/__tests__/test-helpers.ts` 的 `respond(status, body)`/`urlOf(url)`/`bodyOf(init)`；`makeClient({fetchImpl})` 模式（见 upload.test.ts）。
+- server 测试基建：`installMockStorage()`（`apps/server/__tests__/helpers/storage.ts`）mock 全部 adapter 方法；`injectJson(app, {method, url, token, payload})`（`helpers/http.ts`，GET 不传 payload）。
+- api-client 测试基建：`respond`/`urlOf`/`bodyOf`（`packages/api-client/__tests__/test-helpers.ts`）；S3 PUT 的 mock 必须带 ETag header：`new Response(null, { status: 200, headers: { ETag: '"e1"' } })`。
+- 基线（开工前已验证全绿）：dto 45、server 136、web 123、extension 37、api-client（含既有用例）。任何包新失败即回归。
 
 ---
 
-### Task 1: DTO — 常量、MIME、multipart 协议 schema
+### Task 1: DTO — 常量、MIME、multipart 协议 schema（含 ETag）
 
 **Files:**
 - Modify: `packages/dto/src/uploads.ts`
-- Modify: `packages/dto/src/inbox.ts`（`InboxAsset` 加 `mime`）
-- Test: `packages/dto/__tests__/uploads.test.ts`（新建或追加；先看 `packages/dto/__tests__/` 现有文件）
+- Test: `packages/dto/__tests__/uploads.test.ts`（新建）
 
 **Interfaces:**
 - Consumes: 无（首个任务）。
-- Produces（后续任务全部依赖）:
-  - `MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024`、`MIN_UPLOAD_PART_BYTES = 5 * 1024 * 1024`、`MAX_UPLOAD_PARTS = 10000`
-  - `UPLOADABLE_MIME_TYPES`（完整集合，含视频/音频）、`isUploadableMime(mime: string): boolean`
-  - `partSizeFor(size: number): number`、`totalPartsFor(size: number): number`
-  - `UploadedPart { partNumber: number; size: number }`
-  - `UploadInitInput { mime: string; size: number; filename?: string; resumeId?: string }` + schema
-  - `UploadInitResponse { id: string; uploadId: string; partSize: number; totalParts: number; parts: UploadedPart[] }`
-  - `UploadPartsResponse { parts: UploadedPart[] }`
-  - `PartPresignResponse { url: string; expiresIn: number }`
-  - `CompletePartInput { partNumber: number; etag: string }`、`UploadCompletePartsInput { parts: CompletePartInput[] }` + schema（parts 数组 min 1）
-  - `InboxAsset` 增加必填 `mime: string`（现有 `url?: string` 保留）
-  - `UploadCompleteResponse` 形状不变
+- Produces:
+  - `MAX_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024`、`MIN_UPLOAD_PART_BYTES = 5 * 1024 * 1024`、`MAX_UPLOAD_PARTS = 10_000`
+  - `partSizeFor(size): number`、`totalPartsFor(size): number`
+  - `isUploadableMime(mime: string): boolean`
+  - `UploadedPart { partNumber: number; size: number; etag: string }`
+  - `uploadInitInputSchema`（mime/size/filename?/resumeId?，**不含** superRefine mime 检查与 size 上限——server service 层显式抛 422/413，schema 只做形状）
+  - `UploadInitResponse { id; uploadId; partSize; totalParts; parts: UploadedPart[] }`
+  - `UploadPartsResponse { parts: UploadedPart[] }`、`PartPresignResponse { url; expiresIn }`
+  - `uploadCompletePartsInputSchema`（parts min 1 max 10000）
+  - `UploadUrlResponse { url: string; expiresIn: number }`（Task 8 签名 URL JSON 端点用）
+  - `UploadCompleteResponse` 形状不变；`UploadInput`（api-client）见 Task 5
+
+**注意**：本任务**不动 `packages/dto/src/inbox.ts`**（`InboxAsset.mime` 挪到 Task 4，避免 server typecheck 暂红窗口）。
 
 - [ ] **Step 1: Write the failing test**
 
-先 `ls packages/dto/__tests__/`。若已有 `uploads.test.ts` 追加，否则新建。测试内容：
+新建 `packages/dto/__tests__/uploads.test.ts`：
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -58,17 +61,21 @@ import {
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_PARTS,
   MIN_UPLOAD_PART_BYTES,
+  isUploadableMime,
   partSizeFor,
   totalPartsFor,
   uploadInitInputSchema,
   uploadCompletePartsInputSchema,
-  isUploadableMime,
 } from '../src/uploads.js';
+
+const UUID = '1b671a64-40d5-491e-99b0-da01ff1f3341';
 
 describe('upload constants and mime', () => {
   it('includes video and audio mimes, still no svg', () => {
-    for (const mime of ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska',
-      'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/flac']) {
+    for (const mime of [
+      'video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska',
+      'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/wav', 'audio/flac',
+    ]) {
       expect(ATTACHMENT_MIME_TYPES).toContain(mime);
       expect(isUploadableMime(mime)).toBe(true);
     }
@@ -92,28 +99,28 @@ describe('part sizing', () => {
   it('huge files stay within the 10000-part S3 limit', () => {
     const size = MAX_UPLOAD_BYTES;
     const partSize = partSizeFor(size);
-    expect(partSize).toBeGreaterThan(MIN_UPLOAD_PART_BYTES);
     expect(partSize).toBe(Math.ceil(size / MAX_UPLOAD_PARTS));
-    expect(totalPartsFor(size)).toBe(Math.ceil(size / partSize));
     expect(totalPartsFor(size)).toBeLessThanOrEqual(MAX_UPLOAD_PARTS);
   });
 });
 
 describe('multipart schemas', () => {
-  it('validates init input incl optional resumeId', () => {
+  it('init accepts shape with optional resumeId (valid uuid)', () => {
     expect(uploadInitInputSchema.parse({ mime: 'video/mp4', size: 1000 })).toEqual({
       mime: 'video/mp4', size: 1000,
     });
     expect(
-      uploadInitInputSchema.parse({ mime: 'application/pdf', size: 10, resumeId: 'a'.repeat(36) }),
-    ).toMatchObject({ resumeId: 'a'.repeat(36) });
+      uploadInitInputSchema.parse({ mime: 'application/pdf', size: 10, resumeId: UUID }),
+    ).toMatchObject({ resumeId: UUID });
     expect(
-      uploadInitInputSchema.safeParse({ mime: 'image/svg+xml', size: 10 }).success,
+      uploadInitInputSchema.safeParse({ mime: 'video/mp4', size: 'big' }).success,
     ).toBe(false);
-    expect(uploadInitInputSchema.safeParse({ mime: 'video/mp4', size: MAX_UPLOAD_BYTES + 1 }).success).toBe(false);
+    expect(
+      uploadInitInputSchema.safeParse({ mime: 'video/mp4', size: 10, resumeId: 'not-a-uuid' }).success,
+    ).toBe(false);
   });
 
-  it('validates complete parts need at least one part', () => {
+  it('complete parts need 1..10000 parts', () => {
     expect(
       uploadCompletePartsInputSchema.parse({ parts: [{ partNumber: 1, etag: '"e1"' }] }),
     ).toEqual({ parts: [{ partNumber: 1, etag: '"e1"' }] });
@@ -122,8 +129,6 @@ describe('multipart schemas', () => {
 });
 ```
 
-inbox 的 `mime` 字段测试追加到现有 inbox 测试文件：`packages/dto/__tests__/inbox.test.ts` 里若有 InboxAsset 构造处，加 `mime: 'application/pdf'` 断言；若没有直接构造，在 uploads.test.ts 里补一条类型层面的说明即可（DTO 是 zod/类型，无运行时校验 InboxAsset——它是 interface）。**注意**：`InboxAsset` 是纯 interface，加必填字段会让 server 的 `toAssetDto` 编译报错——这正是 Task 4 修的，本任务 typecheck 会暂红，**可接受**（与此前 capture-active-tab 的模式相同）。本任务的 dto test 必须全绿。
-
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @vital/dto test`
@@ -131,9 +136,9 @@ Expected: FAIL — `partSizeFor` 等不存在。
 
 - [ ] **Step 3: Write minimal implementation**
 
-`packages/dto/src/uploads.ts` 修改：
+`packages/dto/src/uploads.ts`：
 
-1. 常量段替换（保留 `MAX_IMAGE_BYTES` 若别处仍引用——grep `packages/dto/src` 确认；extension 的 images.ts 引用了它，Task 6 处理；DTO 内部改用新常量后若 `MAX_IMAGE_BYTES` 无内部引用且仅 extension 用，**保留导出**并加注释 `/** @deprecated use MAX_UPLOAD_BYTES */`，Task 6 删）：
+1. 常量（放 `MAX_IMAGE_BYTES` 之后；`MAX_IMAGE_BYTES` 保留原样，Task 9 统一清理）：
 
 ```ts
 /** Single-file upload cap (5GB). */
@@ -153,35 +158,29 @@ export function totalPartsFor(size: number): number {
 }
 ```
 
-2. `ATTACHMENT_MIME_TYPES` 数组按 Global Constraints 扩充；新增：
+2. `ATTACHMENT_MIME_TYPES` 扩充（追加视频/音频十项），随后：
 
 ```ts
-export const UPLOADABLE_MIME_TYPES = ATTACHMENT_MIME_TYPES;
 export function isUploadableMime(mime: string): boolean {
-  return (UPLOADABLE_MIME_TYPES as readonly string[]).includes(mime);
+  return (ATTACHMENT_MIME_TYPES as readonly string[]).includes(mime);
 }
 ```
 
-3. multipart schema（`uploadPresignInputSchema` **删除**，替换为）：
+3. 新协议类型（替换 `uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse`——这三个删除）：
 
 ```ts
 export interface UploadedPart {
   partNumber: number;
   size: number;
+  etag: string;
 }
 
-export const uploadInitInputSchema = z
-  .object({
-    mime: z.string().min(3).max(100),
-    size: z.number().int().positive().max(MAX_UPLOAD_BYTES),
-    filename: z.string().trim().min(1).max(255).optional(),
-    resumeId: z.string().uuid().optional(),
-  })
-  .superRefine((val, ctx) => {
-    if (!isUploadableMime(val.mime)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'MIME_KIND_MISMATCH', path: ['mime'] });
-    }
-  });
+export const uploadInitInputSchema = z.object({
+  mime: z.string().min(3).max(100),
+  size: z.number().int().positive(),
+  filename: z.string().trim().min(1).max(255).optional(),
+  resumeId: z.string().uuid().optional(),
+});
 export type UploadInitInput = z.infer<typeof uploadInitInputSchema>;
 
 export interface UploadInitResponse {
@@ -208,110 +207,119 @@ export interface CompletePartInput {
 
 export const uploadCompletePartsInputSchema = z.object({
   parts: z
-    .array(z.object({ partNumber: z.number().int().min(1).max(MAX_UPLOAD_PARTS), etag: z.string().min(1).max(128) }))
+    .array(
+      z.object({
+        partNumber: z.number().int().min(1).max(MAX_UPLOAD_PARTS),
+        etag: z.string().min(1).max(128),
+      }),
+    )
     .min(1)
     .max(MAX_UPLOAD_PARTS),
 });
 export type UploadCompletePartsInput = z.infer<typeof uploadCompletePartsInputSchema>;
-```
 
-4. `packages/dto/src/inbox.ts` 的 `InboxAsset` interface 加 `mime: string;`（放 `url` 之前）。
+export interface UploadUrlResponse {
+  url: string;
+  expiresIn: number;
+}
+```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @vital/dto test`
-Expected: PASS。
+Run: `pnpm --filter @vital/dto test && pnpm --filter @vital/server typecheck`
+Expected: dto PASS；server typecheck PASS（`UploadPresignInput` 被删，server 还在 import 会红——**所以本步同时把 `apps/server/src/uploads/uploads.service.ts`/`uploads.routes.ts` 里对已删类型的 import 改为 `import type { ... } from '@vital/dto'` 的最小修补**？不行——这会把 T3 的工作提前。**改法：保留旧三类型不删**（`uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse` 标 `@deprecated`），Task 3 删。dto 只做纯增量。）
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/dto/src/uploads.ts packages/dto/src/inbox.ts packages/dto/__tests__/uploads.test.ts
+git add packages/dto/src/uploads.ts packages/dto/__tests__/uploads.test.ts
 git commit -m "feat(dto): multipart upload protocol constants and schemas
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
-（若改了 inbox.test.ts 一并 add。）
-
 ---
 
-### Task 2: storage 层 — listParts 新增、presignPut 删除
+### Task 2: storage 层 — listParts（含 ETag 与分页）
 
 **Files:**
 - Modify: `apps/server/src/storage/base.adapter.ts`
 - Modify: `apps/server/src/storage/s3.adapter.ts`
-- Modify: `apps/server/__tests__/helpers/storage.ts`（mock 补 listParts、删 presignPut）
-- Test: 依赖现有 `apps/server/__tests__/uploads.flow.test.ts` 会红（presign 路由还没删——**本任务不改 service/routes**，所以 typecheck 暂不红：`presignUpload` service 仍调 `presignPut`。**因此本任务删 `presignPut` 会导致 service 编译错误**——改序：本任务**只加 `listParts`，不删 `presignPut`**；删除挪到 Task 3 与 service 一起）
-
-**修订后的范围：本任务只新增 `listParts`。**
+- Modify: `apps/server/__tests__/helpers/storage.ts`（mock 补 listParts）
+- Test: `apps/server/__tests__/storage/list-parts.test.ts`（新建，测试分页拼接/排序逻辑——通过受控 mock client，不测真 S3）
 
 **Interfaces:**
-- Consumes: 无。
-- Produces:
-  - adapter 接口与实现：`listParts(key: string, uploadId: string): Promise<UploadedPart[]>`（`UploadedPart` 来自 `@vital/dto`）
+- Consumes: Task 1 的 `UploadedPart`。
+- Produces: `listParts(key: string, uploadId: string): Promise<UploadedPart[]>`（adapter 接口 + s3 实现；ETag 来自 `Part.ETag ?? ''`；分页 `NextPartNumberMarker` 拼接；按 partNumber 升序）。
 
 - [ ] **Step 1: Write the failing test**
 
-`apps/server/__tests__/helpers/storage.ts` 的 mock 对象里，在 `initMultipart` 之后加：
+`apps/server/__tests__/helpers/storage.ts` 的 mock 对象在 `initMultipart` 之后加：
 
 ```ts
     listParts: vi.fn<UnifiedStorageAdapter['listParts']>().mockResolvedValue([]),
 ```
 
-然后写新测试文件 `apps/server/__tests__/storage/list-parts.test.ts`：
+新建 `apps/server/__tests__/storage/list-parts.test.ts`（不 mock adapter，直接构造 S3UnifiedStorageAdapter 的实例并 stub `client.send`——先读 `s3.adapter.ts` 构造函数签名；若构造依赖 config，可 `(adapter as unknown as { client: { send: vi.Mock } }).client.send = vi.fn()` 注入）：
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
-import { setStorageAdapter } from '../../src/storage/factory.js';
-import type { UnifiedStorageAdapter } from '../../src/storage/base.adapter.js';
+import { S3UnifiedStorageAdapter } from '../../src/storage/s3.adapter.js';
 
-const base = {
-  uploadFile: vi.fn().mockResolvedValue(undefined),
-  deleteFile: vi.fn().mockResolvedValue(undefined),
-  fileExists: vi.fn().mockResolvedValue(false),
-  headObject: vi.fn().mockResolvedValue(null),
-  copyObject: vi.fn().mockResolvedValue(undefined),
-  generateAccessUrl: vi.fn().mockResolvedValue('https://fake.local/get'),
-  presignPut: vi.fn().mockResolvedValue('https://fake.local/put'),
-  initMultipart: vi.fn().mockResolvedValue('fake-upload-id'),
-  presignPart: vi.fn().mockResolvedValue('https://fake.local/part'),
-  completeMultipart: vi.fn().mockResolvedValue(undefined),
-  abortMultipart: vi.fn().mockResolvedValue(undefined),
-  getObject: vi.fn().mockResolvedValue(Buffer.alloc(0)),
-} satisfies Partial<UnifiedStorageAdapter>;
+function adapterWithPages(pages: Array<{ parts: Array<{ PartNumber?: number; Size?: number; ETag?: string }>; truncated: boolean; marker?: number }>) {
+  const adapter = new S3UnifiedStorageAdapter({
+    bucket: 'b', prefix: '', region: 'r', accessKeyId: 'a', secretAccessKey: 's', isPublic: false,
+  });
+  let call = 0;
+  (adapter as unknown as { client: { send: ReturnType<typeof vi.fn> } }).client.send = vi.fn(async () => {
+    const page = pages[Math.min(call, pages.length - 1)];
+    call += 1;
+    return {
+      Parts: page.parts,
+      IsTruncated: page.truncated,
+      NextPartNumberMarker: page.marker,
+    };
+  });
+  return adapter;
+}
 
-describe('storage adapter contract', () => {
-  it('exposes listParts for resume flows', () => {
-    const adapter = { ...base, listParts: vi.fn().mockResolvedValue([{ partNumber: 1, size: 5 }]) };
-    setStorageAdapter(adapter as UnifiedStorageAdapter);
-    expect(typeof adapter.listParts).toBe('function');
-    setStorageAdapter(null);
+describe('S3 listParts', () => {
+  it('concatenates pagination, keeps order, carries etags', async () => {
+    const adapter = adapterWithPages([
+      { parts: [{ PartNumber: 2, Size: 5, ETag: '"e2"' }, { PartNumber: 3, Size: 5, ETag: '"e3"' }], truncated: true, marker: 3 },
+      { parts: [{ PartNumber: 1, Size: 5, ETag: '"e1"' }], truncated: false },
+    ]);
+    const parts = await adapter.listParts('tmp/x.bin', 'up1');
+    expect(parts).toEqual([
+      { partNumber: 1, size: 5, etag: '"e1"' },
+      { partNumber: 2, size: 5, etag: '"e2"' },
+      { partNumber: 3, size: 5, etag: '"e3"' },
+    ]);
+    expect((adapter as unknown as { client: { send: ReturnType<typeof vi.fn> } }).client.send).toHaveBeenCalledTimes(2);
+  });
+
+  it('tolerates missing etag and size fields', async () => {
+    const adapter = adapterWithPages([
+      { parts: [{ PartNumber: 1, ETag: '"e1"' }], truncated: false },
+    ]);
+    // Size undefined → entry skipped (incomplete part info)
+    expect(await adapter.listParts('k', 'u')).toEqual([]);
   });
 });
 ```
 
-（此测试在接口存在前编译失败即为红。）
+（构造函数参数名以 `s3.adapter.ts` 实际为准——先读再写。）
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @vital/server test -- storage/list-parts`
-Expected: FAIL（TS 编译错误：listParts 不在接口上）。
+Expected: FAIL — `listParts` 不在类型上（编译错）。
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 3: Implement**
 
-`base.adapter.ts`：
+`base.adapter.ts`：import `UploadedPart`（type-only）；接口与抽象类在 `presignPart` 后加 `listParts(key: string, uploadId: string): Promise<UploadedPart[]>;`。
 
-- import 区加 `import type { UploadedPart } from '@vital/dto';`
-- 接口与抽象类中，`presignPart` 声明之后各加一行：
-
-```ts
-  listParts(key: string, uploadId: string): Promise<UploadedPart[]>;
-```
-
-`s3.adapter.ts`：
-
-- import 区加 `ListPartsCommand` 到现有 `@aws-sdk/client-s3` import；`import type { UploadedPart } from '@vital/dto';`
-- 在 `presignPart` 实现后加：
+`s3.adapter.ts`：import `ListPartsCommand`；`presignPart` 实现后加：
 
 ```ts
   async listParts(key: string, uploadId: string): Promise<UploadedPart[]> {
@@ -329,7 +337,7 @@ Expected: FAIL（TS 编译错误：listParts 不在接口上）。
       );
       for (const p of res.Parts ?? []) {
         if (p.PartNumber === undefined || p.Size === undefined) continue;
-        parts.push({ partNumber: p.PartNumber, size: p.Size });
+        parts.push({ partNumber: p.PartNumber, size: p.Size, etag: p.ETag ?? '' });
       }
       if (res.IsTruncated !== true || res.NextPartNumberMarker === undefined) break;
       marker = res.NextPartNumberMarker;
@@ -339,189 +347,162 @@ Expected: FAIL（TS 编译错误：listParts 不在接口上）。
   }
 ```
 
-（先读 s3.adapter.ts 确认 `this.full(key)` 与 `this.client` 的实际字段名——现有 `presignPart` 用的就是它们，照抄。）
+（`this.full`/`this.bucket`/`this.client` 字段名以现有 `presignPart` 实现为准。）
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Run tests**
 
 Run: `pnpm --filter @vital/server test && pnpm --filter @vital/server typecheck`
-Expected: PASS（mock helper 补了 listParts 后，所有依赖 mock 的测试恢复绿）。
+Expected: PASS。
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add apps/server/src/storage/base.adapter.ts apps/server/src/storage/s3.adapter.ts apps/server/__tests__/helpers/storage.ts apps/server/__tests__/storage/list-parts.test.ts
-git commit -m "feat(server): storage adapter listParts for multipart resume
+git commit -m "feat(server): storage adapter listParts with etag and pagination
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 3: server uploads — multipart 四路由，删 presign 单 PUT 与 302
+### Task 3: server uploads — multipart 四路由（service 层显式错误码），删 presign/302
 
 **Files:**
-- Modify: `apps/server/src/uploads/uploads.service.ts`（重写 presignUpload → initUpload 等）
+- Modify: `apps/server/src/uploads/uploads.service.ts`
 - Modify: `apps/server/src/uploads/uploads.routes.ts`
-- Modify: `apps/server/src/storage/base.adapter.ts` + `s3.adapter.ts`（删 `presignPut`，本任务完成 Task 2 留尾）
-- Modify: `apps/server/__tests__/uploads.flow.test.ts`（重写为新协议）
-- Modify: `apps/server/__tests__/helpers/storage.ts`（删 presignPut mock）
+- Modify: `apps/server/src/storage/base.adapter.ts` + `s3.adapter.ts`（删 `presignPut`）
+- Modify: `apps/server/__tests__/uploads.flow.test.ts`（重写）
+- Modify: `apps/server/__tests__/helpers/storage.ts` + `__tests__/storage/list-parts.test.ts`（删 presignPut mock）
+- Modify: `apps/server/__tests__/sweeper.test.ts`（补 uploadId 非空场景断言）
 
 **Interfaces:**
-- Consumes: Task 1 的全部 DTO；Task 2 的 `listParts`。
+- Consumes: Task 1 DTO、Task 2 `listParts`。
 - Produces:
-  - service：`initUpload(userId, input: UploadInitInput): Promise<UploadInitResponse>`、`listUploadedParts(userId, id): Promise<UploadPartsResponse>`、`presignPartUpload(userId, id, partNumber): Promise<PartPresignResponse>`、`completeMultipartUpload(userId, id, input: UploadCompletePartsInput): Promise<UploadCompleteResponse>`
-  - `completeUpload`（旧单 PUT complete）**删除**；`abortUpload`/`discardUpload`/`resolveAccessUrl`/`bindUpload` 保留
-  - 路由：`POST /api/v1/uploads`、`GET /api/v1/uploads/:id/parts`、`POST /api/v1/uploads/:id/parts/:partNumber`、`POST /api/v1/uploads/:id/complete`（body 换 `{parts}`）；删 `POST /presign`、`GET /uploads/:id`
+  - `initUpload(userId, input: UploadInitInput): Promise<UploadInitResponse>` — service 层先校验 mime（422 MEDIA_MISMATCH）与 size（413 MEDIA_TOO_LARGE），resumeId 命中（归属+status=uploading+uploadId 非空+mime/size 匹配）则复用会话并附带 ListParts 结果；不匹配 409 MEDIA_INVALID_STATE
+  - `listUploadedParts(userId, id): Promise<UploadPartsResponse>`（409 若非 uploading）
+  - `presignPartUpload(userId, id, partNumber): Promise<PartPresignResponse>`（越界 422 MEDIA_PART_INVALID；非 uploading 409）
+  - `completeMultipartUpload(userId, id, input): Promise<UploadCompleteResponse>`（parts 覆盖 1..totalParts 无缺漏否则 422 MEDIA_PART_MISSING；completeMultipart → HEAD 校验 → ready）
+  - 路由：`POST /api/v1/uploads`（201）、`GET /api/v1/uploads/:id/parts`、`POST /api/v1/uploads/:id/parts/:partNumber`、`POST /api/v1/uploads/:id/complete`、abort/bind/DELETE 不变；**删除** `POST /presign`、`GET /uploads/:id` 302、`presignUpload`/`completeUpload` service 函数
 
 - [ ] **Step 1: 重写 flow 测试（先红）**
 
-`apps/server/__tests__/uploads.flow.test.ts` 整体重写。保留文件头的 register/beforeEach 基建，测试体替换为：
+`apps/server/__tests__/uploads.flow.test.ts` 保留文件头基建（register/beforeEach/afterEach/mockStorage），`describe` 体替换为：
 
 ```ts
+const PART = 5 * 1024 * 1024;
+const SIZE_3P = 12 * 1024 * 1024; // 3 parts at 5MB
+
+async function initUploadFor(alice: { token: string }, payload: Record<string, unknown> = {}) {
+  return injectJson(app, {
+    method: 'POST', url: '/api/v1/uploads', token: alice.token,
+    payload: { mime: 'video/mp4', size: SIZE_3P, ...payload },
+  });
+}
+
 describe('uploads (multipart)', () => {
   it('unauthenticated init is 401', async () => {
-    const res = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads',
-      payload: { mime: 'video/mp4', size: 1024 },
-    });
+    const res = await injectJson(app, { method: 'POST', url: '/api/v1/uploads', payload: { mime: 'video/mp4', size: 1024 } });
     expect(res.statusCode).toBe(401);
   });
 
   it('init creates uploading row with uploadId and part math', async () => {
     const alice = await register('alice');
-    const res = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/uploads',
-      token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
+    const res = await initUploadFor(alice);
     expect(res.statusCode).toBe(201);
     const body = res.json();
     expect(body.uploadId).toBe('fake-upload-id');
-    expect(body.partSize).toBe(5 * 1024 * 1024);
+    expect(body.partSize).toBe(PART);
     expect(body.totalParts).toBe(3);
     expect(body.parts).toEqual([]);
-
     const [row] = await db.select().from(attachments).where(eq(attachments.id, body.id));
     expect(row).toMatchObject({ userId: alice.id, mime: 'video/mp4', status: 'uploading', uploadId: 'fake-upload-id' });
     expect(storage.initMultipart).toHaveBeenCalledWith(row?.s3Key, { contentType: 'video/mp4' });
   });
 
-  it('init rejects non-whitelisted mime and >5GB', async () => {
+  it('init rejects non-whitelisted mime (422) and over-5GB (413) at service level', async () => {
     const alice = await register('alice');
     const badMime = await injectJson(app, {
       method: 'POST', url: '/api/v1/uploads', token: alice.token,
       payload: { mime: 'image/svg+xml', size: 100 },
     });
     expect(badMime.statusCode).toBe(422);
+    expect(badMime.json().error.code).toBe('MEDIA_MISMATCH');
     const tooBig = await injectJson(app, {
       method: 'POST', url: '/api/v1/uploads', token: alice.token,
       payload: { mime: 'video/mp4', size: 5 * 1024 ** 3 + 1 },
     });
     expect(tooBig.statusCode).toBe(413);
+    expect(tooBig.json().error.code).toBe('MEDIA_TOO_LARGE');
+    expect(await db.select().from(attachments)).toHaveLength(0);
   });
 
-  it('resumeId returns the same session with uploaded parts', async () => {
+  it('resumeId returns the same session with uploaded parts incl etags', async () => {
     const alice = await register('alice');
-    const first = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
+    const first = await initUploadFor(alice);
     const id = first.json().id;
-    storage.listParts.mockResolvedValueOnce([{ partNumber: 1, size: 5 * 1024 * 1024 }]);
+    storage.listParts.mockResolvedValueOnce([{ partNumber: 1, size: PART, etag: '"e1"' }]);
 
-    const resumed = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024, resumeId: id },
-    });
+    const resumed = await initUploadFor(alice, { resumeId: id });
     expect(resumed.statusCode).toBe(201);
     const body = resumed.json();
     expect(body.id).toBe(id);
-    expect(body.parts).toEqual([{ partNumber: 1, size: 5 * 1024 * 1024 }]);
-    expect(storage.initMultipart).toHaveBeenCalledTimes(1); // not re-init
-    // rows still one
-    const rows = await db.select().from(attachments).where(eq(attachments.id, id));
-    expect(rows).toHaveLength(1);
+    expect(body.parts).toEqual([{ partNumber: 1, size: PART, etag: '"e1"' }]);
+    expect(storage.initMultipart).toHaveBeenCalledTimes(1);
   });
 
-  it('resumeId with mismatched size is rejected', async () => {
+  it('resumeId with mismatched size is 409 MEDIA_INVALID_STATE', async () => {
     const alice = await register('alice');
-    const first = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
-    const res = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 20 * 1024 * 1024, resumeId: first.json().id },
-    });
+    const first = await initUploadFor(alice);
+    const res = await initUploadFor(alice, { size: 20 * 1024 * 1024, resumeId: first.json().id });
     expect(res.statusCode).toBe(409);
   });
 
   it('presign part validates range and ownership', async () => {
     const alice = await register('alice');
     const bob = await register('bob');
-    const init = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
-    const { id } = init.json();
+    const { id } = (await initUploadFor(alice)).json();
 
-    const ok = await injectJson(app, {
-      method: 'POST', url: `/api/v1/uploads/${id}/parts/2`, token: alice.token, payload: {},
-    });
+    const ok = await injectJson(app, { method: 'POST', url: `/api/v1/uploads/${id}/parts/2`, token: alice.token, payload: {} });
     expect(ok.statusCode).toBe(200);
     expect(ok.json().url).toBe('https://fake.local/presigned-part');
     expect(storage.presignPart).toHaveBeenCalledWith(expect.any(String), 'fake-upload-id', 2, expect.any(Number));
 
-    const outOfRange = await injectJson(app, {
-      method: 'POST', url: `/api/v1/uploads/${id}/parts/99`, token: alice.token, payload: {},
-    });
+    const outOfRange = await injectJson(app, { method: 'POST', url: `/api/v1/uploads/${id}/parts/99`, token: alice.token, payload: {} });
     expect(outOfRange.statusCode).toBe(422);
+    expect(outOfRange.json().error.code).toBe('MEDIA_PART_INVALID');
 
-    const foreign = await injectJson(app, {
-      method: 'POST', url: `/api/v1/uploads/${id}/parts/1`, token: bob.token, payload: {},
-    });
+    const foreign = await injectJson(app, { method: 'POST', url: `/api/v1/uploads/${id}/parts/1`, token: bob.token, payload: {} });
     expect(foreign.statusCode).toBe(404);
   });
 
   it('GET /uploads/:id/parts lists uploaded parts for the owner', async () => {
     const alice = await register('alice');
-    const init = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
-    const { id } = init.json();
-    storage.listParts.mockResolvedValueOnce([{ partNumber: 1, size: 5 * 1024 * 1024 }, { partNumber: 2, size: 5 * 1024 * 1024 }]);
-
+    const { id } = (await initUploadFor(alice)).json();
+    storage.listParts.mockResolvedValueOnce([
+      { partNumber: 1, size: PART, etag: '"e1"' },
+      { partNumber: 2, size: PART, etag: '"e2"' },
+    ]);
     const res = await injectJson(app, { method: 'GET', url: `/api/v1/uploads/${id}/parts`, token: alice.token });
     expect(res.statusCode).toBe(200);
     expect(res.json().parts).toHaveLength(2);
   });
 
-  it('complete with missing etags is 422; complete ok marks ready', async () => {
+  it('complete with missing parts is 422 MEDIA_PART_MISSING; full set marks ready', async () => {
     const alice = await register('alice');
-    const init = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
-    const { id } = init.json();
-    const total = init.json().totalParts;
+    const init = await initUploadFor(alice);
+    const { id, totalParts } = init.json();
 
-    // Missing the last part.
     const missing = await injectJson(app, {
       method: 'POST', url: `/api/v1/uploads/${id}/complete`, token: alice.token,
       payload: { parts: [{ partNumber: 1, etag: '"e1"' }] },
     });
     expect(missing.statusCode).toBe(422);
+    expect(missing.json().error.code).toBe('MEDIA_PART_MISSING');
 
-    // Full set: HEAD must match.
-    storage.headObject.mockResolvedValueOnce({
-      size: 12 * 1024 * 1024, contentType: 'video/mp4', lastModified: new Date(),
-    });
+    storage.headObject.mockResolvedValueOnce({ size: SIZE_3P, contentType: 'video/mp4', lastModified: new Date() });
     const full = await injectJson(app, {
       method: 'POST', url: `/api/v1/uploads/${id}/complete`, token: alice.token,
-      payload: { parts: Array.from({ length: total }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })) },
+      payload: { parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })) },
     });
     expect(full.statusCode).toBe(200);
     expect(full.json()).toMatchObject({ id, status: 'ready', mime: 'video/mp4' });
@@ -532,14 +513,8 @@ describe('uploads (multipart)', () => {
 
   it('HEAD mismatch on complete is 422 MEDIA_MISMATCH', async () => {
     const alice = await register('alice');
-    const init = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
-    const { id, totalParts } = init.json();
-    storage.headObject.mockResolvedValueOnce({
-      size: 999, contentType: 'video/mp4', lastModified: new Date(),
-    });
+    const { id, totalParts } = (await initUploadFor(alice)).json();
+    storage.headObject.mockResolvedValueOnce({ size: 999, contentType: 'video/mp4', lastModified: new Date() });
     const res = await injectJson(app, {
       method: 'POST', url: `/api/v1/uploads/${id}/complete`, token: alice.token,
       payload: { parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })) },
@@ -550,11 +525,7 @@ describe('uploads (multipart)', () => {
 
   it('abort calls abortMultipart and orphans the row', async () => {
     const alice = await register('alice');
-    const init = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads', token: alice.token,
-      payload: { mime: 'video/mp4', size: 12 * 1024 * 1024 },
-    });
-    const { id } = init.json();
+    const { id } = (await initUploadFor(alice)).json();
     const res = await injectJson(app, { method: 'POST', url: `/api/v1/uploads/${id}/abort`, token: alice.token, payload: {} });
     expect(res.statusCode).toBe(204);
     expect(storage.abortMultipart).toHaveBeenCalledWith(expect.any(String), 'fake-upload-id');
@@ -562,35 +533,52 @@ describe('uploads (multipart)', () => {
     expect(row?.status).toBe('orphaned');
   });
 
-  it('old presign route and 302 GET route are gone', async () => {
+  it('old presign and 302 GET routes are gone', async () => {
     const alice = await register('alice');
     const presign = await injectJson(app, {
-      method: 'POST', url: '/api/v1/uploads/presign', token: alice.token,
-      payload: { mime: 'image/jpeg', size: 10 },
+      method: 'POST', url: '/api/v1/uploads/presign', token: alice.token, payload: { mime: 'image/jpeg', size: 10 },
     });
     expect(presign.statusCode).toBe(404);
-    const redirect = await injectJson(app, { method: 'GET', url: '/api/v1/uploads/00000000-0000-4000-8000-000000000000', token: alice.token });
+    const redirect = await injectJson(app, {
+      method: 'GET', url: '/api/v1/uploads/00000000-0000-4000-8000-000000000000', token: alice.token,
+    });
     expect(redirect.statusCode).toBe(404);
   });
 });
 ```
 
-注意 register() 的实现沿用文件现有版本；`injectJson` 带空 payload 的 GET 调用若现有 helper 不支持（GET + payload），按 helper 实际签名调整（读 `apps/server/__tests__/helpers/http.ts`）。
+注意：`GET` 调用不传 `payload`（helper 只在有 payload 时带上）。`register` 沿用文件现有实现。
+
+`apps/server/__tests__/sweeper.test.ts` 追加一条（uploadId 非空走 abortMultipart——现有测试可能只测 null uploadId，先读文件再追加，风格一致）：
+
+```ts
+it('stale uploading with uploadId aborts the multipart session', async () => {
+  // insert attachments row: status 'uploading', uploadId 'fake-upload-id',
+  // createdAt older than MEDIA_UPLOADING_TTL_HOURS — 照抄现有 stale 用例的 insert 模式
+  // run sweep → expect storage.abortMultipart toHaveBeenCalledWith(key, 'fake-upload-id')
+});
+```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @vital/server test -- uploads.flow`
-Expected: FAIL — 新路由 404 / presign 仍是旧逻辑。
+Expected: FAIL — 新路由 404。
 
-- [ ] **Step 3: Implement service + routes + 删 presignPut**
+- [ ] **Step 3: Implement**
 
 `uploads.service.ts`：
 
-1. import 更新：从 `@vital/dto` 引入 `MAX_UPLOAD_BYTES, type UploadInitInput, type UploadInitResponse, type UploadPartsResponse, type PartPresignResponse, type UploadCompletePartsInput, type UploadCompleteResponse, type UploadBindInput, type UploadBindResponse, partSizeFor, totalPartsFor`；删 `MAX_IMAGE_BYTES, UploadPresignInput, UploadPresignResponse`。
-2. 删除 `presignUpload` 与 `completeUpload` 函数，替换为：
+1. imports：加 `MAX_UPLOAD_BYTES, isUploadableMime, partSizeFor, totalPartsFor, type UploadInitInput, type UploadInitResponse, type UploadPartsResponse, type PartPresignResponse, type UploadCompletePartsInput`；删 `UploadPresignInput/UploadPresignResponse/MAX_IMAGE_BYTES`。
+2. 删 `presignUpload`/`completeUpload`，新增（完整实现，错误码全部 service 层显式）：
 
 ```ts
 export async function initUpload(userId: string, input: UploadInitInput): Promise<UploadInitResponse> {
+  if (!isUploadableMime(input.mime)) {
+    throw AppError.of(422, 'MEDIA_MISMATCH');
+  }
+  if (input.size > MAX_UPLOAD_BYTES) {
+    throw AppError.of(413, 'MEDIA_TOO_LARGE');
+  }
   const partSize = partSizeFor(input.size);
   const totalParts = totalPartsFor(input.size);
 
@@ -614,19 +602,10 @@ export async function initUpload(userId: string, input: UploadInitInput): Promis
   const ext = mime.extension(input.mime) || 'bin';
   const tmpKey = `tmp/${id}.${ext}`;
   const uploadId = await getStorage().initMultipart(tmpKey, { contentType: input.mime });
-
   await getDb().insert(attachments).values({
-    id,
-    userId,
-    ownerType: 'tmp',
-    ownerId: null,
-    s3Key: tmpKey,
-    mime: input.mime,
-    size: input.size,
-    status: 'uploading',
-    storageMeta: currentStorageMeta(),
-    uploadId,
-    sortOrder: 0,
+    id, userId, ownerType: 'tmp', ownerId: null, s3Key: tmpKey,
+    mime: input.mime, size: input.size, status: 'uploading',
+    storageMeta: currentStorageMeta(), uploadId, sortOrder: 0,
   });
   return { id, uploadId, partSize, totalParts, parts: [] };
 }
@@ -640,18 +619,13 @@ export async function listUploadedParts(userId: string, id: string): Promise<Upl
 }
 
 export async function presignPartUpload(
-  userId: string,
-  id: string,
-  partNumber: number,
+  userId: string, id: string, partNumber: number,
 ): Promise<PartPresignResponse> {
-  if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > MAX_UPLOAD_PARTS) {
-    throw AppError.of(422, 'MEDIA_PART_INVALID');
-  }
   const row = await getOwnedAttachmentOr404(userId, id);
   if (row.status !== 'uploading' || row.uploadId === null) {
     throw AppError.of(409, 'MEDIA_INVALID_STATE');
   }
-  if (partNumber > totalPartsFor(row.size)) {
+  if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > totalPartsFor(row.size)) {
     throw AppError.of(422, 'MEDIA_PART_INVALID');
   }
   const url = await getStorage().presignPart(row.s3Key, row.uploadId, partNumber, config.PRESIGN_PUT_TTL_SECONDS);
@@ -659,10 +633,9 @@ export async function presignPartUpload(
 }
 
 export async function completeMultipartUpload(
-  userId: string,
-  id: string,
-  input: UploadCompletePartsInput,
+  userId: string, id: string, input: UploadCompletePartsInput,
 ): Promise<UploadCompleteResponse> {
+  const started = Date.now();
   const row = await getOwnedAttachmentOr404(userId, id);
   if (row.status === 'ready') {
     return { id: row.id, status: 'ready', mime: row.mime, size: row.size, ownerType: 'tmp' };
@@ -676,8 +649,7 @@ export async function completeMultipartUpload(
     if (!seen.has(n)) throw AppError.of(422, 'MEDIA_PART_MISSING');
   }
   await getStorage().completeMultipart(
-    row.s3Key,
-    row.uploadId,
+    row.s3Key, row.uploadId,
     input.parts.map((p) => ({ partNumber: p.partNumber, etag: p.etag })),
   );
   const head = await getStorage().headObject(row.s3Key);
@@ -701,85 +673,97 @@ export async function completeMultipartUpload(
 }
 ```
 
-（`const started = Date.now();` 放函数第一行，沿用旧 completeUpload 的计时。）
-
-3. `abortUpload` 不变（uploadId 现在有值，逻辑本来就对）。
-
-`uploads.routes.ts` 重写路由注册：
+3. `uploads.routes.ts`：删 presign/302 路由，新增（schema 用 Task 1 的；partNumber 用 `z.coerce.number().int().positive()`）：
 
 ```ts
-const partParams = z.object({ id: z.string().uuid(), partNumber: z.coerce.number().int() });
+app.post('/api/v1/uploads', { preHandler: [requireAuth] }, async (req, reply) => {
+  const user = req.user; if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+  const result = await initUpload(user.id, uploadInitInputSchema.parse(req.body));
+  return reply.code(201).send(result);
+});
+app.get('/api/v1/uploads/:id/parts', { preHandler: [requireAuth] }, async (req) => {
+  const user = req.user; if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+  const { id } = idParams.parse(req.params);
+  return listUploadedParts(user.id, id);
+});
+app.post('/api/v1/uploads/:id/parts/:partNumber', { preHandler: [requireAuth] }, async (req) => {
+  const user = req.user; if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+  const { id, partNumber } = partParams.parse(req.params);
+  return presignPartUpload(user.id, id, partNumber);
+});
+// complete 路由的 body 换 uploadCompletePartsInputSchema.parse(req.body)
 ```
 
-- `POST /api/v1/uploads` → `initUpload`（schema `uploadInitInputSchema`）
-- `GET /api/v1/uploads/:id/parts` → `listUploadedParts`
-- `POST /api/v1/uploads/:id/parts/:partNumber` → `presignPartUpload`
-- `POST /api/v1/uploads/:id/complete` → body 换 `uploadCompletePartsInputSchema`
-- abort / bind / DELETE 不变
-- **删除** `POST /presign` 路由与 `GET /uploads/:id` 302 路由；import 相应清理
-
-`base.adapter.ts` + `s3.adapter.ts` + `helpers/storage.ts`：删除 `presignPut`（接口声明、抽象声明、s3 实现、mock 项）。同时 `list-parts.test.ts`（Task 2）里的 `presignPut: vi.fn()...` 行删除。**注意** `apps/server/__tests__/storage/list-parts.test.ts` 的 base 对象需要同步删 presignPut。
+4. `base.adapter.ts`/`s3.adapter.ts`/两个测试 helper：删 `presignPut`（接口、抽象、实现、mock 项、list-parts.test 的 base 对象）。
 
 - [ ] **Step 4: Run tests**
 
 Run: `pnpm --filter @vital/server test && pnpm --filter @vital/server typecheck`
-Expected: PASS（uploads.flow 新协议全绿；sweeper.test 若 mock 了 presignPut 相关按需同步——先读 sweeper.test.ts 确认）。
+Expected: PASS（sweeper 追加用例绿）。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/server/src/uploads/uploads.service.ts apps/server/src/uploads/uploads.routes.ts apps/server/src/storage/base.adapter.ts apps/server/src/storage/s3.adapter.ts apps/server/__tests__/uploads.flow.test.ts apps/server/__tests__/helpers/storage.ts apps/server/__tests__/storage/list-parts.test.ts
-git commit -m "feat(server): multipart upload routes with resume, drop presign and 302
+git add apps/server/src/uploads/uploads.service.ts apps/server/src/uploads/uploads.routes.ts apps/server/src/storage/base.adapter.ts apps/server/src/storage/s3.adapter.ts apps/server/__tests__/uploads.flow.test.ts apps/server/__tests__/helpers/storage.ts apps/server/__tests__/storage/list-parts.test.ts apps/server/__tests__/sweeper.test.ts
+git commit -m "feat(server): multipart upload routes with resume; drop presign and 302
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
-（若 sweeper.test.ts 有同步改动一并 add。）
-
 ---
 
-### Task 4: server inbox — InboxAsset.mime 下发
+### Task 4: server inbox — InboxAsset.mime 下发（DTO + service 同任务落地）
 
 **Files:**
-- Modify: `apps/server/src/inbox/inbox.service.ts`（`toAssetDto` 加 mime；查询 join 已带 attachments，补列）
-- Test: `apps/server/__tests__/inbox.flow.test.ts`（追加断言；**注意此文件有用户 WIP——先 `git diff apps/server/__tests__/inbox.flow.test.ts` 看 WIP，追加测试写在文件末尾新 describe，提交时若 WIP 未提交则 surgical 处理：本任务只 add service 文件 + 测试文件的**新增部分**。若无法逐行拆分，则把断言写进独立新文件 `apps/server/__tests__/inbox/asset-mime.test.ts`** —— **采用独立新文件，避免动 WIP 文件**）
+- Modify: `packages/dto/src/inbox.ts`（`InboxAsset` 加 `mime: string`——本任务与 service 同提交，无暂红窗口）
+- Modify: `apps/server/src/inbox/inbox.service.ts`（`toAssetDto` 返回 mime）
+- Test: `apps/server/__tests__/inbox/asset-mime.test.ts`（新建）
 
 **Interfaces:**
-- Consumes: Task 1 的 `InboxAsset.mime`。
-- Produces: inbox API 返回的 assets 每项含 `mime`（如 `application/pdf`）。
+- Consumes: 无新依赖。
+- Produces: inbox API 的每个 asset 含 `mime`（如 `application/pdf`）。
 
 - [ ] **Step 1: Write the failing test**
 
-新建 `apps/server/__tests__/inbox/asset-mime.test.ts`（模仿现有 inbox 测试的基建；先读 `apps/server/__tests__/inbox/sanitize.test.ts` 或 inbox.flow.test.ts 的 setup 模式——asset-mime 需要真实 app + db + 注册用户 + 创建 inbox item + patchInboxAssets。若直接走 service 层更简单：调用 `loadAssetsByItemIds` 前先 insert 一行 attachments + inbox_assets。按以下骨架，helper 名以实际为准）：
+新建 `apps/server/__tests__/inbox/asset-mime.test.ts`（**必须 `installMockStorage()`**——`toAssetDto` 调 `getStorage().generateAccessUrl`，无 mock 会构造真 S3 adapter）：
 
 ```ts
-import { describe, expect, it, beforeAll, beforeEach, afterAll } from 'vitest';
+import { eq } from 'drizzle-orm';
+import type { FastifyInstance } from 'fastify';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../../src/app.js';
 import { db } from '../../src/db/index.js';
-import { attachments, inboxAssets, inboxItems } from '../../src/db/schema.js';
+import { attachments, inboxAssets, inboxItems, users } from '../../src/db/schema.js';
 import { loadAssetsByItemIds } from '../../src/inbox/inbox.service.js';
+import { setStorageAdapter } from '../../src/storage/factory.js';
 import { resetDb } from '../helpers/db.js';
+import { installMockStorage } from '../helpers/storage.js';
 
-let app: ReturnType<typeof buildFastify> extends Promise<infer T> ? T : never;
+let app: FastifyInstance;
 
 beforeAll(async () => {
   app = await buildFastify();
 });
 beforeEach(async () => {
   await resetDb();
+  installMockStorage();
+});
+afterEach(() => {
+  setStorageAdapter(null);
 });
 afterAll(async () => {
   await app.close();
 });
 
 describe('inbox asset mime', () => {
-  it('loadAssetsByItemIds returns attachment mime for rendering', async () => {
-    const userId = '11111111-1111-4111-8111-111111111111';
+  it('loadAssetsByItemIds returns attachment mime', async () => {
+    const [user] = await db.insert(users).values({
+      email: `asset-mime-${Date.now()}@test.com`, passwordHash: 'x', displayName: 't',
+    }).returning();
+    expect(user).toBeDefined();
+    const userId = user!.id;
     const attachmentId = '22222222-2222-4222-8222-222222222222';
     const itemId = '33333333-3333-4333-8333-333333333333';
-    // users row needed if FK enforced — check resetDb/fixtures; if users FK
-    // blocks direct insert, register a user through the API instead and use
-    // its id (pattern from uploads.flow.test.ts register()).
     await db.insert(attachments).values({
       id: attachmentId, userId, ownerType: 'tmp', s3Key: 'tmp/x.pdf',
       mime: 'application/pdf', size: 100, status: 'ready', storageMeta: {},
@@ -798,30 +782,32 @@ describe('inbox asset mime', () => {
 });
 ```
 
-（字段名以 `apps/server/src/db/schema/inbox.ts` 与 `attachments.ts` 实际为准——先读。若 inboxItems 有必填列没写全，补齐。）
+（`users`/`inboxItems`/`inboxAssets` 的必填列以 schema 实际为准——先读 `apps/server/src/db/schema/users.ts` 和 `inbox.ts`；`source` 枚举在 6334a0a 后含 `wechat`，用 `'extension'` 安全。）
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @vital/server test -- inbox/asset-mime`
-Expected: FAIL — `mime` undefined（toAssetDto 未返回）。
+Expected: FAIL — TS 编译错（InboxAsset 无 mime 字段，DTO 还没加）。
 
 - [ ] **Step 3: Implement**
 
-`inbox.service.ts`：
+`packages/dto/src/inbox.ts`：`InboxAsset` interface 加 `mime: string;`（`url` 之前）。
 
-1. `toAssetDto` 的 row 参数类型加 `mime: string;`，返回对象加 `mime: row.mime,`（放 url 之前）。
-2. `loadAssetsByItemIds` 的 select 已经 `innerJoin(attachments, ...)` 用 `.select()`（全列），传入 `toAssetDto` 的对象字面量补 `mime: row.attachments.mime,`。
-3. 检查同文件其他调用 `toAssetDto` / 构造 `InboxAsset` 的位置（grep `originalSrc:`）同步补 mime。
+`apps/server/src/inbox/inbox.service.ts`：
+
+1. `toAssetDto` 参数类型加 `mime: string;`，返回对象加 `mime: row.mime,`。
+2. `loadAssetsByItemIds` 传给 `toAssetDto` 的字面量补 `mime: row.attachments.mime,`。
+3. grep 同文件其他 `InboxAsset` 构造点（`grep -n "originalSrc:" inbox.service.ts`）同步补。
 
 - [ ] **Step 4: Run tests**
 
-Run: `pnpm --filter @vital/server test && pnpm --filter @vital/server typecheck`
-Expected: PASS。
+Run: `pnpm --filter @vital/server test && pnpm --filter @vital/server typecheck && pnpm --filter @vital/web test`
+Expected: PASS（web 若有 InboxAsset fixture 缺 mime 的类型错——vitest 不查类型，typecheck 由 server 侧保证；web typecheck 在 T7/T9 跑）。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/server/src/inbox/inbox.service.ts apps/server/__tests__/inbox/asset-mime.test.ts
+git add packages/dto/src/inbox.ts apps/server/src/inbox/inbox.service.ts apps/server/__tests__/inbox/asset-mime.test.ts
 git commit -m "feat(server): expose asset mime in inbox API for reader rendering
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
@@ -829,22 +815,25 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 ---
 
-### Task 5: api-client — upload() 分片重写（resumeId 续传），删 PUT 双轨
+### Task 5: api-client — upload() 分片重写（注入 fetch、resume 409 回退、partSource）
 
 **Files:**
-- Modify: `packages/api-client/src/upload.ts`（重写）
-- Modify: `packages/api-client/src/client.ts`（删 `putWithProgress`/`uploadUrl`、upload 签名加 resumeId）
-- Modify: `packages/api-client/src/types.ts`（删 PutFn/putWithProgress 相关，`UploadInput` 加 resumeId）
-- Delete: `packages/api-client/src/default-put.ts`
+- Modify: `packages/api-client/src/upload.ts`（重写；`UploadInput` 定义于此并从 index 导出）
+- Modify: `packages/api-client/src/client.ts`（删 `uploadUrl`/`putWithProgress` 透传；upload 调用新签名）
+- Modify: `packages/api-client/src/types.ts`（删 `PutFn`/`putWithProgress`/`FilePart`）
 - Modify: `packages/api-client/src/index.ts`（导出清理）
-- Rewrite: `packages/api-client/__tests__/upload.test.ts`；Delete: `packages/api-client/__tests__/default-put.test.ts`
-- Modify: 调用点适配 —— 先 grep `putWithProgress|xhrPut|fetchPut` 全仓库（web/server 测试可能引用）；extension 的 `client.ts` 传了 `putWithProgress: fetchPut`（`apps/extension/src/client.ts:20`）需删除该行
+- Delete: `packages/api-client/src/default-put.ts`、`packages/api-client/__tests__/default-put.test.ts`
+- Modify: `packages/api-client/__tests__/upload.test.ts`（重写）+ `__tests__/client.test.ts`（旧 presign/uploadUrl 断言更新——先读 155-164 行附近）
+- Modify: `apps/web/src/api/client.ts`（删 `PutFn`/`barePutInit` import 与 `tauriPut`/`putWithProgress` 透传；S3 PUT 走注入的 `fetchImpl`）
+- Modify: `apps/extension/src/client.ts`（删 `putWithProgress: fetchPut` 行）
+- Modify: `apps/mobile/src/lib/api.ts` + `apps/mobile/src/lib/rn-put.ts`（删 `putWithProgress: rnPut`；rn-put 的 `PutFn`/`FilePart` import 删除——rn-put 整个文件若仅为此存在则删除；mobile 的正确 partSource 在 Task 8 接）
 
 **Interfaces:**
-- Consumes: Task 1 DTO（`UploadInitResponse` 等）、Task 3 路由。
+- Consumes: Task 1 DTO、Task 3 路由。
 - Produces:
-  - `upload(input: { file?: Blob; fileUri?: string; mime: string; size: number; onProgress?: (loaded: number; total: number) => void; onAttachmentId?: (id: string) => void; signal?: AbortSignal; resumeId?: string }): Promise<UploadCompleteResponse>`（签名不变 + resumeId）
-  - `UploadCompleteResponse` 不变；内部走 multipart
+  - `UploadInput { file?: Blob; partSource?: (start: number, end: number) => Promise<Blob>; mime: string; size: number; onProgress?: (loaded: number, total: number) => void; onAttachmentId?: (id: string) => void; signal?: AbortSignal; resumeId?: string }`（**fileUri 形态删除**；file 与 partSource 二选一）
+  - `upload(input: UploadInput): Promise<UploadCompleteResponse>`：init（resumeId 409 时自动去 resumeId 重试一次）→ 跳过 init.parts 已传片 → 逐片 presign + PUT（**走注入的 `options.fetchImpl ?? fetch`**）→ complete（全量 ETag：本轮上传的 + init.parts 携带的）
+  - 跳片时 onProgress 基数累加已传片 size（进度不从中间跳）
 
 - [ ] **Step 1: 重写测试（先红）**
 
@@ -859,29 +848,33 @@ const tokenStore: TokenStore = {
   getAccessToken: () => 'a', getRefreshToken: () => 'r', setTokens: () => undefined, clear: () => undefined,
 };
 
+const PART = 5 * 1024 * 1024;
+
+function s3Put(etag: string): Response {
+  return new Response(null, { status: 200, headers: { ETag: etag } });
+}
+
 function makeClient(fetchImpl: typeof fetch) {
   return createVitalClient({ baseUrl: '', authMode: 'bearer', tokenStore, fetchImpl });
 }
 
-const PART = 5 * 1024 * 1024;
-
-function makeInit(overrides: Record<string, unknown> = {}) {
-  return respond(201, {
-    id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2, parts: [],
-    ...overrides,
-  });
-}
-
 describe('upload (multipart)', () => {
-  it('init → presign each part → PUT → complete with etags', async () => {
-    const putUrls: string[] = [];
-    const progress: Array<[number, number]> = [];
+  it('init → presign each part → PUT via injected fetch → complete with etags', async () => {
+    const apiCalls: string[] = [];
+    let s3PutCount = 0;
     const blob = new Blob([new Uint8Array(PART + 100)]); // 2 parts
     const client = makeClient((url, init) => {
       const u = urlOf(url);
+      if (u.startsWith('https://s3')) {
+        s3PutCount += 1;
+        expect(init?.method).toBe('PUT');
+        expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/pdf');
+        return Promise.resolve(s3Put(`"e${s3PutCount}"`));
+      }
+      apiCalls.push(`${init?.method ?? 'GET'} ${u}`);
       if (u === '/api/v1/uploads') {
         expect(bodyOf(init)).toMatchObject({ mime: 'application/pdf', size: blob.size });
-        return makeInit();
+        return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2, parts: [] });
       }
       if (u === '/api/v1/uploads/att1/parts/1' || u === '/api/v1/uploads/att1/parts/2') {
         return respond(200, { url: `https://s3${u}`, expiresIn: 900 });
@@ -896,56 +889,120 @@ describe('upload (multipart)', () => {
       }
       return respond(200, {});
     });
-    const res = await client.upload({
-      file: blob, mime: 'application/pdf', size: blob.size,
-      onProgress: (loaded, total) => progress.push([loaded, total]),
-      onAttachmentId: () => { expect(putUrls.length).toBe(0); },
-    });
+    const res = await client.upload({ file: blob, mime: 'application/pdf', size: blob.size });
     expect(res.status).toBe('ready');
-    // PUTs went straight to S3 presigned urls through fetchImpl? No —
-    // presigned PUTs must NOT carry Authorization; the upload impl sends
-    // them with credentials omitted. Our fetchImpl sees them here:
-    // (assert via putUrls captured in fetchImpl below)
-    expect(progress.at(-1)).toEqual([blob.size, blob.size]);
+    expect(s3PutCount).toBe(2);
+    expect(apiCalls).toEqual([
+      'POST /api/v1/uploads',
+      'POST /api/v1/uploads/att1/parts/1',
+      'POST /api/v1/uploads/att1/parts/2',
+      'POST /api/v1/uploads/att1/complete',
+    ]);
   });
 
-  it('resumes: skips parts already uploaded', async () => {
+  it('resume skips uploaded parts and keeps their etags for complete', async () => {
     const blob = new Blob([new Uint8Array(PART + 100)]);
     const putPartNumbers: number[] = [];
+    const progress: Array<[number, number]> = [];
     const client = makeClient((url, init) => {
       const u = urlOf(url);
+      if (u.startsWith('https://s3')) {
+        putPartNumbers.push(2);
+        return Promise.resolve(s3Put('"e2"'));
+      }
       if (u === '/api/v1/uploads') {
         expect(bodyOf(init)).toMatchObject({ resumeId: 'att1' });
-        return makeInit({ parts: [{ partNumber: 1, size: PART }] });
+        return respond(201, {
+          id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2,
+          parts: [{ partNumber: 1, size: PART, etag: '"e1"' }],
+        });
       }
       if (u === '/api/v1/uploads/att1/parts/2') {
         return respond(200, { url: 'https://s3/2', expiresIn: 900 });
       }
       if (u === '/api/v1/uploads/att1/complete') {
-        const body = bodyOf(init) as { parts: Array<{ partNumber: number }> };
-        expect(body.parts.map((p) => p.partNumber)).toEqual([1, 2]);
+        const body = bodyOf(init) as { parts: Array<{ partNumber: number; etag: string }> };
+        expect(body.parts).toEqual([
+          { partNumber: 1, etag: '"e1"' }, // carried from init.parts
+          { partNumber: 2, etag: '"e2"' },
+        ]);
         return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
-      }
-      if (u.startsWith('https://s3')) {
-        putPartNumbers.push(2);
-        return respond(200, null);
       }
       return respond(200, {});
     });
-    const res = await client.upload({ file: blob, mime: 'application/pdf', size: blob.size, resumeId: 'att1' });
+    const res = await client.upload({
+      file: blob, mime: 'application/pdf', size: blob.size, resumeId: 'att1',
+      onProgress: (loaded, total) => progress.push([loaded, total]),
+    });
     expect(res.status).toBe('ready');
     expect(putPartNumbers).toEqual([2]); // part 1 skipped
+    // progress starts from the resumed base, not 0
+    expect(progress[0]?.[0]).toBe(PART);
   });
 
-  it('surfaces presigned PUT failures as ApiError and does not complete', async () => {
+  it('resume 409 falls back to a fresh init without resumeId', async () => {
+    const blob = new Blob([new Uint8Array(10)]);
+    let initCalls = 0;
+    const client = makeClient((url, init) => {
+      const u = urlOf(url);
+      if (u === '/api/v1/uploads') {
+        initCalls += 1;
+        const body = bodyOf(init) as { resumeId?: string };
+        if (initCalls === 1) {
+          expect(body.resumeId).toBe('att-old');
+          return respond(409, { error: { code: 'MEDIA_INVALID_STATE' } });
+        }
+        expect(body.resumeId).toBeUndefined();
+        return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 1, parts: [] });
+      }
+      if (u === '/api/v1/uploads/att1/parts/1') return respond(200, { url: 'https://s3/1', expiresIn: 900 });
+      if (u === '/api/v1/uploads/att1/complete') {
+        return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
+      }
+      if (u.startsWith('https://s3')) return Promise.resolve(s3Put('"e1"'));
+      return respond(200, {});
+    });
+    const res = await client.upload({ file: blob, mime: 'application/pdf', size: blob.size, resumeId: 'att-old' });
+    expect(res.status).toBe('ready');
+    expect(initCalls).toBe(2);
+  });
+
+  it('partSource is used instead of file slicing', async () => {
+    const requested: Array<[number, number]> = [];
+    const blob = new Blob([new Uint8Array(PART + 100)]);
+    const client = makeClient((url) => {
+      const u = urlOf(url);
+      if (u === '/api/v1/uploads') {
+        return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2, parts: [] });
+      }
+      if (u.endsWith('/parts/1') || u.endsWith('/parts/2')) {
+        return respond(200, { url: `https://s3${u}`, expiresIn: 900 });
+      }
+      if (u.endsWith('/complete')) {
+        return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
+      }
+      if (u.startsWith('https://s3')) return Promise.resolve(s3Put('"e"'));
+      return respond(200, {});
+    });
+    await client.upload({
+      mime: 'application/pdf', size: blob.size,
+      partSource: async (start, end) => {
+        requested.push([start, end]);
+        return blob.slice(start, end);
+      },
+    });
+    expect(requested).toEqual([[0, PART], [PART, PART + 100]]);
+  });
+
+  it('presigned PUT failure surfaces as ApiError and never completes', async () => {
     const blob = new Blob([new Uint8Array(10)]);
     let completed = false;
     const client = makeClient((url) => {
       const u = urlOf(url);
-      if (u === '/api/v1/uploads') return makeInit({ partSize: PART, totalParts: 1 });
-      if (u === '/api/v1/uploads/att1/parts/1') return respond(200, { url: 'https://s3/1', expiresIn: 900 });
-      if (u === '/api/v1/uploads/att1/complete') { completed = true; return respond(200, {}); }
-      if (u.startsWith('https://s3')) return respond(403, {});
+      if (u === '/api/v1/uploads') return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 1, parts: [] });
+      if (u.endsWith('/parts/1')) return respond(200, { url: 'https://s3/1', expiresIn: 900 });
+      if (u.endsWith('/complete')) { completed = true; return respond(200, {}); }
+      if (u.startsWith('https://s3')) return Promise.resolve(new Response(null, { status: 403 }));
       return respond(200, {});
     });
     await expect(
@@ -953,23 +1010,26 @@ describe('upload (multipart)', () => {
     ).rejects.toBeInstanceOf(ApiError);
     expect(completed).toBe(false);
   });
+
+  it('over 5GB fails client-side with 413 before any request', async () => {
+    const client = makeClient(() => respond(200, {}));
+    await expect(
+      client.upload({ file: new Blob(), mime: 'video/mp4', size: 5 * 1024 ** 3 + 1 }),
+    ).rejects.toMatchObject({ status: 413 });
+  });
 });
 ```
 
-（第一个用例的 `putUrls` 断言按最终实现调整——presigned PUT 也会走注入的 fetchImpl，可以在 fetchImpl 里对 `https://s3` 前缀分支 push 并返回 200 + 无 ETag header 的问题：`Response` 构造支持 headers，用 `new Response(null, { status: 200, headers: { ETag: '"e1"' } })`。完善为在 fetchImpl 的 s3 分支按序返回 e1/e2。）
-
-同时删除 `packages/api-client/__tests__/default-put.test.ts`。
+同时读 `packages/api-client/__tests__/client.test.ts` 中引用 `presign`/`uploadUrl`/`complete` 的用例并更新为新协议（mock 数据改为 multipart 形状）。
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @vital/api-client test`
-Expected: FAIL — 仍打旧 `/presign` 路径或编译错（default-put.ts 删除后 index 导出报错——先改 index.ts 再跑）。
+Expected: FAIL。
 
 - [ ] **Step 3: Implement**
 
-`packages/api-client/src/types.ts`：删 `PutFn`、`putWithProgress`；`UploadInput` 加 `resumeId?: string`（在 upload.ts 定义则移过去，保持单一来源）。
-
-`packages/api-client/src/upload.ts` 重写：
+`packages/api-client/src/upload.ts` 重写（完整实现）：
 
 ```ts
 import {
@@ -983,20 +1043,37 @@ import type { Http } from './http.js';
 import { ApiError, type VitalClientOptions } from './types.js';
 
 export interface UploadInput {
+  /** Whole-file blob (web/extension, small files). */
   file?: Blob;
-  fileUri?: string;
+  /** Lazy part fetcher (streaming/5GB). Called with ascending [start, end). */
+  partSource?: (start: number, end: number) => Promise<Blob>;
   mime: string;
   size: number;
-  onProgress?: (loaded: number; total: number) => void;
+  onProgress?: (loaded: number, total: number) => void;
   onAttachmentId?: (id: string) => void;
   signal?: AbortSignal;
-  /** Resume a previous multipart session; already-uploaded parts are skipped. */
+  /** Resume a previous multipart session; uploaded parts are skipped. */
   resumeId?: string;
+}
+
+async function initSession(
+  http: Http,
+  input: UploadInput,
+  withResume: boolean,
+): Promise<UploadInitResponse> {
+  return http.request<UploadInitResponse>('/api/v1/uploads', {
+    method: 'POST',
+    body: {
+      mime: input.mime,
+      size: input.size,
+      ...(withResume && input.resumeId !== undefined ? { resumeId: input.resumeId } : {}),
+    },
+  });
 }
 
 export async function uploadImpl(
   http: Http,
-  _options: VitalClientOptions,
+  options: VitalClientOptions,
   input: UploadInput,
 ): Promise<UploadCompleteResponse> {
   if (input.size > MAX_UPLOAD_BYTES) {
@@ -1005,39 +1082,46 @@ export async function uploadImpl(
   if (!isUploadableMime(input.mime)) {
     throw new ApiError(422, 'MEDIA_MISMATCH', ERROR_MESSAGES.MEDIA_MISMATCH);
   }
-  const init = await http.request<UploadInitResponse>('/api/v1/uploads', {
-    method: 'POST',
-    body: { mime: input.mime, size: input.size, resumeId: input.resumeId },
-  });
+  if (input.file === undefined && input.partSource === undefined) {
+    throw new ApiError(0, 'UPLOAD_INPUT_INVALID', 'file 与 partSource 必须提供其一');
+  }
+
+  let init: UploadInitResponse;
+  try {
+    init = await initSession(http, input, true);
+  } catch (err) {
+    // Stale/mismatched resume session → fall back to a fresh one (spec ⑤).
+    if (input.resumeId !== undefined && err instanceof ApiError && err.status === 409) {
+      init = await initSession(http, input, false);
+    } else {
+      throw err;
+    }
+  }
   input.onAttachmentId?.(init.id);
 
-  const done = new Set(init.parts.map((p) => p.partNumber));
   const etags = new Map<number, string>();
+  let loaded = 0;
+  for (const p of init.parts) {
+    etags.set(p.partNumber, p.etag);
+    loaded += p.size; // resumed base so progress does not restart from 0
+  }
+  input.onProgress?.(loaded, input.size);
 
   for (let n = 1; n <= init.totalParts; n += 1) {
-    if (done.has(n)) {
-      // Resumed part: size unknown client-side; approximate by part size.
-      continue;
-    }
+    if (etags.has(n)) continue;
     const start = (n - 1) * init.partSize;
     const end = Math.min(n * init.partSize, input.size);
-    const bytes = Math.max(0, end - start);
     const presigned = await http.request<{ url: string }>(
       `/api/v1/uploads/${init.id}/parts/${n}`,
       { method: 'POST', body: {} },
     );
-    const body: Blob | { fileUri: string; start: number; end: number; size: number; mime: string } =
-      input.file !== undefined
-        ? input.file.slice(start, end)
-        : input.fileUri !== undefined
-          ? { fileUri: input.fileUri, start, end, size: bytes, mime: input.mime }
-          : (() => {
-              throw new ApiError(0, 'UPLOAD_INPUT_INVALID', 'file 与 fileUri 必须提供其一');
-            })();
-    const res = await fetch(presigned.url, {
+    const body = input.partSource !== undefined
+      ? await input.partSource(start, end)
+      : input.file!.slice(start, end);
+    const res = await (options.fetchImpl ?? fetch)(presigned.url, {
       method: 'PUT',
       headers: { 'Content-Type': input.mime },
-      body: body as BodyInit,
+      body,
       credentials: 'omit',
       signal: input.signal,
     });
@@ -1049,89 +1133,83 @@ export async function uploadImpl(
       throw new ApiError(0, 'UPLOAD_ETAG_MISSING', 'S3 未返回 ETag');
     }
     etags.set(n, etag);
-    input.onProgress?.(end, input.size);
+    loaded = end;
+    input.onProgress?.(loaded, input.size);
   }
 
-  for (const p of init.parts) {
-    // Resumed parts need their etags too; server keeps them via S3? No —
-    // complete requires the full etag list. Resumed sessions must re-GET
-    // parts? S3 ListParts returns ETag; extend GET /parts to include etag.
-    // See note below — the DTO UploadedPart gains etag in Task 1 output?
-    break;
+  const parts: Array<{ partNumber: number; etag: string }> = [];
+  for (let n = 1; n <= init.totalParts; n += 1) {
+    const etag = etags.get(n);
+    if (etag === undefined) {
+      throw new ApiError(0, 'UPLOAD_ETAG_MISSING', `分片 ${n} 缺少 ETag`);
+    }
+    parts.push({ partNumber: n, etag });
   }
-
   return http.request<UploadCompleteResponse>(`/api/v1/uploads/${init.id}/complete`, {
     method: 'POST',
-    body: {
-      parts: Array.from({ length: init.totalParts }, (_, i) => i + 1).map((n) => {
-        const etag = etags.get(n);
-        if (etag === undefined) {
-          // Resumed part: etag comes from the init response parts list.
-          const prior = init.parts.find((p) => p.partNumber === n);
-          if (prior?.etag === undefined) {
-            throw new ApiError(0, 'UPLOAD_ETAG_MISSING', `分片 ${n} 缺少 ETag`);
-          }
-          return { partNumber: n, etag: prior.etag };
-        }
-        return { partNumber: n, etag };
-      }),
-    },
+    body: { parts },
   });
 }
 ```
 
-**协议补丁（写入实现，不写入 spec 单独文件）**：续传需要已传分片的 **ETag**（S3 CompleteMultipartUpload 要求全量 ETag），`ListPartsCommand` 的 `Part.ETag` 恰好返回它。因此：`UploadedPart` 扩展为 `{ partNumber: number; size: number; etag: string }`（Task 1 的 DTO 已定义 `UploadedPart`——实现本任务时若 Task 1 已提交无 etag 字段，**在 Task 5 内直接给 `packages/dto/src/uploads.ts` 的 `UploadedPart` 加 `etag: string` 并补/改 dto 测试**，一并提交；storage 的 `listParts` 返回同步带 etag——`ListPartsCommand` 结果里取 `p.ETag ?? ''`；server 的 Task 3 mock 测试中 `[{ partNumber: 1, size: 5*1024*1024 }]` 补 etag 字段——**Task 3 的实现直接带 etag**（实现 Task 3 时 `listParts` 返回 `UploadedPart`，其 etag 字段 Task 1 已有则直接填）。为避免跨任务顺序问题：**Task 1 的 `UploadedPart` 定义直接含 `etag: string`**（上面 Task 1 Step 3 的代码块已按此修正——实现者以 Task 1 brief 中的类型定义为准，若发现无 etag 则补上并加测试）。
+（`ApiError` 的 status 字段名以 `types.ts` 实际为准——先读；旧 `xhrPut` 里是 `new ApiError(403, ...)` 两参 + message 第三参，照抄其构造签名。）
 
-`packages/api-client/src/client.ts`：删 `uploadUrl` 接口项与实现、删 `putWithProgress` 透传；`upload: (input) => uploadImpl(http, options, input)` 保留。
+其余文件：
 
-`packages/api-client/src/index.ts`：删 `default-put.ts` 相关导出（`xhrPut`/`fetchPut`/`bareGetInit`/`barePutInit`——grep 全仓库确认 `bareGetInit` 是否被别处使用，若有保留该函数单独文件或挪移）。
+- `types.ts`：删 `PutFn`/`putWithProgress`/`FilePart`（grep `FilePart` 全仓确认仅 default-put/upload 用）。
+- `client.ts`：接口删 `uploadUrl`；`upload: (input) => uploadImpl(http, options, input)`；删 putWithProgress 透传。
+- `index.ts`：删 default-put 导出（`bareGetInit` 若有别处引用——grep 后决定：被引用则把该函数挪进 `upload.ts` 导出）。
+- 删 `default-put.ts`、`default-put.test.ts`。
+- `apps/web/src/api/client.ts`：删 `PutFn`/`barePutInit`/`tauriPut` 相关（Tauri 的 S3 PUT 由 `tauriFetch` 注入的 fetchImpl 覆盖——`uploadImpl` 用 `options.fetchImpl ?? fetch`，web 的 tauriFetch 已注入，无需单独 put 路径）；确认 `putWithProgress` 透传行删除。
+- `apps/extension/src/client.ts`：删 `putWithProgress: fetchPut` 行 + `fetchPut` import。
+- `apps/mobile/src/lib/api.ts`：删 `putWithProgress: rnPut`；`rn-put.ts` 若仅剩 PutFn 用途则删除（grep 确认），否则最小修补。**mobile 的 avatar 上传此刻会缺 partSource/file** —— Task 8 接 `file: new File(uri)`（expo 新 API File implements Blob）。**为避免 mobile 中间态不可用**，本任务在 `apps/mobile/src/lib/api.ts` 的 createVitalClient 调用处加注入（若 api.ts 有统一工厂）或直接改 `SettingsHome.tsx` 传 `file: new File(asset.uri)`——**按最小改动：api.ts 的 client 工厂无法预置 per-call input，故在 SettingsHome.tsx 的 pickAvatar 里 `client.upload({ file: new File(asset.uri), mime, size })`**（expo-file-system 新 File 类 implements Blob、支持 slice——已验证 v19.0.24）。该改动小且立即生效，列入本任务 Files。
+- `packages/api-client/__tests__/client.test.ts`：旧断言按新协议改。
 
-删除 `packages/api-client/src/default-put.ts`、`packages/api-client/__tests__/default-put.test.ts`。
+- [ ] **Step 4: Run tests（全仓受影响包）**
 
-调用点适配：
+```bash
+pnpm --filter @vital/api-client test && pnpm --filter @vital/api-client typecheck \
+&& pnpm --filter @vital/extension typecheck && pnpm --filter @vital/web test \
+&& pnpm --filter @vital/web exec tsc --noEmit && pnpm --filter @vital/server typecheck
+```
 
-- `apps/extension/src/client.ts`：删 `putWithProgress: fetchPut` 行与相关 import。
-- grep `putWithProgress|xhrPut|fetchPut|uploadUrl|barePutInit|bareGetInit` 全仓库（排除 node_modules），逐个清理或保留（bareGet 若有别处用）。
-
-- [ ] **Step 4: Run tests**
-
-Run: `pnpm --filter @vital/api-client test && pnpm --filter @vital/api-client typecheck && pnpm --filter @vital/extension typecheck && pnpm --filter @vital/web test`
-Expected: PASS（web 的上传调用 client.upload 签名兼容——`file, mime, size` 不变）。
+Expected: PASS（web typecheck 覆盖 `apps/web/src/api/client.ts` 的 import 清理）。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add packages/api-client/src/upload.ts packages/api-client/src/client.ts packages/api-client/src/types.ts packages/api-client/src/index.ts packages/api-client/__tests__/upload.test.ts apps/extension/src/client.ts packages/dto/src/uploads.ts
+git add packages/api-client/src/upload.ts packages/api-client/src/client.ts packages/api-client/src/types.ts packages/api-client/src/index.ts packages/api-client/__tests__/upload.test.ts packages/api-client/__tests__/client.test.ts apps/web/src/api/client.ts apps/extension/src/client.ts apps/mobile/src/lib/api.ts apps/mobile/src/lib/rn-put.ts apps/mobile/src/features/settings/SettingsHome.tsx
 git rm packages/api-client/src/default-put.ts packages/api-client/__tests__/default-put.test.ts
-git commit -m "feat(api-client): multipart upload with resume; drop XHR put track
+git commit -m "feat(api-client): multipart upload with resume via injected fetch; drop PUT track
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
+（rn-put.ts 若删除则 git rm；若 mobile/extension 的文件在本任务无改动则不 add。）
+
 ---
 
-### Task 6: 扩展 — file-kind 识别 + SW 流式转存 + 静默/弹窗接入
+### Task 6: 扩展 — file-kind 识别 + 流式转存（字节对齐 partSource）+ popup file 模式
 
 **Files:**
 - Create: `apps/extension/src/file-kind.ts`
 - Create: `apps/extension/__tests__/file-kind.test.ts`
-- Modify: `apps/extension/src/capture.ts`（extractCapture 文件分支、commitCapture file 分支、saveLink 文件直链分支、流式转存函数）
-- Modify: `apps/extension/src/messages.ts`（`PopupMode` 加 `'file'`；`CapturePayload` 加 `file?: { url: string; mime: string; size: number } | null`）
-- Modify: `apps/extension/src/popup-state.ts`（file 模式 UI 状态）
-- Modify: `apps/extension/src/i18n.ts`（新增文案）
-- Modify: `apps/extension/entrypoints/popup/main.ts`（file 模式渲染 + 进度）
-- Test: `apps/extension/__tests__/popup-state.test.ts`（file 模式追加）
+- Create: `apps/extension/src/stream-rehost.ts`（流式 partSource，字节对齐——单测核心）
+- Create: `apps/extension/__tests__/stream-rehost.test.ts`
+- Modify: `apps/extension/src/capture.ts`、`src/messages.ts`、`src/popup-state.ts`、`src/i18n.ts`、`entrypoints/popup/main.ts`
+- Test: `apps/extension/__tests__/popup-state.test.ts`（initialMode 签名更新 + file 模式）
 
 **Interfaces:**
-- Consumes: Task 1/5 的 `MAX_UPLOAD_BYTES`、`isUploadableMime`、`upload({resumeId})`。
+- Consumes: Task 1 `MAX_UPLOAD_BYTES`/`isUploadableMime`、Task 5 `upload({partSource, resumeId})`。
 - Produces:
-  - `fileKindOf(url: string): 'pdf' | 'video' | 'audio' | null`（按扩展名）
-  - `fileModeFromResponse(url: string, contentType: string, contentLength: number | null): { url: string; mime: string; size: number } | null`（MIME 白名单 + 5GB 校验，不通过返回 null 走文章模式）
-  - `CapturePayload.file` 字段
-  - `commitCapture` 接受 `mode: 'file'`：创建 item（title、originalUrl=file.url）→ 流式转存 → patchInboxAssets
-  - 流式转存：`rehostDirectFile(file: {url, mime, size}, onProgress): Promise<{ attachmentId: string; failed: number }>`（SW fetch 流式读 + 分片上传 + resume）
+  - `fileKindOf(url): 'pdf' | 'video' | 'audio' | null`
+  - `fileModeFromResponse(url, contentType, contentLength): { url; mime; size } | null`（**未知长度一律 null**——协议 size 必须正数；MIME 收紧为 pdf/video/audio 三类，image/* 不算文件模式）
+  - `createStreamPartSource(url: string, partSize: number, totalSize: number): { partSource: (start, end) => Promise<Blob>; knownLength: () => number }` — **字节对齐**：内部 reader 跟踪 `consumed` 字节；请求的 `start > consumed` 时先丢弃 `start - consumed` 字节再取；`start < consumed`（不应发生）抛错；流提前结束抛 `UPLOAD_STREAM_SHORT`
+  - `PopupMode` 加 `'file'`；`CapturePayload` 加 `file: { url: string; mime: string; size: number } | null`
+  - `initialMode(capture: CapturePayload): PopupMode` — file 优先，其次 selection，再次 article
+  - `commitCapture` file 分支：createExtensionItem → 流式 rehost（resume：`chrome.storage.session` key `vital.rehost.<sha256(canonicalUrl)>` 存 `{ attachmentId, size, mime }`）→ patchInboxAssets
 
-- [ ] **Step 1: file-kind 纯函数测试（先红）**
+- [ ] **Step 1: file-kind + stream-rehost 测试（先红）**
 
 `apps/extension/__tests__/file-kind.test.ts`：
 
@@ -1146,51 +1224,97 @@ describe('fileKindOf', () => {
     expect(fileKindOf('https://ex.com/v/clip.MOV')).toBe('video');
     expect(fileKindOf('https://ex.com/a/song.flac')).toBe('audio');
     expect(fileKindOf('https://ex.com/a/page.html')).toBeNull();
-    expect(fileKindOf('https://ex.com/noext')).toBeNull();
     expect(fileKindOf('https://ex.com/a.png')).toBeNull(); // images stay article-mode
   });
 });
 
 describe('fileModeFromResponse', () => {
-  it('accepts whitelisted mime with size within 5GB', () => {
+  it('accepts pdf/video/audio mime with known size within 5GB', () => {
     expect(fileModeFromResponse('https://ex.com/a.pdf', 'application/pdf', 123)).toEqual({
       url: 'https://ex.com/a.pdf', mime: 'application/pdf', size: 123,
     });
+    expect(fileModeFromResponse('https://ex.com/a.mp4', 'video/mp4; charset=binary', 500)).toEqual({
+      url: 'https://ex.com/a.mp4', mime: 'video/mp4', size: 500,
+    });
   });
 
-  it('rejects html, unknown mime, and oversized', () => {
+  it('rejects html, images, unknown mime, unknown length, and oversized', () => {
     expect(fileModeFromResponse('https://ex.com/a', 'text/html', 100)).toBeNull();
+    expect(fileModeFromResponse('https://ex.com/a.jpg', 'image/jpeg', 100)).toBeNull();
     expect(fileModeFromResponse('https://ex.com/a', 'application/x-msdownload', 100)).toBeNull();
+    expect(fileModeFromResponse('https://ex.com/a.pdf', 'application/pdf', null)).toBeNull();
     expect(fileModeFromResponse('https://ex.com/a.mp4', 'video/mp4', 5 * 1024 ** 3 + 1)).toBeNull();
-  });
-
-  it('tolerates missing content-length only for pdf', () => {
-    // 长度未知时谨慎放行（streaming fetch 逐片校验上限），视频音频要求已知长度
-    expect(fileModeFromResponse('https://ex.com/a.pdf', 'application/pdf', null)).toMatchObject({ mime: 'application/pdf' });
-    expect(fileModeFromResponse('https://ex.com/a.mp4', 'video/mp4', null)).toBeNull();
   });
 });
 ```
 
-（最后一条规则是我加的产品决策：PDF 无 Content-Length 也放行（下载中逐片累计校验），视频/音频必须已知长度才转存——避免无限流。若你认为都应该放行，实现时统一去掉该分支并改测试——**默认按测试写的实现**。）
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `pnpm --filter @vital/extension test -- file-kind`
-Expected: FAIL — 模块不存在。
-
-- [ ] **Step 3: Implement file-kind.ts**
+`apps/extension/__tests__/stream-rehost.test.ts`（**核心：resume 跳片的字节对齐**）：
 
 ```ts
-import { MAX_UPLOAD_BYTES, isUploadableMime } from '@vital/dto';
+import { describe, expect, it } from 'vitest';
+import { createStreamPartSource } from '../src/stream-rehost.js';
+
+function streamOf(chunks: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const c of chunks) controller.enqueue(encoder.encode(c));
+      controller.close();
+    },
+  });
+}
+
+describe('createStreamPartSource', () => {
+  it('sequential slices consume the stream in order', async () => {
+    const blob = new Blob(['aaaabbbbcccc']);
+    const src = createStreamPartSourceFromBlob(blob, 4);
+    expect(await (await src.partSource(0, 4)).text()).toBe('aaaa');
+    expect(await (await src.partSource(4, 8)).text()).toBe('bbbb');
+    expect(await (await src.partSource(8, 12)).text()).toBe('cccc');
+  });
+
+  it('resume skip: discards bytes up to start before reading the part', async () => {
+    // Simulate a resumed upload: parts 1 already done, next request is (8, 12)
+    // on a FRESH stream that starts at byte 0.
+    const blob = new Blob(['aaaabbbbcccc']);
+    const src = createStreamPartSourceFromBlob(blob, 4);
+    expect(await (await src.partSource(8, 12)).text()).toBe('cccc'); // aaaabbbb discarded
+  });
+
+  it('start behind the current position throws (cannot rewind a stream)', async () => {
+    const blob = new Blob(['aaaabbbb']);
+    const src = createStreamPartSourceFromBlob(blob, 4);
+    await src.partSource(4, 8);
+    await expect(src.partSource(0, 4)).rejects.toThrow();
+  });
+
+  it('stream ending early throws UPLOAD_STREAM_SHORT', async () => {
+    const blob = new Blob(['aaaa']);
+    const src = createStreamPartSourceFromBlob(blob, 4);
+    await expect(src.partSource(4, 8)).rejects.toThrow(/short/i);
+  });
+});
+```
+
+（测试通过 `createStreamPartSourceFromBlob` 辅助——真实实现 `createStreamPartSource(url, ...)` 内部 fetch；为可测，导出一个接受任意 `ReadableStream<Uint8Array>` 的内核函数。**接口设计**：`createStreamPartSource(stream: ReadableStream<Uint8Array>): StreamPartSource`，`StreamPartSource.partSource(start, end)` 字节对齐；capture.ts 里 `fetch(url).then(r => r.body)` 传入。测试直接构造 stream——上面 `createStreamPartSourceFromBlob` 就是 `createStreamPartSource(blob.stream())`。）
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `pnpm --filter @vital/extension test`
+Expected: FAIL — 模块不存在。
+
+- [ ] **Step 3: Implement file-kind.ts + stream-rehost.ts**
+
+`file-kind.ts`：
+
+```ts
+import { MAX_UPLOAD_BYTES } from '@vital/dto';
 
 const EXT_TO_KIND: Record<string, 'pdf' | 'video' | 'audio'> = {
   pdf: 'pdf',
   mp4: 'video', webm: 'video', mov: 'video', m4v: 'video', mkv: 'video',
   mp3: 'audio', m4a: 'audio', aac: 'audio', ogg: 'audio', wav: 'audio', flac: 'audio',
 };
-
-const AUDIO_VIDEO_MIME = /^(video|audio)\//;
 
 export function fileKindOf(url: string): 'pdf' | 'video' | 'audio' | null {
   let parsed: URL;
@@ -1209,157 +1333,232 @@ export interface DirectFile {
   size: number;
 }
 
+const FILE_MIME = /^(application\/pdf|video\/|audio\/)/;
+
+/** Direct-file gate: whitelisted kind + known length + within cap. */
 export function fileModeFromResponse(
   url: string,
   contentType: string,
   contentLength: number | null,
 ): DirectFile | null {
   const mime = contentType.split(';')[0]?.trim() ?? '';
-  if (mime === '' || !isUploadableMime(mime) || AUDIO_VIDEO_MIME.test(mime) === false && mime !== 'application/pdf') {
+  if (!FILE_MIME.test(mime)) return null;
+  if (contentLength === null || contentLength <= 0 || contentLength > MAX_UPLOAD_BYTES) {
     return null;
   }
-  if (contentLength === null) {
-    if (mime !== 'application/pdf') return null;
-    return { url, mime, size: 0 }; // unknown length; streaming path enforces the cap
-  }
-  if (contentLength <= 0 || contentLength > MAX_UPLOAD_BYTES) return null;
   return { url, mime, size: contentLength };
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `pnpm --filter @vital/extension test -- file-kind`
-Expected: PASS。
-
-- [ ] **Step 5: messages.ts + popup-state + i18n**
-
-`messages.ts`：
-
-- `PopupMode` 改为 `'article' | 'selection' | 'task' | 'file'`
-- `CapturePayload` 加 `file: { url: string; mime: string; size: number } | null`
-- `isCommitPortMessage` 的 mode 校验加 `'file'`
-
-`popup-state.ts`：
+`stream-rehost.ts`：
 
 ```ts
-export function fileMetaLine(file: { mime: string; size: number }): string {
-  const kind = file.mime.split('/')[0] === 'video' ? '视频'
-    : file.mime.split('/')[0] === 'audio' ? '音频' : 'PDF';
-  const size = file.size > 0 ? ` · ${formatBytes(file.size)}` : '';
-  return `${kind}${size}`;
+export interface StreamPartSource {
+  partSource: (start: number, end: number) => Promise<Blob>;
 }
 
-function formatBytes(n: number): string {
-  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)}GB`;
-  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)}MB`;
-  return `${Math.max(1, Math.round(n / 1024))}KB`;
+/**
+ * Byte-aligned part source over a network stream. Ascending slices consume
+ * the stream; a skip (resume) first discards bytes up to `start`. A request
+ * behind the current position throws — streams cannot rewind.
+ */
+export function createStreamPartSource(
+  stream: ReadableStream<Uint8Array>,
+): StreamPartSource {
+  const reader = stream.getReader();
+  let consumed = 0;
+  let buffer = new Uint8Array(0);
+
+  async function ensure(n: number): Promise<Uint8Array> {
+    while (buffer.length < n) {
+      const { done, value } = await reader.read();
+      if (done || value === undefined) {
+        throw new Error(`UPLOAD_STREAM_SHORT: stream ended at ${consumed + buffer.length}, need ${n}`);
+      }
+      const next = new Uint8Array(buffer.length + value.length);
+      next.set(buffer);
+      next.set(value, buffer.length);
+      buffer = next;
+    }
+    return buffer;
+  }
+
+  async function discard(n: number): Promise<void> {
+    await ensure(n);
+    buffer = buffer.slice(n);
+    consumed += n;
+  }
+
+  return {
+    async partSource(start: number, end: number): Promise<Blob> {
+      if (start < consumed) {
+        throw new Error(`UPLOAD_STREAM_REWIND: requested ${start}, already at ${consumed}`);
+      }
+      if (start > consumed) {
+        await discard(start - consumed);
+      }
+      const need = end - start;
+      const data = await ensure(need);
+      const part = data.slice(0, need);
+      buffer = data.slice(need);
+      consumed += need;
+      return new Blob([part]);
+    },
+  };
 }
 ```
 
-`modeDisabled`：`file` 模式 disabled 当 `capture.file === null`（改签名 `modeDisabled(mode, capture)` 或加独立判断——**保持现签名**，在 popup main.ts 的 file 分支里由 `capture.file` 判断，popup-state 只加 `fileMetaLine`，`initialMode` 改为 `capture => file ? 'file' : selection ? 'selection' : 'article'`——**改签名为 `initialMode(capture: CapturePayload): PopupMode`**，同步更新现有测试调用）。
+- [ ] **Step 4: Run tests to verify they pass**
 
-`i18n.ts` 增加：`fileModeLabel: '文件'`、`progressParts: '转存中…'`。
+Run: `pnpm --filter @vital/extension test`
+Expected: PASS。
 
-popup `main.ts`：`renderCapture` 里 `mode === 'file'` 时隐藏模式切换组的 selection/task 按钮（或全部隐藏、只显示文件名+meta）、标题预填 URL 文件名（`decodeURIComponent(new URL(file.url).pathname.split('/').pop() ?? '')`）、`fileMetaLine` 显示。commit 的 mode 透传。
+- [ ] **Step 5: messages.ts + popup-state.ts + i18n.ts**
 
-- [ ] **Step 6: capture.ts — extractCapture 文件分支 + commitCapture file 分支 + 流式转存**
+- `messages.ts`：`PopupMode` 加 `'file'`；`CapturePayload` 加 `file: { url: string; mime: string; size: number } | null`；`isCommitPortMessage` mode 校验加 `'file'`。
+- `popup-state.ts`：`initialMode` 签名改 `(capture: CapturePayload): PopupMode`（file > selection > article）；新增 `fileMetaLine(file: { mime: string; size: number }): string`（`视频/音频/PDF · 12.3MB`，内部 `formatBytes`）；`modeDisabled` 增加规则：`file` disabled 当 selection 逻辑照旧（file 的 disabled 由 popup main 判断 `capture.file === null`，`modeDisabled` 保持现签名仅管 selection）。
+- `i18n.ts`：`progressLabel` 场景扩展无需新 key（复用现有进度文案）；popup 静态文案进 HTML。
+- `__tests__/popup-state.test.ts`：`initialMode` 调用改为传 capture fixture；补 `initialMode({...capture, file: {...}}) === 'file'` 用例；`fileMetaLine` 用例。
 
-1. `extractCapture` 开头（收集 payload 前）加文件探测：
+- [ ] **Step 6: capture.ts — 探测、file 分支、流式 rehost**
+
+1. `extractCapture`（capture.ts，现约 447 行）在 `collectFromTab` **之前**加文件探测（用 `tab.url`，不 executeScript）：
 
 ```ts
-  const kind = fileKindOf(originalUrlOf(tab));
-  if (kind !== null) {
-    const direct = await probeDirectFile(originalUrl); // HEAD via fetch, credentials omit
+  const tabUrl = tab.url ?? '';
+  if (fileKindOf(tabUrl) !== null) {
+    const direct = await probeDirectFile(tabUrl);
     if (direct !== null) {
       return {
-        title: fileNameFromUrl(direct.url), originalUrl: direct.url,
-        extractedText: null, extractedHtml: null, excerpt: null, byline: null,
-        siteName: null, imageSrcs: [], selection: '', tabId: tab.id ?? null,
-        file: direct,
+        title: fileNameFromUrl(direct.url),
+        originalUrl: direct.url,
+        extractedText: null, extractedHtml: null, excerpt: null,
+        byline: null, siteName: null, imageSrcs: [], selection: '',
+        tabId: tab.id ?? null, file: direct,
       };
     }
-    // not a real file (e.g. html page at .pdf route) → fall through to article mode
+    // .pdf route serving html → fall through to article mode
   }
 ```
 
-（`originalUrlOf(tab)` 与现有 `savePage` 的 `page.url` 探测逻辑一致——为避免双份 executeScript，文件探测放在 `collectFromTab` 之前用 `tab.url` 判断；`probeDirectFile` 用 fetch HEAD（`method: 'HEAD'`），CORS 拒绝时返回 null 走文章模式。现有 CapturePayload 构造点补 `file: null`。）
-
-2. 流式转存函数（capture.ts）：
+辅助函数（capture.ts 内）：
 
 ```ts
+async function probeDirectFile(url: string): Promise<DirectFile | null> {
+  try {
+    const res = await fetch(url, { method: 'HEAD', credentials: 'omit' });
+    if (!res.ok) return null;
+    const len = res.headers.get('content-length');
+    return fileModeFromResponse(
+      url,
+      res.headers.get('content-type') ?? '',
+      len === null ? null : Number(len),
+    );
+  } catch {
+    return null; // CORS or network → article mode
+  }
+}
+
+function fileNameFromUrl(url: string): string {
+  try {
+    const name = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '');
+    return name === '' ? url : name;
+  } catch {
+    return url;
+  }
+}
+```
+
+（HEAD 被 405 的站点：探测失败 → 文章模式。CORS 限制是已知现实——多数第三方直链会降级文章模式，spec 已设计。）
+
+现有 `extractCapture` 的文章路径 payload 构造补 `file: null`。
+
+2. 流式 rehost（capture.ts）：
+
+```ts
+interface RehostState {
+  attachmentId: string;
+  size: number;
+  mime: string;
+}
+
 async function rehostDirectFile(
-  file: { url: string; mime: string; size: number },
+  file: DirectFile,
   onProgress?: (loaded: number, total: number) => Promise<void> | void,
 ): Promise<{ attachmentId: string | null; failed: number }> {
-  const client = getClient();
-  const res = await fetch(file.url, { credentials: 'omit' });
-  if (!res.ok || res.body === null) return { attachmentId: null, failed: 1 };
-  const reader = res.body.getReader();
-  const init = await client.uploadInit?.(...) // api-client 未暴露 init？——见下
-  ...
+  const resumeKey = `vital.rehost.${await sha256Hex(file.url)}`;
+  const stored = await chrome.storage.session.get(resumeKey);
+  const prior = stored[resumeKey] as RehostState | undefined;
+  try {
+    const res = await fetch(file.url, { credentials: 'omit' });
+    if (!res.ok || res.body === null) return { attachmentId: null, failed: 1 };
+    const source = createStreamPartSource(res.body);
+    const uploaded = await getClient().upload({
+      partSource: (start, end) => source.partSource(start, end),
+      mime: file.mime,
+      size: file.size,
+      resumeId: prior?.attachmentId,
+      onProgress: (loaded, total) => {
+        void onProgress?.(loaded, total);
+        // Persist resume handle as soon as we have an id — onAttachmentId fires
+        // after init; store for crash recovery.
+      },
+      onAttachmentId: (id) => {
+        void chrome.storage.session.set({ [resumeKey]: { attachmentId: id, size: file.size, mime: file.mime } satisfies RehostState });
+      },
+    });
+    await chrome.storage.session.remove(resumeKey);
+    return { attachmentId: uploaded.id, failed: 0 };
+  } catch {
+    return { attachmentId: null, failed: 1 }; // resume state stays for retry
+  }
 }
 ```
 
-**实现口径**：api-client 的 `upload()` 接受 `file: Blob`（一次读入内存）——5GB 不行。但流式场景 SW 里可以**逐片构造 Blob**：`upload()` 的 `file.slice(start,end)` 分片读的源头是 Blob——5GB Blob 在 SW 不可行。**方案**：扩展不走 `client.upload`，直接用底层分片协议：在 `packages/api-client/src/upload.ts` 导出 `uploadFromPartReader(http 不可得…)`——**更简单**：api-client 的 `UploadInput` 增加第三形态 `partSource?: (start: number, end: number) => Promise<Blob>`，upload 循环里优先用它取片。扩展传 `(start, end) => reader-backed chunk`。流式读 + 上传在扩展侧实现一个 `StreamPartSource`：
-
-```ts
-// apps/extension/src/capture.ts
-function streamPartSource(url: string): {
-  source: (start: number, end: number) => Promise<Blob>;
-  length: Promise<number>;
-} {
-  // fetch once, keep reader; consecutive slice requests consume the stream.
-}
-```
-
-顺序分片上传与流式读取天然匹配（片号递增 = 流顺序）。**UploadInput 增加形态属于 Task 5 的 api-client 接口**——实现 Task 6 时若 Task 5 已提交无此形态，在 Task 6 内给 `packages/api-client/src/upload.ts` 的 `UploadInput` 加 `partSource?: (start: number, end: number) => Promise<Blob>`（循环里 `input.partSource !== undefined ? await input.partSource(start, end) : file.slice(...)`），api-client 测试补一条 partSource 用例，一并提交。
-
-`rehostDirectFile` 完整实现（含 resume）：转存前查 `chrome.storage.session`（key `vital.rehost.<canonicalUrl>`）取 `{ attachmentId, doneParts }`；命中则 `upload({resumeId, partSource, mime, size})`；上传成功后清 key。progress 回调透传。
+（`sha256Hex` 从 canonical.ts 已导出。CORS 拒绝 → fetch 抛错 → failed=1，item 已建不丢——降级收录。）
 
 3. `commitCapture` 加 file 分支（在 task 分支之前）：
 
 ```ts
   if (input.mode === 'file' && capture.file !== null) {
     const file = capture.file;
-    const result = await createExtensionItem({
-      title, originalUrl: file.url, source: 'extension',
-    });
-    const outcome: CaptureOutcome = { kind: result.created ? 'created' : 'existing', id: result.item.id };
+    const result = await createExtensionItem({ title, originalUrl: file.url, source: 'extension' });
+    const outcome: CaptureOutcome = {
+      kind: result.created ? 'created' : 'existing',
+      id: result.item.id,
+    };
     await input.onCreated?.(outcome);
+    let failed = 0;
     if (result.created) {
       const rehosted = await rehostDirectFile(file, input.onProgress);
       if (rehosted.attachmentId !== null) {
         await getClient().patchInboxAssets(result.item.id, {
           assets: [{ attachmentId: rehosted.attachmentId, originalSrc: file.url, sortOrder: 0 }],
         });
+      } else {
+        failed = 1;
       }
     }
-    return { outcome, failed: rehosted.attachmentId === null ? 1 : 0 };
+    return { outcome, failed };
   }
 ```
 
-（变量作用域按实际调整——`rehosted` 需在 if 外声明。）
+4. `saveLink`（右键链接）加文件分支：`fileKindOf(href) !== null` 时 `probeDirectFile`，命中则同 file 流程（静默 badge 进度：复用 `report` 通道）。
 
-4. `saveLink`（右键链接）加文件分支：`fileKindOf(href) !== null` 时探测，命中则同 file 提交流程（静默，badge 进度）。
+- [ ] **Step 7: popup main.ts 接入**
 
-5. `saveImage` 不动（图片已有自己的转存路径）。
-
-- [ ] **Step 7: popup main.ts 接入 + 全量验证**
-
-- `boot()` 里 `capture.file !== null` → `initialMode` 返回 `'file'`（popup-state 已改）
-- `renderCapture`：file 模式隐藏 `mode-selection`/`mode-task` 按钮、清单区；meta 行用 `fileMetaLine`
-- commit 透传 mode（无需改 commit 消息结构——`PopupMode` 已含 file，background `commitCapture` 分支处理）
-- `probeDirectFile` 在 popup 场景由 background 的 `capture-active-tab` RPC 走 `extractCapture`（已含文件探测），popup 无需自己探测
+- `renderCapture`：`mode === 'file'` 时隐藏 selection/task 模式按钮与清单区，meta 行用 `fileMetaLine(capture.file)`，标题预填 `fileNameFromUrl`（从 capture.title 来——extractCapture 已预填）。
+- commit 的 mode 透传（`PopupMode` 已含 file，Port 协议无需改）。
+- 静默路径进度：background Port 的 progress 事件已通用（`转存图片 n/N` 文案对 file 场景改为通用 `n/N`——`progressLabel` 改为仅 `n/N` 或保留图片字样，**实现时统一为 `${done}/${total}`**，popup-state 测试同步）。
 
 Run: `pnpm --filter @vital/extension test && pnpm --filter @vital/extension typecheck && pnpm --filter @vital/extension lint && pnpm --filter @vital/extension build`
-Expected: PASS。popup-state 现有测试的 `initialMode` 调用签名更新后全绿。
+Expected: PASS。
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add apps/extension/src/file-kind.ts apps/extension/__tests__/file-kind.test.ts apps/extension/src/capture.ts apps/extension/src/messages.ts apps/extension/src/popup-state.ts apps/extension/src/i18n.ts apps/extension/entrypoints/popup/main.ts apps/extension/__tests__/popup-state.test.ts packages/api-client/src/upload.ts packages/api-client/__tests__/upload.test.ts
-git commit -m "feat(extension): direct-file capture with streaming multipart rehost
+git add apps/extension/src/file-kind.ts apps/extension/__tests__/file-kind.test.ts apps/extension/src/stream-rehost.ts apps/extension/__tests__/stream-rehost.test.ts apps/extension/src/capture.ts apps/extension/src/messages.ts apps/extension/src/popup-state.ts apps/extension/src/i18n.ts apps/extension/entrypoints/popup/main.ts apps/extension/__tests__/popup-state.test.ts
+git commit -m "feat(extension): direct-file capture with byte-aligned streaming rehost
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
@@ -1370,66 +1569,57 @@ Co-Authored-By: Claude Code <noreply@anthropic.com>"
 
 **Files:**
 - Create: `apps/web/src/features/inbox/ReaderFileAsset.tsx`
-- Modify: `apps/web/src/features/inbox/ReaderArticle.tsx`（引入 ReaderFileAsset）
-- Modify: `apps/web/src/features/reports/media.ts`（`uploadReportFile` 的 `src` 从 `/api/v1/uploads/${id}` 改为 `uploaded.url`？——**不需要**：UploadCompleteResponse 无 url，报告编辑器现有渲染走 302 会被删。grep 报告编辑器对 `src` 的消费，改为 complete 后调用一个签名 URL 获取。**先探查**：`apps/web/src/features/reports/` 里 `<img src={...}>` 或 `media.ts` 的 `src` 消费点，统一改为「上传完成后 client 里补一个 `getUploadUrl(id)` 方法（GET /api/v1/uploads/:id/url 返回 {url}）」——**这需要 server 加一个轻端点**。**简化替代**：报告场景图片上传后立即 bind 到 report，服务端 bind 响应/报告查询接口本身应已下发签名 URL——grep 报告查询接口对附件的处理再定。**本任务以探查结果为准，若报告编辑器当前用 `/api/v1/uploads/:id` 直链渲染（依赖 302），必须一并迁移到签名 URL**，不迁移则删 302 后报告图片挂掉。）
+- Modify: `apps/web/src/features/inbox/ReaderArticle.tsx`（顶层渲染 file 类 asset）
+- Create: `apps/web/__tests__/features/inbox/reader-file-asset.test.tsx`
 
 **Interfaces:**
-- Consumes: Task 4 的 `InboxAsset.mime`、`InboxAsset.url`（签名 URL 已有）。
-- Produces: Reader 对 pdf/video/audio asset 内嵌渲染；报告编辑器图片渲染迁移到签名 URL（若探查确认依赖 302）。
+- Consumes: Task 4 的 `InboxAsset.mime` 与既有 `InboxAsset.url`（签名 URL）。
+- Produces: Reader 对 `application/pdf`/`video/*`/`audio/*` asset 的内嵌渲染。
 
-- [ ] **Step 1: 探查报告编辑器与 302 依赖**
+- [ ] **Step 1: Write the failing test**
 
-```bash
-grep -rn "uploads/" apps/web/src --include="*.tsx" --include="*.ts" | grep -v test
-grep -rn "attachmentId" apps/web/src/features/reports/*.tsx | head
-grep -rn "report.*assets\|ReportAsset" packages/dto/src/reports.ts apps/server/src/reports/*.ts | head
-```
-
-按结果决定报告侧迁移方案（服务端报告查询若已带 `generateAccessUrl` 签名则只改前端 src；若纯靠 302 则给报告附件下发加签名 URL——模式照抄 inbox 的 `toAssetDto`）。
-
-- [ ] **Step 2: Write the failing test（Reader 渲染分支）**
-
-先看 `apps/web/__tests__/features/inbox/` 现有 reader 测试文件的模式（jsdom render？），新建或追加：
+先看 `apps/web/__tests__/features/inbox/` 现有测试的 render 模式（testing-library）。新建：
 
 ```tsx
-import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import { ReaderFileAsset } from '@/features/inbox/ReaderFileAsset';
+import type { InboxAsset } from '@vital/dto';
+
+function asset(mime: string): InboxAsset {
+  return {
+    id: 'a1', attachmentId: 'att1', url: 'https://s3/x', originalSrc: 'x', sortOrder: 0, mime,
+  };
+}
 
 describe('ReaderFileAsset', () => {
-  it('renders video element for video mime', () => {
-    render(
-      <ReaderFileAsset asset={{ id: 'a1', attachmentId: 'att1', url: 'https://s3/v', originalSrc: 'x', sortOrder: 0, mime: 'video/mp4' }} />,
-    );
+  it('renders video for video mime', () => {
+    render(<ReaderFileAsset asset={asset('video/mp4')} />);
     expect(screen.getByTestId('reader-video').tagName).toBe('VIDEO');
   });
-
   it('renders iframe for pdf', () => {
-    render(
-      <ReaderFileAsset asset={{ id: 'a2', attachmentId: 'att2', url: 'https://s3/p', originalSrc: 'x', sortOrder: 0, mime: 'application/pdf' }} />,
-    );
+    render(<ReaderFileAsset asset={asset('application/pdf')} />);
     expect(screen.getByTestId('reader-pdf').tagName).toBe('IFRAME');
   });
-
-  it('renders audio element for audio mime', () => {
-    render(
-      <ReaderFileAsset asset={{ id: 'a3', attachmentId: 'att3', url: 'https://s3/a', originalSrc: 'x', sortOrder: 0, mime: 'audio/mpeg' }} />,
-    );
+  it('renders audio for audio mime', () => {
+    render(<ReaderFileAsset asset={asset('audio/mpeg')} />);
     expect(screen.getByTestId('reader-audio').tagName).toBe('AUDIO');
   });
-
   it('renders nothing for image mime', () => {
-    const { container } = render(
-      <ReaderFileAsset asset={{ id: 'a4', attachmentId: 'att4', url: 'https://s3/i', originalSrc: 'x', sortOrder: 0, mime: 'image/jpeg' }} />,
-    );
+    const { container } = render(<ReaderFileAsset asset={asset('image/jpeg')} />);
     expect(container.firstChild).toBeNull();
   });
 });
 ```
 
-（InboxAsset 构造需补齐 interface 全部必填字段——mime 加入后旧的测试 fixture 若在用户 WIP 里，别动，新文件自建 fixture。）
+- [ ] **Step 2: Run test to verify it fails**
 
-- [ ] **Step 3: Implement ReaderFileAsset.tsx**
+Run: `pnpm --filter @vital/web test -- reader-file-asset`
+Expected: FAIL — 组件不存在。
+
+- [ ] **Step 3: Implement**
+
+`ReaderFileAsset.tsx`（样式类名以 InboxReader.tsx 现有 tailwind token 风格为准）：
 
 ```tsx
 import type { InboxAsset } from '@vital/dto';
@@ -1440,7 +1630,7 @@ export function ReaderFileAsset({ asset }: { asset: InboxAsset }) {
     return (
       <iframe
         data-testid="reader-pdf"
-        title="pdf"
+        title={asset.originalSrc}
         src={asset.url}
         className="h-[70vh] w-full rounded-lg border border-border"
       />
@@ -1458,107 +1648,190 @@ export function ReaderFileAsset({ asset }: { asset: InboxAsset }) {
 }
 ```
 
-`ReaderArticle.tsx`：`ReaderArticle` 顶层（`ReaderArticleBody` 之前）渲染 file 类 asset：
+`ReaderArticle.tsx`：`ReaderArticle` 组件内、`ReaderArticleBody` 之前：
 
 ```tsx
 const fileAssets = props.assets.filter(
   (a) => a.mime === 'application/pdf' || a.mime.startsWith('video/') || a.mime.startsWith('audio/'),
 );
+...
+{fileAssets.map((a) => (
+  <ReaderFileAsset key={a.id} asset={a} />
+))}
 ```
 
-`{fileAssets.map((a) => <ReaderFileAsset key={a.id} asset={a} />)}` 放 ReaderArticleBody 前面。样式类名沿用项目 tailwind token（看现有文件的实际类名风格，如 `rounded-lg border`——以 InboxReader.tsx 现有写法为准）。
+- [ ] **Step 4: Run tests**
 
-- [ ] **Step 4: 报告编辑器迁移（按 Step 1 探查结论执行）**
+Run: `pnpm --filter @vital/web test && pnpm --filter @vital/web exec tsc --noEmit`
+Expected: PASS（对照基线 123 + 新增；不新增失败）。
 
-若依赖 302：服务端报告附件 DTO 下发签名 URL（模式照抄 Task 4 的 `toAssetDto`），前端 `src` 改用之。**探查结论与改动写进提交信息**。
-
-- [ ] **Step 5: Run tests**
-
-Run: `pnpm --filter @vital/web test && pnpm --filter @vital/web typecheck 2>/dev/null || pnpm --filter @vital/web exec tsc --noEmit`
-Expected: PASS（web 测试含用户 WIP，WIP 相关失败如实报告不算本任务问题——开工前先跑一遍基线记录既有失败）。
-
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/web/src/features/inbox/ReaderFileAsset.tsx apps/web/src/features/inbox/ReaderArticle.tsx <报告侧文件>
+git add apps/web/src/features/inbox/ReaderFileAsset.tsx apps/web/src/features/inbox/ReaderArticle.tsx apps/web/__tests__/features/inbox/reader-file-asset.test.tsx
 git commit -m "feat(web): inline pdf/video/audio rendering in reader
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
-（新增测试文件一并 add。）
-
 ---
 
-### Task 8: mobile 适配 + 全仓清理与端到端验证
+### Task 8: 报告编辑器 302 迁移 — 渲染层签名 URL（历史数据零迁移）
+
+**背景**：报告 markdown（bodyMd）持久化 `/api/v1/uploads/<id>` 形式的图片 src 与链接 href（`safeImageSrc` 白名单只放行该形态或绝对 http(s) URL）。**方案：markdown 内容保持稳定引用不迁移；渲染/交互层把该形态替换为签名 URL。** 新增 server JSON 端点 `GET /uploads/:id/url`（复用 `resolveAccessUrl`），web 侧在图片渲染与链接点击处解析。
 
 **Files:**
-- Modify: `apps/mobile/src/features/settings/SettingsHome.tsx`（若 upload 调用签名变化——`fileUri` 形态在新 upload 中逐片读需 expo-file-system 分段：`UploadInput.fileUri` 的 partSource 路径在 mobile 由 api-client 内部处理？**不能**——api-client 无 expo 依赖。mobile 调用点传 `partSource`：`(start, end) => File.readSlice`。**mobile 探查后落地**：若 avatar 场景文件小（<10MB 单片），partSource 简单实现为整读后 slice。）
-- Modify: 清理 grep 残留（`MAX_IMAGE_BYTES`、`presign`、`uploadUrl` 全仓引用）
+- Modify: `apps/server/src/uploads/uploads.service.ts`（`getUploadUrl(userId, id): Promise<UploadUrlResponse>`——`resolveAccessUrl` 已有逻辑，包一层校验 ready）
+- Modify: `apps/server/src/uploads/uploads.routes.ts`（`GET /api/v1/uploads/:id/url`）
+- Modify: `packages/api-client/src/client.ts`（`getUploadUrl(id): Promise<UploadUrlResponse>`）
+- Modify: `apps/web/src/features/reports/WysiwygEditor.tsx`（图片 nodeView 的 src 换签名 URL + 缓存 hook）
+- Create: `apps/web/src/features/reports/upload-url.ts`（`useUploadUrls`：批量解析 bodyMd 中的 uploads id → 签名 URL 的 hook，带模块级 Map 缓存 + 6 小时 TTL）
+- Test: `apps/web/__tests__/features/reports/upload-url.test.ts(x)`（新建）
 
 **Interfaces:**
-- Consumes: Task 5 的 `UploadInput.partSource`。
-- Produces: 无（终点任务）。
+- Consumes: Task 1 `UploadUrlResponse`、`resolveAccessUrl`（service 内部已有）。
+- Produces: `getUploadUrl(userId, id)` service、`client.getUploadUrl(id)`、`useUploadUrls(bodyMd: string): Record<string, string>`（uploads id → 签名 URL）。
 
-- [ ] **Step 1: mobile upload 适配**
+- [ ] **Step 1: Write the failing test**
 
-读 `apps/mobile/src/features/settings/SettingsHome.tsx` 的 `pickAvatar`（第 122 行附近 `client.upload({ fileUri, mime, size })`）。新 `upload()` 的 `fileUri` 形态若被删（Task 5 重写后 fileUri 走 partSource？）——**Task 5 的实现保留 fileUri 形态**（内部构造 partSource：`(start, end) => readExpoSlice(fileUri, start, end)` 需 expo——**api-client 不引 expo**）。**最终口径**：mobile 调用点显式传 `partSource`：
+server 侧在 `uploads.flow.test.ts` 追加（此文件已在本分支多次修改，继续追加）：
 
 ```ts
-const { File } = await import('expo-file-system');
-const uploaded = await client.upload({
-  mime, size,
-  partSource: async (start, end) => {
-    const slice = await File.readAsStringAsync(asset.uri, {
-      encoding: File.EncodingType.Base64,
-      position: start,
-      length: end - start,
-    });
-    const bytes = Uint8Array.from(atob(slice), (c) => c.charCodeAt(0));
-    return new Blob([bytes], { type: mime });
-  },
+it('GET /uploads/:id/url returns a signed url for a ready attachment', async () => {
+  const alice = await register('alice');
+  const { id } = (await initUploadFor(alice)).json();
+  // complete it (3 parts)
+  storage.headObject.mockResolvedValueOnce({ size: SIZE_3P, contentType: 'video/mp4', lastModified: new Date() });
+  await injectJson(app, {
+    method: 'POST', url: `/api/v1/uploads/${id}/complete`, token: alice.token,
+    payload: { parts: [1, 2, 3].map((n) => ({ partNumber: n, etag: `"e${n}"` })) },
+  });
+  const res = await injectJson(app, { method: 'GET', url: `/api/v1/uploads/${id}/url`, token: alice.token });
+  expect(res.statusCode).toBe(200);
+  expect(res.json()).toEqual({ url: 'https://fake.local/presigned-get', expiresIn: expect.any(Number) });
+});
+
+it('GET /uploads/:id/url for a non-ready attachment is 404', async () => {
+  const alice = await register('alice');
+  const { id } = (await initUploadFor(alice)).json();
+  const res = await injectJson(app, { method: 'GET', url: `/api/v1/uploads/${id}/url`, token: alice.token });
+  expect(res.statusCode).toBe(404);
 });
 ```
 
-（expo-file-system 的 `readAsStringAsync` position/length 参数按实际 API 确认——react-native-fs 与 expo 版本签名不同，以项目实际依赖为准。）
+web 侧 `upload-url.test.ts`：从 bodyMd 提取 uploads id 的纯函数 + 缓存命中行为（mock client）。
 
-- [ ] **Step 2: 全仓残留清理**
+- [ ] **Step 2: Run tests to verify they fail**
 
-```bash
-grep -rn "MAX_IMAGE_BYTES\|presignPut\|uploadUrl\|xhrPut\|fetchPut\|putWithProgress\|uploads/presign" \
-  packages apps --include="*.ts" --include="*.tsx" \
-  | grep -v node_modules | grep -v dist | grep -v ".wxt"
+Run: `pnpm --filter @vital/server test -- uploads.flow`
+Expected: FAIL — 路由不存在。
+
+- [ ] **Step 3: Implement**
+
+server：
+
+```ts
+// service
+export async function getUploadUrl(userId: string, id: string): Promise<UploadUrlResponse> {
+  const row = await getOwnedAttachmentOr404(userId, id);
+  if (row.status !== 'ready') throw AppError.of(404, 'ATTACHMENT_NOT_FOUND');
+  const url = await getStorage().generateAccessUrl(row.s3Key, row.storageMeta, config.PRESIGN_GET_TTL_SECONDS);
+  return { url, expiresIn: config.PRESIGN_GET_TTL_SECONDS };
+}
+// route
+app.get('/api/v1/uploads/:id/url', { preHandler: [requireAuth] }, async (req) => {
+  const user = req.user; if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+  const { id } = idParams.parse(req.params);
+  return getUploadUrl(user.id, id);
+});
 ```
 
-逐个处理：`MAX_IMAGE_BYTES` 在 extension images.ts 的引用改为 `MAX_UPLOAD_BYTES`（图片转存上限语义随新协议放宽到 5GB——`MIN_IMAGE_BYTES` 保留防 tracking pixel）；DTO 里 `@deprecated` 标记的 `MAX_IMAGE_BYTES` 删除。`apps/extension/src/images.ts` 的 `MAX_IMAGE_BYTES` import 与 `fetchOneFromSw`/`fetchImagesInPage`（page-scripts.ts）里的 size 校验值同步换。
+api-client：`getUploadUrl: (id) => http.request(`/api/v1/uploads/${id}/url`)`。
 
-- [ ] **Step 3: 全量验证**
+web `upload-url.ts`：
 
-```bash
-pnpm --filter @vital/dto test && pnpm --filter @vital/api-client test && \
-pnpm --filter @vital/server test && pnpm --filter @vital/extension test && \
-pnpm --filter @vital/web test && pnpm --filter @vital/server typecheck && \
-pnpm --filter @vital/extension typecheck && pnpm --filter @vital/extension build
+```ts
+const UPLOAD_ID_RE = /\/api\/v1\/uploads\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+
+export function uploadIdsOf(bodyMd: string): string[] { /* 去重提取 */ }
+export function useUploadUrls(bodyMd: string): Record<string, string> {
+  // 模块级 Map<id, {url, at}> 缓存，TTL 6h；useEffect 内并发 fetch 未命中项；
+  // 状态存 useState。返回 id→url 映射；未解析的 id 不在结果里。
+}
 ```
 
-（web/mobile 若有用户 WIP 既有失败，开工前跑基线对比，只保证不新增失败。mobile 无独立 test 脚本则 typecheck。）
+`WysiwygEditor.tsx`：图片渲染处（tiptap Image 的 props 或全局替换）——最简实现：`useUploadUrls(bodyMd)` 得到映射后，一个 `resolveSrc(src)` 函数把 `/api/v1/uploads/<id>` 替换为映射里的签名 URL（查不到则原样，后续解析完成重渲染）；tiptap `Image.configure({})` 的默认渲染直接用 attrs.src——**通过 editorProps 或自定义 Image extension nodeView** 成本高，**采用**：在内容进入 editor 前（`asPm(bodyMd)` 产出后）遍历 PM JSON 把 image src 与 link href 中的 uploads 路径替换为签名 URL，序列化回 md 前再还原（`serializePmJSONToMarkdown` 的 `safeImageSrc` 对绝对 https URL 也放行，但**序列化输出会把签名 URL 持久化**——不行！）。**最终采用 nodeView**：自定义 `Image` extension，`addNodeView` 返回一个 `<img src={resolveSrc(node.attrs.src)}>` 的 DOM node view（ReactNodeViewRenderer 或纯 DOM——纯 DOM 简单），原始 attrs.src 不变（markdown 持久化不变），仅显示层替换。链接 href：tiptap Link 的 `HTMLAttributes` 钩子里映射（`Link.configure({ HTMLAttributes: ... })` 是静态的，改用 editor 的 `transformOutgoing`/装饰太重——**链接场景从简**：WysiwygEditor 的 setLink/toggleLink 不变，href 持久化 uploads 路径，编辑器内点击跳转交给浏览器（相对路径 `/api/v1/uploads/...` 在 dev/prod 会 404——**从简处理：链接点击事件拦截，`resolveSrc(href)` 后 window.open**，一处事件监听）。
 
-Expected: 全绿（或与基线一致）。
+（以上实现路径写明给实现者；若 nodeView 实现遇阻，fallback：`editorProps.transformPHTML` 不存在——**次选方案**：编辑器 container 上一个全局 `click` 拦截 + 图片走 nodeView。实现者按首选做，卡住按次选，都不行则回报 BLOCKED 而非自造方案。）
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Run tests**
 
 ```bash
-git add apps/mobile/src/features/settings/SettingsHome.tsx <清理涉及的文件>
-git commit -m "feat(mobile): multipart upload via part source; cleanup legacy upload refs
+pnpm --filter @vital/server test && pnpm --filter @vital/web test && pnpm --filter @vital/api-client test
+```
+
+Expected: PASS。
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add apps/server/src/uploads/uploads.service.ts apps/server/src/uploads/uploads.routes.ts apps/server/__tests__/uploads.flow.test.ts packages/api-client/src/client.ts apps/web/src/features/reports/WysiwygEditor.tsx apps/web/src/features/reports/upload-url.ts apps/web/__tests__/features/reports/upload-url.test.tsx
+git commit -m "feat(web): report editor renders upload refs via signed urls; history-safe 302 removal
 
 Co-Authored-By: Claude Code <noreply@anthropic.com>"
 ```
 
 ---
 
-## Self-Review 结论
+### Task 9: 全仓清理与端到端验证
 
-- **Spec 覆盖**：常量/MIME/schema（T1）、listParts（T2）、四路由+删presign+删302（T3）、InboxAsset.mime（T4）、upload()重写+续传+删双轨（T5）、扩展文件识别/流式转存/popup/静默（T6）、Reader内嵌+报告302迁移（T7）、mobile+清理（T8）。spec 的「全站签名 URL」「断点续传」「不留兼容」均有对应任务。
-- **跨任务类型一致**：`UploadedPart {partNumber, size, etag}` 在 T1 定义（含 etag——续传 Complete 需要）、T2 listParts 返回、T3 init/parts 响应、T5 消费。`DirectFile {url, mime, size}` 在 T6 定义并用于 messages/capture。`UploadInput.partSource` 在 T5 定义、T6/T8 消费。
-- **已知计划内中间态**：T1 后 server typecheck 红（toAssetDto 缺 mime）→ T4 修；T5 删 default-put 前需先改 index 导出。
-- **WIP 交错风险**：inbox.service.ts、inbox 测试、web inbox 组件均在用户 WIP 集内——T4 用独立新测试文件规避、T7 只新建 ReaderFileAsset + 最小 touch ReaderArticle（先 git diff 检查 WIP 冲突，ReaderArticle 若有 WIP 改动则改动最小化并把交叠部分 surgical 拆分）。
+**Files:**
+- Modify: 清理 grep 残留（`MAX_IMAGE_BYTES`、`uploadPresignInputSchema`、`presignPut`、`xhrPut`、`fetchPut`、`putWithProgress`、`uploadUrl(`、`/uploads/presign`）
+
+**Interfaces:**
+- Consumes: 全部前序任务。
+- Produces: 无（终点任务）。
+
+- [ ] **Step 1: 残留清理**
+
+```bash
+grep -rn "MAX_IMAGE_BYTES\|uploadPresignInputSchema\|presignPut\|xhrPut\|fetchPut\|putWithProgress\|fileUri" \
+  packages apps --include="*.ts" --include="*.tsx" | grep -v node_modules | grep -v dist | grep -v ".wxt"
+```
+
+逐项处理：
+
+- `MAX_IMAGE_BYTES`：`packages/dto/src/uploads.ts` 删除该常量与 `@deprecated` 注释；引用方（`apps/extension/src/capture.ts` 的图片转存 size 上限、page-scripts.ts 的 `fetchImagesInPage` 参数）改为 `MAX_UPLOAD_BYTES`（图片转存上限随协议放宽——`MIN_IMAGE_BYTES` 保留防 tracking pixel）。
+- `uploadPresignInputSchema`/`UploadPresignInput`/`UploadPresignResponse`：DTO 里删除（T1 标记 deprecated 的旧类型）。
+- 其余项应已在前序任务清零——grep 结果非空则逐个清。
+
+- [ ] **Step 2: 全量验证**
+
+```bash
+pnpm --filter @vital/dto test && pnpm --filter @vital/api-client test && \
+pnpm --filter @vital/server test && pnpm --filter @vital/extension test && \
+pnpm --filter @vital/web test && \
+pnpm --filter @vital/server typecheck && pnpm --filter @vital/api-client typecheck && \
+pnpm --filter @vital/extension typecheck && pnpm --filter @vital/extension build && \
+pnpm --filter @vital/web exec tsc --noEmit
+```
+
+Expected: 全绿，对照基线（dto ≥45、server ≥136+新增、web ≥123+新增、extension ≥37+新增）无回退。
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add <清理涉及的文件>
+git commit -m "chore: remove legacy upload references after multipart migration
+
+Co-Authored-By: Claude Code <noreply@anthropic.com>"
+```
+
+---
+
+## Self-Review 结论（rev2）
+
+- **评审 Blocker 全部落实**：B1（ETag 统一：T1 定义含 etag、T2 实现取 `p.ETag ?? ''`、T3 mock 全带 etag、T5 complete 全量组装，删除旧稿自相矛盾段落）；B2（InboxAsset.mime 挪 T4，无跨任务暂红）；B3（错误码 service 层显式：413/422/409，schema 只管形状）；B4（报告 302：渲染层签名 URL，历史 markdown 零迁移，Task 8 落地）；B5（S3 PUT 走 `options.fetchImpl ?? fetch`，web/tauri client.ts 列入 T5 Files 并跑 typecheck）；B6（用户 WIP 已落盘 6334a0a，工作区干净）。
+- **Important 全部落实**：I1（stream-rehost 字节对齐 + 跳片丢弃单测）；I2（未知长度一律 null，无 size:0 路径）；I3（fileUri 形态删除）；I4（409 回退重试 + 测试）；I5（S3 PUT mock 带 ETag header）；I6（expo 新 File 类 implements Blob，mobile 传 `file: new File(uri)`）；I7（mobile api.ts/rn-put.ts/client.test.ts 全部列入 T5 Files）；I8（合法 UUID 字符串）；I9（T4 测试 installMockStorage）。
+- **Minor 落实**：M1（listParts 分页单测）；M2（sweeper uploadId 用例入 T3）；M3（MAX_IMAGE_BYTES 引用归属 T9，指向 capture.ts）；M4（probeDirectFile/fileNameFromUrl 完整实现给出，extractCapture 落点标明）；M5（MIME 收紧 pdf/video/audio，image/* 不进文件模式）；M6（resume 进度基数）；M8（partSource 定义统一 T5，T6/T8 消费）。
+- **Spec 覆盖**：全部需求（含 rev2 的报告迁移方案）映射到 T1-T9；spec ⑤ 的 409 回退在 T5 实现。
