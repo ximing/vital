@@ -1,11 +1,4 @@
-import {
-  ApiError,
-  barePutInit,
-  createVitalClient,
-  type PutFn,
-  type TokenStore,
-  type VitalClient,
-} from '@vital/api-client';
+import { createVitalClient, type TokenStore, type VitalClient } from '@vital/api-client';
 import type { AuthTokens } from '@vital/dto';
 
 const AUTH_CLEARED = 'vital:auth-cleared';
@@ -78,31 +71,6 @@ function loadPluginHttp(): Promise<typeof import('@tauri-apps/plugin-http')> {
 export const tauriFetch: typeof fetch = (input, init) =>
   loadPluginHttp().then((mod) => mod.fetch(input, init));
 
-export const tauriPut: PutFn = async (url, body, contentType, onProgress, signal) => {
-  if (signal?.aborted === true) {
-    throw new ApiError(0, 'ABORTED', '已取消');
-  }
-  if (!(typeof Blob !== 'undefined' && body instanceof Blob)) {
-    throw new ApiError(0, 'PUT_UNAVAILABLE', 'fileUri 形态需注入自定义 putWithProgress');
-  }
-  onProgress?.(0, body.size);
-  try {
-    const { fetch: pluginFetch } = await loadPluginHttp();
-    const res = await pluginFetch(url, barePutInit(body, contentType, signal));
-    if (!res.ok) {
-      throw new ApiError(res.status, 'UPLOAD_FAILED', `直传失败（${String(res.status)}）`);
-    }
-    onProgress?.(body.size, body.size);
-    return { etag: res.headers.get('ETag') };
-  } catch (err) {
-    if (err instanceof ApiError) throw err;
-    if (err instanceof Error && err.name === 'AbortError') {
-      throw new ApiError(0, 'ABORTED', '已取消');
-    }
-    throw new ApiError(0, 'NETWORK_ERROR', err instanceof Error ? err.message : '网络错误');
-  }
-};
-
 /** Memory-only access. Refresh lives in the httpOnly cookie; never persist tokens. */
 export function createCookieTokenStore(): TokenStore {
   let accessToken: string | null = null;
@@ -151,7 +119,6 @@ export function createAppClient(input: {
   isTauri: boolean;
   tokenStore: TokenStore;
   fetchImpl?: typeof fetch;
-  putWithProgress?: PutFn;
   env?: TauriEnv;
 }): VitalClient {
   if (!input.isTauri) {
@@ -160,7 +127,6 @@ export function createAppClient(input: {
       authMode: 'cookie',
       tokenStore: input.tokenStore,
       fetchImpl: input.fetchImpl,
-      putWithProgress: input.putWithProgress,
     });
   }
   return createVitalClient({
@@ -168,7 +134,6 @@ export function createAppClient(input: {
     authMode: 'bearer',
     tokenStore: input.tokenStore,
     fetchImpl: input.fetchImpl ?? tauriFetch,
-    putWithProgress: input.putWithProgress ?? tauriPut,
   });
 }
 

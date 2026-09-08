@@ -58,8 +58,8 @@ import type {
   UploadBindInput,
   UploadBindResponse,
   UploadCompleteResponse,
-  UploadPresignInput,
-  UploadPresignResponse,
+  UploadInitInput,
+  UploadInitResponse,
   UserProfile,
 } from '@vital/dto';
 import { Http, isAuthResponse, tokensForStore } from './http.js';
@@ -87,11 +87,9 @@ export interface VitalClient {
   testNotificationChannel(id: string): Promise<void>;
   updateOnboarding(input: UpdateOnboardingInput): Promise<UserProfile>;
   changePassword(input: ChangePasswordInput): Promise<void>;
-  presignUpload(input: UploadPresignInput): Promise<UploadPresignResponse>;
-  completeUpload(id: string): Promise<UploadCompleteResponse>;
+  initUpload(input: UploadInitInput): Promise<UploadInitResponse>;
   abortUpload(id: string): Promise<void>;
   discardUpload(id: string): Promise<void>;
-  uploadUrl(id: string): string;
   fetchUploadBlob(id: string): Promise<Blob>;
   upload(input: UploadInput): Promise<UploadCompleteResponse>;
   bindUpload(id: string, input: UploadBindInput): Promise<UploadBindResponse>;
@@ -155,7 +153,6 @@ async function persistAuth(options: VitalClientOptions, data: unknown): Promise<
 
 export function createVitalClient(options: VitalClientOptions): VitalClient {
   const http = new Http(options);
-  const baseUrl = options.baseUrl.replace(/\/$/, '');
   const skipAuth: { method: 'POST'; skipAuth: true; skipAuthRefresh: true } = {
     method: 'POST',
     skipAuth: true,
@@ -239,13 +236,10 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
         // Server already revoked every session.
       }
     },
-    presignUpload: (input) =>
-      http.request('/api/v1/uploads/presign', { method: 'POST', body: input }),
-    completeUpload: (id) =>
-      http.request(`/api/v1/uploads/${id}/complete`, { method: 'POST', body: {} }),
+    initUpload: (input) =>
+      http.request('/api/v1/uploads', { method: 'POST', body: input }),
     abortUpload: (id) => http.request(`/api/v1/uploads/${id}/abort`, { method: 'POST' }),
     discardUpload: (id) => http.request(`/api/v1/uploads/${id}`, { method: 'DELETE' }),
-    uploadUrl: (id) => `${baseUrl}/api/v1/uploads/${id}`,
     fetchUploadBlob: (id) => http.requestBlob(`/api/v1/uploads/${id}`),
     upload: (input) => uploadImpl(http, options, input),
     bindUpload: (id, input) =>

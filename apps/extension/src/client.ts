@@ -1,4 +1,4 @@
-import { ApiError, createVitalClient, fetchPut, type VitalClient } from '@vital/api-client';
+import { ApiError, createVitalClient, type VitalClient } from '@vital/api-client';
 import type { AuthResponse, UserProfile } from '@vital/dto';
 import { extensionLoginUrl, isTrustedWebOrigin } from './capture-helpers.js';
 import { API_URL, WEB_URL } from './config.js';
@@ -14,9 +14,8 @@ export function getClient(): VitalClient {
       baseUrl: API_URL,
       authMode: 'bearer',
       tokenStore: chromeTokenStore,
+      // Service workers have no XMLHttpRequest — fetch for API and S3 alike.
       fetchImpl: fetch.bind(globalThis),
-      // Service workers have no XMLHttpRequest.
-      putWithProgress: fetchPut,
     });
   }
   return client;

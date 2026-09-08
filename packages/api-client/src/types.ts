@@ -31,30 +31,12 @@ export class ApiError extends Error {
   }
 }
 
-/** RN/file-uri put: interval on disk so the whole file is not read into memory. */
-export interface FilePart {
-  fileUri: string;
-  start: number;
-  end: number;
-  size: number;
-  mime: string;
-}
-
-/** Presigned PUT with progress. Default is browser XHR (Blob only). */
-export type PutFn = (
-  url: string,
-  body: Blob | FilePart,
-  contentType: string,
-  onProgress?: (loaded: number, total: number) => void,
-  signal?: AbortSignal,
-) => Promise<{ etag: string | null }>;
-
 export interface VitalClientOptions {
   /** API root, e.g. `''` (web same-origin) or `http://127.0.0.1:3010` (Tauri). */
   baseUrl: string;
   tokenStore: TokenStore;
   /** Chosen at runtime: cookie for browser web, bearer for Tauri/extension/mobile. */
   authMode: AuthMode;
+  /** Carries API JSON calls and presigned S3 PUTs alike (Tauri plugin-http, tests). */
   fetchImpl?: typeof fetch;
-  putWithProgress?: PutFn;
 }

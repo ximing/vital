@@ -1,7 +1,6 @@
 import Constants from 'expo-constants';
 import { createVitalClient, type VitalClient } from '@vital/api-client';
 import { secureTokenStore } from './token-store';
-import { rnPut } from './rn-put';
 
 function extraApiUrl(extra: unknown): string | undefined {
   if (typeof extra !== 'object' || extra === null) return undefined;
@@ -15,5 +14,4 @@ export const client: VitalClient = createVitalClient({
   baseUrl: apiUrl,
   tokenStore: secureTokenStore,
   authMode: 'bearer',
-  putWithProgress: rnPut,
 });

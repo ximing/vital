@@ -119,7 +119,7 @@ export function SettingsHome() {
       const size = asset.fileSize ?? new File(asset.uri).size;
       if (!size) return;
       setBusy(true);
-      const uploaded = await client.upload({ fileUri: asset.uri, mime, size });
+      const uploaded = await client.upload({ file: new File(asset.uri), mime, size });
       await client.bindUpload(uploaded.id, { ownerType: 'user', ownerId: auth.user.id });
       setAvatarFailed(false);
       auth.refreshUser(await client.updateMe({ avatarAttachmentId: uploaded.id }));

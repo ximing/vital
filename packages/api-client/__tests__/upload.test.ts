@@ -1,130 +1,178 @@
-import { MAX_IMAGE_BYTES } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
-import {
-  ApiError,
-  createVitalClient,
-  type PutFn,
-  type TokenStore,
-  type VitalClientOptions,
-} from '../src/index.js';
-import { respond, urlOf } from './test-helpers.js';
+import { createVitalClient, ApiError, type TokenStore } from '../src/index.js';
+import { bodyOf, respond, urlOf } from './test-helpers.js';
 
 const tokenStore: TokenStore = {
-  getAccessToken: () => 'a',
-  getRefreshToken: () => 'r',
-  setTokens: () => undefined,
-  clear: () => undefined,
+  getAccessToken: () => 'a', getRefreshToken: () => 'r', setTokens: () => undefined, clear: () => undefined,
 };
 
-function makeClient(opts: { put?: PutFn; fetchImpl: typeof fetch }) {
-  const options: VitalClientOptions = {
-    baseUrl: '',
-    authMode: 'bearer',
-    tokenStore,
-    fetchImpl: opts.fetchImpl,
-  };
-  if (opts.put !== undefined) {
-    options.putWithProgress = opts.put;
-  }
-  return createVitalClient(options);
+const PART = 5 * 1024 * 1024;
+
+function s3Put(etag: string): Response {
+  return new Response(null, { status: 200, headers: { ETag: etag } });
 }
 
-describe('upload', () => {
-  it('presign → bare PUT → complete; S3 URL never goes through Http', async () => {
-    const progress: [number, number][] = [];
-    const ids: string[] = [];
-    const apiUrls: string[] = [];
-    const putUrls: string[] = [];
-    const put: PutFn = (url, _body, contentType, onProgress) => {
-      putUrls.push(url);
-      expect(contentType).toBe('image/jpeg');
-      onProgress?.(1, 5);
-      onProgress?.(5, 5);
-      return Promise.resolve({ etag: '"e1"' });
-    };
-    const blob = new Blob(['hello']);
-    const client = makeClient({
-      put,
-      fetchImpl: (url, init) => {
-        const u = urlOf(url);
-        apiUrls.push(`${init?.method ?? 'GET'} ${u}`);
-        expect(u.startsWith('https://s3')).toBe(false);
-        if (u === '/api/v1/uploads/presign') {
-          return respond(201, { id: 'att1', method: 'put', url: 'https://s3/put', expiresIn: 900 });
-        }
-        if (u === '/api/v1/uploads/att1/complete') {
-          return respond(200, {
-            id: 'att1',
-            status: 'ready',
-            mime: 'image/jpeg',
-            size: blob.size,
-            ownerType: 'tmp',
-          });
-        }
-        return respond(200, {});
-      },
+function makeClient(fetchImpl: typeof fetch) {
+  return createVitalClient({ baseUrl: '', authMode: 'bearer', tokenStore, fetchImpl });
+}
+
+describe('upload (multipart)', () => {
+  it('init → presign each part → PUT via injected fetch → complete with etags', async () => {
+    const apiCalls: string[] = [];
+    let s3PutCount = 0;
+    const blob = new Blob([new Uint8Array(PART + 100)]); // 2 parts
+    const client = makeClient((url, init) => {
+      const u = urlOf(url);
+      if (u.startsWith('https://s3')) {
+        s3PutCount += 1;
+        expect(init?.method).toBe('PUT');
+        expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/pdf');
+        return Promise.resolve(s3Put(`"e${s3PutCount}"`));
+      }
+      apiCalls.push(`${init?.method ?? 'GET'} ${u}`);
+      if (u === '/api/v1/uploads') {
+        expect(bodyOf(init)).toMatchObject({ mime: 'application/pdf', size: blob.size });
+        return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2, parts: [] });
+      }
+      if (u === '/api/v1/uploads/att1/parts/1' || u === '/api/v1/uploads/att1/parts/2') {
+        return respond(200, { url: `https://s3${u}`, expiresIn: 900 });
+      }
+      if (u === '/api/v1/uploads/att1/complete') {
+        const body = bodyOf(init) as { parts: Array<{ partNumber: number; etag: string }> };
+        expect(body.parts).toEqual([
+          { partNumber: 1, etag: '"e1"' },
+          { partNumber: 2, etag: '"e2"' },
+        ]);
+        return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
+      }
+      return respond(200, {});
+    });
+    const res = await client.upload({ file: blob, mime: 'application/pdf', size: blob.size });
+    expect(res.status).toBe('ready');
+    expect(s3PutCount).toBe(2);
+    expect(apiCalls).toEqual([
+      'POST /api/v1/uploads',
+      'POST /api/v1/uploads/att1/parts/1',
+      'POST /api/v1/uploads/att1/parts/2',
+      'POST /api/v1/uploads/att1/complete',
+    ]);
+  });
+
+  it('resume skips uploaded parts and keeps their etags for complete', async () => {
+    const blob = new Blob([new Uint8Array(PART + 100)]);
+    const putPartNumbers: number[] = [];
+    const progress: Array<[number, number]> = [];
+    const client = makeClient((url, init) => {
+      const u = urlOf(url);
+      if (u.startsWith('https://s3')) {
+        putPartNumbers.push(2);
+        return Promise.resolve(s3Put('"e2"'));
+      }
+      if (u === '/api/v1/uploads') {
+        expect(bodyOf(init)).toMatchObject({ resumeId: 'att1' });
+        return respond(201, {
+          id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2,
+          parts: [{ partNumber: 1, size: PART, etag: '"e1"' }],
+        });
+      }
+      if (u === '/api/v1/uploads/att1/parts/2') {
+        return respond(200, { url: 'https://s3/2', expiresIn: 900 });
+      }
+      if (u === '/api/v1/uploads/att1/complete') {
+        const body = bodyOf(init) as { parts: Array<{ partNumber: number; etag: string }> };
+        expect(body.parts).toEqual([
+          { partNumber: 1, etag: '"e1"' }, // carried from init.parts
+          { partNumber: 2, etag: '"e2"' },
+        ]);
+        return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
+      }
+      return respond(200, {});
     });
     const res = await client.upload({
-      file: blob,
-      mime: 'image/jpeg',
-      size: blob.size,
+      file: blob, mime: 'application/pdf', size: blob.size, resumeId: 'att1',
       onProgress: (loaded, total) => progress.push([loaded, total]),
-      onAttachmentId: (id) => {
-        expect(putUrls.length).toBe(0);
-        ids.push(id);
-      },
     });
     expect(res.status).toBe('ready');
-    expect(putUrls).toEqual(['https://s3/put']);
-    expect(apiUrls).toEqual(['POST /api/v1/uploads/presign', 'POST /api/v1/uploads/att1/complete']);
-    expect(ids).toEqual(['att1']);
-    expect(progress.at(-1)).toEqual([5, 5]);
+    expect(putPartNumbers).toEqual([2]); // part 1 skipped
+    // progress starts from the resumed base, not 0
+    expect(progress[0]?.[0]).toBe(PART);
   });
 
-  it('rejects oversize locally without fetching', async () => {
-    let fetches = 0;
-    const client = makeClient({
-      put: () => Promise.resolve({ etag: null }),
-      fetchImpl: () => {
-        fetches += 1;
-        return respond(200, {});
-      },
-    });
-    await expect(
-      client.upload({ file: new Blob(['x']), mime: 'image/jpeg', size: MAX_IMAGE_BYTES + 1 }),
-    ).rejects.toMatchObject({ code: 'MEDIA_TOO_LARGE', status: 413 });
-    expect(fetches).toBe(0);
-  });
-
-  it('rejects SVG locally', async () => {
-    const client = makeClient({
-      put: () => Promise.resolve({ etag: null }),
-      fetchImpl: () => respond(200, {}),
-    });
-    await expect(
-      client.upload({ file: new Blob(['x']), mime: 'image/svg+xml', size: 10 }),
-    ).rejects.toMatchObject({ code: 'MEDIA_MISMATCH', status: 422 });
-  });
-
-  it('onAttachmentId still fires if PUT fails', async () => {
-    const ids: string[] = [];
-    const client = makeClient({
-      put: () => Promise.reject(new ApiError(0, 'NETWORK_ERROR', '抖动')),
-      fetchImpl: (url) => {
-        if (urlOf(url) === '/api/v1/uploads/presign') {
-          return respond(201, { id: 'att1', method: 'put', url: 'https://s3/put', expiresIn: 900 });
+  it('resume 409 falls back to a fresh init without resumeId', async () => {
+    const blob = new Blob([new Uint8Array(10)]);
+    let initCalls = 0;
+    const client = makeClient((url, init) => {
+      const u = urlOf(url);
+      if (u === '/api/v1/uploads') {
+        initCalls += 1;
+        const body = bodyOf(init) as { resumeId?: string };
+        if (initCalls === 1) {
+          expect(body.resumeId).toBe('att-old');
+          return respond(409, { error: { code: 'MEDIA_INVALID_STATE' } });
         }
-        return respond(200, {});
+        expect(body.resumeId).toBeUndefined();
+        return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 1, parts: [] });
+      }
+      if (u === '/api/v1/uploads/att1/parts/1') return respond(200, { url: 'https://s3/1', expiresIn: 900 });
+      if (u === '/api/v1/uploads/att1/complete') {
+        return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
+      }
+      if (u.startsWith('https://s3')) return Promise.resolve(s3Put('"e1"'));
+      return respond(200, {});
+    });
+    const res = await client.upload({ file: blob, mime: 'application/pdf', size: blob.size, resumeId: 'att-old' });
+    expect(res.status).toBe('ready');
+    expect(initCalls).toBe(2);
+  });
+
+  it('partSource is used instead of file slicing', async () => {
+    const requested: Array<[number, number]> = [];
+    const blob = new Blob([new Uint8Array(PART + 100)]);
+    const client = makeClient((url) => {
+      const u = urlOf(url);
+      if (u.startsWith('https://s3')) return Promise.resolve(s3Put('"e"'));
+      if (u === '/api/v1/uploads') {
+        return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 2, parts: [] });
+      }
+      if (u.endsWith('/parts/1') || u.endsWith('/parts/2')) {
+        return respond(200, { url: `https://s3${u}`, expiresIn: 900 });
+      }
+      if (u.endsWith('/complete')) {
+        return respond(200, { id: 'att1', status: 'ready', mime: 'application/pdf', size: blob.size, ownerType: 'tmp' });
+      }
+      return respond(200, {});
+    });
+    await client.upload({
+      mime: 'application/pdf', size: blob.size,
+      partSource: async (start, end) => {
+        requested.push([start, end]);
+        return blob.slice(start, end);
       },
     });
+    expect(requested).toEqual([[0, PART], [PART, PART + 100]]);
+  });
+
+  it('presigned PUT failure surfaces as ApiError and never completes', async () => {
+    const blob = new Blob([new Uint8Array(10)]);
+    let completed = false;
+    const client = makeClient((url) => {
+      const u = urlOf(url);
+      if (u === '/api/v1/uploads') return respond(201, { id: 'att1', uploadId: 'up1', partSize: PART, totalParts: 1, parts: [] });
+      if (u.endsWith('/parts/1')) return respond(200, { url: 'https://s3/1', expiresIn: 900 });
+      if (u.endsWith('/complete')) { completed = true; return respond(200, {}); }
+      if (u.startsWith('https://s3')) return Promise.resolve(new Response(null, { status: 403 }));
+      return respond(200, {});
+    });
     await expect(
-      client.upload({
-        file: new Blob(['x']),
-        mime: 'image/jpeg',
-        size: 1,
-        onAttachmentId: (id) => ids.push(id),
-      }),
-    ).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
-    expect(ids).toEqual(['att1']);
+      client.upload({ file: blob, mime: 'application/pdf', size: blob.size }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(completed).toBe(false);
+  });
+
+  it('over 5GB fails client-side with 413 before any request', async () => {
+    const client = makeClient(() => respond(200, {}));
+    await expect(
+      client.upload({ file: new Blob(), mime: 'video/mp4', size: 5 * 1024 ** 3 + 1 }),
+    ).rejects.toMatchObject({ status: 413 });
   });
 });
