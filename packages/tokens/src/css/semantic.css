@@ -11,62 +11,62 @@
 }
 
 :root {
-  /* Primitive — mineral garden */
-  --ink-950: #191c19;
-  --ink-800: #272b27;
-  --ink-600: #697067;
-  --ink-400: #969b91;
-  --ink-200: #dce3d7;
-  --ink-100: #eaece4;
-  --ink-50: #f3f3ed;
+  /* Primitive — emerald garden */
+  --ink-950: #1b211d;
+  --ink-800: #1b211d;
+  --ink-600: #555e56;
+  --ink-400: #98a098;
+  --ink-200: #dfede4;
+  --ink-100: #ebeee9;
+  --ink-50: #f3f5f2;
   --white: #ffffff;
-  --pulse-700: #425246;
-  --pulse-500: #697c65;
-  --pulse-400: #a0b497;
-  --pulse-100: #dce3d7;
-  --amber-600: #b97922;
-  --amber-100: #dce3d7;
-  --rose-600: #c95454;
-  --rose-100: #f3e4e4;
-  --done-600: #45a36b;
-  --doing-600: #4d82d8;
+  --pulse-700: #155e3d;
+  --pulse-500: #1c7a4f;
+  --pulse-400: #5fd3a1;
+  --pulse-100: #dfede4;
+  --amber-600: #b4761e;
+  --amber-100: #f5ead7;
+  --rose-600: #ce4a45;
+  --rose-100: #f9e9e7;
+  --done-600: #2f9e63;
+  --doing-600: #3d6fd1;
 
   /* Semantic */
-  --bg-app: #f3f3ed;
+  --bg-app: #f3f5f2;
   --bg-canvas: var(--bg-app);
-  --bg-surface: #fafaf6;
-  --bg-surface-muted: #eaece4;
+  --bg-surface: #fafbf9;
+  --bg-surface-muted: #ebeee9;
   --bg-elevated: #ffffff;
-  --bg-accent-subtle: #dce3d7;
-  --text-primary: #272b27;
-  --text-secondary: #697067;
-  --text-tertiary: #969b91;
+  --bg-accent-subtle: #dfede4;
+  --text-primary: #1b211d;
+  --text-secondary: #555e56;
+  --text-tertiary: #98a098;
   --fg-primary: var(--text-primary);
   --fg-muted: var(--text-secondary);
   --fg-on-accent: #ffffff;
-  --border-subtle: #dee0d9;
-  --border-focus: #697c65;
-  --accent-primary: #697c65;
-  --accent-primary-hover: #425246;
-  --accent-deep: #425246;
-  --focus-ring: rgb(105 124 101 / 20%);
-  --status-todo: #697067;
-  --status-doing: #4d82d8;
-  --status-done: #45a36b;
-  --status-overdue: #c95454;
-  --status-due-soon: #b97922;
-  --report-daily: #697c65;
-  --report-weekly: #697c65;
-  --report-monthly: #425246;
-  --report-yearly: #425246;
-  --danger: #c95454;
-  --scrim: rgb(39 43 39 / 28%);
+  --border-subtle: #e2e6e0;
+  --border-focus: #1c7a4f;
+  --accent-primary: #1c7a4f;
+  --accent-primary-hover: #155e3d;
+  --accent-deep: #155e3d;
+  --focus-ring: rgb(28 122 79 / 16%);
+  --status-todo: #555e56;
+  --status-doing: #3d6fd1;
+  --status-done: #2f9e63;
+  --status-overdue: #ce4a45;
+  --status-due-soon: #b4761e;
+  --report-daily: #1c7a4f;
+  --report-weekly: #1c7a4f;
+  --report-monthly: #155e3d;
+  --report-yearly: #155e3d;
+  --danger: #ce4a45;
+  --scrim: rgb(27 33 29 / 32%);
 
-  /* Inbox source hues — kept muted to sit inside mineral garden */
+  /* Inbox source hues — kept muted to sit inside emerald garden */
   --src-extension: #6a5cd0;
   --src-wechat: #229e4e;
-  --src-web: #4d82d8;
-  --src-mobile: #b97922;
+  --src-web: #3d6fd1;
+  --src-mobile: #b4761e;
   --src-manual: #2c9c8c;
 
   --space-1: 4px;
@@ -75,31 +75,37 @@
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
+  --space-14: 56px;
 
   --font-sans:
     Inter, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+  --font-display:
+    Sora, Inter, 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   --font-mono: ui-monospace, 'IBM Plex Mono', monospace;
   --text-caption: 12px;
-  --text-caption-lh: 18px;
+  --text-caption-lh: 16px;
   --text-meta: 13px;
   --text-meta-lh: 18px;
-  --text-body: 15px;
-  --text-body-lh: 22px;
-  --text-title: 24px;
-  --text-title-lh: 32px;
-  --text-display: 28px;
-  --text-display-lh: 36px;
+  --text-body: 14px;
+  --text-body-lh: 21px;
+  --text-title: 20px;
+  --text-title-lh: 28px;
+  --text-display: 26px;
+  --text-display-lh: 34px;
 
   --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
   --radius-pill: 999px;
 
-  --shadow: 0 4px 16px rgb(39 43 39 / 6%);
+  --shadow: 0 1px 2px rgb(20 34 24 / 5%), 0 10px 28px rgb(20 34 24 / 7%);
+  --shadow-xs: 0 1px 2px rgb(20 34 24 / 5%);
+  --panel-edge: inset 0 1px 0 rgb(255 255 255 / 60%);
 
   --z-sticky: 10;
   --z-dropdown: 40;
@@ -122,41 +128,43 @@
 }
 
 :root[data-theme='dark'] {
-  --bg-app: #191c19;
+  --bg-app: #0f1210;
   --bg-canvas: var(--bg-app);
-  --bg-surface: #20231f;
-  --bg-surface-muted: #292d27;
-  --bg-elevated: #30342f;
-  --bg-accent-subtle: #303b2f;
-  --text-primary: #edeee8;
-  --text-secondary: #a8ada3;
-  --text-tertiary: #777d74;
+  --bg-surface: #161a17;
+  --bg-surface-muted: #1d221e;
+  --bg-elevated: #232925;
+  --bg-accent-subtle: #1b2e24;
+  --text-primary: #ecefeb;
+  --text-secondary: #a4aca1;
+  --text-tertiary: #798174;
   --fg-primary: var(--text-primary);
   --fg-muted: var(--text-secondary);
-  --fg-on-accent: #191c19;
-  --border-subtle: #393e37;
-  --border-focus: #a0b497;
-  --accent-primary: #a0b497;
-  --accent-primary-hover: #b7c8af;
-  --accent-deep: #a0b497;
-  --focus-ring: rgb(160 180 151 / 24%);
-  --status-todo: #a8ada3;
+  --fg-on-accent: #0b1611;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-focus: #5fd3a1;
+  --accent-primary: #5fd3a1;
+  --accent-primary-hover: #82e0b6;
+  --accent-deep: #5fd3a1;
+  --focus-ring: rgb(95 211 161 / 22%);
+  --status-todo: #a4aca1;
   --status-doing: #6fa0ee;
-  --status-done: #65c58a;
-  --status-overdue: #eb7777;
-  --status-due-soon: #e3ae55;
-  --report-daily: #a0b497;
-  --report-weekly: #a0b497;
-  --report-monthly: #b7c8af;
-  --report-yearly: #b7c8af;
-  --danger: #eb7777;
-  --scrim: rgb(0 0 0 / 48%);
-  --shadow: 0 12px 32px rgb(0 0 0 / 28%);
+  --status-done: #63c78d;
+  --status-overdue: #e8756c;
+  --status-due-soon: #e0a94e;
+  --report-daily: #5fd3a1;
+  --report-weekly: #5fd3a1;
+  --report-monthly: #82e0b6;
+  --report-yearly: #82e0b6;
+  --danger: #e8756c;
+  --scrim: rgba(0, 0, 0, 0.52);
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px rgb(0 0 0 / 42%);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 24%);
+  --panel-edge: inset 0 1px 0 rgb(255 255 255 / 5%);
 
   --src-extension: #9d8ef0;
   --src-wechat: #5ccf82;
   --src-web: #7fa8f0;
-  --src-mobile: #e3ae55;
+  --src-mobile: #e0a94e;
   --src-manual: #5cc9b8;
 
   color-scheme: dark;
