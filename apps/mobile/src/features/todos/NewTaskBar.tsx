@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import type { CreateTaskInput, Task } from '@vital/dto';
+import { llmReady, type CreateTaskInput, type Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { client } from '../../lib/api';
@@ -32,7 +32,17 @@ export function NewTaskBar({
     if (trimmed === '' || busy) return;
     setBusy(true);
     try {
-      const task = await client.createTask({ title: trimmed, listId, ...extra });
+      const task = llmReady(auth.user?.llm)
+        ? await client.createTaskFromText({
+            text: trimmed,
+            listId,
+            ...(auth.user?.timezone ? { timezone: auth.user.timezone } : {}),
+            ...(extra?.status === 'doing' || extra?.status === 'todo'
+              ? { status: extra.status }
+              : {}),
+            ...(extra?.priority !== undefined ? { priority: extra.priority } : {}),
+          })
+        : await client.createTask({ title: trimmed, listId, ...extra });
       setTitle('');
       onCreated(task);
       await markOnboarding(auth.user, auth.refreshUser, { createdTask: true });

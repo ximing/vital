@@ -1,8 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { Bell, Palette, SlidersHorizontal, User } from 'lucide-react-native';
-import { DEFAULT_NOTIFICATION_PREFS, IMAGE_MIME_TYPES, type NotificationChannel } from '@vital/dto';
+import { Bell, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react-native';
+import {
+  DEFAULT_NOTIFICATION_PREFS,
+  IMAGE_MIME_TYPES,
+  llmReady,
+  type NotificationChannel,
+} from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { Banner } from '../../components/Banner';
@@ -23,6 +28,7 @@ const TABS = [
   { id: 'appearance', label: copy.settings.tabs.appearance, icon: Palette },
   { id: 'notifications', label: copy.settings.tabs.notifications, icon: Bell },
   { id: 'prefs', label: copy.settings.tabs.prefs, icon: SlidersHorizontal },
+  { id: 'llm', label: copy.settings.tabs.llm, icon: Sparkles },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -50,6 +56,9 @@ export function SettingsHome() {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [nickname, setNickname] = useState('');
   const [enabled, setEnabled] = useState(true);
+  const [llmApiBase, setLlmApiBase] = useState(auth.user?.llm.apiBase ?? '');
+  const [llmModel, setLlmModel] = useState(auth.user?.llm.model ?? '');
+  const [llmApiKey, setLlmApiKey] = useState('');
 
   const prefs = auth.user?.notifications ?? DEFAULT_NOTIFICATION_PREFS;
   const meow = channels.find((c) => c.type === 'meow');
@@ -147,6 +156,28 @@ export function SettingsHome() {
         });
         setChannels((list) => [...list, created]);
       }
+      toast(copy.toast.saved);
+    } catch (err) {
+      toast(humanError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveLlm(): Promise<void> {
+    setBusy(true);
+    try {
+      const nextBase = llmApiBase.trim();
+      const nextModel = llmModel.trim();
+      const user = await client.updateMe({
+        llm: {
+          apiBase: nextBase === '' ? null : nextBase,
+          model: nextModel === '' ? null : nextModel,
+          ...(llmApiKey.trim() === '' ? {} : { apiKey: llmApiKey.trim() }),
+        },
+      });
+      auth.refreshUser(user);
+      setLlmApiKey('');
       toast(copy.toast.saved);
     } catch (err) {
       toast(humanError(err));
@@ -337,6 +368,71 @@ export function SettingsHome() {
                 );
               })}
             </View>
+          </View>
+        ) : null}
+        {tab === 'llm' ? (
+          <View style={styles.block}>
+            <Text style={styles.hint}>{copy.settings.llm.hint}</Text>
+            <Field
+              label={copy.settings.llm.apiBase}
+              value={llmApiBase}
+              onChangeText={setLlmApiBase}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={copy.settings.llm.apiBaseHint}
+            />
+            <Field
+              label={copy.settings.llm.model}
+              value={llmModel}
+              onChangeText={setLlmModel}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={copy.settings.llm.modelHint}
+            />
+            <Field
+              label={copy.settings.llm.apiKey}
+              value={llmApiKey}
+              onChangeText={setLlmApiKey}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              placeholder={
+                auth.user?.llm.apiKeySet ? copy.settings.llm.apiKeySet : copy.settings.llm.apiKey
+              }
+            />
+            <Button loading={busy} onPress={() => void saveLlm()}>
+              {copy.settings.llm.save}
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!llmReady(auth.user?.llm)}
+              onPress={() =>
+                void client
+                  .testLlm()
+                  .then(() => toast(copy.settings.llm.testOk))
+                  .catch((err) => toast(humanError(err)))
+              }
+            >
+              {copy.settings.llm.test}
+            </Button>
+            {auth.user?.llm.apiKeySet ? (
+              <Button
+                variant="quiet"
+                disabled={busy}
+                onPress={() =>
+                  void client
+                    .updateMe({ llm: { apiKey: null } })
+                    .then((user) => {
+                      auth.refreshUser(user);
+                      setLlmApiKey('');
+                      toast(copy.toast.saved);
+                    })
+                    .catch((err) => toast(humanError(err)))
+                }
+              >
+                {copy.settings.llm.clearKey}
+              </Button>
+            ) : null}
           </View>
         ) : null}
       </ScrollView>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
+import { DEFAULT_LLM_SETTINGS, DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
 import { needsOnboarding, showChecklist } from '../../src/lib/onboarding-state';
 
 const user: UserProfile = {
@@ -13,6 +13,7 @@ const user: UserProfile = {
   convertArchiveOnComplete: false,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
+  llm: DEFAULT_LLM_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
