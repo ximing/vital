@@ -1,7 +1,8 @@
-import type { Report, ReportReviewTask, ReportType, SyncHead } from '@vital/dto';
+import type { Report, ReportType, SyncHead } from '@vital/dto';
 import { extractNotes, replaceNotes } from '@vital/dto';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { useOnline } from '@/features/inbox/online';
@@ -19,11 +20,17 @@ import {
   reportHref,
   SAVE_DEBOUNCE_MS,
 } from './model';
-import { useReportActions, useReportQuery, useReportReviewQuery } from './queries';
+import {
+  reportKeys,
+  useCurrentReportQuery,
+  useReportActions,
+  useReportQuery,
+  useReportReviewQuery,
+} from './queries';
 import { useAuth } from '@/services/auth.service';
 import { ReportsCalendar } from './ReportsCalendar';
-import { ReportsOverview } from './Overview';
 import { ReviewLists } from './ReviewLists';
+import { StatsBlock } from './StatsBlock';
 import { reportUi } from './report-ui.service';
 import { WysiwygEditor } from './WysiwygEditor';
 
@@ -74,11 +81,31 @@ export function ReportsWorkspace() {
   const actions = useReportActions();
   const user = useAuth((s) => s.user);
   const timeZone = user?.timezone ?? 'UTC';
+  const formatCompletedAt = (iso: string): string =>
+    new Date(iso).toLocaleDateString('zh-CN', {
+      timeZone,
+      month: 'long',
+      day: 'numeric',
+    });
   const weekStartsOn = user?.weekStartsOn === 0 ? 0 : 1;
 
   const reportQuery = useReportQuery(id, id !== '');
   const reviewQuery = useReportReviewQuery(id, id !== '');
+  const currentQuery = useCurrentReportQuery(typeParam, id === '');
+  const qc = useQueryClient();
   const liveType: ReportType = reportQuery.data?.type ?? typeParam;
+
+  // `/reports` (and `?type=…`) has no document of its own: resolve the current
+  // period and replace the URL with the canonical `/reports/:id` editor route.
+  useEffect(() => {
+    if (id !== '') return;
+    const current = currentQuery.data;
+    if (!current) return;
+    qc.setQueryData(reportKeys.item(current.id), current);
+    // get-or-create may have inserted a new row, so per-type counts can move.
+    void qc.invalidateQueries({ queryKey: reportKeys.counts });
+    navigate(reportHref(current.id, current.type), { replace: true });
+  }, [id, currentQuery.data, navigate, qc]);
 
   useEffect(() => {
     if (liveType === 'weekly') void markOnboarding({ openedWeekly: true });
@@ -277,6 +304,23 @@ export function ReportsWorkspace() {
     session?.filling,
   ]);
 
+  // ⌘S / Ctrl+S flushes the pending autosave immediately, from anywhere on the page.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key !== 's' && event.key !== 'S') return;
+      if (!event.metaKey && !event.ctrlKey) return;
+      if (id === '') return;
+      event.preventDefault();
+      cancelSaveTimer();
+      const live = sessionRef.current;
+      if (!live || live.id !== id || live.conflict || live.blockSave || live.filling) return;
+      if (!sessionDirty(live)) return;
+      void runSaveTrackedRef.current?.(live).catch(() => undefined);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [id]);
+
   async function openPeriod(next: ReportType, at?: string): Promise<void> {
     cancelSaveTimer();
     try {
@@ -338,7 +382,10 @@ export function ReportsWorkspace() {
     });
   }
 
-  async function toggleReviewTask(task: ReportReviewTask): Promise<void> {
+  async function toggleReviewTask(task: {
+    taskId: string;
+    completionId: string | null;
+  }): Promise<void> {
     try {
       if (task.completionId) {
         await client.uncompleteTask(task.taskId, { completionId: task.completionId });
@@ -366,16 +413,18 @@ export function ReportsWorkspace() {
         className="order-2 flex min-h-0 min-w-0 flex-1 flex-col bg-canvas lg:order-1"
       >
         <div className="flex w-full min-h-0 flex-1 flex-col">
-          <header className="flex shrink-0 items-end justify-between gap-3 pb-2">
-            <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+          <header className="flex shrink-0 items-end justify-between gap-3 pb-3">
+            <p className="eyebrow eyebrow-accent eyebrow-rule">
               {t.reports.kicker}
             </p>
             <span className="text-[length:var(--text-caption)] text-muted" role="status">
-              {session?.saveState === 'saving'
-                ? t.reports.saving
-                : session?.saveState === 'saved' && !dirty
-                  ? t.reports.saved
-                  : null}
+              {session && session.id === id
+                ? session.saveState === 'saving'
+                  ? t.reports.saving
+                  : dirty
+                    ? t.reports.unsaved
+                    : t.reports.saved
+                : null}
             </span>
           </header>
 
@@ -431,7 +480,20 @@ export function ReportsWorkspace() {
           ) : null}
 
           {id === '' ? (
-            <ReportsOverview type={typeParam} onPick={(ymd) => void openPeriod(typeParam, ymd)} />
+            currentQuery.error ? (
+              <div className="flex items-center gap-3 py-2">
+                <Banner>{humanError(currentQuery.error)}</Banner>
+                <Button variant="ghost" onClick={() => void currentQuery.refetch()}>
+                  {t.reports.retry}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex-1 py-10" aria-busy="true" aria-label={t.reports.loading}>
+                <div className="skeleton-pulse mb-4 h-10 rounded-lg" />
+                <div className="skeleton-pulse mb-8 h-32 rounded-lg" />
+                <div className="skeleton-pulse h-64 rounded-lg" />
+              </div>
+            )
           ) : loading || !session || session.id !== id ? (
             <div className="flex-1 py-10" aria-busy="true" aria-label={t.reports.loading}>
               <div className="skeleton-pulse mb-4 h-10 rounded-lg" />
@@ -440,24 +502,28 @@ export function ReportsWorkspace() {
             </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-6 pt-2">
-              <input
-                aria-label={t.reports.title}
-                value={session.draftTitle}
-                disabled={!online || session.filling}
-                onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
-                className="w-full shrink-0 bg-transparent text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em] text-fg outline-none"
-              />
+              <div className="flex shrink-0 items-center gap-3">
+                <span className="h-7 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
+                <input
+                  aria-label={t.reports.title}
+                  value={session.draftTitle}
+                  disabled={!online || session.filling}
+                  onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
+                  className="report-title w-full bg-transparent text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)] text-fg outline-none"
+                />
+              </div>
               {reviewQuery.data ? (
                 <ReviewLists
                   review={reviewQuery.data}
                   onToggleTask={(task) => void toggleReviewTask(task)}
                   onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
                   onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
+                  formatCompletedAt={formatCompletedAt}
                 />
               ) : (
-                <div className="skeleton-pulse h-24 rounded-lg" aria-busy="true" />
+                <div className="skeleton-pulse h-24 rounded-2xl" aria-busy="true" />
               )}
-              <div className="report-paper flex min-h-[16rem] min-w-0 flex-1 flex-col pt-2">
+              <div className="report-paper flex min-h-[16rem] min-w-0 flex-1 flex-col">
                 <WysiwygEditor
                   key={`${session.id}:${session.editorKey}`}
                   reportId={session.id}
@@ -477,7 +543,7 @@ export function ReportsWorkspace() {
       <aside
         data-region="calendar-pane"
         aria-label={t.reports.history}
-        className="order-1 shrink-0 bg-surface px-5 py-5 lg:order-2 lg:h-full lg:w-[20rem] lg:px-5 lg:py-6"
+        className="order-1 shrink-0 border-b border-border bg-surface px-5 py-5 lg:order-2 lg:h-full lg:w-[20rem] lg:border-b-0 lg:border-l lg:px-5 lg:py-6"
       >
         <ReportsCalendar
           type={liveType}
@@ -486,6 +552,7 @@ export function ReportsWorkspace() {
           timeZone={timeZone}
           onPick={(ymd) => void openPeriod(liveType, ymd)}
         />
+        <StatsBlock type={liveType} />
       </aside>
     </div>
   );

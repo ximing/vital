@@ -24,6 +24,7 @@ import {
   type ReportSnapshot,
   type ReportTaskEmbed,
   type ReportType,
+  type ReportTypeCounts,
   type TaskStatus,
 } from '@vital/dto';
 import { getUserEntity } from '../auth/auth.service.js';
@@ -39,6 +40,7 @@ import {
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
+import { computeCarriedSnapshot } from './carry.js';
 import { currentPeriod, localDate, periodInstants, previousPeriodStart } from './period.js';
 
 export type ReportClock = { id: string; timezone: string; weekStartsOn: 0 | 1 };
@@ -75,14 +77,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isReportSnapshot(value: unknown): value is ReportSnapshot {
+export function isReportSnapshot(value: unknown): value is ReportSnapshot {
   if (!isRecord(value)) return false;
   if (typeof value.title !== 'string' || typeof value.bodyMd !== 'string') return false;
   if (typeof value.revision !== 'number') return false;
   if (!isRecord(value.embeds) || !isRecord(value.embeds.tasks) || !isRecord(value.embeds.inbox)) {
     return false;
   }
-  return true;
+  return Array.isArray(value.carried);
 }
 
 export function toReportListItem(row: ReportRow): ReportListItem {
@@ -160,14 +162,23 @@ function snapshotReport(row: ReportRow, snap: ReportSnapshot): Report {
   };
 }
 
-async function freezeIfNeeded(row: ReportRow): Promise<void> {
+/** Freeze body, embeds, and the carried list as of now (idempotent). */
+export async function freezeIfNeeded(row: ReportRow): Promise<void> {
   if (row.snapshotAt !== null && row.snapshotJson) return;
+  const clock = await loadReportClock(row.userId);
   const embeds = await hydrateEmbeds(row.userId, row.bodyMd);
+  const carried = await computeCarriedSnapshot(
+    row.userId,
+    clock,
+    row.periodStart,
+    row.periodEnd,
+  );
   const snapshot: ReportSnapshot = {
     title: row.title,
     bodyMd: row.bodyMd,
     revision: row.revision,
     embeds,
+    carried,
   };
   await getDb()
     .update(reports)
@@ -322,6 +333,17 @@ export async function getCurrentReport(
     if (!again) throw AppError.of(500, 'INTERNAL_ERROR');
     return await liveReport(again);
   }
+}
+
+export async function countReportsByType(userId: string): Promise<ReportTypeCounts> {
+  const rows = await getDb()
+    .select({ type: reports.type, n: sql<number>`count(*)::int` })
+    .from(reports)
+    .where(eq(reports.userId, userId))
+    .groupBy(reports.type);
+  const counts: ReportTypeCounts = { daily: 0, weekly: 0, monthly: 0, yearly: 0 };
+  for (const row of rows) counts[asType(row.type)] = row.n;
+  return counts;
 }
 
 export async function getReport(

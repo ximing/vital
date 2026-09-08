@@ -12,6 +12,7 @@ import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import { getReportOverview, getReportReview } from './overview.service.js';
 import {
+  countReportsByType,
   fillReport,
   getCurrentReport,
   getReport,
@@ -39,6 +40,12 @@ export function registerReportRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { type, at } = currentReportQuerySchema.parse(req.query);
     return getCurrentReport(user.id, type, at);
+  });
+
+  app.get('/api/v1/reports/counts', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    return countReportsByType(user.id);
   });
 
   app.get('/api/v1/reports/:id/review', { preHandler: [requireAuth] }, async (req) => {

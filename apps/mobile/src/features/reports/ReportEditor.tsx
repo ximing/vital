@@ -7,8 +7,8 @@ import {
   extractNotes,
   replaceNotes,
   type Report,
+  type ReportCarriedTask,
   type ReportReview,
-  type ReportReviewTask,
   type SyncHead,
 } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
@@ -154,7 +154,7 @@ export function ReportEditor({ reportId }: { reportId: string }) {
     }
   }
 
-  async function toggleReviewTask(item: ReportReviewTask): Promise<void> {
+  async function toggleReviewTask(item: ReportCarriedTask): Promise<void> {
     try {
       if (item.completionId) {
         await client.uncompleteTask(item.taskId, { completionId: item.completionId });
@@ -200,7 +200,18 @@ export function ReportEditor({ reportId }: { reportId: string }) {
                   onPress={() => void toggleReviewTask(item)}
                   style={styles.carry}
                 >
-                  <Text style={styles.carryTitle}>{item.title}</Text>
+                  <Text
+                    style={[
+                      styles.carryTitle,
+                      (item.status === 'done' || item.deleted) && styles.doneItem,
+                    ]}
+                  >
+                    {item.title}
+                    {item.status === 'done' && item.completedAt
+                      ? ` · ${copy.reports.finishedLater}`
+                      : ''}
+                    {item.deleted ? ` · ${copy.reports.deleted}` : ''}
+                  </Text>
                 </Pressable>
               ))}
               {review.captured.map((item) => (

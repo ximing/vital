@@ -1,6 +1,7 @@
 import {
   hasWrote,
   type InboxStatus,
+  type ReportCarriedTask,
   type ReportHeatCell,
   type ReportListStat,
   type ReportOverview,
@@ -9,7 +10,6 @@ import {
   type ReportReviewInbox,
   type ReportReviewTask,
   type ReportType,
-  type TaskPriority,
   type TaskStatus,
 } from '@vital/dto';
 import { and, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
@@ -17,13 +17,15 @@ import { DateTime } from 'luxon';
 import { getDb } from '../db/index.js';
 import { inboxItems, lists, reports, taskCompletions, tasks } from '../db/schema.js';
 import { AppError } from '../errors.js';
+import { asPriority, carriedWithLiveState, computeCarriedTasks, isCarried } from './carry.js';
 import { currentPeriod, localDate, periodInstants, previousPeriodStart } from './period.js';
-import { getOwnedReportOr404, loadReportClock, type ReportClock } from './reports.service.js';
-
-function asPriority(value: number): TaskPriority {
-  if (value === 0 || value === 1 || value === 2 || value === 3) return value;
-  return 3;
-}
+import {
+  freezeIfNeeded,
+  getOwnedReportOr404,
+  isReportSnapshot,
+  loadReportClock,
+  type ReportClock,
+} from './reports.service.js';
 
 function asStatus(value: string): TaskStatus {
   if (value === 'todo' || value === 'doing' || value === 'done' || value === 'canceled') {
@@ -119,23 +121,6 @@ function streakFrom(today: string, marked: Set<string>): number {
     cursor = ymdAdd(cursor, -1);
   }
   return n;
-}
-
-function isCarried(
-  dueAt: Date | null,
-  startAt: Date | null,
-  periodStart: string,
-  periodEnd: string,
-  tz: string,
-  periodEndInstant: Date,
-): boolean {
-  const anchor = dueAt ?? startAt;
-  const inPeriod =
-    anchor !== null &&
-    localDate(anchor, tz) >= periodStart &&
-    localDate(anchor, tz) < periodEnd;
-  const overdue = dueAt !== null && dueAt.getTime() < periodEndInstant.getTime();
-  return inPeriod || overdue;
 }
 
 export async function getReportOverview(
@@ -325,10 +310,19 @@ export async function getReportOverview(
 
 export async function getReportReview(userId: string, id: string): Promise<ReportReview> {
   const user = await loadReportClock(userId);
-  const row = await getOwnedReportOr404(user.id, id);
+  let row = await getOwnedReportOr404(user.id, id);
   const type = row.type as ReportType;
   const tz = user.timezone;
   const bounds = periodInstants(row.periodStart, row.periodEnd, tz);
+
+  // Lazy freeze: the period has closed but no snapshot exists yet — freeze the
+  // carried list now, as of this read, so it stops drifting with live edits.
+  const todayYmd = DateTime.now().setZone(tz).startOf('day').toISODate() ?? '';
+  const periodEnded = row.periodEnd <= todayYmd;
+  if (periodEnded && row.snapshotAt === null) {
+    await freezeIfNeeded(row);
+    row = await getOwnedReportOr404(user.id, id);
+  }
 
   const completionRows = await getDb()
     .select({
@@ -363,36 +357,17 @@ export async function getReportReview(userId: string, id: string): Promise<Repor
     listId: item.listId,
   }));
 
-  const openTasks = await getDb()
-    .select()
-    .from(tasks)
-    .where(
-      and(
-        eq(tasks.userId, user.id),
-        isNull(tasks.deletedAt),
-        inArray(tasks.status, ['todo', 'doing']),
-      ),
-    );
-  const carried: ReportReviewTask[] = openTasks
-    .filter((task) =>
-      isCarried(task.dueAt, task.startAt, row.periodStart, row.periodEnd, tz, bounds.end),
-    )
-    .sort((a, b) => {
-      const da = a.dueAt?.getTime() ?? a.startAt?.getTime() ?? 0;
-      const db = b.dueAt?.getTime() ?? b.startAt?.getTime() ?? 0;
-      if (da !== db) return da - db;
-      return a.id.localeCompare(b.id);
-    })
-    .map((task) => ({
-      taskId: task.id,
-      title: task.title,
-      priority: asPriority(task.priority),
-      status: asStatus(task.status),
-      dueAt: task.dueAt ? iso(task.dueAt) : null,
-      completedAt: null,
-      completionId: null,
-      listId: task.listId,
-    }));
+  // Ended period: the frozen list, overlaid with each task's live state — a
+  // task completed after the freeze stays, annotated with when. Current
+  // period: live query, as before.
+  const snapshot =
+    row.snapshotJson && isReportSnapshot(row.snapshotJson) ? row.snapshotJson : null;
+  let carried: ReportCarriedTask[];
+  if (periodEnded && snapshot) {
+    carried = await carriedWithLiveState(user.id, snapshot.carried);
+  } else {
+    carried = await computeCarriedTasks(user.id, user, row.periodStart, row.periodEnd);
+  }
 
   const inboxRows = await getDb()
     .select()

@@ -23,11 +23,22 @@ export interface ReportEmbeds {
   inbox: Record<string, ReportInboxEmbed>;
 }
 
+/** Carried task frozen at period close — the facts as of freeze time. */
+export interface ReportSnapshotCarriedTask {
+  taskId: string;
+  title: string;
+  priority: TaskPriority;
+  dueAt: string | null;
+  listId: string;
+}
+
 export interface ReportSnapshot {
   title: string;
   bodyMd: string;
   revision: number;
   embeds: ReportEmbeds;
+  /** Open tasks carried out of the period, frozen when the period closed. */
+  carried: ReportSnapshotCarriedTask[];
 }
 
 export interface ReportListItem {
@@ -56,6 +67,8 @@ export interface ReportEmbedsResponse {
   revision: number;
   embeds: ReportEmbeds;
 }
+
+export type ReportTypeCounts = Record<ReportType, number>;
 
 const limitSchema = z
   .string()
@@ -165,6 +178,23 @@ export interface ReportReviewTask {
   listId: string;
 }
 
+/**
+ * Carried task at review time: frozen snapshot facts plus the task's live
+ * state now — so a later completion reads as "still carried then, done on X".
+ */
+export interface ReportCarriedTask {
+  taskId: string;
+  title: string;
+  priority: TaskPriority;
+  dueAt: string | null;
+  listId: string;
+  /** Live state at read time. */
+  status: TaskStatus;
+  completedAt: string | null;
+  completionId: string | null;
+  deleted: boolean;
+}
+
 export interface ReportReviewInbox {
   inboxId: string;
   title: string;
@@ -178,6 +208,6 @@ export interface ReportReview {
   periodStart: string;
   periodEnd: string;
   completed: ReportReviewTask[];
-  carried: ReportReviewTask[];
+  carried: ReportCarriedTask[];
   captured: ReportReviewInbox[];
 }

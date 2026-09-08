@@ -318,6 +318,95 @@ describe('reports', () => {
     expect(current.json().title).toContain('周报');
   });
 
+  it('freezes carried at period end and annotates later completions on review', async () => {
+    const alice = await registerUser(app);
+    const list = await inboxId(app, alice.token);
+    const tz = 'Asia/Shanghai';
+    const todayStart = DateTime.now().setZone(tz).startOf('day');
+    const prevStart = todayStart.minus({ days: 1 }).toISODate();
+    const prevEnd = todayStart.toISODate();
+    const yesterdayNoon = todayStart.minus({ days: 1 }).plus({ hours: 12 }).toISO();
+    const prevId = randomUUID();
+    await db.insert(reports).values({
+      id: prevId,
+      userId: alice.id,
+      type: 'daily',
+      periodStart: prevStart ?? '2026-01-01',
+      periodEnd: prevEnd ?? '2026-01-02',
+      title: '昨天 日报',
+      bodyMd: '# 昨天 日报\n',
+      revision: 1,
+    });
+    const task = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '结转的事', listId: list, dueAt: yesterdayNoon, timezone: tz },
+    });
+    expect(task.statusCode).toBe(201);
+
+    // Reading the ended period's review lazily freezes the carried list —
+    // without ever opening today's report.
+    const before = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/reports/${prevId}/review`,
+      token: alice.token,
+    });
+    expect(before.statusCode).toBe(200);
+    const carriedBefore = before.json().carried as Array<Record<string, unknown>>;
+    expect(carriedBefore.map((row) => row.title)).toContain('结转的事');
+    expect(carriedBefore.find((row) => row.title === '结转的事')).toMatchObject({
+      status: 'todo',
+      completedAt: null,
+      deleted: false,
+    });
+
+    const [frozen] = await db.select().from(reports).where(eq(reports.id, prevId));
+    expect(frozen?.snapshotAt).not.toBeNull();
+    expect(frozen?.snapshotJson?.carried).toEqual([
+      expect.objectContaining({ taskId: task.json().id, title: '结转的事' }),
+    ]);
+
+    // Completing the task today must not erase it from yesterday's carried list.
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${task.json().id}/complete`,
+      token: alice.token,
+    });
+    const after = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/reports/${prevId}/review`,
+      token: alice.token,
+    });
+    expect(after.statusCode).toBe(200);
+    const carriedAfter = after.json().carried as Array<Record<string, unknown>>;
+    expect(carriedAfter.map((row) => row.title)).toContain('结转的事');
+    expect(carriedAfter.find((row) => row.title === '结转的事')).toMatchObject({
+      status: 'done',
+      deleted: false,
+    });
+    expect(
+      carriedAfter.find((row) => row.title === '结转的事')?.completedAt,
+    ).toBeTruthy();
+
+    // The current period's review stays live.
+    const today = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/current?type=daily',
+      token: alice.token,
+    });
+    expect(today.statusCode).toBe(200);
+    const todayReview = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/reports/${today.json().id}/review`,
+      token: alice.token,
+    });
+    expect(todayReview.statusCode).toBe(200);
+    expect(
+      (todayReview.json().carried as Array<Record<string, unknown>>).map((row) => row.title),
+    ).not.toContain('结转的事');
+  });
+
   it('overview counts completions and review lists done vs carried', async () => {
     const alice = await registerUser(app);
     const list = await inboxId(app, alice.token);
@@ -407,5 +496,39 @@ describe('reports', () => {
       token: alice.token,
     });
     expect(after.json().totals.wrote).toBe(1);
+  });
+
+  it('GET /reports/counts returns per-type totals scoped to the user', async () => {
+    const alice = await registerUser(app);
+    const bob = await registerUser(app);
+
+    const empty = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/counts',
+      token: alice.token,
+    });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json()).toEqual({ daily: 0, weekly: 0, monthly: 0, yearly: 0 });
+
+    for (const [user, type] of [
+      [alice, 'daily'],
+      [alice, 'weekly'],
+      [bob, 'daily'],
+    ] as const) {
+      const res = await injectJson(app, {
+        method: 'GET',
+        url: `/api/v1/reports/current?type=${type}`,
+        token: user.token,
+      });
+      expect(res.statusCode).toBe(200);
+    }
+
+    const counts = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/reports/counts',
+      token: alice.token,
+    });
+    expect(counts.statusCode).toBe(200);
+    expect(counts.json()).toEqual({ daily: 1, weekly: 1, monthly: 0, yearly: 0 });
   });
 });

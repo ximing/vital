@@ -144,11 +144,12 @@ function makeReview(over: Partial<ReportReview> = {}): ReportReview {
         taskId: TASK_ID,
         title: '写纪要',
         priority: 1,
-        status: 'todo',
         dueAt: null,
+        listId: 'inbox-1',
+        status: 'todo',
         completedAt: null,
         completionId: null,
-        listId: 'inbox-1',
+        deleted: false,
       },
     ],
     captured: [],
@@ -249,14 +250,16 @@ describe('reports workspace', () => {
     resetReportUi();
   });
 
-  it('shows overview stats and heatmap on /reports', async () => {
+  it('redirects /reports to the current period editor with stats in the calendar pane', async () => {
     renderAt('/reports');
+    await waitFor(() => {
+      expect(client.getCurrentReport).toHaveBeenCalledWith('daily');
+    });
+    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
     expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
-    expect(screen.getByText(t.reports.completed)).toBeInTheDocument();
-    expect(screen.getByText(t.reports.wrote)).toBeInTheDocument();
-    expect(screen.getByText('写纪要')).toBeInTheDocument();
-    expect(screen.queryByLabelText(t.reports.title)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: t.reports.sourceToggle })).not.toBeInTheDocument();
+    const pane = document.querySelector('[data-region="calendar-pane"]');
+    expect(pane?.textContent).toContain(t.reports.completed);
+    expect(pane?.textContent).toContain(t.reports.wrote);
   });
 
   it('opens the period review without leaking heading markers', async () => {
@@ -308,13 +311,12 @@ describe('reports workspace', () => {
     expect(screen.getByTestId('streak-calendar')).toBeInTheDocument();
   });
 
-  it('switches type on overview without opening a document', async () => {
+  it('switches type by redirecting to that type’s current report', async () => {
     renderAt('/reports?type=weekly');
-    expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
     await waitFor(() => {
-      expect(client.getReportOverview).toHaveBeenCalledWith('weekly', undefined);
+      expect(client.getCurrentReport).toHaveBeenCalledWith('weekly');
     });
-    expect(screen.queryByLabelText(t.reports.title)).not.toBeInTheDocument();
+    expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
   });
 
   it('toggles a carried task via complete, not a markdown patch', async () => {
@@ -362,6 +364,76 @@ describe('reports workspace', () => {
       expect(client.completeTask).toHaveBeenCalledWith(TASK_ID);
     });
     expect(client.patchReport).not.toHaveBeenCalled();
+  });
+
+  it('annotates a carried task that was completed after the freeze', async () => {
+    vi.mocked(client.getReportReview).mockResolvedValue(
+      makeReview({
+        carried: [
+          {
+            taskId: TASK_ID,
+            title: '写纪要',
+            priority: 1,
+            dueAt: null,
+            listId: 'inbox-1',
+            status: 'done',
+            completedAt: '2026-09-07T02:00:00.000Z',
+            completionId: 'comp-later',
+            deleted: false,
+          },
+        ],
+      }),
+    );
+    renderAt('/reports/r-daily');
+    const row = await screen.findByText('写纪要');
+    expect(row).toBeInTheDocument();
+    expect(
+      screen.getByText(`${t.reports.finishedLater} · 9月7日`),
+    ).toBeInTheDocument();
+    // Done later: the toggle reflects the live state, still actionable.
+    expect(screen.getByRole('checkbox', { name: t.reports.complete })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+  });
+
+  it('marks a carried task that was deleted after the freeze', async () => {
+    vi.mocked(client.getReportReview).mockResolvedValue(
+      makeReview({
+        carried: [
+          {
+            taskId: TASK_ID,
+            title: '写纪要',
+            priority: 1,
+            dueAt: null,
+            listId: 'inbox-1',
+            status: 'todo',
+            completedAt: null,
+            completionId: null,
+            deleted: true,
+          },
+        ],
+      }),
+    );
+    renderAt('/reports/r-daily');
+    expect(await screen.findByText('写纪要')).toBeInTheDocument();
+    expect(screen.getByText(t.reports.deleted)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: t.reports.complete })).toBeDisabled();
+  });
+
+  it('flushes the pending save immediately on Cmd+S', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/reports/r-daily');
+    const title = await screen.findByLabelText(t.reports.title);
+    await user.type(title, '改');
+    expect(await screen.findByText(t.reports.unsaved)).toBeInTheDocument();
+    await user.keyboard('{Meta>}s{/Meta}');
+    // Debounce (800ms) never elapsed — the shortcut itself drove the save.
+    await waitFor(() => {
+      expect(client.patchReport).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText(t.reports.saved)).toBeInTheDocument();
   });
 
   it('shows 409 conflict and does not replace the dirty body', async () => {

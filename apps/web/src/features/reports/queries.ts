@@ -17,6 +17,7 @@ export const reportKeys = {
   all: ['reports'] as const,
   list: (type: ReportType) => ['reports', 'list', type] as const,
   current: (type: ReportType) => ['reports', 'current', type] as const,
+  counts: ['reports', 'counts'] as const,
   overview: (type: ReportType, at = '') => ['reports', 'overview', type, at] as const,
   item: (id: string) => ['reports', 'item', id] as const,
   review: (id: string) => ['reports', 'review', id] as const,
@@ -57,6 +58,13 @@ export function useCurrentReportQuery(type: ReportType, enabled = true) {
   });
 }
 
+export function useReportCountsQuery() {
+  return useQuery({
+    queryKey: reportKeys.counts,
+    queryFn: () => client.getReportCounts(),
+  });
+}
+
 export function useReportReviewQuery(id: string, enabled = true) {
   return useQuery({
     queryKey: reportKeys.review(id),
@@ -90,6 +98,7 @@ export function useReportActions() {
       cacheReport(report);
       void qc.invalidateQueries({ queryKey: reportKeys.list(report.type) });
       void qc.invalidateQueries({ queryKey: reportKeys.current(report.type) });
+      void qc.invalidateQueries({ queryKey: reportKeys.counts });
       void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
       void qc.invalidateQueries({ queryKey: reportKeys.review(report.id) });
     },
@@ -114,6 +123,8 @@ export function useReportActions() {
   async function loadCurrent(type: ReportType, at?: string): Promise<Report> {
     const report = await client.getCurrentReport(type, at);
     cacheReport(report, at === undefined);
+    // get-or-create may have inserted a new row, so per-type counts can move.
+    void qc.invalidateQueries({ queryKey: reportKeys.counts });
     return report;
   }
 

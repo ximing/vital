@@ -43,6 +43,7 @@ import type {
   ReportCollection,
   ReportEmbedsResponse,
   ReportType,
+  ReportTypeCounts,
   ReorderListsInput,
   ReorderTasksInput,
   SearchInput,
@@ -133,6 +134,7 @@ export interface VitalClient {
     limit?: number;
   }): Promise<ReportCollection>;
   getCurrentReport(type: ReportType, at?: string): Promise<Report>;
+  getReportCounts(): Promise<ReportTypeCounts>;
   getReportOverview(type: ReportType, at?: string): Promise<ReportOverview>;
   getReport(id: string, query?: GetReportQuery): Promise<Report>;
   getReportReview(id: string): Promise<ReportReview>;
@@ -305,6 +307,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       const query: CurrentReportQuery = { type, ...(at ? { at } : {}) };
       return http.request('/api/v1/reports/current', { query });
     },
+    getReportCounts: () => http.request('/api/v1/reports/counts'),
     getReportOverview: (type, at) => {
       const query: ReportOverviewQuery = { type, ...(at ? { at } : {}) };
       return http.request('/api/v1/reports/overview', { query });

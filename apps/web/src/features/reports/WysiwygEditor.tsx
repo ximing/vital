@@ -329,10 +329,7 @@ export function WysiwygEditor({
       data-region="report-editor"
       onClick={onClick}
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-0.5 py-1">
-        <span className="mr-2 px-1 text-[length:var(--text-caption)] text-muted">
-          {t.reports.writeToday}
-        </span>
+      <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b border-border/80 px-3 py-1.5">
         <ToolbarBtn
           label={t.reports.bold}
           active={editor?.isActive('bold') === true}

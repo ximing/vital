@@ -20,6 +20,8 @@ export const copy = {
     recentDone: '最近完成',
     emptyDone: '还没有完成。做完一件，会记在这里。',
     emptyCarried: '没有要结转的事。',
+    finishedLater: '后来完成',
+    deleted: '已删除',
     emptyCaptured: '这一期没有新的稍后读。',
     emptyRecent: '这一期还没有完成。去做一件，回来就会出现。',
     streakCompleted: '连续完成 {n} 天',

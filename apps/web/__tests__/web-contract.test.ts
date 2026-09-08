@@ -95,7 +95,7 @@ describe('web shell contract', () => {
     const model = read('src/features/reports/model.ts');
     expect(ws).toContain('syncHead');
     expect(ws).toContain('getReportEmbeds');
-    expect(ws).toContain('ReportsOverview');
+    expect(ws).toContain('StatsBlock');
     expect(model).toContain('REPORT_REVISION_CONFLICT');
     expect(ws).not.toContain("authMode: 'bearer'");
   });
