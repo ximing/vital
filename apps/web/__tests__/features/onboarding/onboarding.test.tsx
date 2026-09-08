@@ -1,4 +1,4 @@
-import { DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
+import { DEFAULT_LLM_SETTINGS, DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -33,6 +33,7 @@ const mockUser: UserProfile = {
   convertArchiveOnComplete: false,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
+  llm: DEFAULT_LLM_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };

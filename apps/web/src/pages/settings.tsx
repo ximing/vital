@@ -1,23 +1,35 @@
-import { Bell, Palette, SlidersHorizontal, User } from 'lucide-react';
+import { Bell, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { AccountSection } from '@/features/settings/AccountSection';
+import { LlmSection } from '@/features/settings/LlmSection';
 import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { PrefsSection } from '@/features/settings/PrefsSection';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { Icon, type LucideIcon } from '@/ui/icon';
 
-const TABS: { id: 'account' | 'appearance' | 'notifications' | 'prefs'; label: string; icon: LucideIcon }[] =
-  [
-    { id: 'account', label: t.settings.tabs.account, icon: User },
-    { id: 'appearance', label: t.settings.tabs.appearance, icon: Palette },
-    { id: 'notifications', label: t.settings.tabs.notifications, icon: Bell },
-    { id: 'prefs', label: t.settings.tabs.prefs, icon: SlidersHorizontal },
-  ];
+const TABS: {
+  id: 'account' | 'appearance' | 'notifications' | 'prefs' | 'llm';
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { id: 'account', label: t.settings.tabs.account, icon: User },
+  { id: 'appearance', label: t.settings.tabs.appearance, icon: Palette },
+  { id: 'notifications', label: t.settings.tabs.notifications, icon: Bell },
+  { id: 'prefs', label: t.settings.tabs.prefs, icon: SlidersHorizontal },
+  { id: 'llm', label: t.settings.tabs.llm, icon: Sparkles },
+];
 
 function isTab(value: string | null): (typeof TABS)[number]['id'] {
-  if (value === 'appearance' || value === 'notifications' || value === 'prefs') return value;
+  if (
+    value === 'appearance' ||
+    value === 'notifications' ||
+    value === 'prefs' ||
+    value === 'llm'
+  ) {
+    return value;
+  }
   return 'account';
 }
 
@@ -99,6 +111,11 @@ export function SettingsPage() {
           {tab === 'prefs' ? (
             <SettingsBlock title={t.settings.prefs}>
               <PrefsSection />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'llm' ? (
+            <SettingsBlock title={t.settings.llm.title} description={t.settings.llm.hint}>
+              <LlmSection />
             </SettingsBlock>
           ) : null}
         </div>

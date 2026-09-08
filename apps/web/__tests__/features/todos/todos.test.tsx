@@ -1,4 +1,11 @@
-import { DEFAULT_NOTIFICATION_PREFS, type List, type Tag, type Task, type UserProfile } from '@vital/dto';
+import {
+  DEFAULT_LLM_SETTINGS,
+  DEFAULT_NOTIFICATION_PREFS,
+  type List,
+  type Tag,
+  type Task,
+  type UserProfile,
+} from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -24,6 +31,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       listTags: vi.fn(),
       calendar: vi.fn(),
       createTask: vi.fn(),
+      createTaskFromText: vi.fn(),
       patchTask: vi.fn(),
       completeTask: vi.fn(),
       uncompleteTask: vi.fn(),
@@ -49,6 +57,7 @@ const mockUser: UserProfile = {
   convertArchiveOnComplete: false,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
+  llm: DEFAULT_LLM_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -427,5 +436,35 @@ describe('todos workspace', () => {
       expect.objectContaining({ startAt: null, isAllDay: true, dueAt: expect.any(String) }),
     );
     expect(screen.queryByRole('menu', { name: '写周报' })).not.toBeInTheDocument();
+  });
+
+  it('uses the model to create a task and hides date/priority pickers', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    setAuthForTest({
+      ...mockUser,
+      llm: {
+        apiBase: 'https://open.bigmodel.cn/api/paas/v4',
+        model: 'glm-4-flash',
+        apiKeySet: true,
+      },
+    });
+    vi.mocked(client.createTaskFromText).mockResolvedValue(
+      makeTask({ id: 'n1', title: '和设计组开会', dueAt: '2026-09-09T07:00:00.000Z', isAllDay: false }),
+    );
+    renderAt('/todos/lists/smart:today');
+    expect(await screen.findByPlaceholderText(t.todos.composeIntent)).toBeInTheDocument();
+    expect(screen.queryByLabelText(t.todos.addDate)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(t.todos.priorityLabel)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(t.todos.quickAddPlaceholder), '明天下午3点和设计组开会');
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(client.createTaskFromText).toHaveBeenCalledWith({
+        text: '明天下午3点和设计组开会',
+        listId: 'inbox-1',
+        smartListId: 'smart:today',
+        timezone: TZ,
+      }),
+    );
+    expect(client.createTask).not.toHaveBeenCalled();
   });
 });

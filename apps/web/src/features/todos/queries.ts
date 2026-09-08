@@ -1,6 +1,7 @@
 import type {
   CalendarInstance,
   CreateListInput,
+  CreateTaskFromTextInput,
   CreateTaskInput,
   List,
   PatchTaskInput,
@@ -97,6 +98,16 @@ export function useTodoActions() {
     },
   });
 
+  const createFromText = useMutation({
+    mutationFn: (input: CreateTaskFromTextInput) => client.createTaskFromText(input),
+    onSuccess: async (task) => {
+      await invalidate();
+      await markOnboarding({ createdTask: true });
+      todosUi().setSelected(task.id);
+      todosUi().openDetail(task.id);
+    },
+  });
+
   const patch = useMutation({
     mutationFn: ({ id, input }: { id: string; input: PatchTaskInput }) =>
       client.patchTask(id, input),
@@ -184,6 +195,7 @@ export function useTodoActions() {
 
   return {
     create,
+    createFromText,
     patch,
     remove,
     reorder,

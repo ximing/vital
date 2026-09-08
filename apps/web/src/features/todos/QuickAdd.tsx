@@ -2,6 +2,7 @@ import type { List, TaskPriority } from '@vital/dto';
 import { CircleArrowUp, Folder } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { t } from '@/copy';
+import { humanError } from '@/lib/errors';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { usePopover } from '@/ui/use-popover';
@@ -14,7 +15,7 @@ import { useTodosUi } from './todos-ui.service';
 
 export type ComposeExtras = {
   listId: string;
-  priority: TaskPriority;
+  priority?: TaskPriority;
   status?: 'todo' | 'doing';
 };
 
@@ -31,6 +32,7 @@ export function QuickAdd({
   captureId = true,
   lockedPriority,
   lockedStatus,
+  intent = false,
 }: {
   onSubmit: (title: string, draft: ScheduleDraft, extras: ComposeExtras) => Promise<void> | void;
   disabled?: boolean;
@@ -44,6 +46,7 @@ export function QuickAdd({
   captureId?: boolean;
   lockedPriority?: TaskPriority;
   lockedStatus?: 'todo' | 'doing';
+  intent?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const nonce = useTodosUi((s) => s.quickAddNonce);
@@ -51,6 +54,8 @@ export function QuickAdd({
   const [priority, setPriority] = useState<TaskPriority>(lockedPriority ?? 3);
   const [listId, setListId] = useState(defaultListId);
   const [prevDefaultListId, setPrevDefaultListId] = useState(defaultListId);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Follow defaultListId changes by adjusting state during render.
   if (defaultListId !== prevDefaultListId) {
@@ -62,64 +67,88 @@ export function QuickAdd({
     if (captureId && nonce > 0) inputRef.current?.focus();
   }, [captureId, nonce]);
 
-  function handle(event: FormEvent) {
+  async function handle(event: FormEvent) {
     event.preventDefault();
     const el = inputRef.current;
-    if (!el || disabled) return;
+    if (!el || disabled || busy) return;
     const title = el.value.trim();
     if (title === '') return;
-    el.value = '';
     const next = draft;
-    setDraft(emptyScheduleDraft());
-    setPriority(lockedPriority ?? 3);
-    setListId(defaultListId);
-    void onSubmit(title, next, {
-      listId,
-      priority,
-      status: lockedStatus,
-    });
+    setBusy(true);
+    setError(null);
+    try {
+      await onSubmit(title, next, {
+        listId,
+        priority: intent ? lockedPriority : priority,
+        status: lockedStatus,
+      });
+      el.value = '';
+      setDraft(emptyScheduleDraft());
+      setPriority(lockedPriority ?? 3);
+      setListId(defaultListId);
+    } catch (err) {
+      setError(humanError(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const card = variant === 'card';
-  const placeholder = hint ?? (card ? t.todos.composeWhat : `+ ${t.todos.composeTo} “${listName}”`);
+  const placeholder =
+    hint ??
+    (intent
+      ? t.todos.composeIntent
+      : card
+        ? t.todos.composeWhat
+        : `+ ${t.todos.composeTo} “${listName}”`);
   const tools = (
     <>
-      <SchedulePopover
-        draft={draft}
-        zone={zone}
-        weekStartsOn={weekStartsOn}
-        onChange={setDraft}
-        compact
-        triggerClassName="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
-        ariaLabel={t.todos.addDate}
-      />
-      {lockedPriority === undefined ? (
+      {intent ? null : (
+        <SchedulePopover
+          draft={draft}
+          zone={zone}
+          weekStartsOn={weekStartsOn}
+          onChange={setDraft}
+          compact
+          triggerClassName="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface hover:text-fg"
+          ariaLabel={t.todos.addDate}
+        />
+      )}
+      {intent || lockedPriority !== undefined ? null : (
         <PriorityMenu value={priority} onChange={setPriority} />
-      ) : null}
+      )}
       <ListMenu lists={lists} value={listId} onChange={setListId} />
     </>
   );
 
+  const blocked = disabled || busy;
+  const errorNode = error ? (
+    <p className="px-1 pt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-danger">
+      {error}
+    </p>
+  ) : null;
+
   if (card) {
     return (
-      <form onSubmit={handle} className="pb-2">
+      <form onSubmit={(event) => void handle(event)} className="pb-2">
         <div className="rounded-xl bg-elevated px-3 py-2 shadow-[0_0_0_1px_var(--border-subtle)]">
           <input
             id={captureId ? QUICK_ADD_ID : undefined}
             ref={inputRef}
             type="text"
             name="title"
-            maxLength={500}
-            disabled={disabled}
-            placeholder={placeholder}
+            maxLength={intent ? 2000 : 500}
+            disabled={blocked}
+            placeholder={busy && intent ? t.todos.interpreting : placeholder}
             aria-label={t.todos.quickAddPlaceholder}
+            aria-busy={busy || undefined}
             className="field-focus h-8 w-full border-0 bg-transparent px-0 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
           />
           <div className="mt-1 flex items-center gap-0.5">
             {tools}
             <button
               type="submit"
-              disabled={disabled}
+              disabled={blocked}
               aria-label={t.todos.add}
               className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent text-on-accent hover:bg-accent-hover disabled:opacity-40"
             >
@@ -127,29 +156,32 @@ export function QuickAdd({
             </button>
           </div>
         </div>
+        {errorNode}
       </form>
     );
   }
 
   return (
-    <form onSubmit={handle} className="w-full min-w-0 self-stretch pb-1 pt-1">
+    <form onSubmit={(event) => void handle(event)} className="w-full min-w-0 self-stretch pb-1 pt-1">
       <div className="flex h-10 w-full min-w-0 items-center gap-1 rounded-lg bg-surface-muted px-2.5">
         <input
           id={captureId ? QUICK_ADD_ID : undefined}
           ref={inputRef}
           type="text"
           name="title"
-          maxLength={500}
-          disabled={disabled}
-          placeholder={placeholder}
+          maxLength={intent ? 2000 : 500}
+          disabled={blocked}
+          placeholder={busy && intent ? t.todos.interpreting : placeholder}
           aria-label={t.todos.quickAddPlaceholder}
+          aria-busy={busy || undefined}
           className="field-focus h-8 min-w-0 flex-1 border-0 bg-transparent px-0.5 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
         />
         <div className="ml-auto flex shrink-0 items-center gap-0.5 text-muted">{tools}</div>
-        <button type="submit" disabled={disabled} className="sr-only">
+        <button type="submit" disabled={blocked} className="sr-only">
           {t.todos.add}
         </button>
       </div>
+      {errorNode}
     </form>
   );
 }

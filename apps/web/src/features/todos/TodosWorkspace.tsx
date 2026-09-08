@@ -1,4 +1,4 @@
-import type { Task, TaskPriority } from '@vital/dto';
+import { llmReady, SMART_LIST_IDS, type SmartListId, type Task, type TaskPriority } from '@vital/dto';
 import { CalendarDays, Columns3, Ellipsis, EyeOff, List, PanelRightClose } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { NavLink, useParams, useSearchParams } from 'react-router';
@@ -175,12 +175,29 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
     }
   }
 
+  const intent = llmReady(user?.llm);
+
   async function handleCreate(name: string, draft: ScheduleDraft, extras: ComposeExtras) {
     if (!inboxId) return;
+    if (intent) {
+      await actions.createFromText.mutateAsync({
+        text: name,
+        listId: extras.listId || inboxId,
+        timezone: timeZone,
+        ...((SMART_LIST_IDS as readonly string[]).includes(listId)
+          ? { smartListId: listId as SmartListId }
+          : {}),
+        ...(extras.status !== undefined ? { status: extras.status } : {}),
+        ...(extras.priority !== undefined ? { priority: extras.priority } : {}),
+        ...(composeDay ? { dueYmd: composeDay } : {}),
+      });
+      setComposeDay(null);
+      return;
+    }
     const base = createPayload(name, listId, inboxId, timeZone, new Date(), composeDay ?? undefined);
     const next = applyDraftToCreate(base, draft, timeZone);
     if (extras.listId) next.listId = extras.listId;
-    if (extras.priority !== 3) next.priority = extras.priority;
+    if (extras.priority !== undefined && extras.priority !== 3) next.priority = extras.priority;
     if (extras.status) next.status = extras.status;
     await actions.create.mutateAsync(next);
     setComposeDay(null);
@@ -350,6 +367,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
               defaultListId={defaultListId}
               zone={timeZone}
               weekStartsOn={weekStartsOn}
+              intent={intent}
               hint={
                 composeDay
                   ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}`
@@ -394,6 +412,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                   void actions.setPriority(task, priority)
                 }
                 onCreate={handleCreate}
+                intent={intent}
                 onTaskMenu={(task, x, y) => setTaskMenu({ task, x, y })}
               />
             ) : calendarQuery.isLoading ? (

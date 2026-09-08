@@ -118,6 +118,7 @@ describe('Tauri runtime client', () => {
                 allDayNotifyTime: '09:00',
               },
               onboarding: {},
+              llm: { apiBase: null, model: null, apiKeySet: false },
               createdAt: '2026-01-01T00:00:00.000Z',
               updatedAt: '2026-01-01T00:00:00.000Z',
             },

@@ -1,4 +1,4 @@
-import { DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
+import { DEFAULT_LLM_SETTINGS, DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -20,6 +20,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       patchNotificationChannel: vi.fn(),
       testNotificationChannel: vi.fn(),
       updateMe: vi.fn(),
+      testLlm: vi.fn(),
     },
   };
 });
@@ -35,6 +36,7 @@ const mockUser: UserProfile = {
   convertArchiveOnComplete: false,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
+  llm: DEFAULT_LLM_SETTINGS,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
@@ -97,6 +99,44 @@ describe('NotificationsSection', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: t.settings.timezone })).toBeInTheDocument();
     });
+    await user.click(screen.getByRole('tab', { name: t.settings.tabs.llm }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(t.settings.llm.apiBase)).toBeInTheDocument();
+    });
+  });
+
+  it('saves OpenAI-compatible model settings', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.updateMe).mockResolvedValue({
+      ...mockUser,
+      llm: {
+        apiBase: 'https://open.bigmodel.cn/api/paas/v4',
+        model: 'glm-4-flash',
+        apiKeySet: true,
+      },
+    });
+    render(
+      <RabRoot>
+        <MemoryRouter initialEntries={['/settings?tab=llm']}>
+          <Routes>
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </MemoryRouter>
+      </RabRoot>,
+    );
+    await user.type(screen.getByLabelText(t.settings.llm.apiBase), 'https://open.bigmodel.cn/api/paas/v4');
+    await user.type(screen.getByLabelText(t.settings.llm.model), 'glm-4-flash');
+    await user.type(screen.getByLabelText(t.settings.llm.apiKey), 'sk-test');
+    await user.click(screen.getByRole('button', { name: t.settings.llm.save }));
+    await waitFor(() =>
+      expect(client.updateMe).toHaveBeenCalledWith({
+        llm: {
+          apiBase: 'https://open.bigmodel.cn/api/paas/v4',
+          model: 'glm-4-flash',
+          apiKey: 'sk-test',
+        },
+      }),
+    );
   });
 
   it('saves a MeoW nickname', async () => {

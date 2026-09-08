@@ -24,6 +24,7 @@ export function BoardView({
   onStatus,
   onPriority,
   onCreate,
+  intent = false,
   onTaskMenu,
 }: {
   listId: string;
@@ -39,6 +40,7 @@ export function BoardView({
   onStatus: (task: Task, status: 'todo' | 'doing') => void;
   onPriority: (task: Task, priority: TaskPriority) => void;
   onCreate: (title: string, draft: ScheduleDraft, extras: ComposeExtras) => void;
+  intent?: boolean;
   onTaskMenu?: (task: Task, x: number, y: number) => void;
 }) {
   const boardMode = useTodosUi((s) => s.boardMode);
@@ -129,6 +131,7 @@ export function BoardView({
                     zone={timeZone}
                     weekStartsOn={weekStartsOn}
                     lockedStatus={status}
+                    intent={intent}
                   />
                 ) : null}
                 <div className="min-h-0 flex-1 overflow-y-auto">{byStatus[status].map(card)}</div>
@@ -162,6 +165,7 @@ export function BoardView({
                   zone={timeZone}
                   weekStartsOn={weekStartsOn}
                   lockedPriority={priority}
+                  intent={intent}
                 />
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   {byPriority[priority].map(card)}
