@@ -3,6 +3,15 @@ import { useEffect, useState } from 'react';
 import { t } from '@/copy';
 import { type ReaderSize } from './model';
 import { prepareReaderHtml, purifyInboxHtml, readerSourceHtml } from './purify';
+import { ReaderFileAsset } from './ReaderFileAsset';
+
+function isFileAsset(a: InboxAsset) {
+  return (
+    a.mime === 'application/pdf' ||
+    a.mime.startsWith('video/') ||
+    a.mime.startsWith('audio/')
+  );
+}
 
 function ReaderArticleBody({
   html,
@@ -59,13 +68,23 @@ export function ReaderArticle(props: {
   const assetKey = props.assets
     .map((asset) => `${asset.attachmentId}:${asset.originalSrc}`)
     .join('|');
+  const fileAssets = props.assets.filter(isFileAsset);
   return (
-    <ReaderArticleBody
-      key={`${props.html ?? ''}\n${props.text ?? ''}\n${assetKey}`}
-      html={props.html}
-      text={props.text}
-      assets={props.assets}
-      size={props.size}
-    />
+    <>
+      {fileAssets.length > 0 ? (
+        <div className="mb-6 flex flex-col gap-3">
+          {fileAssets.map((a) => (
+            <ReaderFileAsset key={a.id} asset={a} />
+          ))}
+        </div>
+      ) : null}
+      <ReaderArticleBody
+        key={`${props.html ?? ''}\n${props.text ?? ''}\n${assetKey}`}
+        html={props.html}
+        text={props.text}
+        assets={props.assets}
+        size={props.size}
+      />
+    </>
   );
 }
