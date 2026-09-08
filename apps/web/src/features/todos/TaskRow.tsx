@@ -1,4 +1,5 @@
 import type { Task, Tag } from '@vital/dto';
+import { Check } from 'lucide-react';
 import type { DragEvent, MouseEvent } from 'react';
 import { t } from '@/copy';
 import {
@@ -38,12 +39,14 @@ export function TaskCheckbox({
       role="checkbox"
       aria-checked={done}
       aria-label={t.todos.complete}
-      className={`mt-0.5 h-[1.125rem] w-[1.125rem] shrink-0 rounded-full border-[1.5px] ${ring}`}
+      className={`mt-0.5 flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] ${ring}`}
       onClick={(event) => {
         event.stopPropagation();
         onToggle();
       }}
-    />
+    >
+      {done ? <Check size={11} strokeWidth={3.2} className="text-on-accent" aria-hidden /> : null}
+    </button>
   );
 }
 
