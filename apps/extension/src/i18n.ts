@@ -5,7 +5,6 @@ export const copy = {
   menuLink: '保存链接到 Vital',
   menuSelection: '保存所选文字',
   menuImage: '保存图片到 Vital',
-  menuRecent: '最近保存',
   menuSaveTask: '保存为待办到 Vital',
   menuSaveEdit: '保存并编辑',
   toastSaving: '正在保存…',

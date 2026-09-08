@@ -159,6 +159,14 @@ export async function handlePanelMessage(message: PanelRequest): Promise<PanelRe
       await clearDraft();
       return { ok: true };
     }
+    case 'capture-active-tab': {
+      try {
+        const { captureActiveTabPayload } = await import('./capture.js');
+        return { ok: true, capture: await captureActiveTabPayload() };
+      } catch {
+        return { ok: true, capture: null };
+      }
+    }
     case 'commit-draft': {
       try {
         const { commitDraft } = await import('./capture.js');

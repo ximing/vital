@@ -8,16 +8,18 @@ import {
 import { ApiError } from '@vital/api-client';
 import { idempotencyKeyForUrl } from './canonical.js';
 import {
+  extensionLoginUrl,
   feedbackView,
+  inboxInputFromCapture,
   inboxListUrl,
   inboxReaderUrl,
+  selectionInputFromCapture,
   taskNotesFromCapture,
   type SaveFeedbackEvent,
   type SaveKind,
 } from './capture-helpers.js';
 import { getClient, requireAuth } from './client.js';
-import { PANEL_PATH, WEB_URL } from './config.js';
-import { saveDraft } from './draft-store.js';
+import { WEB_URL } from './config.js';
 import { clip, escapeParagraph, hostnameOf, isHttpUrl } from './html.js';
 import { copy } from './i18n.js';
 import {
@@ -28,8 +30,10 @@ import {
   rewriteExtractedImageSrcs,
   shouldConvertImage,
 } from './images.js';
+import type { CapturePayload, PopupMode } from './messages.js';
 import { convertInOffscreen, parseInOffscreen } from './offscreen.js';
 import { collectPagePayload, fetchImagesInPage, showInPageToast } from './page-scripts.js';
+import { titleForMode } from './popup-state.js';
 
 const MENU = {
   page: 'vital-save-page',
@@ -38,7 +42,6 @@ const MENU = {
   image: 'vital-save-image',
   task: 'vital-save-task',
   edit: 'vital-save-edit',
-  recent: 'vital-open-recent',
 } as const;
 
 export const COMMAND = {
@@ -76,17 +79,6 @@ export async function registerMenus(): Promise<void> {
     title: copy.menuSaveEdit,
     contexts: ['page', 'selection'],
   });
-  chrome.contextMenus.create({ id: MENU.recent, title: copy.menuRecent, contexts: ['action'] });
-}
-
-export async function openPanel(): Promise<void> {
-  await chrome.windows.create({
-    url: chrome.runtime.getURL(PANEL_PATH),
-    type: 'popup',
-    width: 380,
-    height: 560,
-    focused: true,
-  });
 }
 
 async function toast(
@@ -110,7 +102,7 @@ async function toast(
 
 let badgeClearTimer: ReturnType<typeof setTimeout> | undefined;
 
-async function setBadge(text: string): Promise<void> {
+export async function setBadge(text: string): Promise<void> {
   try {
     await chrome.action.setBadgeText({ text });
     if (text !== '') {
@@ -240,7 +232,7 @@ async function prepareUpload(image: FetchedImage): Promise<FetchedImage | null> 
 async function rehostImages(
   item: InboxItem,
   images: FetchedImage[],
-  onProgress?: (done: number, total: number) => Promise<void>,
+  onProgress?: (done: number, total: number) => Promise<void> | void,
 ): Promise<{ item: InboxItem; failed: number }> {
   if (images.length === 0) return { item, failed: 0 };
   if (item.assets.length > 0) return { item, failed: 0 };
@@ -452,7 +444,7 @@ async function saveTask(
   return outcome;
 }
 
-async function saveAndEdit(tab: chrome.tabs.Tab, selectionOnly: boolean): Promise<void> {
+export async function extractCapture(tab: chrome.tabs.Tab): Promise<CapturePayload> {
   const tabId = tab.id;
   if (tabId === undefined) throw new Error(copy.toastFailed);
   const page = await collectFromTab(tabId);
@@ -460,48 +452,102 @@ async function saveAndEdit(tab: chrome.tabs.Tab, selectionOnly: boolean): Promis
   if (originalUrl === undefined || !isHttpUrl(originalUrl)) {
     throw new Error(copy.toastRestricted);
   }
-  const selection = page.selection.trim();
-  if (selectionOnly && selection === '') throw new Error(copy.toastFailed);
-
-  let title =
-    clip(selectionOnly ? selection : page.title, 500) ?? hostnameOf(originalUrl) ?? originalUrl;
-  let extractedHtml: string | null = selectionOnly ? escapeParagraph(selection) : null;
-  let extractedText: string | null = selectionOnly ? clip(selection, 2 * 1024 * 1024) : null;
-  let excerpt: string | null = selectionOnly ? clip(selection, 500) : null;
-  let byline: string | null = null;
-  let siteName: string | null = null;
-  let imageSrcs: string[] = [];
-
-  if (!selectionOnly) {
-    try {
-      const parsed = await parseInOffscreen(page.outerHTML, originalUrl);
-      title = parsed.title;
-      extractedHtml = parsed.extractedHtml;
-      extractedText = parsed.extractedText;
-      excerpt = parsed.excerpt;
-      byline = parsed.byline;
-      siteName = parsed.siteName;
-      imageSrcs = parsed.imageSrcs;
-    } catch {
-      extractedText = clip(page.title, 500);
-    }
-  }
-
-  await saveDraft({
-    title,
-    note: excerpt ?? '',
+  const payload: CapturePayload = {
+    title: clip(page.title, 500) ?? hostnameOf(originalUrl) ?? originalUrl,
     originalUrl,
-    extractedText,
-    extractedHtml,
-    excerpt,
-    byline,
-    siteName,
-    imageSrcs,
-    selection,
+    extractedText: null,
+    extractedHtml: null,
+    excerpt: null,
+    byline: null,
+    siteName: null,
+    imageSrcs: [],
+    selection: page.selection.trim(),
     tabId,
-    mode: 'inbox',
-  });
-  await openPanel();
+  };
+  try {
+    const parsed = await parseInOffscreen(page.outerHTML, originalUrl);
+    return {
+      ...payload,
+      title: parsed.title,
+      extractedText: parsed.extractedText,
+      extractedHtml: parsed.extractedHtml,
+      excerpt: parsed.excerpt,
+      byline: parsed.byline,
+      siteName: parsed.siteName,
+      imageSrcs: parsed.imageSrcs,
+    };
+  } catch {
+    return payload;
+  }
+}
+
+export async function captureActiveTabPayload(): Promise<CapturePayload> {
+  const tab = await activeTab();
+  if (tab === undefined) throw new Error(copy.toastFailed);
+  return extractCapture(tab);
+}
+
+export interface CommitResult {
+  outcome: CaptureOutcome;
+  failed: number;
+}
+
+export async function commitCapture(input: {
+  capture: CapturePayload;
+  title: string;
+  note: string;
+  mode: PopupMode;
+  listId?: string;
+  onCreated?: (outcome: CaptureOutcome) => Promise<void> | void;
+  onProgress?: (done: number, total: number) => Promise<void> | void;
+}): Promise<CommitResult> {
+  const { capture } = input;
+  const title = input.title.trim() === '' ? titleForMode(capture, input.mode) : input.title.trim();
+  if (input.mode === 'task') {
+    const task = await getClient().createTask({
+      title,
+      listId: input.listId ?? (await inboxListId()),
+      notes: taskNotesFromCapture(capture.originalUrl, input.note || capture.selection),
+      timeBucket: 'anytime',
+    });
+    const outcome: CaptureOutcome = { kind: 'task', id: task.id };
+    await input.onCreated?.(outcome);
+    return { outcome, failed: 0 };
+  }
+  const base =
+    input.mode === 'selection'
+      ? selectionInputFromCapture(capture, title)
+      : inboxInputFromCapture(capture, title, input.note);
+  const result = await createExtensionItem(base);
+  const outcome: CaptureOutcome = {
+    kind: result.created ? 'created' : 'existing',
+    id: result.item.id,
+  };
+  await input.onCreated?.(outcome);
+  if (result.created && input.mode === 'article') {
+    const images = await gatherImages(capture.tabId ?? undefined, capture.imageSrcs);
+    const { failed } = await rehostImages(result.item, images, input.onProgress);
+    return { outcome, failed };
+  }
+  return { outcome, failed: 0 };
+}
+
+export async function openCapturePopup(): Promise<void> {
+  try {
+    await chrome.action.openPopup();
+  } catch {
+    // Popup already open, or the API is policy-disabled: fall back to the web inbox.
+    await chrome.tabs.create({ url: inboxListUrl(WEB_URL) });
+  }
+}
+
+async function promptLogin(tab: chrome.tabs.Tab | undefined): Promise<void> {
+  await announce(tab, { type: 'fail', message: copy.toastLogin });
+  try {
+    await chrome.action.openPopup();
+  } catch {
+    await chrome.tabs.create({ url: extensionLoginUrl(WEB_URL, chrome.runtime.id) });
+  }
 }
 
 export async function commitDraft(input: {
@@ -556,8 +602,7 @@ async function withAuth(
 ): Promise<void> {
   const loggedIn = await requireAuth();
   if (!loggedIn) {
-    await announce(tab, { type: 'fail', message: copy.toastLogin });
-    await openPanel();
+    await promptLogin(tab);
     return;
   }
   const report: Announce = (event, action) => announce(tab, event, action);
@@ -588,13 +633,8 @@ export async function handleCommand(command: string): Promise<void> {
     return;
   }
   if (command === COMMAND.saveEdit) {
-    await withAuth(
-      tab,
-      async () => {
-        await saveAndEdit(tab, false);
-      },
-      { saving: false },
-    );
+    await openCapturePopup();
+    return;
   }
 }
 
@@ -602,19 +642,8 @@ export async function handleContextMenu(
   info: chrome.contextMenus.OnClickData,
   tab?: chrome.tabs.Tab,
 ): Promise<void> {
-  if (info.menuItemId === MENU.recent) {
-    await openPanel();
-    return;
-  }
   if (info.menuItemId === MENU.edit) {
-    await withAuth(
-      tab,
-      async () => {
-        if (tab === undefined) throw new Error(copy.toastFailed);
-        await saveAndEdit(tab, info.selectionText !== undefined && info.selectionText !== '');
-      },
-      { saving: false },
-    );
+    await openCapturePopup();
     return;
   }
   await withAuth(tab, async (report) => {
