@@ -310,7 +310,13 @@ async function rehostDirectFile(
     if (!res.ok || res.body === null) return { attachmentId: null, failed: 1 };
     const source = createStreamPartSource(res.body);
     const uploaded = await getClient().upload({
-      partSource: (start, end) => source.partSource(start, end),
+      partSource: async (start, end) => {
+        const part = await source.partSource(start, end);
+        // Integrity gate on the final part: the body must end exactly at the
+        // declared size, so a mutated/over-long file fails before complete.
+        if (end >= file.size) await source.finish();
+        return part;
+      },
       mime: file.mime,
       size: file.size,
       resumeId: prior?.attachmentId,
@@ -462,11 +468,9 @@ async function probeDirectFile(url: string): Promise<DirectFile | null> {
     const res = await fetch(url, { method: 'HEAD', credentials: 'omit' });
     if (!res.ok) return null;
     const len = res.headers.get('content-length');
-    return fileModeFromResponse(
-      url,
-      res.headers.get('content-type') ?? '',
-      len === null ? null : Number(len),
-    );
+    // Number("...") can be NaN; fileModeFromResponse rejects non-finite sizes.
+    const n = len === null ? null : Number(len);
+    return fileModeFromResponse(url, res.headers.get('content-type') ?? '', n);
   } catch {
     return null; // CORS or network → article mode
   }

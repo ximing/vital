@@ -1,4 +1,4 @@
-import { MAX_UPLOAD_BYTES } from '@vital/dto';
+import { MAX_UPLOAD_BYTES, isUploadableMime } from '@vital/dto';
 
 const EXT_TO_KIND: Record<string, 'pdf' | 'video' | 'audio'> = {
   pdf: 'pdf',
@@ -23,17 +23,22 @@ export interface DirectFile {
   size: number;
 }
 
-const FILE_MIME = /^(application\/pdf|video\/|audio\/)/;
-
-/** Direct-file gate: whitelisted kind + known length + within cap. */
+/** Direct-file gate: uploadable mime (never an image), known length, within cap. */
 export function fileModeFromResponse(
   url: string,
   contentType: string,
   contentLength: number | null,
 ): DirectFile | null {
   const mime = contentType.split(';')[0]?.trim() ?? '';
-  if (!FILE_MIME.test(mime)) return null;
-  if (contentLength === null || contentLength <= 0 || contentLength > MAX_UPLOAD_BYTES) {
+  // Images stay in article mode; the upload whitelist is stricter than any
+  // video/* or audio/* prefix match, so reuse it instead of a regex.
+  if (mime.startsWith('image/') || !isUploadableMime(mime)) return null;
+  if (
+    contentLength === null ||
+    !Number.isFinite(contentLength) ||
+    contentLength <= 0 ||
+    contentLength > MAX_UPLOAD_BYTES
+  ) {
     return null;
   }
   return { url, mime, size: contentLength };

@@ -32,4 +32,29 @@ describe('createStreamPartSource', () => {
     const src = createStreamPartSourceFromBlob(blob);
     await expect(src.partSource(4, 8)).rejects.toThrow(/short/i);
   });
+
+  it('finish() passes when the stream ends exactly at the declared size', async () => {
+    const blob = new Blob(['aaaabbbb']);
+    const src = createStreamPartSourceFromBlob(blob);
+    await src.partSource(0, 8);
+    await expect(src.finish()).resolves.toBeUndefined();
+  });
+
+  it('finish() throws when the body is longer than the declared size', async () => {
+    const blob = new Blob(['aaaabbbbEXTRA']);
+    const src = createStreamPartSourceFromBlob(blob);
+    expect(await (await src.partSource(0, 8)).text()).toBe('aaaabbbb');
+    // The rehost wrapper calls finish() after the final partSource, so a
+    // longer-than-declared body fails the upload before complete.
+    await expect(src.finish()).rejects.toThrow(/extra|longer/i);
+  });
+
+  it('resume skip does not buffer the discarded span (bounded memory)', async () => {
+    // A large skip must discard chunk-by-chunk, not accumulate into one buffer.
+    const data = new Uint8Array(1024 * 1024).fill(0x61);
+    const blob = new Blob([data, new Uint8Array([0x62, 0x62, 0x62, 0x62])]);
+    const src = createStreamPartSource(blob.stream());
+    expect((await src.partSource(1024 * 1024, 1024 * 1024 + 4)).size).toBe(4);
+    await expect(src.finish()).resolves.toBeUndefined();
+  });
 });

@@ -1,5 +1,7 @@
 export interface StreamPartSource {
   partSource: (start: number, end: number) => Promise<Blob>;
+  /** Fails unless the stream ended exactly at the bytes consumed so far. */
+  finish: () => Promise<void>;
 }
 
 /**
@@ -29,9 +31,25 @@ export function createStreamPartSource(
   }
 
   async function discard(n: number): Promise<void> {
-    await ensure(n);
-    buffer = buffer.slice(n);
-    consumed += n;
+    // Read-and-drop in bounded chunks so a multi-GB resume skip never
+    // buffers more than one chunk in the service worker.
+    while (n > 0) {
+      if (buffer.length > 0) {
+        const take = Math.min(buffer.length, n);
+        buffer = buffer.slice(take);
+        consumed += take;
+        n -= take;
+        continue;
+      }
+      const { done, value } = await reader.read();
+      if (done || value === undefined) {
+        throw new Error(`UPLOAD_STREAM_SHORT: stream ended at ${consumed}, expected ${consumed + n} more`);
+      }
+      const take = Math.min(value.length, n);
+      buffer = value.slice(take); // keep only the overflow
+      consumed += take;
+      n -= take;
+    }
   }
 
   return {
@@ -48,6 +66,21 @@ export function createStreamPartSource(
       buffer = data.slice(need);
       consumed += need;
       return new Blob([part]);
+    },
+    /** Integrity gate: the stream must end exactly at the declared size. Call
+     * after the last part is read so a truncated or over-long body fails the
+     * upload instead of completing with corrupted bytes. */
+    async finish(): Promise<void> {
+      if (buffer.length > 0) {
+        throw new Error(`UPLOAD_STREAM_EXTRA: ${buffer.length} unread bytes past the declared size`);
+      }
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done || value === undefined) return;
+        if (value.length > 0) {
+          throw new Error('UPLOAD_STREAM_EXTRA: stream longer than the declared size');
+        }
+      }
     },
   };
 }

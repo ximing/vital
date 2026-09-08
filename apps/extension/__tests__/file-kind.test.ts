@@ -29,4 +29,15 @@ describe('fileModeFromResponse', () => {
     expect(fileModeFromResponse('https://ex.com/a.pdf', 'application/pdf', null)).toBeNull();
     expect(fileModeFromResponse('https://ex.com/a.mp4', 'video/mp4', 5 * 1024 ** 3 + 1)).toBeNull();
   });
+
+  it('rejects mimes outside the upload whitelist (stricter than the video/audio prefix)', () => {
+    expect(fileModeFromResponse('https://ex.com/a.avi', 'video/avi', 100)).toBeNull();
+    expect(fileModeFromResponse('https://ex.com/a.wav', 'audio/x-wav', 100)).toBeNull();
+    expect(fileModeFromResponse('https://ex.com/a.pdf', 'application/x-pdf', 100)).toBeNull();
+  });
+
+  it('rejects non-finite content lengths (NaN from malformed headers)', () => {
+    expect(fileModeFromResponse('https://ex.com/a.pdf', 'application/pdf', Number.NaN)).toBeNull();
+    expect(fileModeFromResponse('https://ex.com/a.pdf', 'application/pdf', 0)).toBeNull();
+  });
 });
