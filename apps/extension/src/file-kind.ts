@@ -23,16 +23,23 @@ export interface DirectFile {
   size: number;
 }
 
-/** Direct-file gate: uploadable mime (never an image), known length, within cap. */
+/** Direct-file gate: pdf/video/audio mime only, known length, within cap. */
 export function fileModeFromResponse(
   url: string,
   contentType: string,
   contentLength: number | null,
 ): DirectFile | null {
   const mime = contentType.split(';')[0]?.trim() ?? '';
-  // Images stay in article mode; the upload whitelist is stricter than any
+  // Images and text stay in article mode (a text/plain body would render an
+  // invisible file in the Reader); the upload whitelist is stricter than any
   // video/* or audio/* prefix match, so reuse it instead of a regex.
-  if (mime.startsWith('image/') || !isUploadableMime(mime)) return null;
+  if (
+    mime.startsWith('image/') ||
+    mime.startsWith('text/') ||
+    !isUploadableMime(mime)
+  ) {
+    return null;
+  }
   if (
     contentLength === null ||
     !Number.isFinite(contentLength) ||

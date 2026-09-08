@@ -1,4 +1,6 @@
-import type { NodeView, NodeViewRendererProps } from '@tiptap/core';
+import type { NodeViewRendererProps } from '@tiptap/core';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
+import type { NodeView } from '@tiptap/pm/view';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
@@ -75,7 +77,7 @@ const UploadedImage = Image.extend({
       imageNodeUrlState.listeners.add(onUrls);
       return {
         dom: img,
-        update: (updated) => {
+        update: (updated: ProseMirrorNode) => {
           if (updated.type !== current.type) return false;
           current = updated;
           sync();

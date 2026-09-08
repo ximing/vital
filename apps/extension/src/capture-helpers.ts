@@ -31,7 +31,8 @@ export function saveToast(kind: SaveKind): { text: string; actionLabel: string }
 }
 
 export function uploadProgressToast(done: number, total: number): string {
-  return `上传图片 ${done}/${total}`;
+  // Generic "转存": used for both image rehosting and direct-file streaming.
+  return `转存 ${done}/${total}`;
 }
 
 export function savedAfterImagesToast(failed: number): string {

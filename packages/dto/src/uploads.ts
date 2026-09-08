@@ -113,11 +113,6 @@ export interface PartPresignResponse {
   expiresIn: number;
 }
 
-export interface CompletePartInput {
-  partNumber: number;
-  etag: string;
-}
-
 export const uploadCompletePartsInputSchema = z.object({
   parts: z
     .array(

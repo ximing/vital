@@ -35,6 +35,7 @@ describe('prepareReaderHtml', () => {
           id: 'as1',
           attachmentId: '11111111-1111-4111-8111-111111111111',
           url: 'https://s3.test/signed-image',
+          mime: 'image/jpeg',
           originalSrc: 'https://x.test/a.png',
           sortOrder: 0,
         },

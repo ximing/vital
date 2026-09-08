@@ -353,19 +353,17 @@ async function saveDirectFile(file: DirectFile, report: Announce): Promise<Captu
     const done = Math.min(totalParts, Math.ceil(loaded / partSizeFor(file.size)));
     return report({ type: 'upload', done, total: totalParts });
   });
+  let failed = rehosted.attachmentId !== null ? 0 : 1;
   if (rehosted.attachmentId !== null) {
     try {
       await getClient().patchInboxAssets(result.item.id, {
         assets: [{ attachmentId: rehosted.attachmentId, originalSrc: file.url, sortOrder: 0 }],
       });
     } catch {
-      // Item already saved; the asset patch is best-effort.
+      failed = 1; // item is saved; only the asset attach failed
     }
   }
-  await report(
-    { type: 'imagesDone', failed: rehosted.attachmentId !== null ? 0 : 1 },
-    outcomeAction(outcome),
-  );
+  await report({ type: 'imagesDone', failed }, outcomeAction(outcome));
   return outcome;
 }
 

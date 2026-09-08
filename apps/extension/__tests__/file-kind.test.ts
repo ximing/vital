@@ -30,6 +30,11 @@ describe('fileModeFromResponse', () => {
     expect(fileModeFromResponse('https://ex.com/a.mp4', 'video/mp4', 5 * 1024 ** 3 + 1)).toBeNull();
   });
 
+  it('rejects text mimes (.mp4 URL serving text/plain stays article-mode)', () => {
+    expect(fileModeFromResponse('https://ex.com/a.mp4', 'text/plain', 100)).toBeNull();
+    expect(fileModeFromResponse('https://ex.com/a.md', 'text/markdown', 100)).toBeNull();
+  });
+
   it('rejects mimes outside the upload whitelist (stricter than the video/audio prefix)', () => {
     expect(fileModeFromResponse('https://ex.com/a.avi', 'video/avi', 100)).toBeNull();
     expect(fileModeFromResponse('https://ex.com/a.wav', 'audio/x-wav', 100)).toBeNull();

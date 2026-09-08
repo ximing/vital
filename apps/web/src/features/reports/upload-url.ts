@@ -28,7 +28,8 @@ function freshEntry(id: string): CacheEntry | undefined {
 export function uploadIdsOf(bodyMd: string): string[] {
   const ids = new Set<string>();
   for (const match of bodyMd.matchAll(UPLOAD_ID_RE)) {
-    ids.add(match[1].toLowerCase());
+    const id = match[1]?.toLowerCase();
+    if (id !== undefined) ids.add(id);
   }
   return [...ids];
 }
@@ -36,7 +37,7 @@ export function uploadIdsOf(bodyMd: string): string[] {
 /** The upload id of a single src/href ref, or null when it is not one. */
 export function uploadIdOf(ref: string): string | null {
   const match = SINGLE_REF_RE.exec(ref.trim());
-  return match ? match[1].toLowerCase() : null;
+  return match?.[1]?.toLowerCase() ?? null;
 }
 
 /** Resolve one id to a signed url, caching the result for later renders. */

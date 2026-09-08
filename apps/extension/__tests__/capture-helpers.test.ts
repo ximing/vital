@@ -55,7 +55,7 @@ describe('saveToast', () => {
 describe('save progress copy', () => {
   it('covers saving, upload n/N, done, and image failures', () => {
     expect(feedbackView({ type: 'saving' })).toEqual({ text: '正在保存…', badge: '…' });
-    expect(uploadProgressToast(3, 12)).toBe('上传图片 3/12');
+    expect(uploadProgressToast(3, 12)).toBe('转存 3/12');
     expect(savedAfterImagesToast(0)).toBe('已保存');
     expect(savedAfterImagesToast(2)).toBe('已保存，2 张图失败');
   });
@@ -66,7 +66,7 @@ describe('save progress copy', () => {
     expect(badgeText('progress', { done: 3, total: 12 })).toBe('3/12');
     expect(badgeText('progress', { done: 12, total: 12 }).length).toBeLessThanOrEqual(4);
     expect(feedbackView({ type: 'upload', done: 3, total: 12 })).toEqual({
-      text: '上传图片 3/12',
+      text: '转存 3/12',
       badge: '3/12',
     });
     expect(feedbackView({ type: 'imagesDone', failed: 0 })).toEqual({
