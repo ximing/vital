@@ -135,7 +135,7 @@ describe('fixed recurrence kinds', () => {
     const next = await nextFixedOccurrenceAfter(
       { dueAt, timezone: 'Asia/Shanghai', isAllDay: false, recurrenceKind: 'legal_workdays' },
       dueAt,
-      async (date) => (date === '2026-02-21' ? 'workday' : null),
+      (date) => Promise.resolve(date === '2026-02-21' ? ('workday' as const) : null),
     );
     expect(DateTime.fromJSDate(next as Date, { zone: 'Asia/Shanghai' }).toISO()).toContain('2026-02-21T09:00:00');
   });

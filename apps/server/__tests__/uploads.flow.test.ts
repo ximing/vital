@@ -313,8 +313,11 @@ describe('uploads (multipart)', () => {
 
   it('complete rejects duplicate or out-of-range part numbers with 422 MEDIA_PART_INVALID', async () => {
     const alice = await register('alice');
-    const { id, totalParts } = (await initUploadFor(alice)).json();
-    const full = Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` }));
+    const { id, totalParts } = (await initUploadFor(alice)).json() as {
+      id: string;
+      totalParts: number;
+    };
+    const full = Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${String(i + 1)}"` }));
 
     const dup = await injectJson(app, {
       method: 'POST',

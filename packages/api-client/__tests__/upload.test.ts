@@ -27,7 +27,7 @@ describe('upload (multipart)', () => {
         s3PutCount += 1;
         expect(init?.method).toBe('PUT');
         expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/pdf');
-        return Promise.resolve(s3Put(`"e${s3PutCount}"`));
+        return Promise.resolve(s3Put(`"e${String(s3PutCount)}"`));
       }
       apiCalls.push(`${init?.method ?? 'GET'} ${u}`);
       if (u === '/api/v1/uploads') {
@@ -184,9 +184,9 @@ describe('upload (multipart)', () => {
     });
     await client.upload({
       mime: 'application/pdf', size: blob.size,
-      partSource: async (start, end) => {
+      partSource: (start, end) => {
         requested.push([start, end]);
-        return blob.slice(start, end);
+        return Promise.resolve(blob.slice(start, end));
       },
     });
     expect(requested).toEqual([[0, PART], [PART, PART + 100]]);

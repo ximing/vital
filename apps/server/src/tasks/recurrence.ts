@@ -390,7 +390,7 @@ async function fixedCursorMatches(
   if (task.recurrenceKind === 'holidays' || task.recurrenceKind === 'legal_workdays') {
     return matchesChinaRule(cursor.toISODate() ?? '', task.recurrenceKind, lookup);
   }
-  return matchesFixedKind(cursor, origin, task.recurrenceKind, async () => null);
+  return matchesFixedKind(cursor, origin, task.recurrenceKind, () => Promise.resolve(null));
 }
 
 export async function nextFixedOccurrenceAfter(

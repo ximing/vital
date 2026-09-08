@@ -82,12 +82,17 @@ export async function uploadImpl(
     const start = (n - 1) * init.partSize;
     const end = Math.min(n * init.partSize, input.size);
     const presigned = await http.request<PartPresignResponse>(
-      `/api/v1/uploads/${init.id}/parts/${n}`,
+      `/api/v1/uploads/${init.id}/parts/${String(n)}`,
       { method: 'POST', body: {} },
     );
-    const body = input.partSource !== undefined
-      ? await input.partSource(start, end)
-      : input.file!.slice(start, end);
+    let body: Blob;
+    if (input.partSource !== undefined) {
+      body = await input.partSource(start, end);
+    } else if (input.file !== undefined) {
+      body = input.file.slice(start, end);
+    } else {
+      throw new ApiError(0, 'UPLOAD_INPUT_INVALID', 'file 与 partSource 必须提供其一');
+    }
     const res = await (options.fetchImpl ?? fetch)(presigned.url, {
       method: 'PUT',
       headers: { 'Content-Type': input.mime },
@@ -111,7 +116,7 @@ export async function uploadImpl(
   for (let n = 1; n <= init.totalParts; n += 1) {
     const etag = etags.get(n);
     if (etag === undefined) {
-      throw new ApiError(0, 'UPLOAD_ETAG_MISSING', `分片 ${n} 缺少 ETag`);
+      throw new ApiError(0, 'UPLOAD_ETAG_MISSING', `分片 ${String(n)} 缺少 ETag`);
     }
     parts.push({ partNumber: n, etag });
   }
