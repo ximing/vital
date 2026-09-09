@@ -11,8 +11,18 @@ export function AccountMenu({ collapsed, railWidth }: { collapsed: boolean; rail
   const user = useAuth((s) => s.user);
   const logout = useAuth((s) => s.logout);
   const [open, setOpen] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const initials = initialsOf(user?.displayName ?? '');
+  const avatarUrl = user?.avatarUrl;
+
+  // Reset the broken-image fallback when the avatar URL changes (render-time
+  // adjustment instead of an effect, per react-hooks/set-state-in-effect).
+  const [prevAvatarUrl, setPrevAvatarUrl] = useState(avatarUrl);
+  if (prevAvatarUrl !== avatarUrl) {
+    setPrevAvatarUrl(avatarUrl);
+    setAvatarFailed(false);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -43,10 +53,19 @@ export function AccountMenu({ collapsed, railWidth }: { collapsed: boolean; rail
         }`}
       >
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-subtle text-[length:var(--text-caption)] font-semibold leading-none"
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-subtle text-[length:var(--text-caption)] font-semibold leading-none"
           aria-hidden
         >
-          {initials}
+          {avatarUrl && !avatarFailed ? (
+            <img
+              src={avatarUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={() => setAvatarFailed(true)}
+            />
+          ) : (
+            initials
+          )}
         </span>
         {collapsed ? null : (
           <span className="min-w-0 flex-1 truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">

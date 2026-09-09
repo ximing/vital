@@ -71,7 +71,7 @@ export function Shell() {
 
         <div
           data-region="rail-account"
-          className="mt-auto flex shrink-0 flex-col border-t border-border pb-2 pt-1"
+          className="mt-auto flex shrink-0 flex-col gap-1 border-t border-border pb-2 pt-1"
         >
           <ThemeSwitch variant="rail" />
           <NavLink
