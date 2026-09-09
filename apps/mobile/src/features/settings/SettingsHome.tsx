@@ -6,7 +6,6 @@ import {
   DEFAULT_NOTIFICATION_PREFS,
   IMAGE_MIME_TYPES,
   llmReady,
-  parseLlmParameters,
   type NotificationChannel,
 } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
@@ -57,24 +56,16 @@ export function SettingsHome() {
   const [channels, setChannels] = useState<NotificationChannel[]>([]);
   const [nickname, setNickname] = useState('');
   const [enabled, setEnabled] = useState(true);
-  const [llmApiBase, setLlmApiBase] = useState(auth.user?.llm.apiBase ?? '');
-  const [llmModel, setLlmModel] = useState(auth.user?.llm.model ?? '');
-  const [llmApiKey, setLlmApiKey] = useState('');
-  const [llmParameters, setLlmParameters] = useState(
-    JSON.stringify(auth.user?.llm.parameters ?? {}, null, 2),
+  const customProvider = auth.user?.llm.providers.find((p) => p.providerId === 'custom');
+  const [llmApiBase, setLlmApiBase] = useState(customProvider?.baseUrl ?? '');
+  const [llmModel, setLlmModel] = useState(
+    auth.user?.llm.routing.default?.model ?? customProvider?.models[0] ?? '',
   );
-  let llmParametersDirty = true;
-  try {
-    llmParametersDirty =
-      JSON.stringify(parseLlmParameters(llmParameters)) !==
-      JSON.stringify(auth.user?.llm.parameters ?? {});
-  } catch {
-    /* Invalid JSON cannot be tested. */
-  }
+  const [llmApiKey, setLlmApiKey] = useState('');
   const llmDirty =
-    llmParametersDirty ||
-    llmApiBase.trim() !== (auth.user?.llm.apiBase ?? '') ||
-    llmModel.trim() !== (auth.user?.llm.model ?? '') ||
+    llmApiBase.trim() !== (customProvider?.baseUrl ?? '') ||
+    llmModel.trim() !==
+      (auth.user?.llm.routing.default?.model ?? customProvider?.models[0] ?? '') ||
     llmApiKey.trim() !== '';
 
   const prefs = auth.user?.notifications ?? DEFAULT_NOTIFICATION_PREFS;
@@ -186,17 +177,28 @@ export function SettingsHome() {
     try {
       const nextBase = llmApiBase.trim();
       const nextModel = llmModel.trim();
-      const user = await client.updateMe({
-        llm: {
-          apiBase: nextBase === '' ? null : nextBase,
-          model: nextModel === '' ? null : nextModel,
-          parameters: parseLlmParameters(llmParameters),
-          ...(llmApiKey.trim() === '' ? {} : { apiKey: llmApiKey.trim() }),
-        },
-      });
-      auth.refreshUser(user);
+      const existing = auth.user?.llm.providers.find((p) => p.providerId === 'custom');
+      let settings = existing
+        ? await client.patchLlmProvider(existing.id, {
+            baseUrl: nextBase,
+            models: [nextModel],
+            ...(llmApiKey.trim() === '' ? {} : { apiKey: llmApiKey.trim() }),
+          })
+        : await client.addLlmProvider({
+            providerId: 'custom',
+            label: '自定义端点',
+            baseUrl: nextBase,
+            apiKey: llmApiKey.trim(),
+            models: [nextModel],
+          });
+      const provider = settings.providers.find((p) => p.providerId === 'custom');
+      if (provider) {
+        settings = await client.putLlmRouting({
+          routing: { ...settings.routing, default: { providerId: provider.id, model: nextModel } },
+        });
+      }
+      if (auth.user) auth.refreshUser({ ...auth.user, llm: settings });
       setLlmApiKey('');
-      setLlmParameters(JSON.stringify(user.llm.parameters ?? {}, null, 2));
       toast(copy.toast.saved);
     } catch (err) {
       toast(humanError(err));
@@ -426,46 +428,34 @@ export function SettingsHome() {
               autoCorrect={false}
               secureTextEntry
               placeholder={
-                auth.user?.llm.apiKeySet ? copy.settings.llm.apiKeySet : copy.settings.llm.apiKey
+                customProvider?.apiKeySet ? copy.settings.llm.apiKeySet : copy.settings.llm.apiKey
               }
             />
-            <Field
-              label={copy.settings.llm.parameters}
-              value={llmParameters}
-              onChangeText={setLlmParameters}
-              multiline
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={
-                '{\n  "thinking": { "type": "enabled" },\n  "reasoning_effort": "low",\n  "max_tokens": 4096\n}'
-              }
-            />
-            <Text style={styles.hint}>{copy.settings.llm.parametersHint}</Text>
             {llmDirty ? <Text style={styles.hint}>{copy.settings.llm.saveBeforeTest}</Text> : null}
             <Button loading={busy} onPress={() => void saveLlm()}>
               {copy.settings.llm.save}
             </Button>
             <Button
               variant="secondary"
-              disabled={!llmReady(auth.user?.llm) || llmDirty || busy}
+              disabled={!customProvider || !llmReady(auth.user?.llm) || llmDirty || busy}
               onPress={() =>
                 void client
-                  .testLlm()
+                  .testLlmProvider(customProvider!.id, llmModel.trim())
                   .then(() => toast(copy.settings.llm.testOk))
                   .catch((err) => toast(humanError(err)))
               }
             >
               {copy.settings.llm.test}
             </Button>
-            {auth.user?.llm.apiKeySet ? (
+            {customProvider?.apiKeySet ? (
               <Button
                 variant="quiet"
                 disabled={busy}
                 onPress={() =>
                   void client
-                    .updateMe({ llm: { apiKey: null } })
-                    .then((user) => {
-                      auth.refreshUser(user);
+                    .removeLlmProvider(customProvider.id)
+                    .then((settings) => {
+                      if (auth.user) auth.refreshUser({ ...auth.user, llm: settings });
                       setLlmApiKey('');
                       toast(copy.toast.saved);
                     })

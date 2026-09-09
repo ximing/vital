@@ -210,17 +210,23 @@ export function ReportsWorkspace() {
           reportUi().setEmbeds(remote.embeds);
           return;
         }
-        if (action.fetchEmbeds) {
+        if (action.fetchEmbeds || action.toastRemote) {
           const res = await client.getReportEmbeds(reportId);
           if (cancelled || fillingRef.current) return;
           reportUi().mergeEmbeds(res.embeds);
-        }
-        if (action.toastRemote && !fillingRef.current) {
-          const live = sessionRef.current;
-          if (live) {
-            const next = { ...live, remoteToast: true };
-            sessionRef.current = next;
-            setSession(next);
+          if (action.toastRemote) {
+            // The global report watermark also moves for our own saves and
+            // other reports. Compare this document's revision only after any
+            // pending save has acknowledged its new revision.
+            const pendingSave = saveInFlightRef.current;
+            if (pendingSave) await pendingSave.catch(() => undefined);
+            if (cancelled || fillingRef.current) return;
+            const live = sessionRef.current;
+            if (live && live.id === reportId && res.revision > live.revision) {
+              const next = { ...live, remoteToast: true };
+              sessionRef.current = next;
+              setSession(next);
+            }
           }
         }
       } catch {

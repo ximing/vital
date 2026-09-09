@@ -1,6 +1,6 @@
 import { parseReportType, type ReportType } from '@/features/reports/model';
 
-export type AppSection = 'todos' | 'capture' | 'reflect' | 'search' | 'settings';
+export type AppSection = 'today' | 'todos' | 'capture' | 'reflect' | 'search' | 'settings';
 
 export const RHYTHM_LIST_IDS = [
   'smart:today',
@@ -16,12 +16,13 @@ export function listIdFrom(pathname: string, search: string): string | null {
 }
 
 export function sectionOf(pathname: string, _search: string): AppSection {
+  if (pathname.startsWith('/today')) return 'today';
   if (pathname.startsWith('/inbox')) return 'capture';
   if (pathname.startsWith('/reports')) return 'reflect';
   if (pathname.startsWith('/search')) return 'search';
   if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/todos')) return 'todos';
-  return 'todos';
+  return 'today';
 }
 
 export function showsPane(section: AppSection): boolean {

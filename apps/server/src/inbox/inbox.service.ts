@@ -26,6 +26,7 @@ import {
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { getInboxList } from '../lists/lists.service.js';
+import { assertOwnedOutcomeId } from '../outcomes/shared.js';
 import { assertOwnedTagIds } from '../tags/tags.service.js';
 import { createTask, getTask } from '../tasks/tasks.service.js';
 import { bindUpload } from '../uploads/uploads.service.js';
@@ -85,6 +86,7 @@ export function toInboxDto(
   return {
     id: row.id,
     title: row.title,
+    outcomeId: row.outcomeId,
     originalUrl: row.originalUrl,
     canonicalUrl: row.canonicalUrl,
     extractedText: row.extractedText,
@@ -354,10 +356,12 @@ export async function patchInbox(
 ): Promise<InboxItem> {
   const row = await getOwnedInboxOr404(userId, id);
   if (input.tagIds !== undefined) await assertOwnedTagIds(userId, input.tagIds);
+  if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
   const now = new Date();
   const patch: Partial<InboxItemRow> = { updatedAt: now };
   if (input.title !== undefined) patch.title = input.title;
   if (input.status !== undefined) patch.status = input.status;
+  if (input.outcomeId !== undefined) patch.outcomeId = input.outcomeId;
   if (input.extractedText !== undefined) patch.extractedText = input.extractedText;
   if (input.extractedHtml !== undefined) {
     patch.extractedHtml =

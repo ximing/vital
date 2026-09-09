@@ -50,6 +50,11 @@ export const envSchema = z.object({
   WORKER_POLL_MS: z.coerce.number().int().min(1_000).default(15_000),
   WORKER_CLAIM_LIMIT: z.coerce.number().int().min(1).max(100).default(20),
   WORKER_HEAL_INTERVAL_MS: z.coerce.number().int().min(10_000).default(300_000),
+  AGENT_ENABLED: boolEnum.default('true'),
+  AGENT_CRITIC_ENABLED: boolEnum.default('false'),
+  AGENT_SCHEDULER_INTERVAL_MS: z.coerce.number().int().min(10_000).default(300_000),
+  AGENT_UNDO_WINDOW_HOURS: z.coerce.number().int().min(1).default(24),
+  AGENT_CLUSTER_MIN_UNASSIGNED: z.coerce.number().int().min(1).default(4),
 });
 
 export const config = envSchema.parse(process.env);

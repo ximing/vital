@@ -6,12 +6,14 @@ import {
   check,
   customType,
   index,
+  integer,
   type AnyPgColumn,
   pgTable,
   smallint,
   text,
   timestamp,
   unique,
+  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
@@ -36,6 +38,17 @@ export const tasks = pgTable(
     parentId: char('parent_id', { length: 36 }).references((): AnyPgColumn => tasks.id, {
       onDelete: 'cascade',
     }),
+    /** Owning thread. No FK — ownership enforced in the service layer. */
+    outcomeId: char('outcome_id', { length: 36 }),
+    estimateMinutes: integer('estimate_minutes'),
+    /** How many times dueAt was pushed strictly forward. */
+    deferCount: integer('defer_count').notNull().default(0),
+    /** Habit instance linkage (spawned by the habits engine). */
+    habitId: char('habit_id', { length: 36 }),
+    /** 1-based sequence within the habit's day. */
+    habitSeq: integer('habit_seq'),
+    /** `{habitId}:{yyyymmdd}:{seq}` — idempotent spawn key, in the user's timezone. */
+    habitKey: varchar('habit_key', { length: 80 }),
     title: varchar('title', { length: 500 }).notNull(),
     notesMd: text('notes_md').notNull().default(''),
     status: varchar('status', { length: 16 }).notNull().default('todo'),
@@ -67,6 +80,10 @@ export const tasks = pgTable(
     index('idx_tasks_user_list_sort').on(t.userId, t.listId, t.sortOrder),
     index('idx_tasks_user_status_due').on(t.userId, t.status, t.dueAt),
     index('idx_tasks_user_updated').on(t.userId, t.updatedAt),
+    index('idx_tasks_user_outcome').on(t.userId, t.outcomeId),
+    uniqueIndex('idx_tasks_habit_key')
+      .on(t.habitKey)
+      .where(sql`${t.habitKey} IS NOT NULL`),
     index('idx_tasks_search_tsv').using('gin', t.searchTsv),
     index('idx_tasks_title_trgm').using('gin', sql`${t.title} gin_trgm_ops`),
     check('tasks_status_check', sql`${t.status} IN ('todo', 'doing', 'done', 'canceled')`),

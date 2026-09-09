@@ -74,7 +74,7 @@ export function NotesEditor({
   }, [editor, value]);
 
   return (
-    <div className="group/notes min-h-[12rem]">
+    <div className="group/notes min-h-[6rem]">
       <div className="mb-1 flex flex-wrap items-center gap-0.5 opacity-0 transition-opacity group-focus-within/notes:opacity-100 group-hover/notes:opacity-100">
         <ToolbarBtn
           label="小标题"

@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
-import { HOME_PATH, t } from '@/copy';
+import { HOME_PATH, TODOS_HOME_PATH, t } from '@/copy';
 import { setAuthForTest } from '@/services/auth.service';
 import { themeService } from '@/services/theme.service';
 import { Shell } from '../../src/shell/Shell';
@@ -88,7 +88,7 @@ describe('primary rail', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('puts search in the primary nav after reflect', () => {
+  it('puts today first, then todos, capture, reflect, search', () => {
     renderShell();
     const rail = screen.getByLabelText('主导航');
     const hrefs = within(rail)
@@ -96,6 +96,7 @@ describe('primary rail', () => {
       .querySelectorAll('a');
     expect([...hrefs].map((el) => el.getAttribute('href'))).toEqual([
       HOME_PATH,
+      TODOS_HOME_PATH,
       '/inbox',
       '/reports',
       '/search',

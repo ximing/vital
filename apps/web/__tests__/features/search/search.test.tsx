@@ -27,6 +27,7 @@ describe('search page', () => {
           inbox: {
             id: '22222222-2222-4222-8222-222222222222',
             title: '一篇稍后读',
+            outcomeId: null,
             originalUrl: 'https://example.com',
             canonicalUrl: 'https://example.com',
             excerpt: null,

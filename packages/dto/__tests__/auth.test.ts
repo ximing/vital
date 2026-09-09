@@ -8,6 +8,7 @@ import {
   updateMeInputSchema,
   updateOnboardingInputSchema,
 } from '../src/auth.js';
+import { llmRoutingSchema } from '../src/llm.js';
 
 describe('registerInputSchema', () => {
   it('normalizes email (trim + lowercase)', () => {
@@ -87,15 +88,17 @@ describe('changePasswordInputSchema', () => {
 });
 
 describe('updateMeInputSchema', () => {
-  it('preserves generic nested model parameters and supports clearing them', () => {
+  it('preserves generic nested model parameters on routing targets and rejects bad ones', () => {
     const parameters = {
       thinking: { type: 'enabled', clear_thinking: false },
       reasoning_effort: 'future-effort',
       max_tokens: 4096,
       custom: { values: [true, 1, null] },
     };
-    expect(updateMeInputSchema.parse({ llm: { parameters } }).llm?.parameters).toEqual(parameters);
-    expect(updateMeInputSchema.parse({ llm: { parameters: null } }).llm?.parameters).toBeNull();
+    const ok = llmRoutingSchema.parse({
+      'agent.headline': { providerId: 'p1', model: 'm1', parameters },
+    });
+    expect(ok['agent.headline']?.parameters).toEqual(parameters);
   });
 
   it.each([
@@ -113,7 +116,10 @@ describe('updateMeInputSchema', () => {
     { n: 2 },
     { custom: 'x'.repeat(17000) },
   ])('rejects invalid or reserved model parameters: %j', (parameters) => {
-    expect(updateMeInputSchema.safeParse({ llm: { parameters } }).success).toBe(false);
+    expect(
+      llmRoutingSchema.safeParse({ default: { providerId: 'p1', model: 'm1', parameters } })
+        .success,
+    ).toBe(false);
   });
 
   it('rejects empty patch; accepts IANA timezone and theme', () => {
@@ -130,20 +136,6 @@ describe('updateMeInputSchema', () => {
     expect(ok.displayName).toBe('Ada');
     expect(ok.weekStartsOn).toBe(0);
     expect(() => updateMeInputSchema.parse({ timezone: 'Not/AZone' })).toThrow();
-  });
-
-  it('accepts OpenAI-compatible LLM settings; empty patch still rejected', () => {
-    const ok = updateMeInputSchema.parse({
-      llm: {
-        apiBase: 'https://open.bigmodel.cn/api/paas/v4',
-        apiKey: 'sk-test',
-        model: 'glm-4-flash',
-      },
-    });
-    expect(ok.llm?.apiBase).toBe('https://open.bigmodel.cn/api/paas/v4');
-    expect(ok.llm?.model).toBe('glm-4-flash');
-    expect(() => updateMeInputSchema.parse({ llm: {} })).toThrow();
-    expect(() => updateMeInputSchema.parse({ llm: { apiBase: 'not-a-url' } })).toThrow();
   });
 });
 

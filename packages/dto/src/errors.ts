@@ -30,6 +30,7 @@ export const ERROR_MESSAGES = {
   MEOW_NICKNAME_INVALID: 'MeoW 昵称不合法',
   CHANNEL_DELIVERY_FAILED: '通知发送失败',
   LLM_NOT_CONFIGURED: '还没有配置大模型',
+  LLM_PROVIDER_NOT_FOUND: '模型提供商不存在',
   LLM_OUTPUT_TRUNCATED:
     '模型输出被截断，请提高 max_tokens / max_completion_tokens 或降低 reasoning_effort',
   LLM_TIMEOUT: '模型响应超时，请降低推理强度后重试',

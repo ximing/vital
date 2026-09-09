@@ -15,6 +15,7 @@ import {
 
 function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): InboxItem {
   return {
+    outcomeId: null,
     originalUrl: 'https://example.com/a',
     canonicalUrl: 'https://example.com/a',
     extractedText: 'Hello',
@@ -127,6 +128,7 @@ describe('createInputFromPreview', () => {
   it('keeps originalUrl and web source', () => {
     const preview: InboxPreview = {
       title: 'Example Domain',
+      outcomeId: null,
       originalUrl: 'https://example.com/a',
       canonicalUrl: 'https://example.com/a',
       extractedText: 'Hello',

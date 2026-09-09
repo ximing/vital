@@ -1,0 +1,3 @@
+ALTER TABLE "agent_memory" ADD COLUMN "manual" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "agent_memory" ADD COLUMN "scope" text[] DEFAULT '{all}' NOT NULL;--> statement-breakpoint
+ALTER TABLE "agent_memory" ADD CONSTRAINT "agent_memory_scope_check" CHECK ("agent_memory"."scope" <> '{}' AND "agent_memory"."scope" <@ ARRAY['all', 'headline', 'cluster', 'decompose', 'reflect', 'distill']::text[]);

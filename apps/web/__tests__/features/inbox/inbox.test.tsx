@@ -30,6 +30,7 @@ vi.mock('@/api/client', async (importOriginal) => {
     ...actual,
     client: {
       listLists: vi.fn(),
+      listOutcomes: vi.fn(),
       listTasks: vi.fn(),
       listTags: vi.fn(),
       createTag: vi.fn(),
@@ -82,6 +83,11 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
   return {
     listId: 'inbox-1',
     parentId: null,
+    outcomeId: null,
+    estimateMinutes: null,
+    deferCount: 0,
+    habitId: null,
+    habitSeq: null,
     notes: '',
     status: 'todo',
     priority: 3,
@@ -108,6 +114,7 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
 
 function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): InboxItem {
   return {
+    outcomeId: null,
     originalUrl: 'https://example.com/a',
     canonicalUrl: 'https://example.com/a',
     extractedText: 'Hello',
@@ -131,6 +138,7 @@ function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): I
 
 const preview: InboxPreview = {
   title: 'Example Domain',
+  outcomeId: null,
   originalUrl: 'https://example.com/a',
   canonicalUrl: 'https://example.com/a',
   extractedText: 'Hello',
@@ -180,6 +188,7 @@ describe('inbox workspace', () => {
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });
+    vi.mocked(client.listOutcomes).mockResolvedValue([]);
     vi.mocked(client.listTags).mockResolvedValue({ items: [] });
     vi.mocked(client.patchInbox).mockImplementation(async (id, _input) =>
       makeItem({ id, title: 'x', readAt: '2026-09-06T00:01:00.000Z' }),
@@ -421,6 +430,7 @@ describe('inbox reader', () => {
     );
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.listOutcomes).mockResolvedValue([]);
   });
 
   afterEach(() => {

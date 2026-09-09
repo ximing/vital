@@ -9,7 +9,19 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
-import type { LlmParameters, OnboardingState } from '@vital/dto';
+import type { LlmParameters, LlmRouting, OnboardingState } from '@vital/dto';
+
+/** Stored LLM provider config. apiKeyEnc is encryptSecret() output — never leaves the server. */
+export interface StoredLlmProvider {
+  id: string;
+  /** pi-ai builtin provider id ('openai', 'anthropic', …) or 'custom'. */
+  providerId: string;
+  label: string;
+  baseUrl?: string;
+  apiKeyEnc: string;
+  models: string[];
+  modelParameters?: Record<string, LlmParameters>;
+}
 
 export const users = pgTable(
   'users',
@@ -30,10 +42,8 @@ export const users = pgTable(
     quietHoursEnd: varchar('quiet_hours_end', { length: 5 }),
     allDayNotifyTime: varchar('all_day_notify_time', { length: 5 }).notNull().default('09:00'),
     onboarding: jsonb('onboarding').$type<OnboardingState>().notNull().default({}),
-    llmApiBase: varchar('llm_api_base', { length: 512 }),
-    llmApiKey: varchar('llm_api_key', { length: 1024 }),
-    llmModel: varchar('llm_model', { length: 128 }),
-    llmParameters: jsonb('llm_parameters').$type<LlmParameters>().notNull().default({}),
+    llmProviders: jsonb('llm_providers').$type<StoredLlmProvider[]>().notNull().default([]),
+    llmRouting: jsonb('llm_routing').$type<LlmRouting>().notNull().default({}),
     passwordChangedAt: timestamp('password_changed_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

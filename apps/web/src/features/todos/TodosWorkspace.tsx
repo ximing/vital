@@ -12,6 +12,7 @@ import { BoardView } from './BoardView';
 import { TaskSkeleton } from './EmptyTasks';
 import { LIST_FILTER_ID, useTodosKeyboard } from './keyboard';
 import { ListView } from './ListView';
+import { useOutcomesQuery } from '@/features/today/queries';
 import {
   applyOptimisticComplete,
   boardVisibleIds,
@@ -44,6 +45,7 @@ import { TaskDetail } from './TaskDetail';
 import { UndoToast } from './UndoToast';
 import { todosUi, useTodosUi } from './todos-ui.service';
 import { WeekView } from './WeekView';
+import { usePendingDecomposeQuery } from '@/features/today/queries';
 
 function useOnline(): boolean {
   const [online, setOnline] = useState(() =>
@@ -83,6 +85,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const listsQuery = useListsQuery();
   const tasksQuery = useTasksQuery(listId);
   const tagsQuery = useTagsQuery();
+  const outcomesQuery = useOutcomesQuery();
   const actions = useTodoActions();
 
   const [weekAnchor, setWeekAnchor] = useState(() => todayYmd(timeZone));
@@ -173,7 +176,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
     }
   }
 
-  const intent = llmReady(user?.llm);
+  const intent = llmReady(user?.llm, 'task.parse');
 
   async function handleCreate(name: string, draft: ScheduleDraft, extras: ComposeExtras) {
     if (!inboxId) return;
@@ -205,6 +208,11 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const subtasks = (persistedTasksQuery.data ?? tasks).filter(
     (item) => detailTask !== undefined && item.parentId === detailTask.id,
   );
+  const decomposeQuery = usePendingDecomposeQuery(
+    detailOpen && detailTask && detailTask.parentId === null ? detailTask.id : null,
+  );
+  const decomposeAction =
+    (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.decompose') ?? null;
 
   const instances = (calendarQuery.data ?? []).filter((inst) => {
     if (listId.startsWith('smart:')) {
@@ -230,6 +238,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
         subtasks={subtasks}
         lists={lists}
         tags={tags}
+        outcomes={outcomesQuery.data ?? []}
+        decomposeAction={decomposeAction}
         timeZone={timeZone}
         onPatch={(input) => actions.patch.mutate({ id: detailTask.id, input })}
         onComplete={(task: Task) => void actions.complete(task)}

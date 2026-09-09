@@ -153,7 +153,7 @@ export function TaskRow({
           </p>
         ) : null}
       </div>
-      {metaParts.length > 0 || due ? (
+      {metaParts.length > 0 || due || task.estimateMinutes !== null ? (
         <p className="mt-0.5 flex max-w-[46%] shrink-0 flex-col items-end gap-px text-right font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums">
           {metaParts.length > 0 ? (
             <span className="max-w-full truncate text-tertiary">
@@ -165,20 +165,32 @@ export function TaskRow({
               ))}
             </span>
           ) : null}
-          {due ? (
-            <span
-              data-task-meta="due"
-              className={`shrink-0 ${
-                overdue
-                  ? 'text-overdue'
-                  : timedToday
-                    ? 'text-doing'
-                    : soon
-                      ? 'text-due'
-                      : 'text-tertiary'
-              }`}
-            >
-              {due}
+          {task.estimateMinutes !== null || due ? (
+            <span className="flex items-center gap-1.5">
+              {task.estimateMinutes !== null ? (
+                <span
+                  data-task-meta="estimate"
+                  className="shrink-0 rounded-full bg-surface-muted px-[7px] py-px text-tertiary"
+                >
+                  {task.estimateMinutes}m
+                </span>
+              ) : null}
+              {due ? (
+                <span
+                  data-task-meta="due"
+                  className={`shrink-0 ${
+                    overdue
+                      ? 'text-overdue'
+                      : timedToday
+                        ? 'text-doing'
+                        : soon
+                          ? 'text-due'
+                          : 'text-tertiary'
+                  }`}
+                >
+                  {due}
+                </span>
+              ) : null}
             </span>
           ) : null}
         </p>

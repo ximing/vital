@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type UIEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { useOutcomesQuery } from '@/features/today/queries';
 import { useTagsQuery } from '@/features/todos/queries';
 import { todosUi } from '@/features/todos/todos-ui.service';
 import { humanError } from '@/lib/errors';
@@ -20,6 +21,7 @@ import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Icon, type LucideIcon } from '@/ui/icon';
+import { OutcomeField } from '@/ui/outcome-field';
 import { EmptyReader, InboxSkeleton } from './EmptyInbox';
 import { InboxListColumn } from './InboxListPanel';
 import { inboxSourceIcon, inboxSourceTextClass } from './InboxRow';
@@ -79,6 +81,7 @@ export function InboxReader() {
   const timeZone = useAuth((s) => s.user?.timezone) ?? 'UTC';
   const query = useInboxItemQuery(id);
   const tags = useTagsQuery().data ?? [];
+  const outcomes = useOutcomesQuery().data ?? [];
   const actions = useInboxActions();
   const fontSize = useInboxUi((s) => s.fontSize);
   const setFontSize = useInboxUi((s) => s.setFontSize);
@@ -322,36 +325,54 @@ export function InboxReader() {
                 size={13}
                 className={`shrink-0 ${inboxSourceTextClass(item.source)}`}
               />
-              {[t.inbox.source[item.source], item.byline, item.siteName].filter(Boolean).join(' · ')}
+              <span className="shrink-0">
+                {[t.inbox.source[item.source], item.byline, item.siteName].filter(Boolean).join(' · ')}
+              </span>
+              {originalUrl ? (
+                <>
+                  <span aria-hidden className="shrink-0">
+                    ·
+                  </span>
+                  <a
+                    href={originalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-w-0 items-baseline gap-1 text-accent underline-offset-4 hover:underline"
+                  >
+                    <span className="min-w-0 truncate">{originalUrl}</span>
+                    <Icon icon={ArrowUpRight} size={12} className="shrink-0 self-center" />
+                  </a>
+                  <button
+                    type="button"
+                    aria-label={copied ? t.inbox.copied : t.inbox.copyLink}
+                    title={copied ? t.inbox.copied : t.inbox.copyLink}
+                    onClick={() => void onCopyUrl()}
+                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] ${
+                      copied
+                        ? 'text-done'
+                        : 'text-tertiary hover:bg-surface-muted hover:text-fg'
+                    }`}
+                  >
+                    <Icon icon={copied ? Check : Copy} size={13} />
+                  </button>
+                </>
+              ) : null}
             </p>
-            {originalUrl ? (
-              <p className="mt-1.5 flex items-center gap-1.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
-                <span className="shrink-0 text-muted">{t.inbox.originalUrl} · </span>
-                <a
-                  href={originalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-w-0 items-baseline gap-1 text-accent underline-offset-4 hover:underline"
-                >
-                  <span className="min-w-0 truncate">{originalUrl}</span>
-                  <Icon icon={ArrowUpRight} size={12} className="shrink-0 self-center" />
-                </a>
-                <button
-                  type="button"
-                  aria-label={copied ? t.inbox.copied : t.inbox.copyLink}
-                  title={copied ? t.inbox.copied : t.inbox.copyLink}
-                  onClick={() => void onCopyUrl()}
-                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] ${
-                    copied
-                      ? 'text-done'
-                      : 'text-tertiary hover:bg-surface-muted hover:text-fg'
-                  }`}
-                >
-                  <Icon icon={copied ? Check : Copy} size={13} />
-                </button>
-              </p>
-            ) : null}
-            <div className="mt-2">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <OutcomeField
+                value={item.outcomeId}
+                outcomes={outcomes}
+                placeholder={t.inbox.attachOutcome}
+                disabled={!online}
+                onChange={(outcomeId) => {
+                  setActionError(null);
+                  void actions.patch
+                    .mutateAsync({ id: item.id, input: { outcomeId } })
+                    .catch((err) => {
+                      setActionError(humanError(err));
+                    });
+                }}
+              />
               <InboxTagEditor
                 tagIds={item.tagIds ?? []}
                 tags={tags}

@@ -1,7 +1,11 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion -- test row assertions */
 import { DateTime } from 'luxon';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
+import { getDb } from '../src/db/index.js';
+import { agentJobs } from '../src/db/schema.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -416,5 +420,89 @@ describe('tasks', () => {
       token: alice.token,
     });
     expect((childOnly.json().items as { title: string }[]).map((item) => item.title)).toEqual(['子任务']);
+  });
+});
+
+describe('tasks agent triggers', () => {
+  it('pushing dueAt forward increments defer_count (other edits do not); 3rd defer enqueues task.decompose once', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '写年度总结',
+        listId: inbox,
+        dueAt: shanghaiDate('2026-10-01'),
+        isAllDay: true,
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const taskId = created.json().id as string;
+    expect(created.json().deferCount).toBe(0);
+
+    const pushDue = async (date: string) =>
+      injectJson(app, {
+        method: 'PATCH',
+        url: `/api/v1/tasks/${taskId}`,
+        token: alice.token,
+        payload: { dueAt: shanghaiDate(date) },
+      });
+
+    expect((await pushDue('2026-10-02')).json().deferCount).toBe(1);
+
+    // A non-due edit must not bump defer_count.
+    const renamed = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${taskId}`,
+      token: alice.token,
+      payload: { title: '写年度总结（草稿）' },
+    });
+    expect(renamed.json().deferCount).toBe(1);
+
+    expect((await pushDue('2026-10-03')).json().deferCount).toBe(2);
+    expect((await pushDue('2026-10-04')).json().deferCount).toBe(3);
+
+    const decomposeJobs = async () =>
+      getDb()
+        .select()
+        .from(agentJobs)
+        .where(and(eq(agentJobs.userId, alice.id), eq(agentJobs.jobType, 'task.decompose')));
+
+    let jobs = await decomposeJobs();
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.payload).toEqual({ taskId });
+    expect(jobs[0]!.status).toBe('pending');
+
+    // A 4th defer while the proposal is pending must not enqueue a duplicate.
+    expect((await pushDue('2026-10-05')).json().deferCount).toBe(4);
+    jobs = await decomposeJobs();
+    expect(jobs).toHaveLength(1);
+  });
+
+  it('assigning outcomeId on create enqueues an outcome.refresh job', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const outcome = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/outcomes',
+      token: alice.token,
+      payload: { name: '健身' },
+    });
+    expect(outcome.statusCode).toBe(200);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '跑步 5 公里', listId: inbox, outcomeId: outcome.json().id },
+    });
+    expect(created.statusCode).toBe(201);
+    const jobs = await getDb()
+      .select()
+      .from(agentJobs)
+      .where(and(eq(agentJobs.userId, alice.id), eq(agentJobs.jobType, 'outcome.refresh')));
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]!.payload).toEqual({ outcomeId: outcome.json().id });
   });
 });

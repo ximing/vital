@@ -66,6 +66,7 @@ export async function extractUrl(rawUrl: string): Promise<InboxPreview> {
     const { canonicalUrl } = idempotencyKeyForUrl(fetched.url.href);
     return {
       title: article.title,
+      outcomeId: null,
       originalUrl: rawUrl,
       canonicalUrl,
       extractedText: article.text,

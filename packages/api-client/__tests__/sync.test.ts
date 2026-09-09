@@ -11,11 +11,16 @@ import {
 
 const task = (over: Partial<Task> & Pick<Task, 'id' | 'listId'>): Task => ({
   parentId: null,
+  outcomeId: null,
   title: 't',
   notes: '',
   status: 'todo',
   priority: 3,
   pinned: false,
+  estimateMinutes: null,
+  deferCount: 0,
+  habitId: null,
+  habitSeq: null,
   dueAt: null,
   startAt: null,
   reminderMode: null,
@@ -37,6 +42,7 @@ const task = (over: Partial<Task> & Pick<Task, 'id' | 'listId'>): Task => ({
 
 const inbox = (over: Partial<InboxItem> & Pick<InboxItem, 'id'>): InboxItem => ({
   title: 'n',
+  outcomeId: null,
   originalUrl: null,
   canonicalUrl: null,
   extractedText: null,

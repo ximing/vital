@@ -53,6 +53,7 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 | `MEOW_NICKNAME_INVALID` | MeoW 昵称不合法 |
 | `CHANNEL_DELIVERY_FAILED` | 通知发送失败 |
 | `LLM_NOT_CONFIGURED` | 还没有配置大模型 |
+| `LLM_PROVIDER_NOT_FOUND` | 模型提供商不存在 |
 | `LLM_OUTPUT_TRUNCATED` | 模型输出被截断，请提高 max_tokens / max_completion_tokens 或降低 reasoning_effort |
 | `LLM_TIMEOUT` | 模型响应超时，请降低推理强度后重试 |
 | `LLM_UNAVAILABLE` | 大模型暂时不可用，请检查 API Base、密钥和模型名称 |
@@ -61,11 +62,98 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 ## Types
 
 ```ts
-export interface LlmSettingsPublic {
-  apiBase: string | null;
-  model: string | null;
-  apiKeySet: boolean;
-  parameters?: LlmParameters;
+export interface AgentAction {
+  id: string;
+  actionType: AgentActionType;
+  targetType: AgentTargetType;
+  targetId: string;
+  payload: Record<string, unknown>;
+  feedback: AgentFeedback;
+  feedbackPayload: Record<string, unknown> | null;
+  feedbackAt: string | null;
+  createdAt: string;
+}
+```
+
+```ts
+export interface AgentActionLogItem extends AgentAction {
+  /** Target name/title at read time; null when the target was deleted or undone. */
+  targetName: string | null;
+  /** Human-oriented one-line summary distilled from payload per action type. */
+  payloadSummary: string;
+}
+```
+
+```ts
+export interface AgentUsageDaily {
+  /** YYYY-MM-DD in the user's timezone. */
+  date: string;
+  capability: string;
+  runs: number;
+  promptTokens: number;
+  completionTokens: number;
+  costMicros: number;
+}
+```
+
+```ts
+export interface AgentUsageSummary {
+  days: number;
+  totalRuns: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalCostMicros: number;
+  items: AgentUsageDaily[];
+}
+```
+
+```ts
+export interface AgentAdoptionDaily {
+  /** YYYY-MM-DD in the user's timezone. */
+  date: string;
+  proposed: number;
+  adopted: number;
+  dismissed: number;
+  /**
+   * adopted / (adopted + dismissed) — the share of *decided* actions that were
+   * adopted. Pending actions are excluded from the denominator (they have no
+   * verdict yet); 0 when nothing has been decided that day.
+   */
+  adoptionRate: number;
+}
+```
+
+```ts
+export interface AgentMetricsSummary {
+  proposed: number;
+  adopted: number;
+  dismissed: number;
+  /** Same formula as the daily rows, totaled over the window. */
+  adoptionRate: number;
+  /** adoptionRate of the preceding window of the same length, for trend arrows. */
+  prevAdoptionRate: number;
+}
+```
+
+```ts
+export interface AgentMetricsResponse {
+  daily: AgentAdoptionDaily[];
+  summary: AgentMetricsSummary;
+}
+```
+
+```ts
+export interface AgentMemoryItem {
+  id: string;
+  kind: AgentMemoryKind;
+  content: string;
+  scope: string[];
+  /** How many distilled actions contributed to this row. 0 for user-written rows. */
+  sourceCount: number;
+  /** User-written rows are protected: distill may never update or drop them. */
+  manual: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 ```
 
@@ -120,6 +208,27 @@ export interface ErrorEnvelope {
 ```
 
 ```ts
+export interface Habit {
+  id: string;
+  name: string;
+  kind: HabitKind;
+  /** Required for kind='count' (e.g. 8 glasses of water). */
+  targetCount: number | null;
+  /** 'HH:mm' local window; outside it no instances are spawned. */
+  windowStart: string | null;
+  windowEnd: string | null;
+  active: boolean;
+  createdBy: HabitCreatedBy;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Computed at read time for the dashboard. */
+  todayDone: number;
+  todayTotal: number;
+}
+```
+
+```ts
 export interface InboxAsset {
   id: string;
   attachmentId: string;
@@ -136,6 +245,8 @@ export interface InboxAsset {
 export interface InboxItem {
   id: string;
   title: string;
+  /** Owning thread (outcome) when filed as material, optional. */
+  outcomeId: string | null;
   originalUrl: string | null;
   canonicalUrl: string | null;
   extractedText: string | null;
@@ -195,6 +306,51 @@ export interface ListCollection {
 ```
 
 ```ts
+export interface LlmCatalogModel {
+  id: string;
+  name: string;
+  api?: string;
+  reasoning?: boolean;
+  thinkingLevels?: string[];
+}
+```
+
+```ts
+export interface LlmCatalogProvider {
+  id: string;
+  name: string;
+  models: LlmCatalogModel[];
+}
+```
+
+```ts
+export interface LlmProviderPublic {
+  id: string;
+  providerId: string;
+  label: string;
+  baseUrl: string | null;
+  models: string[];
+  modelParameters?: Record<string, LlmParameters>;
+  apiKeySet: boolean;
+}
+```
+
+```ts
+export interface LlmRouteTarget {
+  providerId: string;
+  model: string;
+  parameters?: LlmParameters | undefined;
+}
+```
+
+```ts
+export interface LlmSettingsPublic {
+  providers: LlmProviderPublic[];
+  routing: LlmRouting;
+}
+```
+
+```ts
 export interface NotificationChannel {
   id: string;
   type: NotificationChannelType;
@@ -210,6 +366,49 @@ export interface NotificationChannel {
 ```ts
 export interface NotificationChannelCollection {
   items: NotificationChannel[];
+}
+```
+
+```ts
+export interface Outcome {
+  id: string;
+  name: string;
+  status: OutcomeStatus;
+  createdBy: OutcomeCreatedBy;
+  ruleSignal: OutcomeSignal | null;
+  ruleNextStep: string | null;
+  agentHeadline: string | null;
+  agentSuggestion: string | null;
+  agentState: OutcomeAgentState;
+  agentUpdatedAt: string | null;
+  /** Agent-created threads can be undone until this instant. */
+  undoUntil: string | null;
+  lastActivityAt: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Computed at read time, not stored. */
+  openTaskCount: number;
+  completedLast7d: number;
+  materialCount: number;
+}
+```
+
+```ts
+export interface TodayPulse {
+  inboxPending: number;
+  reportStreak: number;
+  /** Current day's daily report id when it exists (has content), else null. */
+  todayReportId: string | null;
+}
+```
+
+```ts
+export interface TodayDashboard {
+  outcomes: Outcome[];
+  tasks: Task[];
+  pulse: TodayPulse;
+  generatedAt: string;
 }
 ```
 
@@ -488,11 +687,21 @@ export interface Task {
   id: string;
   listId: string;
   parentId: string | null;
+  /** Owning thread (outcome), optional — orthogonal to listId. */
+  outcomeId: string | null;
   title: string;
   notes: string;
   status: TaskStatus;
   priority: TaskPriority;
   pinned: boolean;
+  /** Estimated effort in minutes, optional. */
+  estimateMinutes: number | null;
+  /** How many times dueAt has been pushed forward. */
+  deferCount: number;
+  /** Set when this task is a habit instance. */
+  habitId: string | null;
+  /** 1-based sequence within the habit's day (count habits). */
+  habitSeq: number | null;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;
@@ -782,11 +991,6 @@ Request body (`updateMeInputSchema`):
   - `quietHoursStart`: string pattern (optional, nullable)
   - `quietHoursEnd`: string pattern (optional, nullable)
   - `allDayNotifyTime`: string pattern (optional)
-- `llm` (optional):
-  - `apiBase`: string 0–512 pattern | null (optional)
-  - `apiKey`: string 1–512 (optional, nullable)
-  - `model`: string 1–128 | null (optional)
-  - `parameters`: object (optional, nullable)
 
 #### `PATCH /api/v1/auth/onboarding`
 
@@ -925,10 +1129,12 @@ Request body (`createTaskInputSchema`):
 - `title`: string 1–500
 - `listId`: uuid
 - `parentId`: uuid (optional, nullable)
+- `outcomeId`: uuid (optional, nullable)
 - `notes`: string 0–50000 (optional)
 - `status`: "todo" | "doing" | "canceled" (optional)
 - `priority`: 0 | 1 | 2 | 3 (optional)
 - `pinned`: boolean (optional)
+- `estimateMinutes`: number int min 0 max 100000 (optional, nullable)
 - `dueAt`: string iso datetime (optional, nullable)
 - `startAt`: string iso datetime (optional, nullable)
 - `reminderMode`: "none" | "due" | "offset" | "custom" (optional)
@@ -981,10 +1187,12 @@ Request body (`patchTaskInputSchema`):
 
 - `title`: string 1–500 (optional)
 - `listId`: uuid (optional)
+- `outcomeId`: uuid (optional, nullable)
 - `notes`: string 0–50000 (optional, nullable)
 - `status`: "todo" | "doing" | "canceled" (optional)
 - `priority`: 0 | 1 | 2 | 3 (optional)
 - `pinned`: boolean (optional)
+- `estimateMinutes`: number int min 0 max 100000 (optional, nullable)
 - `dueAt`: string iso datetime (optional, nullable)
 - `startAt`: string iso datetime (optional, nullable)
 - `reminderMode`: "none" | "due" | "offset" | "custom" (optional, nullable)
@@ -1230,6 +1438,7 @@ Request body (`patchInboxInputSchema`):
 - `siteName`: string 0–200 (optional, nullable)
 - `readAt`: string iso datetime (optional, nullable)
 - `tagIds`: uuid[] (optional)
+- `outcomeId`: uuid (optional, nullable)
 
 #### `PATCH /api/v1/inbox/:id/assets`
 
@@ -1587,13 +1796,91 @@ Path params:
 
 ### llm
 
-#### `POST /api/v1/llm/test`
+#### `GET /api/v1/llm/catalog`
 
-Test Llm
+Builtin provider catalog for the settings UI (labels + selectable models).
 
 - Auth: Bearer required
-- Client: `testLlm`
+- Client: `llmCatalog`
+- Response: `{ providers: import('@vital/dto').LlmCatalogProvider[] }`
+
+#### `POST /api/v1/llm/providers`
+
+Add Llm Provider
+
+- Auth: Bearer required
+- Client: `addLlmProvider`
+- Response: `LlmSettingsPublic`
+
+Request body (`llmProviderInputSchema`):
+
+- `providerId`: string 1–64
+- `label`: string 1–64
+- `baseUrl`: string 0–512 pattern (optional)
+- `apiKey`: string 1–512
+- `models`: string 1–128[]
+- `modelParameters`: object (optional)
+
+#### `DELETE /api/v1/llm/providers/:id`
+
+Remove Llm Provider
+
+- Auth: Bearer required
+- Client: `removeLlmProvider`
+- Response: `LlmSettingsPublic`
+
+Path params:
+
+- `id`: uuid
+
+#### `PATCH /api/v1/llm/providers/:id`
+
+Patch Llm Provider
+
+- Auth: Bearer required
+- Client: `patchLlmProvider`
+- Response: `LlmSettingsPublic`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchLlmProviderInputSchema`):
+
+- `label`: string 1–64 (optional)
+- `baseUrl`: string 0–512 pattern (optional)
+- `apiKey`: string 1–512 (optional)
+- `models`: string 1–128[] (optional)
+- `modelParameters`: object (optional)
+
+#### `POST /api/v1/llm/providers/:id/test`
+
+Test Llm Provider
+
+- Auth: Bearer required
+- Client: `testLlmProvider`
 - Response: `{ ok: true }`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`testLlmConnectionInputSchema`):
+
+- `providerId`: string 1–64
+- `model`: string 1–128
+
+#### `PUT /api/v1/llm/routing`
+
+Put Llm Routing
+
+- Auth: Bearer required
+- Client: `putLlmRouting`
+- Response: `LlmSettingsPublic`
+
+Request body (`putLlmRoutingSchema`):
+
+- `routing`: object
 
 ### sync
 
@@ -1627,3 +1914,265 @@ Sync Head
 #### `GET /api/v1/health/ready`
 
 - Auth: none
+
+### agent
+
+#### `GET /api/v1/agent/actions`
+
+List Agent Actions
+
+- Auth: Bearer required
+- Client: `listAgentActions`
+- Response: `AgentActionLogItem[]`
+
+Query (`agentActionsQuerySchema`):
+
+- `targetType`: "outcome" | "task" | "habit" (optional)
+- `targetId`: uuid (optional)
+- `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "habit.create" | "habit.adjust" | "habit.nudge" (optional)
+- `feedback`: "pending" | "accepted" | "edited" | "dismissed" (optional)
+- `days`: number int min 1 (optional)
+
+#### `POST /api/v1/agent/actions/:id/feedback`
+
+Send Agent Action Feedback
+
+- Auth: Bearer required
+- Client: `sendAgentActionFeedback`
+- Response: `AgentAction`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`actionFeedbackInputSchema`):
+
+- `feedback`: "accepted" | "dismissed" | "edited"
+- `editedPayload`: object (optional)
+
+#### `GET /api/v1/agent/memory`
+
+List Agent Memory
+
+- Auth: Bearer required
+- Client: `listAgentMemory`
+- Response: `AgentMemoryItem[]`
+
+#### `POST /api/v1/agent/memory`
+
+Create Agent Memory
+
+- Auth: Bearer required
+- Client: `createAgentMemory`
+- Status: 201
+- Response: `AgentMemoryItem`
+
+Request body (`createAgentMemorySchema`):
+
+- `kind`: "preference" | "pattern" | "correction"
+- `content`: string 1–300
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "reflect" | "distill"[]
+
+#### `DELETE /api/v1/agent/memory/:id`
+
+Delete Agent Memory
+
+- Auth: Bearer required
+- Client: `deleteAgentMemory`
+- Status: 204
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+#### `PATCH /api/v1/agent/memory/:id`
+
+Patch Agent Memory
+
+- Auth: Bearer required
+- Client: `patchAgentMemory`
+- Response: `AgentMemoryItem`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchAgentMemorySchema`):
+
+- `kind`: "preference" | "pattern" | "correction" (optional)
+- `content`: string 1–300 (optional)
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "reflect" | "distill"[] (optional)
+
+#### `GET /api/v1/agent/metrics`
+
+- Auth: Bearer required
+
+Query (`agentMetricsQuerySchema`):
+
+- `days`: number int min 1
+
+#### `GET /api/v1/agent/usage`
+
+- Auth: Bearer required
+
+Query (`agentUsageQuerySchema`):
+
+- `days`: number int min 1
+
+### habits
+
+#### `GET /api/v1/habits`
+
+List Habits
+
+- Auth: Bearer required
+- Client: `listHabits`
+- Response: `Habit[]`
+
+#### `POST /api/v1/habits`
+
+Create Habit
+
+- Auth: Bearer required
+- Client: `createHabit`
+- Response: `Habit`
+
+Request body (`createHabitInputSchema`):
+
+- `name`: string 1–120
+- `kind`: "daily" | "count"
+- `targetCount`: number int min 1 max 99 (optional)
+- `windowStart`: string pattern (optional)
+- `windowEnd`: string pattern (optional)
+
+#### `DELETE /api/v1/habits/:id`
+
+Delete Habit
+
+- Auth: Bearer required
+- Client: `deleteHabit`
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+#### `PATCH /api/v1/habits/:id`
+
+Patch Habit
+
+- Auth: Bearer required
+- Client: `patchHabit`
+- Response: `Habit`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchHabitInputSchema`):
+
+- `name`: string 1–120 (optional)
+- `targetCount`: number int min 1 max 99 (optional, nullable)
+- `windowStart`: string pattern (optional, nullable)
+- `windowEnd`: string pattern (optional, nullable)
+- `active`: boolean (optional)
+- `sortOrder`: number int (optional)
+
+### outcomes
+
+#### `GET /api/v1/outcomes`
+
+- Auth: Bearer required
+
+Query (`listOutcomesQuerySchema`):
+
+- `status`: "open" | "closed" (optional)
+
+#### `POST /api/v1/outcomes`
+
+Create Outcome
+
+- Auth: Bearer required
+- Client: `createOutcome`
+- Response: `Outcome`
+
+Request body (`createOutcomeInputSchema`):
+
+- `name`: string 1–120
+
+#### `PATCH /api/v1/outcomes/:id`
+
+Patch Outcome
+
+- Auth: Bearer required
+- Client: `patchOutcome`
+- Response: `Outcome`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchOutcomeInputSchema`):
+
+- `name`: string 1–120 (optional)
+- `sortOrder`: number int (optional)
+
+#### `POST /api/v1/outcomes/:id/close`
+
+Close Outcome
+
+- Auth: Bearer required
+- Client: `closeOutcome`
+- Response: `Outcome`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/outcomes/:id/refresh`
+
+Manual agent re-run: enqueue + mark pending, 202 (worker picks it up).
+
+- Auth: Bearer required
+- Client: `refreshOutcome`
+- Status: 202
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/outcomes/:id/reopen`
+
+Reopen Outcome
+
+- Auth: Bearer required
+- Client: `reopenOutcome`
+- Response: `Outcome`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/outcomes/:id/undo`
+
+Undo Outcome
+
+- Auth: Bearer required
+- Client: `undoOutcome`
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+### today
+
+#### `GET /api/v1/today`
+
+Get Today
+
+- Auth: Bearer required
+- Client: `getToday`
+- Response: `TodayDashboard`

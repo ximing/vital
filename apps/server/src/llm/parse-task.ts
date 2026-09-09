@@ -13,9 +13,9 @@ import {
 } from '@vital/dto';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
+import type { User } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
-import { completeChat } from './client.js';
-import type { LlmParameters } from '@vital/dto';
+import { completeText } from './pi.js';
 
 const OFFSETS = new Set<number>([5, 15, 30, 60, 1440]);
 
@@ -265,10 +265,7 @@ function buildPrompt(input: {
 
 export async function interpretTaskText(input: {
   text: string;
-  apiBase: string;
-  apiKey: string;
-  model: string;
-  parameters?: LlmParameters;
+  user: User;
   timezone: string;
   now: Date;
   lists: List[];
@@ -283,18 +280,13 @@ export async function interpretTaskText(input: {
     tags: input.tags,
     ...(input.smartListId !== undefined ? { smartListId: input.smartListId } : {}),
   });
-  const raw = await completeChat({
-    apiBase: input.apiBase,
-    apiKey: input.apiKey,
-    model: input.model,
-    ...(input.parameters !== undefined ? { parameters: input.parameters } : {}),
+  const result = await completeText(input.user, 'task.parse', {
+    systemPrompt: prompt.system,
+    messages: [{ role: 'user', content: prompt.user }],
     json: true,
-    messages: [
-      { role: 'system', content: prompt.system },
-      { role: 'user', content: prompt.user },
-    ],
   });
-  const extracted = extractedOf(parseModelJson(raw));
-  logger.info('llm.parse.ok', { model: input.model });
+  if (!result) throw AppError.of(400, 'LLM_NOT_CONFIGURED');
+  const extracted = extractedOf(parseModelJson(result.text));
+  logger.info('llm.parse.ok', { model: result.model });
   return extracted;
 }

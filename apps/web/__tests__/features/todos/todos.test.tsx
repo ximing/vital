@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { setAuthForTest } from '@/services/auth.service';
+import { TodayWorkspace } from '../../../src/features/today/TodayWorkspace';
 import { TodosWorkspace } from '../../../src/features/todos/TodosWorkspace';
 import { zonedLocalMidnightIso } from '../../../src/features/todos/model';
 import { resetTodosUi } from '../../../src/features/todos/todos-ui.service';
@@ -41,6 +42,15 @@ vi.mock('@/api/client', async (importOriginal) => {
       getTask: vi.fn(),
       createList: vi.fn(),
       createTag: vi.fn(),
+      listOutcomes: vi.fn(),
+      getToday: vi.fn(),
+      listHabits: vi.fn(),
+      listAgentActions: vi.fn(),
+      listInbox: vi.fn(),
+      createOutcome: vi.fn(),
+      patchOutcome: vi.fn(),
+      undoOutcome: vi.fn(),
+      refreshOutcome: vi.fn(),
       updateOnboarding: vi.fn(),
     },
   };
@@ -104,6 +114,11 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
   return {
     listId: 'inbox-1',
     parentId: null,
+    outcomeId: null,
+    estimateMinutes: null,
+    deferCount: 0,
+    habitId: null,
+    habitSeq: null,
     notes: '',
     status: 'todo',
     priority: 3,
@@ -137,6 +152,7 @@ function renderAt(path: string) {
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[path]}>
           <Routes>
+            <Route path="/today" element={<TodayWorkspace />} />
             <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />
             <Route path="/todos/board" element={<TodosWorkspace view="board" />} />
             <Route path="/todos/calendar" element={<TodosWorkspace view="week" />} />
@@ -155,6 +171,16 @@ describe('todos workspace', () => {
     vi.setSystemTime(new Date('2026-09-06T00:00:00.000Z'));
     vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox] });
     vi.mocked(client.listTags).mockResolvedValue({ items: [] });
+    vi.mocked(client.listOutcomes).mockResolvedValue([]);
+    vi.mocked(client.getToday).mockResolvedValue({
+      outcomes: [],
+      tasks: [],
+      pulse: { inboxPending: 0, reportStreak: 0, todayReportId: null },
+      generatedAt: '2026-09-06T00:00:00.000Z',
+    });
+    vi.mocked(client.listHabits).mockResolvedValue([]);
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.calendar).mockResolvedValue({ instances: [] });
   });
@@ -469,9 +495,17 @@ describe('todos workspace', () => {
     setAuthForTest({
       ...mockUser,
       llm: {
-        apiBase: 'https://open.bigmodel.cn/api/paas/v4',
-        model: 'glm-4-flash',
-        apiKeySet: true,
+        providers: [
+          {
+            id: 'p1',
+            providerId: 'custom',
+            label: 'GLM',
+            baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+            models: ['glm-4-flash'],
+            apiKeySet: true,
+          },
+        ],
+        routing: { default: { providerId: 'p1', model: 'glm-4-flash' } },
       },
     });
     vi.mocked(client.createTaskFromText).mockResolvedValue(

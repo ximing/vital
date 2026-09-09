@@ -16,6 +16,11 @@ const HEAD: SyncHead = {
 function task(over: Partial<Task> & Pick<Task, 'id' | 'listId'>): Task {
   return {
     parentId: null,
+    outcomeId: null,
+    estimateMinutes: null,
+    deferCount: 0,
+    habitId: null,
+    habitSeq: null,
     title: 't',
     notes: '',
     status: 'todo',
@@ -44,6 +49,7 @@ function task(over: Partial<Task> & Pick<Task, 'id' | 'listId'>): Task {
 function inbox(over: Partial<InboxItem> & Pick<InboxItem, 'id'>): InboxItem {
   return {
     title: 'n',
+    outcomeId: null,
     originalUrl: null,
     canonicalUrl: null,
     extractedText: null,

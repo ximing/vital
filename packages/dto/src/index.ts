@@ -1,4 +1,5 @@
 export * from './auth.js';
+export * from './llm.js';
 export * from './notifications.js';
 export * from './uploads.js';
 export * from './errors.js';
@@ -7,6 +8,9 @@ export * from './tasks.js';
 export * from './tags.js';
 export * from './search.js';
 export * from './inbox.js';
+export * from './outcomes.js';
+export * from './agent.js';
+export * from './habits.js';
 export * from './reportTemplates.js';
 export * from './reportNotes.js';
 export * from './reports.js';

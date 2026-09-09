@@ -44,11 +44,21 @@ export interface Task {
   id: string;
   listId: string;
   parentId: string | null;
+  /** Owning thread (outcome), optional — orthogonal to listId. */
+  outcomeId: string | null;
   title: string;
   notes: string;
   status: TaskStatus;
   priority: TaskPriority;
   pinned: boolean;
+  /** Estimated effort in minutes, optional. */
+  estimateMinutes: number | null;
+  /** How many times dueAt has been pushed forward. */
+  deferCount: number;
+  /** Set when this task is a habit instance. */
+  habitId: string | null;
+  /** 1-based sequence within the habit's day (count habits). */
+  habitSeq: number | null;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;
@@ -91,10 +101,12 @@ export const createTaskInputSchema = z.object({
   title: z.string().trim().min(1).max(500),
   listId: uuidSchema,
   parentId: uuidSchema.nullable().optional(),
+  outcomeId: uuidSchema.nullable().optional(),
   notes: z.string().max(50_000).optional(),
   status: z.enum(['todo', 'doing', 'canceled']).optional(),
   priority: taskPrioritySchema.optional(),
   pinned: z.boolean().optional(),
+  estimateMinutes: z.number().int().min(0).max(100000).nullable().optional(),
   dueAt: isoDateTimeSchema.nullable().optional(),
   startAt: isoDateTimeSchema.nullable().optional(),
   reminderMode: reminderModeSchema.optional(),
@@ -119,10 +131,12 @@ export const patchTaskInputSchema = z
   .object({
     title: z.string().trim().min(1).max(500).optional(),
     listId: uuidSchema.optional(),
+    outcomeId: uuidSchema.nullable().optional(),
     notes: z.string().max(50_000).nullable().optional(),
     status: z.enum(['todo', 'doing', 'canceled']).optional(),
     priority: taskPrioritySchema.optional(),
     pinned: z.boolean().optional(),
+    estimateMinutes: z.number().int().min(0).max(100000).nullable().optional(),
     dueAt: isoDateTimeSchema.nullable().optional(),
     startAt: isoDateTimeSchema.nullable().optional(),
     reminderMode: reminderModeSchema.nullable().optional(),

@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, Calendar, CheckSquare, Search, Settings } from 'lucide-react';
+import { BookOpen, Calendar, CheckSquare, Search, Settings, Sun } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { HOME_PATH, t } from '@/copy';
+import { HOME_PATH, TODOS_HOME_PATH, t } from '@/copy';
 import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { AccountMenu } from '@/shell/AccountMenu';
@@ -14,7 +14,8 @@ import { Icon } from '@/ui/icon';
 import { useState } from 'react';
 
 const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
-  { id: 'todos', to: HOME_PATH, icon: CheckSquare, label: t.rail.todos },
+  { id: 'today', to: HOME_PATH, icon: Sun, label: t.rail.today },
+  { id: 'todos', to: TODOS_HOME_PATH, icon: CheckSquare, label: t.rail.todos },
   { id: 'capture', to: '/inbox', icon: BookOpen, label: t.rail.capture },
   { id: 'reflect', to: '/reports', icon: Calendar, label: t.rail.reflect },
   { id: 'search', to: '/search', icon: Search, label: t.nav.search },

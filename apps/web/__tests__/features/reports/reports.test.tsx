@@ -9,7 +9,7 @@ import {
 } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -355,6 +355,11 @@ describe('reports workspace', () => {
         id: TASK_ID,
         listId: 'inbox-1',
         parentId: null,
+        outcomeId: null,
+        estimateMinutes: null,
+        deferCount: 0,
+        habitId: null,
+        habitSeq: null,
         title: '写纪要',
         notes: '',
         status: 'done',
@@ -484,8 +489,52 @@ describe('reports workspace', () => {
     expect(screen.getByRole('button', { name: t.reports.keepLocal })).toBeInTheDocument();
   });
 
+  it.each(['another report', 'own completed save', 'own pending save', 'remote during save'])(
+    'checks the document revision for %s while editing',
+    async (scenario) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      let finishSave!: (report: Report) => void;
+      vi.mocked(client.patchReport).mockImplementation(
+        () => new Promise<Report>((resolve) => { finishSave = resolve; }),
+      );
+      renderAt('/reports/r-daily');
+      const title = await screen.findByLabelText(t.reports.title);
+      await user.type(title, '改');
+      await user.keyboard('{Meta>}s{/Meta}');
+      await waitFor(() => expect(client.patchReport).toHaveBeenCalledTimes(1));
+      const saved = { ...daily, title: `${daily.title}改`, revision: 2 };
+      if (scenario === 'own completed save') {
+        await act(async () => finishSave(saved));
+        await user.type(title, '继续');
+      }
+      vi.mocked(client.syncHead).mockResolvedValue({
+        tasksMaxUpdatedAt: 't1',
+        inboxMaxUpdatedAt: 'i1',
+        reportsMaxUpdatedAt: 'r2',
+        revision: 2,
+      });
+      vi.mocked(client.getReportEmbeds).mockResolvedValue({
+        revision: scenario === 'another report' ? 1 : scenario === 'remote during save' ? 3 : 2,
+        embeds: daily.embeds,
+      });
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+      expect(screen.queryByText(t.reports.remoteUpdated)).not.toBeInTheDocument();
+      if (scenario === 'own pending save' || scenario === 'remote during save') {
+        await act(async () => finishSave(saved));
+        if (scenario === 'remote during save') {
+          expect(screen.getByText(t.reports.remoteUpdated)).toBeInTheDocument();
+        } else {
+          expect(screen.queryByText(t.reports.remoteUpdated)).not.toBeInTheDocument();
+        }
+      }
+      expect(title).toHaveValue(`${daily.title}改${scenario === 'own completed save' ? '继续' : ''}`);
+    },
+  );
+
   it('polls embeds only and never GETs the report body while dirty', async () => {
-    vi.mocked(client.patchReport).mockImplementation(() => new Promise(() => undefined));
+    vi.mocked(client.patchReport).mockRejectedValue(new Error('offline'));
+    vi.mocked(client.getReportEmbeds).mockResolvedValue({ revision: 2, embeds: daily.embeds });
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderAt('/reports/r-daily');

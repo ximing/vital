@@ -41,6 +41,8 @@ export interface InboxAsset {
 export interface InboxItem {
   id: string;
   title: string;
+  /** Owning thread (outcome) when filed as material, optional. */
+  outcomeId: string | null;
   originalUrl: string | null;
   canonicalUrl: string | null;
   extractedText: string | null;
@@ -100,6 +102,7 @@ export const patchInboxInputSchema = z
     siteName: z.string().trim().max(200).nullable().optional(),
     readAt: z.string().datetime({ offset: true }).nullable().optional(),
     tagIds: tagIdsSchema.optional(),
+    outcomeId: uuidSchema.nullable().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',

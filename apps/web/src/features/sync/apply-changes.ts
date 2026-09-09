@@ -3,6 +3,7 @@ import { mergeInboxItems, mergeReportListItems, mergeTasksIntoList } from '@vita
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { inboxKeys } from '@/features/inbox/queries';
 import { reportKeys } from '@/features/reports/queries';
+import { todayKeys } from '@/features/today/queries';
 import { descendantListIds } from '@/features/todos/model';
 import { todoKeys } from '@/features/todos/queries';
 
@@ -26,6 +27,8 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
     }
     void qc.invalidateQueries({ queryKey: ['todos', 'calendar'] });
     void qc.invalidateQueries({ queryKey: todoKeys.counts });
+    // Task moves shift outcome counts / signals on the today dashboard.
+    void qc.invalidateQueries({ queryKey: todayKeys.all });
   }
 
   void qc.invalidateQueries({ queryKey: todoKeys.lists });
@@ -37,6 +40,8 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
       if (item.deletedAt) qc.removeQueries({ queryKey: inboxKeys.item(item.id) });
       else qc.setQueryData(inboxKeys.item(item.id), item);
     }
+    // Inbox moves shift the pulse strip and per-thread material counts.
+    void qc.invalidateQueries({ queryKey: todayKeys.all });
   }
 
   if (changes.reports.length > 0) {

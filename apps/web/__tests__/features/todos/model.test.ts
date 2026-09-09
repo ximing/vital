@@ -46,6 +46,11 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
   return {
     listId: 'inbox-1',
     parentId: null,
+    outcomeId: null,
+    estimateMinutes: null,
+    deferCount: 0,
+    habitId: null,
+    habitSeq: null,
     notes: '',
     status: 'todo',
     priority: 3,

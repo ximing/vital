@@ -20,7 +20,12 @@ vi.mock('@/api/client', async (importOriginal) => {
       patchNotificationChannel: vi.fn(),
       testNotificationChannel: vi.fn(),
       updateMe: vi.fn(),
-      testLlm: vi.fn(),
+      llmCatalog: vi.fn(),
+      addLlmProvider: vi.fn(),
+      patchLlmProvider: vi.fn(),
+      putLlmRouting: vi.fn(),
+      testLlmProvider: vi.fn(),
+      removeLlmProvider: vi.fn(),
       listApiTokens: vi.fn(),
       createApiToken: vi.fn(),
       revokeApiToken: vi.fn(),
@@ -50,6 +55,11 @@ describe('NotificationsSection', () => {
     setAuthForTest(mockUser);
     vi.mocked(client.listNotificationChannels).mockResolvedValue({ items: [] });
     vi.mocked(client.listApiTokens).mockResolvedValue({ items: [] });
+    vi.mocked(client.llmCatalog).mockResolvedValue({
+      providers: [
+        { id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-5-mini', name: 'gpt-5-mini' }] },
+      ],
+    });
     vi.mocked(client.createNotificationChannel).mockResolvedValue({
       id: 'c1',
       type: 'meow',
@@ -76,9 +86,9 @@ describe('NotificationsSection', () => {
     const canvas = document.querySelector('[data-region="settings-canvas"]');
     expect(canvas).not.toBeNull();
     expect(canvas).toHaveClass('w-full');
-    expect(screen.getByRole('heading', { name: t.settings.title }).parentElement).toHaveClass(
-      'max-w-2xl',
-      'mx-auto',
+    expect(screen.getByRole('tablist', { name: t.settings.title })).toHaveAttribute(
+      'aria-orientation',
+      'vertical',
     );
     expect(screen.getByRole('button', { name: t.nav.logout })).toHaveClass('text-muted');
     expect(screen.getByLabelText(t.settings.displayName).closest('form')).toHaveClass('max-w-2xl');
@@ -107,7 +117,7 @@ describe('NotificationsSection', () => {
     });
     await user.click(screen.getByRole('tab', { name: t.settings.tabs.llm }));
     await waitFor(() => {
-      expect(screen.getByLabelText(t.settings.llm.apiBase)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: t.settings.llm.providers })).toBeInTheDocument();
     });
     await user.click(screen.getByRole('tab', { name: t.settings.tabs.tokens }));
     await waitFor(() => {
@@ -115,16 +125,20 @@ describe('NotificationsSection', () => {
     });
   });
 
-  it('saves OpenAI-compatible model settings', async () => {
+  it('adds a custom OpenAI-compatible provider', async () => {
     const user = userEvent.setup();
-    vi.mocked(client.updateMe).mockResolvedValue({
-      ...mockUser,
-      llm: {
-        apiBase: 'https://open.bigmodel.cn/api/paas/v4',
-        model: 'glm-4-flash',
-        apiKeySet: true,
-        parameters: { thinking: { type: 'enabled' }, reasoning_effort: 'low', max_tokens: 4096 },
-      },
+    vi.mocked(client.addLlmProvider).mockResolvedValue({
+      providers: [
+        {
+          id: 'prov-1',
+          providerId: 'custom',
+          label: '公司网关',
+          baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+          models: ['glm-4-flash'],
+          apiKeySet: true,
+        },
+      ],
+      routing: {},
     });
     render(
       <RabRoot>
@@ -135,32 +149,88 @@ describe('NotificationsSection', () => {
         </MemoryRouter>
       </RabRoot>,
     );
+
+    await user.click(screen.getByRole('button', { name: `＋ ${t.settings.llm.addProvider}` }));
+    // Switch the provider picker to a custom endpoint.
+    await user.click(screen.getByRole('button', { name: t.settings.llm.addProvider }));
+    await user.click(screen.getByRole('option', { name: t.settings.llm.customEndpoint }));
+    await user.type(screen.getByLabelText(t.settings.llm.providerLabel), '公司网关');
     await user.type(
       screen.getByLabelText(t.settings.llm.apiBase),
       'https://open.bigmodel.cn/api/paas/v4',
     );
-    await user.type(screen.getByLabelText(t.settings.llm.model), 'glm-4-flash');
+    await user.type(screen.getByLabelText(t.settings.llm.providerModels), 'glm-4-flash{Enter}');
     await user.type(screen.getByLabelText(t.settings.llm.apiKey), 'sk-test');
-    fireEvent.change(screen.getByLabelText(t.settings.llm.parametersJson), {
-      target: {
-        value: '{"thinking":{"type":"enabled"},"reasoning_effort":"low","max_tokens":4096}',
-      },
-    });
-    expect(screen.getByRole('button', { name: t.settings.llm.test })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: t.settings.llm.save }));
+    await user.click(screen.getByRole('button', { name: t.settings.llm.add }));
+
     await waitFor(() =>
-      expect(client.updateMe).toHaveBeenCalledWith({
-        llm: {
-          apiBase: 'https://open.bigmodel.cn/api/paas/v4',
-          model: 'glm-4-flash',
-          apiKey: 'sk-test',
-          parameters: { thinking: { type: 'enabled' }, reasoning_effort: 'low', max_tokens: 4096 },
+      expect(client.addLlmProvider).toHaveBeenCalledWith({
+        providerId: 'custom',
+        label: '公司网关',
+        baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+        apiKey: 'sk-test',
+        models: ['glm-4-flash'],
+      }),
+    );
+    expect(await screen.findByText('公司网关')).toBeInTheDocument();
+    expect(screen.getByText('已配置密钥')).toBeInTheDocument();
+  });
+
+  it('edits saved model parameters independently and restores them on remount', async () => {
+    const user = userEvent.setup();
+    const provider = {
+      id: 'p1',
+      providerId: 'custom',
+      label: '参数测试',
+      baseUrl: 'https://example.com/v1',
+      models: ['model-a', 'model-b'],
+      apiKeySet: true,
+      modelParameters: { 'model-a': { reasoning_effort: 'low' }, 'model-b': { temperature: 0.3 } },
+    };
+    setAuthForTest({ ...mockUser, llm: { providers: [provider], routing: {} } });
+    vi.mocked(client.patchLlmProvider).mockImplementation(async (_id, input) => ({
+      providers: [{ ...provider, modelParameters: input.modelParameters ?? {} }],
+      routing: {},
+    }));
+    const renderPage = () =>
+      render(
+        <RabRoot>
+          <MemoryRouter initialEntries={['/settings?tab=llm']}>
+            <Routes>
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </MemoryRouter>
+        </RabRoot>,
+      );
+    const view = renderPage();
+    await user.click(screen.getByText('配置模型参数 · 参数测试'));
+    fireEvent.change(screen.getByLabelText('model-a 参数 JSON'), {
+      target: { value: '{"thinking":{"type":"enabled"},"reasoning_effort":"high","top_k":20}' },
+    });
+    expect(screen.getByRole('button', { name: '测试 model-a' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: '保存模型参数' }));
+    await waitFor(() =>
+      expect(client.patchLlmProvider).toHaveBeenCalledWith('p1', {
+        modelParameters: {
+          'model-a': { thinking: { type: 'enabled' }, reasoning_effort: 'high', top_k: 20 },
+          'model-b': { temperature: 0.3 },
         },
       }),
     );
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: t.settings.llm.test })).toBeEnabled(),
-    );
+    await waitFor(() => expect(screen.getByRole('button', { name: '测试 model-a' })).toBeEnabled());
+    view.unmount();
+    renderPage();
+    await user.click(screen.getByText('配置模型参数 · 参数测试'));
+    expect(
+      JSON.parse((screen.getByLabelText('model-a 参数 JSON') as HTMLTextAreaElement).value),
+    ).toEqual({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
+      top_k: 20,
+    });
+    expect(
+      JSON.parse((screen.getByLabelText('model-b 参数 JSON') as HTMLTextAreaElement).value),
+    ).toEqual({ temperature: 0.3 });
   });
 
   it('saves a MeoW nickname', async () => {

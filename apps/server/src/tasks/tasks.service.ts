@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  llmReady,
   type CalendarQuery,
   type CalendarResponse,
   type CompleteTaskResponse,
@@ -52,7 +53,15 @@ import {
   listLists,
   SORT_GAP,
 } from '../lists/lists.service.js';
-import { llmCredentialsOf } from '../llm/client.js';
+import { llmPublicOf } from '../llm/settings.service.js';
+import {
+  enqueueOutcomeRefresh,
+  enqueueTaskDecompose,
+  hasPendingDecomposeAction,
+} from '../agent/jobs.js';
+import { spawnNextOnComplete } from '../habits/habits.service.js';
+import { isDefer, needsDecomposition } from '../outcomes/rule-engine.js';
+import { assertOwnedOutcomeId } from '../outcomes/shared.js';
 import {
   buildCreateInputFromIntent,
   interpretTaskText,
@@ -334,6 +343,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
   }
   if (parentId && input.pinned) throw AppError.of(400, 'VALIDATION_ERROR');
   if (input.tagIds !== undefined) await assertOwnedTagIds(userId, input.tagIds);
+  if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
 
   const zone = input.timezone ?? user.timezone;
   const isAllDay = input.isAllDay ?? false;
@@ -382,6 +392,8 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     userId,
     listId,
     parentId,
+    outcomeId: input.outcomeId ?? null,
+    estimateMinutes: input.estimateMinutes ?? null,
     title: input.title,
     notesMd: input.notes ?? '',
     status: input.status ?? 'todo',
@@ -425,6 +437,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
       now,
       tx,
     );
+    if (row.outcomeId) await enqueueOutcomeRefresh(tx, userId, row.outcomeId, now);
   });
   const [created] = await getDb().select().from(tasks).where(eq(tasks.id, row.id)).limit(1);
   if (!created) throw AppError.of(500, 'INTERNAL_ERROR');
@@ -438,19 +451,15 @@ export async function createTaskFromText(
   const user = await getUserEntity(userId);
   const inbox = await getInboxList(userId);
   if (input.listId !== undefined) await getOwnedListOr404(userId, input.listId);
-  const creds = llmCredentialsOf(user);
   const lists = await listLists(userId);
   const tags = await listTags(userId);
   const zone = input.timezone ?? user.timezone;
   const now = new Date();
   let extracted: ExtractedTask | null = null;
-  if (creds) {
+  if (llmReady(llmPublicOf(user), 'task.parse')) {
     extracted = await interpretTaskText({
       text: input.text,
-      apiBase: creds.apiBase,
-      apiKey: creds.apiKey,
-      model: creds.model,
-      parameters: creds.parameters,
+      user,
       timezone: zone,
       now,
       lists: lists.items,
@@ -471,6 +480,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   const task = await getOwnedTaskOr404(userId, id);
   if (input.pinned && task.parentId) throw AppError.of(400, 'VALIDATION_ERROR');
   if (input.tagIds !== undefined) await assertOwnedTagIds(userId, input.tagIds);
+  if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
   if (input.listId !== undefined && task.parentId && input.listId !== task.listId) {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
@@ -582,6 +592,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   }
 
   const now = new Date();
+  const deferred = isDefer(oldDue, input.dueAt === undefined ? undefined : dueAt, now);
   const patch: Partial<TaskRow> = {
     updatedAt: now,
     timezone: zone,
@@ -594,6 +605,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     recurrenceRrule: recurrence,
     recurrenceKind,
     recurrenceDtstart,
+    ...(deferred ? { deferCount: task.deferCount + 1 } : {}),
   };
   if (input.title !== undefined) patch.title = input.title;
   if (input.notes !== undefined) patch.notesMd = input.notes ?? '';
@@ -601,6 +613,8 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   if (input.priority !== undefined) patch.priority = input.priority;
   if (input.pinned !== undefined) patch.pinned = input.pinned;
   if (input.listId !== undefined) patch.listId = input.listId;
+  if (input.outcomeId !== undefined) patch.outcomeId = input.outcomeId;
+  if (input.estimateMinutes !== undefined) patch.estimateMinutes = input.estimateMinutes;
 
   const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {
@@ -631,6 +645,18 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
       now,
       tx,
     );
+    const nextOutcomeId = input.outcomeId !== undefined ? input.outcomeId : task.outcomeId;
+    if (nextOutcomeId) await enqueueOutcomeRefresh(tx, userId, nextOutcomeId, now);
+    if (input.outcomeId !== undefined && task.outcomeId && task.outcomeId !== nextOutcomeId) {
+      await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
+    }
+    if (
+      deferred &&
+      needsDecomposition(task.deferCount + 1) &&
+      !(await hasPendingDecomposeAction(tx, task.id))
+    ) {
+      await enqueueTaskDecompose(tx, userId, task.id, now);
+    }
   });
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }
@@ -643,6 +669,7 @@ export async function deleteTask(userId: string, id: string): Promise<void> {
     if (task.parentId) {
       await tx.update(tasks).set({ deletedAt: now, updatedAt: now }).where(eq(tasks.id, task.id));
       await syncTaskNotifications({ ...task, deletedAt: now }, user, now, tx);
+      if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
       return;
     }
     const children = await tx
@@ -657,6 +684,7 @@ export async function deleteTask(userId: string, id: string): Promise<void> {
     for (const child of children) {
       await syncTaskNotifications({ ...child, deletedAt: now }, user, now, tx);
     }
+    if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
   });
 }
 
@@ -668,6 +696,7 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
     if (task.parentId) {
       await tx.update(tasks).set({ deletedAt: null, updatedAt: now }).where(eq(tasks.id, task.id));
       await syncTaskNotifications({ ...task, deletedAt: null }, user, now, tx);
+      if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
       return;
     }
     const children = await tx
@@ -689,6 +718,7 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
     for (const child of children) {
       await syncTaskNotifications({ ...child, deletedAt: null }, user, now, tx);
     }
+    if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
   });
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }
@@ -785,6 +815,7 @@ export async function completeTask(userId: string, id: string): Promise<Complete
         now,
         tx,
       );
+      if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
     });
   } catch (err) {
     if (isUniqueViolation(err)) throw AppError.of(409, 'VALIDATION_ERROR');
@@ -792,7 +823,10 @@ export async function completeTask(userId: string, id: string): Promise<Complete
   }
 
   const updated = await getOwnedTaskOr404(userId, id);
-  return { task: await dtoOf(updated), undo: { completionId } };
+  const dto = await dtoOf(updated);
+  // Habit relay: completing one count-habit instance spawns the next (rule layer).
+  await spawnNextOnComplete(userId, dto, now);
+  return { task: dto, undo: { completionId } };
 }
 
 export async function uncompleteTask(
@@ -854,6 +888,7 @@ export async function uncompleteTask(
       now,
       tx,
     );
+    if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
   });
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }

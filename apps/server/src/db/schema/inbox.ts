@@ -36,6 +36,8 @@ export const inboxItems = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     title: varchar('title', { length: 500 }).notNull(),
+    /** Owning thread when filed as material. No FK — service layer checks ownership. */
+    outcomeId: char('outcome_id', { length: 36 }),
     originalUrl: text('original_url'),
     canonicalUrl: text('canonical_url'),
     extractedText: text('extracted_text'),

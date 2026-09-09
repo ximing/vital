@@ -1,4 +1,11 @@
 import type {
+  ActionFeedbackInput,
+  AgentAction,
+  AgentActionLogItem,
+  AgentActionsQuery,
+  AgentMemoryItem,
+  AgentUsageSummary,
+  AgentMetricsResponse,
   AuthMode,
   AuthResponse,
   CalendarQuery,
@@ -7,13 +14,24 @@ import type {
   CompleteTaskResponse,
   ConvertInboxInput,
   ConvertInboxResponse,
+  CreateHabitInput,
+  CreateAgentMemoryInput,
   CreateNotificationChannelInput,
   CreateInboxInput,
+  CreateOutcomeInput,
   CurrentReportQuery,
   ExchangeExtensionAuthInput,
   ExtensionAuthCodeResponse,
   FillReportInput,
   GetReportQuery,
+  Habit,
+  LlmProviderInput,
+  LlmSettingsPublic,
+  Outcome,
+  PatchHabitInput,
+  PatchAgentMemoryInput,
+  PatchOutcomeInput,
+  PutLlmRoutingInput,
   ReportOverview,
   ReportOverviewQuery,
   ReportReview,
@@ -54,6 +72,7 @@ import type {
   Task,
   TaskCollection,
   TaskCounts,
+  TodayDashboard,
   UncompleteTaskInput,
   UpdateMeInput,
   UpdateOnboardingInput,
@@ -113,7 +132,32 @@ export interface VitalClient {
   taskCounts(): Promise<TaskCounts>;
   createTask(input: CreateTaskInput): Promise<Task>;
   createTaskFromText(input: CreateTaskFromTextInput): Promise<Task>;
-  testLlm(): Promise<{ ok: true }>;
+  llmCatalog(): Promise<{ providers: import('@vital/dto').LlmCatalogProvider[] }>;
+  addLlmProvider(input: LlmProviderInput): Promise<LlmSettingsPublic>;
+  patchLlmProvider(id: string, input: Partial<LlmProviderInput>): Promise<LlmSettingsPublic>;
+  removeLlmProvider(id: string): Promise<LlmSettingsPublic>;
+  testLlmProvider(id: string, model: string): Promise<{ ok: true }>;
+  putLlmRouting(input: PutLlmRoutingInput): Promise<LlmSettingsPublic>;
+  getToday(): Promise<TodayDashboard>;
+  listOutcomes(status?: 'open' | 'closed'): Promise<Outcome[]>;
+  createOutcome(input: CreateOutcomeInput): Promise<Outcome>;
+  patchOutcome(id: string, input: PatchOutcomeInput): Promise<Outcome>;
+  closeOutcome(id: string): Promise<Outcome>;
+  reopenOutcome(id: string): Promise<Outcome>;
+  undoOutcome(id: string): Promise<void>;
+  refreshOutcome(id: string): Promise<void>;
+  listHabits(): Promise<Habit[]>;
+  createHabit(input: CreateHabitInput): Promise<Habit>;
+  patchHabit(id: string, input: PatchHabitInput): Promise<Habit>;
+  deleteHabit(id: string): Promise<void>;
+  getAgentUsage(days?: number): Promise<AgentUsageSummary>;
+  getAgentMetrics(days?: number): Promise<AgentMetricsResponse>;
+  listAgentActions(query?: AgentActionsQuery): Promise<AgentActionLogItem[]>;
+  sendAgentActionFeedback(id: string, input: ActionFeedbackInput): Promise<AgentAction>;
+  listAgentMemory(): Promise<AgentMemoryItem[]>;
+  createAgentMemory(input: CreateAgentMemoryInput): Promise<AgentMemoryItem>;
+  patchAgentMemory(id: string, input: PatchAgentMemoryInput): Promise<AgentMemoryItem>;
+  deleteAgentMemory(id: string): Promise<void>;
   getTask(id: string): Promise<Task>;
   patchTask(id: string, input: PatchTaskInput): Promise<Task>;
   deleteTask(id: string): Promise<void>;
@@ -285,7 +329,60 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     createTask: (input) => http.request('/api/v1/tasks', { method: 'POST', body: input }),
     createTaskFromText: (input) =>
       http.request('/api/v1/tasks/from-text', { method: 'POST', body: input }),
-    testLlm: () => http.request('/api/v1/llm/test', { method: 'POST', body: {} }),
+    llmCatalog: () => http.request('/api/v1/llm/catalog'),
+    addLlmProvider: (input) =>
+      http.request('/api/v1/llm/providers', { method: 'POST', body: input }),
+    patchLlmProvider: (id, input) =>
+      http.request(`/api/v1/llm/providers/${id}`, { method: 'PATCH', body: input }),
+    removeLlmProvider: (id) => http.request(`/api/v1/llm/providers/${id}`, { method: 'DELETE' }),
+    testLlmProvider: (id, model) =>
+      http.request(`/api/v1/llm/providers/${id}/test`, {
+        method: 'POST',
+        body: { providerId: id, model },
+      }),
+    putLlmRouting: (input) => http.request('/api/v1/llm/routing', { method: 'PUT', body: input }),
+    getToday: () => http.request('/api/v1/today'),
+    listOutcomes: (status) => http.request(`/api/v1/outcomes${status ? `?status=${status}` : ''}`),
+    createOutcome: (input) => http.request('/api/v1/outcomes', { method: 'POST', body: input }),
+    patchOutcome: (id, input) =>
+      http.request(`/api/v1/outcomes/${id}`, { method: 'PATCH', body: input }),
+    closeOutcome: (id) => http.request(`/api/v1/outcomes/${id}/close`, { method: 'POST' }),
+    reopenOutcome: (id) => http.request(`/api/v1/outcomes/${id}/reopen`, { method: 'POST' }),
+    undoOutcome: async (id) => {
+      await http.request(`/api/v1/outcomes/${id}/undo`, { method: 'POST' });
+    },
+    refreshOutcome: async (id) => {
+      await http.request(`/api/v1/outcomes/${id}/refresh`, { method: 'POST' });
+    },
+    listHabits: () => http.request('/api/v1/habits'),
+    createHabit: (input) => http.request('/api/v1/habits', { method: 'POST', body: input }),
+    patchHabit: (id, input) =>
+      http.request(`/api/v1/habits/${id}`, { method: 'PATCH', body: input }),
+    deleteHabit: async (id) => {
+      await http.request(`/api/v1/habits/${id}`, { method: 'DELETE' });
+    },
+    getAgentUsage: (days) => http.request(`/api/v1/agent/usage${days ? `?days=${days}` : ''}`),
+    getAgentMetrics: (days) => http.request(`/api/v1/agent/metrics${days ? `?days=${days}` : ''}`),
+    listAgentActions: (query) =>
+      http.request('/api/v1/agent/actions', {
+        query: {
+          targetType: query?.targetType,
+          targetId: query?.targetId,
+          actionType: query?.actionType,
+          feedback: query?.feedback,
+          days: query?.days,
+        },
+      }),
+    sendAgentActionFeedback: (id, input) =>
+      http.request(`/api/v1/agent/actions/${id}/feedback`, { method: 'POST', body: input }),
+    listAgentMemory: () => http.request('/api/v1/agent/memory'),
+    createAgentMemory: (input) =>
+      http.request('/api/v1/agent/memory', { method: 'POST', body: input }),
+    patchAgentMemory: (id, input) =>
+      http.request(`/api/v1/agent/memory/${id}`, { method: 'PATCH', body: input }),
+    deleteAgentMemory: async (id) => {
+      await http.request(`/api/v1/agent/memory/${id}`, { method: 'DELETE' });
+    },
     getTask: (id) => http.request(`/api/v1/tasks/${id}`),
     patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),
     deleteTask: (id) => http.request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),

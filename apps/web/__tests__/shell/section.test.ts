@@ -3,6 +3,7 @@ import { listIdFrom, rhythmHref, sectionOf } from '../../src/shell/section';
 
 describe('app section', () => {
   it('maps routes to primary sections', () => {
+    expect(sectionOf('/today', '')).toBe('today');
     expect(sectionOf('/todos/lists/smart:today', '')).toBe('todos');
     expect(sectionOf('/todos/lists/smart:someday', '')).toBe('todos');
     expect(sectionOf('/todos/calendar', 'list=smart:today')).toBe('todos');

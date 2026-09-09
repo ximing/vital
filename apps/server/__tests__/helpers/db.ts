@@ -1,10 +1,15 @@
 import { db, pool } from '../../src/db/index.js';
 import {
+  agentActions,
+  agentJobs,
+  agentMemory,
+  agentUsage,
   apiTokenAccessLogs,
   apiTokens,
   attachments,
   entityLinks,
   extensionAuthCodes,
+  habits,
   holidayCalendar,
   inboxAssets,
   inboxItemTags,
@@ -13,6 +18,7 @@ import {
   notificationChannels,
   notificationDeliveries,
   notificationOutbox,
+  outcomes,
   reports,
   refreshTokens,
   tags,
@@ -52,6 +58,10 @@ export async function resetDb(): Promise<void> {
     await db.delete(notificationDeliveries);
     await db.delete(notificationOutbox);
     await db.delete(notificationChannels);
+    await db.delete(agentUsage);
+    await db.delete(agentActions);
+    await db.delete(agentMemory);
+    await db.delete(agentJobs);
     await db.delete(inboxAssets);
     await db.delete(inboxItemTags);
     await db.delete(entityLinks);
@@ -59,6 +69,8 @@ export async function resetDb(): Promise<void> {
     await db.delete(taskTags);
     await db.delete(taskCompletions);
     await db.delete(tasks);
+    await db.delete(habits);
+    await db.delete(outcomes);
     await db.delete(holidayCalendar);
     await db.delete(tags);
     await db.delete(lists);

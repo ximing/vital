@@ -1,6 +1,6 @@
 import type { List, TaskPriority } from '@vital/dto';
-import { CircleArrowUp, Folder } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { CircleArrowUp, Folder, LoaderCircle } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
@@ -49,12 +49,15 @@ export function QuickAdd({
   intent?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
+  const statusId = useId();
   const nonce = useTodosUi((s) => s.quickAddNonce);
   const [draft, setDraft] = useState<ScheduleDraft>(emptyScheduleDraft);
   const [priority, setPriority] = useState<TaskPriority>(lockedPriority ?? 3);
   const [listId, setListId] = useState(defaultListId);
   const [prevDefaultListId, setPrevDefaultListId] = useState(defaultListId);
   const [busy, setBusy] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Follow defaultListId changes by adjusting state during render.
@@ -67,13 +70,21 @@ export function QuickAdd({
     if (captureId && nonce > 0) inputRef.current?.focus();
   }, [captureId, nonce]);
 
+  useEffect(() => {
+    if (!busy) return;
+    const timer = window.setTimeout(() => setWaiting(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [busy]);
+
   async function handle(event: FormEvent) {
     event.preventDefault();
     const el = inputRef.current;
-    if (!el || disabled || busy) return;
+    if (!el || disabled || submittingRef.current) return;
     const title = el.value.trim();
     if (title === '') return;
     const next = draft;
+    submittingRef.current = true;
+    setWaiting(false);
     setBusy(true);
     setError(null);
     try {
@@ -89,6 +100,7 @@ export function QuickAdd({
     } catch (err) {
       setError(humanError(err));
     } finally {
+      submittingRef.current = false;
       setBusy(false);
     }
   }
@@ -123,8 +135,27 @@ export function QuickAdd({
   );
 
   const blocked = disabled || busy;
+  const progressNode = (
+    <div id={statusId} role="status" aria-live="polite" aria-atomic="true">
+      {busy ? (
+        <p className="flex items-center gap-2 px-1 pt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-accent">
+          <Icon
+            icon={LoaderCircle}
+            size={14}
+            className="shrink-0 animate-spin motion-reduce:animate-none"
+          />
+          <span>
+            {waiting ? t.todos.creatingWait : intent ? t.todos.interpreting : t.todos.creating}
+          </span>
+        </p>
+      ) : null}
+    </div>
+  );
   const errorNode = error ? (
-    <p className="px-1 pt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-danger">
+    <p
+      role="alert"
+      className="px-1 pt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-danger"
+    >
       {error}
     </p>
   ) : null;
@@ -140,32 +171,56 @@ export function QuickAdd({
             name="title"
             maxLength={intent ? 2000 : 500}
             disabled={blocked}
-            placeholder={busy && intent ? t.todos.interpreting : placeholder}
+            placeholder={placeholder}
             aria-label={t.todos.quickAddPlaceholder}
             aria-busy={busy || undefined}
+            aria-describedby={busy ? statusId : undefined}
             className="field-focus h-8 w-full border-0 bg-transparent px-0 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
           />
           <div className="mt-1 flex items-center gap-0.5">
-            {tools}
+            <fieldset
+              disabled={blocked}
+              className="flex min-w-0 items-center gap-0.5 border-0 p-0 disabled:opacity-50"
+            >
+              {tools}
+            </fieldset>
             <button
               type="submit"
               disabled={blocked}
               aria-label={t.todos.add}
               className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-full bg-accent text-on-accent hover:bg-accent-hover disabled:opacity-40"
             >
-              <Icon icon={CircleArrowUp} size={16} />
+              <Icon
+                icon={busy ? LoaderCircle : CircleArrowUp}
+                size={16}
+                className={busy ? 'animate-spin motion-reduce:animate-none' : ''}
+              />
             </button>
           </div>
         </div>
+        {progressNode}
         {errorNode}
       </form>
     );
   }
 
   return (
-    <form onSubmit={(event) => void handle(event)} className="w-full min-w-0 self-stretch pb-4 pt-1">
+    <form
+      onSubmit={(event) => void handle(event)}
+      className="w-full min-w-0 self-stretch pb-4 pt-1"
+    >
       <div className="flex h-[46px] w-full min-w-0 items-center gap-2 rounded-[14px] border border-border bg-surface px-4 shadow-[var(--shadow-xs)]">
-        <span aria-hidden className="shrink-0 text-[17px] font-medium leading-none text-accent">+</span>
+        <span aria-hidden className="shrink-0 text-[17px] font-medium leading-none text-accent">
+          {busy ? (
+            <Icon
+              icon={LoaderCircle}
+              size={17}
+              className="animate-spin motion-reduce:animate-none"
+            />
+          ) : (
+            '+'
+          )}
+        </span>
         <input
           id={captureId ? QUICK_ADD_ID : undefined}
           ref={inputRef}
@@ -173,16 +228,23 @@ export function QuickAdd({
           name="title"
           maxLength={intent ? 2000 : 500}
           disabled={blocked}
-          placeholder={busy && intent ? t.todos.interpreting : placeholder}
+          placeholder={placeholder}
           aria-label={t.todos.quickAddPlaceholder}
           aria-busy={busy || undefined}
+          aria-describedby={busy ? statusId : undefined}
           className="field-focus h-8 min-w-0 flex-1 border-0 bg-transparent px-0.5 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
         />
-        <div className="ml-auto flex shrink-0 items-center gap-1 text-muted">{tools}</div>
+        <fieldset
+          disabled={blocked}
+          className="ml-auto flex min-w-0 shrink-0 items-center gap-1 border-0 p-0 text-muted disabled:opacity-50"
+        >
+          {tools}
+        </fieldset>
         <button type="submit" disabled={blocked} className="sr-only">
           {t.todos.add}
         </button>
       </div>
+      {progressNode}
       {errorNode}
     </form>
   );
