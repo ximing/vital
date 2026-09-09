@@ -55,6 +55,7 @@
   --status-done: #2f9e63;
   --status-overdue: #ce4a45;
   --status-due-soon: #b4761e;
+  --status-favorite: #d9a62e;
   --report-daily: #1c7a4f;
   --report-weekly: #1c7a4f;
   --report-monthly: #155e3d;
@@ -92,6 +93,8 @@
   --text-meta-lh: 18px;
   --text-body: 14px;
   --text-body-lh: 21px;
+  --text-section: 16px;
+  --text-section-lh: 24px;
   --text-title: 20px;
   --text-title-lh: 28px;
   --text-display: 26px;
@@ -151,6 +154,7 @@
   --status-done: #63c78d;
   --status-overdue: #e8756c;
   --status-due-soon: #e0a94e;
+  --status-favorite: #f2cc6b;
   --report-daily: #5fd3a1;
   --report-weekly: #5fd3a1;
   --report-monthly: #82e0b6;

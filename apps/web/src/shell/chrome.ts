@@ -4,9 +4,38 @@ export const RAIL_WIDTH = 56;
 export const LIBRARY_MIN = 224;
 export const LIBRARY_MAX = 264;
 export const LIBRARY_DEFAULT = 248;
-export const CAPTURE_MIN = 336;
-export const CAPTURE_MAX = 396;
-export const CAPTURE_DEFAULT = 372;
+export const CAPTURE_MIN = 224;
+export const CAPTURE_MAX = 264;
+export const CAPTURE_DEFAULT = 248;
+
+export const INBOX_LIST_MIN = 320;
+export const INBOX_LIST_MAX = 520;
+export const INBOX_LIST_DEFAULT = 360;
+const INBOX_LIST_KEY = 'vital:pane-width:inbox-list';
+
+export function clampInboxListWidth(n: number): number {
+  return Math.min(INBOX_LIST_MAX, Math.max(INBOX_LIST_MIN, Math.round(n)));
+}
+
+export function loadInboxListWidth(): number {
+  try {
+    const raw = localStorage.getItem(INBOX_LIST_KEY);
+    if (raw === null) return INBOX_LIST_DEFAULT;
+    const n = Number(raw);
+    if (Number.isFinite(n)) return clampInboxListWidth(n);
+  } catch {
+    // Private mode.
+  }
+  return INBOX_LIST_DEFAULT;
+}
+
+export function saveInboxListWidth(width: number): void {
+  try {
+    localStorage.setItem(INBOX_LIST_KEY, String(clampInboxListWidth(width)));
+  } catch {
+    // Private mode.
+  }
+}
 
 export type PaneSection = 'todos' | 'capture' | 'reflect';
 

@@ -1,6 +1,8 @@
+import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { t } from '@/copy';
-import { EmptyArt } from '@/ui/empty-art';
+import { Button } from '@/ui/button';
+import { Icon } from '@/ui/icon';
 import { PASTE_URL_ID } from './model';
 import { useInboxUi } from './inbox-ui.service';
 
@@ -9,30 +11,30 @@ export function EmptyInbox() {
   const [hint, setHint] = useState(false);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col items-center px-3 py-8 text-center">
-      <div data-vignette="mineral-garden" aria-hidden="true" className="absolute inset-0" />
-      <EmptyArt className="relative z-10" />
-      <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-        {t.empty.inbox}
+    <div className="flex flex-1 flex-col items-center justify-center px-8 py-16 text-center">
+      <p className="eyebrow eyebrow-accent">
+        {t.rail.capture} · 0
       </p>
-      <div className="mt-4 flex w-full flex-col gap-2">
-        <button
-          type="button"
-          className="relative z-10 inline-flex min-h-9 w-full items-center justify-center rounded-md px-3 text-[length:var(--text-meta)] text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
-          onClick={() => setHint(true)}
-        >
-          {t.empty.actionExtension}
-        </button>
-        <button
-          type="button"
-          className="relative z-10 inline-flex min-h-9 w-full items-center justify-center rounded-md px-3 text-[length:var(--text-meta)] text-muted transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+      <h2 className="mt-4 max-w-[24ch] font-display text-[24px] font-semibold leading-[32px] tracking-[-0.02em] text-fg">
+        {t.empty.inboxTitle}
+      </h2>
+      <p className="mt-3 max-w-[42ch] text-[length:var(--text-meta)] leading-[1.7] text-muted">
+        {t.empty.inboxHint}
+      </p>
+      <div className="mt-6 flex items-center gap-2">
+        <Button
+          variant="ghost"
           onClick={() => {
             requestPaste();
             document.getElementById(PASTE_URL_ID)?.focus();
           }}
         >
+          <Icon icon={Plus} size={14} className="mr-1" />
           {t.inbox.pasteUrl}
-        </button>
+        </Button>
+        <Button variant="quiet" onClick={() => setHint(true)}>
+          {t.empty.actionExtension}
+        </Button>
       </div>
       {hint ? (
         <p
@@ -42,6 +44,9 @@ export function EmptyInbox() {
           {t.inbox.installHint}
         </p>
       ) : null}
+      <p className="mt-8 font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
+        {t.empty.inboxKbd}
+      </p>
     </div>
   );
 }
@@ -49,8 +54,8 @@ export function EmptyInbox() {
 export function EmptyReader() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">
-      <EmptyArt />
-      <p className="max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
+      <p className="eyebrow">{t.rail.capture}</p>
+      <p className="mt-3 max-w-md text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {t.empty.inboxReader}
       </p>
     </div>

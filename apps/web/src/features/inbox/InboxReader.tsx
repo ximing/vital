@@ -2,11 +2,14 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
+  Check,
+  ChevronLeft,
+  Copy,
   FilePlus2,
   ListTodo,
   Star,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type UIEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -17,6 +20,7 @@ import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Icon, type LucideIcon } from '@/ui/icon';
 import { EmptyReader, InboxSkeleton } from './EmptyInbox';
+import { InboxListColumn } from './InboxListPanel';
 import { inboxSourceIcon, inboxSourceTextClass } from './InboxRow';
 import {
   canPatchStatus,
@@ -31,13 +35,14 @@ import { useInboxActions, useInboxItemQuery } from './queries';
 import { ReaderArticle } from './ReaderArticle';
 import { useInboxUi } from './inbox-ui.service';
 
-const CONTENT_WIDTH = 'mx-auto w-full max-w-[64rem] px-8';
+const CONTENT_WIDTH = 'mx-auto w-full max-w-[700px] px-8 xl:max-w-[840px] 2xl:max-w-[920px]';
 
 function ActionButton({
   label,
   icon,
   active = false,
   activeClass = '',
+  filled = false,
   disabled = false,
   onClick,
 }: {
@@ -45,6 +50,7 @@ function ActionButton({
   icon: LucideIcon;
   active?: boolean;
   activeClass?: string;
+  filled?: boolean;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -60,7 +66,7 @@ function ActionButton({
         active ? activeClass : 'text-muted hover:bg-surface-muted hover:text-fg'
       }`}
     >
-      <Icon icon={icon} size={15} />
+      <Icon icon={icon} size={15} fill={filled ? 'currentColor' : 'none'} />
     </button>
   );
 }
@@ -95,6 +101,25 @@ export function InboxReader() {
   const originalUrl = item?.originalUrl ?? null;
   const patchable = item ? canPatchStatus(item) : false;
   const converted = item?.status === 'converted';
+  const [readProgress, setReadProgress] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  async function onCopyUrl(): Promise<void> {
+    if (!originalUrl) return;
+    try {
+      await navigator.clipboard.writeText(originalUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable (permissions / insecure context).
+    }
+  }
+
+  function onScroll(event: UIEvent<HTMLElement>): void {
+    const el = event.currentTarget;
+    const max = el.scrollHeight - el.clientHeight;
+    setReadProgress(max > 0 ? Math.min(1, el.scrollTop / max) : 0);
+  }
 
   async function onFavorite() {
     if (!item || !patchable) return;
@@ -137,9 +162,29 @@ export function InboxReader() {
   }
 
   return (
-    <main id="main" data-region="reading-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-canvas">
-      <header className="sticky top-0 z-[var(--z-sticky)] border-b border-border bg-canvas/90 backdrop-blur-sm">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 bg-canvas">
+      <InboxListColumn selectedId={id} className="hidden lg:flex" />
+      <main
+        id="main"
+        data-region="reading-canvas"
+        onScroll={onScroll}
+        className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-canvas"
+      >
+      <div className="sticky top-0 z-[var(--z-sticky)] h-[2px] w-full shrink-0" aria-hidden="true">
+        <div
+          className="h-full bg-accent transition-[width] duration-[var(--ease-in)]"
+          style={{ width: `${readProgress * 100}%` }}
+        />
+      </div>
+      <header className="sticky top-[2px] z-[var(--z-sticky)] bg-canvas/90 backdrop-blur-sm">
         <div className={`${CONTENT_WIDTH} flex h-12 items-center gap-3`}>
+          <Link
+            to="/inbox"
+            className="inline-flex h-7 shrink-0 items-center gap-0.5 rounded-md px-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+          >
+            <Icon icon={ChevronLeft} size={13} />
+            {t.inbox.back}
+          </Link>
           {item ? (
             <span className="flex min-w-0 items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
               <Icon
@@ -172,7 +217,8 @@ export function InboxReader() {
               label={item && isFavorite(item) ? t.inbox.unfavorite : t.inbox.favorite}
               icon={Star}
               active={item ? isFavorite(item) : false}
-              activeClass="bg-due/12 text-due"
+              activeClass="bg-favorite/12 text-favorite"
+              filled={item ? isFavorite(item) : false}
               disabled={!online || !patchable}
               onClick={() => void onFavorite()}
             />
@@ -257,32 +303,17 @@ export function InboxReader() {
         </p>
       ) : null}
 
-      <div className="reader-progress w-full" aria-hidden="true" />
-      <div className={`${CONTENT_WIDTH} flex-1 py-10`}>
+      <div className={`${CONTENT_WIDTH} flex-1 pb-16 pt-5`}>
         {query.isLoading ? (
           <InboxSkeleton />
         ) : !item ? (
           <EmptyReader />
         ) : (
           <>
-            <h1 className="text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em]">
+            <h1 className="font-display text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em]">
               {item.title}
             </h1>
-            {originalUrl ? (
-              <p className="mt-3 flex items-center gap-1.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
-                <span className="shrink-0 text-muted">{t.inbox.originalUrl} · </span>
-                <a
-                  href={originalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex min-w-0 items-baseline gap-1 break-all text-accent underline-offset-4 hover:underline"
-                >
-                  {originalUrl}
-                  <Icon icon={ArrowUpRight} size={12} className="shrink-0 self-center" />
-                </a>
-              </p>
-            ) : null}
-            <p className="mt-1.5 flex items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+            <p className="mt-2.5 flex items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
               <Icon
                 icon={inboxSourceIcon(item.source)}
                 size={13}
@@ -290,7 +321,34 @@ export function InboxReader() {
               />
               {[t.inbox.source[item.source], item.byline, item.siteName].filter(Boolean).join(' · ')}
             </p>
-            <div className="mt-8">
+            {originalUrl ? (
+              <p className="mt-1.5 flex items-center gap-1.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
+                <span className="shrink-0 text-muted">{t.inbox.originalUrl} · </span>
+                <a
+                  href={originalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-w-0 items-baseline gap-1 text-accent underline-offset-4 hover:underline"
+                >
+                  <span className="min-w-0 truncate">{originalUrl}</span>
+                  <Icon icon={ArrowUpRight} size={12} className="shrink-0 self-center" />
+                </a>
+                <button
+                  type="button"
+                  aria-label={copied ? t.inbox.copied : t.inbox.copyLink}
+                  title={copied ? t.inbox.copied : t.inbox.copyLink}
+                  onClick={() => void onCopyUrl()}
+                  className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] ${
+                    copied
+                      ? 'text-done'
+                      : 'text-tertiary hover:bg-surface-muted hover:text-fg'
+                  }`}
+                >
+                  <Icon icon={copied ? Check : Copy} size={13} />
+                </button>
+              </p>
+            ) : null}
+            <div className="mt-7">
               <ReaderArticle
                 html={item.extractedHtml}
                 text={item.extractedText}
@@ -301,6 +359,7 @@ export function InboxReader() {
           </>
         )}
       </div>
-    </main>
+      </main>
+    </div>
   );
 }

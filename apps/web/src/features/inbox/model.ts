@@ -1,6 +1,5 @@
-import type { CreateInboxInput, InboxItem, InboxPreview, Task } from '@vital/dto';
+import type { CreateInboxInput, InboxItem, InboxPreview } from '@vital/dto';
 import { extractInboxInputSchema } from '@vital/dto';
-import { isOpen } from '@/features/todos/model';
 
 export const PASTE_URL_ID = 'inbox-paste-url';
 export const READER_SIZES = ['sm', 'md', 'lg'] as const;
@@ -33,12 +32,6 @@ export function pendingIdForUrl(url: string): string {
   return `url:${url}`;
 }
 
-export function unprocessedTodos(tasks: Task[]): Task[] {
-  return tasks
-    .filter((task) => task.parentId === null && isOpen(task))
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
-}
-
 function newestFirst(items: InboxItem[]): InboxItem[] {
   return items.slice().sort((a, b) => {
     if (a.capturedAt === b.capturedAt) return b.id.localeCompare(a.id);
@@ -46,12 +39,27 @@ function newestFirst(items: InboxItem[]): InboxItem[] {
   });
 }
 
+export type InboxFilter = 'all' | 'unread' | 'favorite' | 'archived';
+
+export function parseInboxFilter(raw: string | null): InboxFilter {
+  if (raw === 'unread' || raw === 'favorite' || raw === 'archived') return raw;
+  return 'all';
+}
+
+export function filterSaves(items: InboxItem[], filter: InboxFilter): InboxItem[] {
+  const live = items.filter((item) => item.deletedAt === null);
+  if (filter === 'archived') return newestFirst(live.filter((item) => item.status === 'archived'));
+  if (filter === 'unread') return newestFirst(live.filter((item) => item.status === 'unread'));
+  if (filter === 'favorite') return newestFirst(live.filter((item) => item.status === 'later'));
+  return newestFirst(live.filter((item) => item.status !== 'archived'));
+}
+
 export function visibleSaves(items: InboxItem[]): InboxItem[] {
-  return newestFirst(items.filter((item) => item.status !== 'archived' && item.deletedAt === null));
+  return filterSaves(items, 'all');
 }
 
 export function archivedSaves(items: InboxItem[]): InboxItem[] {
-  return newestFirst(items.filter((item) => item.status === 'archived' && item.deletedAt === null));
+  return filterSaves(items, 'archived');
 }
 
 export function isFavorite(item: InboxItem): boolean {

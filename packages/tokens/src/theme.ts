@@ -20,6 +20,7 @@ export interface ColorTokens {
   statusDone: string;
   statusOverdue: string;
   statusDueSoon: string;
+  statusFavorite: string;
   reportDaily: string;
   reportWeekly: string;
   reportMonthly: string;
@@ -50,6 +51,7 @@ export const lightColors: ColorTokens = {
   statusDone: '#2F9E63',
   statusOverdue: '#CE4A45',
   statusDueSoon: '#B4761E',
+  statusFavorite: '#D9A62E',
   reportDaily: '#1C7A4F',
   reportWeekly: '#1C7A4F',
   reportMonthly: '#155E3D',
@@ -80,6 +82,7 @@ export const darkColors: ColorTokens = {
   statusDone: '#63C78D',
   statusOverdue: '#E8756C',
   statusDueSoon: '#E0A94E',
+  statusFavorite: '#F2CC6B',
   reportDaily: '#5FD3A1',
   reportWeekly: '#5FD3A1',
   reportMonthly: '#82E0B6',

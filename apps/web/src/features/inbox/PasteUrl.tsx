@@ -5,6 +5,7 @@ import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
+import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { hostLabel, normalizePasteUrl, PASTE_URL_ID } from './model';
 import { useInboxActions } from './queries';
@@ -71,7 +72,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
   const site = preview ? (preview.siteName ?? hostLabel(preview.originalUrl)) : null;
 
   return (
-    <div className="min-w-0 px-3 pb-3 pt-1">
+    <div className="min-w-0">
       <form onSubmit={onSubmit} className="flex min-w-0 flex-col gap-2">
         <div className="relative">
           <Icon
@@ -95,7 +96,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
             }}
             placeholder={t.inbox.pastePlaceholder}
             aria-label={t.inbox.pastePlaceholder}
-            className="h-10 w-full min-w-0 rounded-[12px] border border-border bg-canvas pl-8 pr-9 text-[length:var(--text-meta)] text-fg placeholder:text-tertiary focus-visible:outline-none focus-visible:border-focus focus-visible:ring-2 focus-visible:ring-accent/40"
+            className={`${FIELD_CONTROL_CLASS} w-full min-w-0 pl-8 pr-9 text-[length:var(--text-meta)]`}
           />
           <button
             type="submit"
@@ -128,7 +129,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
               value={previewTitle}
               maxLength={500}
               onChange={(e) => setPreviewTitle(e.target.value)}
-              className="h-[var(--field-h)] w-full rounded-md border border-border bg-canvas px-3 text-[length:var(--text-body)] font-semibold text-fg"
+              className={`${FIELD_CONTROL_CLASS} w-full font-semibold`}
             />
           </label>
           <p className="mt-2 break-all text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">

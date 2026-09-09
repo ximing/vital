@@ -1,6 +1,7 @@
-import type { InboxItem, InboxSource, Task } from '@vital/dto';
+import type { InboxItem, InboxSource } from '@vital/dto';
 import {
   Archive,
+  ArchiveRestore,
   Bookmark,
   CircleAlert,
   Globe,
@@ -12,7 +13,6 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router';
 import { t } from '@/copy';
-import { TaskCheckbox } from '@/features/todos/TaskRow';
 import { Button } from '@/ui/button';
 import { Icon, type LucideIcon } from '@/ui/icon';
 import { formatCapturedAt, hostLabel, statusLabelKey, type PendingSave } from './model';
@@ -52,7 +52,7 @@ export function inboxSourceTextClass(source: InboxSource): string {
 function SourceTile({ source }: { source: InboxSource }) {
   return (
     <span
-      className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${SOURCE_TILE_CLASS[source]}`}
+      className={`mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${SOURCE_TILE_CLASS[source]}`}
       title={t.inbox.source[source]}
     >
       <Icon icon={SOURCE_ICONS[source]} size={13} />
@@ -65,13 +65,13 @@ function StatusChip({ status }: { status: 'favorite' | 'archived' | 'converted' 
   const glyph = status === 'favorite' ? Star : Archive;
   const tone =
     status === 'favorite'
-      ? 'bg-due/12 text-due'
+      ? 'bg-favorite/12 text-favorite'
       : status === 'converted'
         ? 'bg-done/12 text-done'
         : 'bg-surface-muted text-tertiary';
   return (
     <span
-      className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${tone}`}
+      className={`mt-px inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-px text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${tone}`}
     >
       <Icon icon={glyph} size={11} />
       {t.inbox[status]}
@@ -79,44 +79,26 @@ function StatusChip({ status }: { status: 'favorite' | 'archived' | 'converted' 
   );
 }
 
-export function UnprocessedRow({
-  task,
-  timeZone,
-  onOpen,
-  onComplete,
-}: {
-  task: Task;
-  timeZone: string;
-  onOpen: () => void;
-  onComplete: () => void;
-}) {
-  return (
-    <div
-      role="listitem"
-      className="flex min-h-[var(--touch-min)] cursor-pointer items-start gap-3 rounded-md px-3 py-2 transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
-      onClick={onOpen}
-    >
-      <TaskCheckbox task={task} timeZone={timeZone} onToggle={onComplete} />
-      <p className="min-w-0 flex-1 truncate text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-fg">
-        {task.title}
-      </p>
-    </div>
-  );
-}
-
 export function SaveRow({
   item,
   timeZone,
   selected = false,
+  compact = false,
+  onFavorite,
+  onArchive,
 }: {
   item: InboxItem;
   timeZone: string;
   selected?: boolean;
+  compact?: boolean;
+  onFavorite?: () => void;
+  onArchive?: () => void;
 }) {
   const host = hostLabel(item.originalUrl) ?? item.siteName;
   const when = formatCapturedAt(item.capturedAt, timeZone);
   const status = statusLabelKey(item.status);
   const unread = item.readAt === null && item.status === 'unread';
+  const archived = item.status === 'archived';
   return (
     <Link
       to={`/inbox/${item.id}`}
@@ -132,8 +114,8 @@ export function SaveRow({
       <span className="min-w-0 flex-1">
         <span className="flex items-start gap-2">
           <span
-            className={`min-w-0 flex-1 truncate text-[length:var(--text-body)] leading-[var(--text-body-lh)] ${
-              unread ? 'font-medium text-fg' : 'text-secondary'
+            className={`min-w-0 flex-1 truncate text-[length:var(--text-body)] font-semibold leading-[var(--text-body-lh)] ${
+              unread ? 'text-fg' : 'text-secondary'
             }`}
           >
             {item.title}
@@ -145,8 +127,15 @@ export function SaveRow({
             />
           ) : null}
           {status === 'favorite' ? (
-            <Icon icon={Star} size={12} className="mt-[3px] shrink-0 text-due" aria-label={t.inbox.favorite} />
+            <Icon
+              icon={Star}
+              size={12}
+              fill="currentColor"
+              className="mt-[3px] shrink-0 text-favorite"
+              aria-label={t.inbox.favorite}
+            />
           ) : null}
+          {status !== 'unread' && status !== 'favorite' ? <StatusChip status={status} /> : null}
         </span>
         <span className="mt-0.5 flex items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
           {host ? <span className="min-w-0 truncate">{host}</span> : null}
@@ -155,15 +144,52 @@ export function SaveRow({
               ·
             </span>
           ) : null}
-          <span className="shrink-0 tabular-nums">{when}</span>
-          {status !== 'unread' && status !== 'favorite' ? <StatusChip status={status} /> : null}
+          <span className="ml-auto shrink-0 pl-2 font-mono tabular-nums text-tertiary">{when}</span>
         </span>
         {item.excerpt ? (
-          <span className="mt-1 line-clamp-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          <span
+            className={`mt-[3px] text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted ${
+              compact ? 'line-clamp-1' : 'line-clamp-2'
+            }`}
+          >
             {item.excerpt}
           </span>
         ) : null}
       </span>
+      {onFavorite || onArchive ? (
+        <span className="absolute right-2 top-2 hidden gap-0.5 rounded-md border border-border bg-elevated p-0.5 shadow-[var(--shadow-xs)] group-hover:flex">
+          {onFavorite ? (
+            <button
+              type="button"
+              aria-label={status === 'favorite' ? t.inbox.unfavorite : t.inbox.favorite}
+              title={status === 'favorite' ? t.inbox.unfavorite : t.inbox.favorite}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onFavorite();
+              }}
+            >
+              <Icon icon={Star} size={13} />
+            </button>
+          ) : null}
+          {onArchive ? (
+            <button
+              type="button"
+              aria-label={archived ? t.inbox.unarchive : t.inbox.archive}
+              title={archived ? t.inbox.unarchive : t.inbox.archive}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onArchive();
+              }}
+            >
+              <Icon icon={archived ? ArchiveRestore : Archive} size={13} />
+            </button>
+          ) : null}
+        </span>
+      ) : null}
     </Link>
   );
 }

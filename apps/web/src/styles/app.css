@@ -19,6 +19,7 @@
   --color-focus: var(--border-focus);
   --color-danger: var(--danger);
   --color-due: var(--status-due-soon);
+  --color-favorite: var(--status-favorite);
   --color-overdue: var(--status-overdue);
   --color-done: var(--status-done);
   --color-doing: var(--status-doing);
@@ -246,47 +247,55 @@ body {
 .reader-article {
   font-family: var(--font-sans);
   color: var(--fg-primary);
-  font-size: 16px;
-  line-height: 28px;
-  letter-spacing: -0.011em;
 }
 
 .reader-article[data-size='sm'] {
   font-size: var(--text-body);
-  line-height: 1.7;
+  line-height: 1.75;
 }
 
 .reader-article[data-size='md'] {
-  font-size: var(--text-title);
-  line-height: 1.7;
+  font-size: 15.5px;
+  line-height: 1.8;
 }
 
 .reader-article[data-size='lg'] {
-  font-size: var(--text-display);
-  line-height: 1.55;
+  font-size: 17px;
+  line-height: 1.8;
 }
 
 .reader-article h1,
 .reader-article h2,
 .reader-article h3 {
+  font-family: var(--font-display);
   font-weight: 600;
-  letter-spacing: -0.03em;
-  margin: 1.1em 0 0.45em;
+  letter-spacing: -0.02em;
 }
 
 .reader-article h1 {
-  font-size: 1.35em;
-  line-height: var(--text-display-lh);
+  font-size: 22px;
+  line-height: 30px;
+  margin: 32px 0 12px;
 }
 
-.reader-article h2,
-.reader-article h3 {
-  font-size: 1.12em;
+.reader-article h2 {
+  font-size: var(--text-title);
   line-height: var(--text-title-lh);
+  margin: 30px 0 12px;
+}
+
+.reader-article h3 {
+  font-size: var(--text-section);
+  line-height: var(--text-section-lh);
+  margin: 26px 0 10px;
+}
+
+.reader-article > :first-child {
+  margin-top: 0;
 }
 
 .reader-article p {
-  margin: 0 0 0.85em;
+  margin: 0 0 18px;
 }
 
 .reader-article a {
@@ -298,21 +307,27 @@ body {
   display: block;
   max-width: 100%;
   height: auto;
-  margin: 1em 0;
+  margin: 18px 0;
   border-radius: var(--radius-md);
 }
 
 .reader-article blockquote {
-  margin: 0 0 0.85em;
-  padding-left: var(--space-4);
+  margin: 0 0 18px;
+  padding: 2px 0 2px 14px;
   border-left: 2px solid var(--accent-primary);
   color: var(--fg-muted);
+  font-size: 0.97em;
+  line-height: 1.8;
 }
 
 .reader-article ul,
 .reader-article ol {
-  margin: 0 0 0.85em;
+  margin: 0 0 18px;
   padding-left: var(--space-6);
+}
+
+.reader-article li {
+  margin: 4px 0;
 }
 
 .reader-article pre,
@@ -328,17 +343,12 @@ body {
   background: var(--bg-surface-muted);
 }
 
-.reader-progress {
-  height: 2px;
-  background: var(--accent-primary);
-}
-
 .report-doc,
 .report-source {
   max-width: 45rem;
   font-family: var(--font-sans);
   font-size: var(--text-body);
-  line-height: 1.7;
+  line-height: 1.75;
   letter-spacing: -0.011em;
 }
 
@@ -373,7 +383,12 @@ body {
 
 .report-paper .report-doc {
   min-height: 100%;
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-6) var(--space-7) var(--space-8);
+}
+
+/* Editorial measure: text column capped at 680px, editor chrome stays full-width. */
+.report-paper .report-doc > * {
+  max-width: 42.5rem;
 }
 
 .report-source {
@@ -386,8 +401,8 @@ body {
 .report-doc h2,
 .report-doc h3 {
   font-weight: 600;
-  letter-spacing: -0.03em;
-  margin: 1.1em 0 0.45em;
+  letter-spacing: -0.02em;
+  margin: 1.4em 0 0.5em;
 }
 
 .report-doc h1 {
@@ -397,22 +412,38 @@ body {
 
 .report-doc h2,
 .report-doc h3 {
-  font-size: var(--text-title);
-  line-height: var(--text-title-lh);
+  font-size: var(--text-section);
+  line-height: var(--text-section-lh);
+}
+
+.report-doc > h1:first-child,
+.report-doc > h2:first-child,
+.report-doc > h3:first-child {
+  margin-top: 0.2em;
 }
 
 .report-doc p {
-  margin: 0 0 0.85em;
+  margin: 0 0 0.45em;
 }
 
 .report-doc ul,
 .report-doc ol {
-  margin: 0 0 0.85em;
+  margin: 0 0 0.45em;
   padding-left: var(--space-6);
 }
 
+.report-doc li + li {
+  margin-top: 2px;
+}
+
+.report-doc hr {
+  margin: var(--space-6) 0;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
 .report-doc blockquote {
-  margin: 0 0 0.85em;
+  margin: 0 0 0.45em;
   padding-left: var(--space-4);
   border-left: 2px solid var(--accent-primary);
   color: var(--fg-muted);
@@ -445,7 +476,7 @@ body {
 }
 
 .report-doc .tableWrapper {
-  margin: 0 0 0.85em;
+  margin: 0 0 0.45em;
   overflow-x: auto;
 }
 
@@ -563,7 +594,7 @@ body {
 }
 
 .report-doc p.is-editor-empty:first-child::before {
-  color: var(--fg-muted);
+  color: var(--text-tertiary);
   content: attr(data-placeholder);
   float: left;
   height: 0;

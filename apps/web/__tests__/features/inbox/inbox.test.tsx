@@ -9,7 +9,7 @@ import {
 } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -88,7 +88,6 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     reminderAt: null,
     isAllDay: true,
     timezone: TZ,
-    timeBucket: 'dated',
     recurrence: null,
     recurrenceKind: null,
     recurrenceDtstart: null,
@@ -196,15 +195,18 @@ describe('inbox workspace', () => {
     expect(canvas).toHaveClass('min-h-0', 'min-w-0', 'flex-1');
   });
 
-  it('shows later-read empty copy in the capture pane', async () => {
+  it('shows the editorial empty state on the canvas and the filter index in the library', async () => {
     renderAt('/inbox');
-    expect(await screen.findByText(t.empty.inbox)).toBeInTheDocument();
+    expect(await screen.findByText(t.empty.inboxTitle)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.empty.actionExtension })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: t.inbox.unprocessed })).not.toBeInTheDocument();
-    expect(screen.getByText(t.empty.inboxReader)).toBeInTheDocument();
+    const nav = screen.getByRole('navigation');
+    for (const label of Object.values(t.inbox.filters)) {
+      expect(within(nav).getByRole('link', { name: new RegExp(label) })).toBeInTheDocument();
+    }
+    expect(screen.queryByText(t.empty.inboxReader)).toBeInTheDocument();
   });
 
-  it('lists unread saves in the capture pane, not unprocessed todos', async () => {
+  it('lists unread saves on the canvas, not unprocessed todos', async () => {
     vi.mocked(client.listTasks).mockResolvedValue({
       items: [makeTask({ id: 't1', title: '未整理的任务' })],
       nextCursor: null,
@@ -233,7 +235,7 @@ describe('inbox workspace', () => {
     expect(screen.getByText('微信收藏')).toBeInTheDocument();
   });
 
-  it('lets the capture pane open archived saves', async () => {
+  it('opens archived saves through the library filter nav', async () => {
     vi.mocked(client.listInbox).mockResolvedValue({
       items: [
         makeItem({ id: 'i1', title: '未读文章' }),
@@ -245,8 +247,24 @@ describe('inbox workspace', () => {
     renderAt('/inbox');
     expect(await screen.findByText('未读文章')).toBeInTheDocument();
     expect(screen.queryByText('归档文章')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '查看归档' }));
+    await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: /归档/ }));
     expect(await screen.findByText('归档文章')).toBeInTheDocument();
+    expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
+  });
+
+  it('filters favorite saves through the library filter nav', async () => {
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: [
+        makeItem({ id: 'i1', title: '未读文章' }),
+        makeItem({ id: 'i2', title: '收藏文章', status: 'later' }),
+      ],
+      nextCursor: null,
+    });
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    expect(await screen.findByText('未读文章')).toBeInTheDocument();
+    await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: /收藏/ }));
+    expect(await screen.findByText('收藏文章')).toBeInTheDocument();
     expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
   });
 
@@ -260,7 +278,7 @@ describe('inbox workspace', () => {
     });
     const user = userEvent.setup();
     renderAt('/inbox');
-    await user.click(await screen.findByRole('button', { name: t.inbox.pasteUrl }));
+    await user.click((await screen.findAllByRole('button', { name: t.inbox.pasteUrl }))[0]!);
     await screen.findByLabelText(t.inbox.pastePlaceholder);
     await user.type(screen.getByLabelText(t.inbox.pastePlaceholder), 'https://example.com/a');
     await user.click(screen.getByRole('button', { name: t.inbox.extract }));
@@ -291,7 +309,7 @@ describe('inbox workspace', () => {
     );
     const user = userEvent.setup();
     renderAt('/inbox');
-    await user.click(await screen.findByRole('button', { name: t.inbox.pasteUrl }));
+    await user.click((await screen.findAllByRole('button', { name: t.inbox.pasteUrl }))[0]!);
     await screen.findByLabelText(t.inbox.pastePlaceholder);
     await user.type(screen.getByLabelText(t.inbox.pastePlaceholder), 'https://example.com/a');
     await user.click(screen.getByRole('button', { name: t.inbox.extract }));
