@@ -30,10 +30,6 @@ export const HABIT_TEMPLATES: CreateHabitInput[] = [
   { name: '阅读', kind: 'daily' },
 ];
 
-function iso(d: Date | null): string | null {
-  return d ? d.toISOString() : null;
-}
-
 export function toHabitDto(row: HabitRow, todayDone = 0, todayTotal = 0): Habit {
   return {
     id: row.id,
@@ -59,7 +55,9 @@ export async function getOwnedHabitOr404(userId: string, id: string): Promise<Ha
 }
 
 function habitDay(now: Date, timezone: string): string {
-  return DateTime.fromJSDate(now).setZone(timezone).toISODate()!;
+  const day = DateTime.fromJSDate(now).setZone(timezone).toISODate();
+  if (!day) throw new Error('invalid local date');
+  return day;
 }
 
 /** Today's progress for a habit: completed instances vs spawned instances. */
@@ -121,7 +119,8 @@ export async function createHabit(
       sortOrder: (maxRow?.max ?? -1) + 1,
     })
     .returning();
-  return toHabitDto(row!);
+  if (!row) throw AppError.of(404, 'NOT_FOUND');
+  return toHabitDto(row);
 }
 
 export async function patchHabit(
@@ -143,7 +142,8 @@ export async function patchHabit(
     })
     .where(eq(habits.id, id))
     .returning();
-  return toHabitDto(row!);
+  if (!row) throw AppError.of(404, 'NOT_FOUND');
+  return toHabitDto(row);
 }
 
 export async function deleteHabit(userId: string, id: string): Promise<void> {
@@ -174,7 +174,7 @@ async function spawnInstance(
       listId: inbox.id,
       habitId: habit.id,
       habitSeq: seq,
-      habitKey: `${habit.id}:${day}:${seq}`,
+      habitKey: `${habit.id}:${day}:${String(seq)}`,
       title: habit.name,
       status: 'todo',
       priority: 3,

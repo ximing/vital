@@ -1,4 +1,4 @@
-import { type SQL, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { char, check, index, integer, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 

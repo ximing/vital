@@ -22,7 +22,7 @@ const providerIdParamsSchema = z.object({ id: z.string().uuid() });
 
 export function registerLlmRoutes(app: FastifyInstance): void {
   /** Builtin provider catalog for the settings UI (labels + selectable models). */
-  app.get('/api/v1/llm/catalog', { preHandler: [requireAuth] }, async () => {
+  app.get('/api/v1/llm/catalog', { preHandler: [requireAuth] }, () => {
     return { providers: llmCatalog() };
   });
 

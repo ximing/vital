@@ -218,8 +218,9 @@ describe('GET /api/v1/today', () => {
   it('alerts on all-day tasks only from the next local day, timed tasks past the instant', async () => {
     const alice = await registerUser(app);
     const inbox = await inboxId(app, alice.token);
-    const today = DateTime.now().setZone('Asia/Shanghai').toISODate()!;
-    const yesterday = DateTime.fromISO(today).minus({ days: 1 }).toISODate()!;
+    const today = DateTime.now().setZone('Asia/Shanghai').toISODate();
+    const yesterday = today ? DateTime.fromISO(today).minus({ days: 1 }).toISODate() : null;
+    if (!today || !yesterday) throw new Error('invalid local dates');
     const cases = [
       { name: '全天今天', dueAt: `${today}T00:00:00+08:00`, isAllDay: true, signal: 'flat' },
       { name: '全天昨天', dueAt: `${yesterday}T00:00:00+08:00`, isAllDay: true, signal: 'alert' },

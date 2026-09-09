@@ -59,12 +59,13 @@ export function selectRuleNextStep(tasks: NextStepTask[], now: Date, tz: string)
   const overdue = open
     .filter((t) => isOverdue(t.dueAt, t.isAllDay, now, tz))
     .sort((a, b) => (a.dueAt?.getTime() ?? 0) - (b.dueAt?.getTime() ?? 0));
-  if (overdue.length > 0) return overdue[0]!.title;
+  if (overdue[0]) return overdue[0].title;
   const upcoming = open
     .filter((t) => t.dueAt !== null)
     .sort((a, b) => (a.dueAt?.getTime() ?? 0) - (b.dueAt?.getTime() ?? 0));
-  if (upcoming.length > 0) return upcoming[0]!.title;
-  return open.sort((a, b) => a.priority - b.priority)[0]!.title;
+  if (upcoming[0]) return upcoming[0].title;
+  const first = open.sort((a, b) => a.priority - b.priority)[0];
+  return first ? first.title : null;
 }
 
 /** A defer = dueAt pushed strictly forward. null→date and same-day time changes don't count. */

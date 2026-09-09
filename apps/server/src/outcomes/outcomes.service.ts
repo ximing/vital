@@ -94,7 +94,10 @@ async function statsForOutcomes(
     )
     .groupBy(tasks.outcomeId);
   for (const row of openRows) {
-    if (row.outcomeId) map.get(row.outcomeId)!.openTaskCount = row.n;
+    if (row.outcomeId) {
+      const rec = map.get(row.outcomeId);
+      if (rec) rec.openTaskCount = row.n;
+    }
   }
 
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
@@ -111,7 +114,10 @@ async function statsForOutcomes(
     )
     .groupBy(tasks.outcomeId);
   for (const row of doneRows) {
-    if (row.outcomeId) map.get(row.outcomeId)!.completedLast7d = row.n;
+    if (row.outcomeId) {
+      const rec = map.get(row.outcomeId);
+      if (rec) rec.completedLast7d = row.n;
+    }
   }
 
   const materialRows = await getDb()
@@ -127,7 +133,10 @@ async function statsForOutcomes(
     )
     .groupBy(inboxItems.outcomeId);
   for (const row of materialRows) {
-    if (row.outcomeId) map.get(row.outcomeId)!.materialCount = row.n;
+    if (row.outcomeId) {
+      const rec = map.get(row.outcomeId);
+      if (rec) rec.materialCount = row.n;
+    }
   }
 
   return map;
@@ -162,7 +171,8 @@ export async function createOutcome(userId: string, input: CreateOutcomeInput): 
       sortOrder: (maxRow?.max ?? -1) + 1,
     })
     .returning();
-  return toOutcomeDto(row!);
+  if (!row) throw AppError.of(404, 'NOT_FOUND');
+  return toOutcomeDto(row);
 }
 
 export async function patchOutcome(
@@ -196,7 +206,8 @@ export async function patchOutcome(
       );
   }
   const stats = await statsForOutcomes(userId, [id]);
-  return toOutcomeDto(next!, stats.get(id));
+  if (!next) throw AppError.of(404, 'NOT_FOUND');
+  return toOutcomeDto(next, stats.get(id));
 }
 
 export async function closeOutcome(userId: string, id: string): Promise<Outcome> {

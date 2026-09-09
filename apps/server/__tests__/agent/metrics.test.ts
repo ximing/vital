@@ -81,14 +81,15 @@ describe('agent adoption metrics', () => {
 
     expect(result.daily).toHaveLength(2);
     // Ascending by date; yesterday first.
-    const [yesterday, today] = result.daily;
+    const yesterday = result.daily[0];
+    const today = result.daily[1];
     expect(yesterday).toMatchObject({
       proposed: 1,
       adopted: 0,
       dismissed: 1,
       adoptionRate: 0,
     });
-    expect(yesterday!.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(yesterday?.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     // Pending counts as proposed but never enters the denominator: 3/4, not 3/6.
     expect(today).toMatchObject({
       proposed: 6,
