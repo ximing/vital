@@ -65,6 +65,10 @@ describe('Tauri desktop contract', () => {
     assert.ok(caps.remote.urls.includes('http://localhost:5180/*'));
   });
 
+  it('ad-hoc signs macOS bundles so Apple Silicon is not marked damaged', () => {
+    assert.equal(conf.bundle.macOS.signingIdentity, '-');
+  });
+
   it('bundles PR1 raster icons', () => {
     for (const icon of [
       'icons/16x16.png',

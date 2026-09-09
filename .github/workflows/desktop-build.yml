@@ -121,6 +121,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_TAURI_API_URL: ${{ env.VITE_TAURI_API_URL }}
+          # Ad-hoc sign so Apple Silicon DMGs are "unidentified developer", not "damaged".
+          APPLE_SIGNING_IDENTITY: '-'
         with:
           projectPath: apps/desktop
           args: ${{ matrix.args }}
