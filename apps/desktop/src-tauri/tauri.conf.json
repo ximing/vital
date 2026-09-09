@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "node scripts/before-dev.mjs",
     "devUrl": "http://localhost:5180",
-    "beforeBuildCommand": "pnpm --filter @vital/web build",
+    "beforeBuildCommand": "pnpm --dir ../.. --filter @vital/web... build",
     "frontendDist": "../../web/dist"
   },
   "app": {

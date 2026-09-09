@@ -74,4 +74,18 @@ describe('Tauri desktop contract', () => {
     assert.ok(pkg.dependencies['@tauri-apps/plugin-http']);
     assert.ok(pkg.dependencies['@tauri-apps/plugin-store']);
   });
+
+  it('builds web workspace packages before bundling', () => {
+    assert.match(conf.build.beforeBuildCommand, /@vital\/web\.\.\./);
+  });
+
+  it('has a GitHub workflow that builds Windows, macOS, and Linux', () => {
+    const workflow = read('../../.github/workflows/desktop-build.yml');
+    assert.match(workflow, /windows-latest/);
+    assert.match(workflow, /macos-latest/);
+    assert.match(workflow, /ubuntu-22\.04/);
+    assert.match(workflow, /tauri-apps\/tauri-action@v1/);
+    assert.match(workflow, /projectPath: apps\/desktop/);
+    assert.match(workflow, /VITE_TAURI_API_URL: https:\/\/vital\.aimo\.plus/);
+  });
 });

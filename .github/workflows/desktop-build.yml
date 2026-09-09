@@ -1,0 +1,128 @@
+# Build Vital desktop (Tauri 2) for Windows, macOS, and Linux.
+#
+#   Actions → Build Desktop → Run workflow
+#   GitHub Release published → attach installers to that release
+#
+# Production API origin is baked into the web bundle as VITE_TAURI_API_URL.
+name: Build Desktop
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-build-${{ github.event.release.tag_name || github.sha }}
+  cancel-in-progress: false
+
+env:
+  VITE_TAURI_API_URL: https://vital.aimo.plus
+
+jobs:
+  build-desktop:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-aarch64
+            platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macos-x86_64
+            platform: macos-latest
+            args: --target x86_64-apple-darwin
+          - name: linux-x86_64
+            platform: ubuntu-22.04
+            args: ''
+          - name: windows-x86_64
+            platform: windows-latest
+            args: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux webkit/gtk
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Stamp app version
+        id: ver
+        shell: bash
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          if [[ -z "$tag" ]]; then
+            tag="${{ github.ref_name }}"
+          fi
+          if [[ "$tag" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+          else
+            version="0.0.0"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if command -v python3 >/dev/null; then PY=python3; else PY=python; fi
+          "$PY" - "$version" <<'PY'
+          import json, pathlib, re, sys
+          version = sys.argv[1]
+          conf = pathlib.Path("apps/desktop/src-tauri/tauri.conf.json")
+          data = json.loads(conf.read_text())
+          data["version"] = version
+          conf.write_text(json.dumps(data, indent=2) + "\n")
+          cargo = pathlib.Path("apps/desktop/src-tauri/Cargo.toml")
+          text, n = re.subn(
+              r'^version = "[^"]+"',
+              f'version = "{version}"',
+              cargo.read_text(),
+              count=1,
+              flags=re.M,
+          )
+          if n != 1:
+              raise SystemExit("failed to patch Cargo.toml version")
+          cargo.write_text(text)
+          PY
+
+      - name: Install Rust stable
+        if: matrix.platform != 'macos-latest'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust stable (macOS targets)
+        if: matrix.platform == 'macos-latest'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+          shared-key: desktop-${{ matrix.name }}
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build desktop
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_TAURI_API_URL: ${{ env.VITE_TAURI_API_URL }}
+        with:
+          projectPath: apps/desktop
+          args: ${{ matrix.args }}
+          uploadWorkflowArtifacts: 'true'
+          uploadUpdaterJson: 'false'
+          workflowArtifactNamePattern: vital-desktop-${{ matrix.name }}
+          releaseId: ${{ github.event_name == 'release' && github.event.release.id || '' }}
