@@ -1802,7 +1802,7 @@ Builtin provider catalog for the settings UI (labels + selectable models).
 
 - Auth: Bearer required
 - Client: `llmCatalog`
-- Response: `{ providers: import('@vital/dto').LlmCatalogProvider[] }`
+- Response: `{ providers: LlmCatalogProvider[] }`
 
 #### `POST /api/v1/llm/providers`
 

@@ -68,7 +68,7 @@ export async function dailyUsage(
     runs: row.runs,
     promptTokens: row.promptTokens,
     completionTokens: row.completionTokens,
-    costMicros: row.costMicros,
+    costMicros: Number.parseInt(String(row.costMicros), 10),
   }));
   return {
     days,

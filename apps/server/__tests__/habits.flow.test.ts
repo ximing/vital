@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { DateTime } from 'luxon';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
 import { spawnDailyHabits } from '../src/habits/habits.service.js';
@@ -30,7 +31,12 @@ describe('habits', () => {
     expect(created.statusCode).toBe(200);
     const habitId = created.json().id as string;
 
-    const noon = new Date('2026-09-09T04:00:00Z'); // 12:00 Asia/Shanghai
+    const noon = DateTime.now().setZone('Asia/Shanghai').set({
+      hour: 12,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+    }).toJSDate();
     const spawned = await spawnDailyHabits(alice.id, 'Asia/Shanghai', noon);
     expect(spawned).toBe(1);
     // Idempotent: second run on the same day spawns nothing.
