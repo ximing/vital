@@ -124,5 +124,5 @@ jobs:
           args: ${{ matrix.args }}
           uploadWorkflowArtifacts: 'true'
           uploadUpdaterJson: 'false'
-          workflowArtifactNamePattern: vital-desktop-${{ matrix.name }}
+          workflowArtifactNamePattern: vital-desktop-[platform]-[arch]-[bundle]
           releaseId: ${{ github.event_name == 'release' && github.event.release.id || '' }}

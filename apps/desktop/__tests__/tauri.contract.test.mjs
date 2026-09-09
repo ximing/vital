@@ -87,5 +87,6 @@ describe('Tauri desktop contract', () => {
     assert.match(workflow, /tauri-apps\/tauri-action@v1/);
     assert.match(workflow, /projectPath: apps\/desktop/);
     assert.match(workflow, /VITE_TAURI_API_URL: https:\/\/vital\.aimo\.plus/);
+    assert.match(workflow, /\[platform\]-\[arch\]-\[bundle\]/);
   });
 });
