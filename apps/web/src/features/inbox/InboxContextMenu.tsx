@@ -97,14 +97,15 @@ export function InboxContextMenu({
   const [pos, setPos] = useState({ left: x, top: y });
   const [draft, setDraft] = useState('');
   const [tagIds, setTagIds] = useState(item.tagIds ?? []);
+  const [tagSource, setTagSource] = useState(item);
+  if (tagSource !== item) {
+    setTagSource(item);
+    setTagIds(item.tagIds ?? []);
+  }
   const patchable = canPatchStatus(item);
   const converted = item.status === 'converted';
   const favorited = isFavorite(item);
   const archived = item.status === 'archived';
-
-  useEffect(() => {
-    setTagIds(item.tagIds ?? []);
-  }, [item]);
 
   useLayoutEffect(() => {
     const el = menuRef.current;
