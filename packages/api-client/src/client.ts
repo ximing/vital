@@ -25,6 +25,7 @@ import type {
   FillReportInput,
   GetReportQuery,
   Habit,
+  LlmCatalogProvider,
   LlmProviderInput,
   LlmSettingsPublic,
   Outcome,
@@ -132,7 +133,7 @@ export interface VitalClient {
   taskCounts(): Promise<TaskCounts>;
   createTask(input: CreateTaskInput): Promise<Task>;
   createTaskFromText(input: CreateTaskFromTextInput): Promise<Task>;
-  llmCatalog(): Promise<{ providers: import('@vital/dto').LlmCatalogProvider[] }>;
+  llmCatalog(): Promise<{ providers: LlmCatalogProvider[] }>;
   addLlmProvider(input: LlmProviderInput): Promise<LlmSettingsPublic>;
   patchLlmProvider(id: string, input: Partial<LlmProviderInput>): Promise<LlmSettingsPublic>;
   removeLlmProvider(id: string): Promise<LlmSettingsPublic>;
@@ -361,8 +362,10 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     deleteHabit: async (id) => {
       await http.request(`/api/v1/habits/${id}`, { method: 'DELETE' });
     },
-    getAgentUsage: (days) => http.request(`/api/v1/agent/usage${days ? `?days=${days}` : ''}`),
-    getAgentMetrics: (days) => http.request(`/api/v1/agent/metrics${days ? `?days=${days}` : ''}`),
+    getAgentUsage: (days) =>
+      http.request(`/api/v1/agent/usage${days ? `?days=${String(days)}` : ''}`),
+    getAgentMetrics: (days) =>
+      http.request(`/api/v1/agent/metrics${days ? `?days=${String(days)}` : ''}`),
     listAgentActions: (query) =>
       http.request('/api/v1/agent/actions', {
         query: {
