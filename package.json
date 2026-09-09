@@ -13,7 +13,8 @@
     "test": "turbo test",
     "lint": "turbo lint",
     "format": "prettier --write .",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "gen:vital-skill": "pnpm --filter @vital/dto build && pnpm --filter @vital/server gen:vital-skill"
   },
   "devDependencies": {
     "prettier": "^3.5.1",

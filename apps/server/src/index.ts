@@ -1,6 +1,7 @@
 import { buildFastify } from './app.js';
 import { config } from './config.js';
 import { pool } from './db/index.js';
+import { startApiTokenAccessSweeper } from './tokens/tokens.service.js';
 import { startSweeper } from './uploads/sweeper.js';
 import { logger } from './utils/logger.js';
 
@@ -11,6 +12,7 @@ logger.info(`server listening on :${String(config.PORT)}`, { env: config.NODE_EN
 
 if (config.NODE_ENV !== 'test') {
   startSweeper();
+  startApiTokenAccessSweeper();
 }
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {

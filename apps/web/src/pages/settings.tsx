@@ -1,4 +1,4 @@
-import { Bell, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react';
+import { Bell, KeyRound, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { t } from '@/copy';
@@ -6,11 +6,12 @@ import { AccountSection } from '@/features/settings/AccountSection';
 import { LlmSection } from '@/features/settings/LlmSection';
 import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { PrefsSection } from '@/features/settings/PrefsSection';
+import { TokensSection } from '@/features/settings/TokensSection';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { Icon, type LucideIcon } from '@/ui/icon';
 
 const TABS: {
-  id: 'account' | 'appearance' | 'notifications' | 'prefs' | 'llm';
+  id: 'account' | 'appearance' | 'notifications' | 'prefs' | 'llm' | 'tokens';
   label: string;
   icon: LucideIcon;
 }[] = [
@@ -19,6 +20,7 @@ const TABS: {
   { id: 'notifications', label: t.settings.tabs.notifications, icon: Bell },
   { id: 'prefs', label: t.settings.tabs.prefs, icon: SlidersHorizontal },
   { id: 'llm', label: t.settings.tabs.llm, icon: Sparkles },
+  { id: 'tokens', label: t.settings.tabs.tokens, icon: KeyRound },
 ];
 
 function isTab(value: string | null): (typeof TABS)[number]['id'] {
@@ -26,7 +28,8 @@ function isTab(value: string | null): (typeof TABS)[number]['id'] {
     value === 'appearance' ||
     value === 'notifications' ||
     value === 'prefs' ||
-    value === 'llm'
+    value === 'llm' ||
+    value === 'tokens'
   ) {
     return value;
   }
@@ -71,7 +74,11 @@ export function SettingsPage() {
           {t.empty.settings}
         </p>
 
-        <div className="mt-8 inline-flex flex-wrap gap-1 rounded-full bg-surface-muted p-1" role="tablist" aria-label={t.settings.title}>
+        <div
+          className="mt-8 inline-flex flex-wrap gap-1 rounded-full bg-surface-muted p-1"
+          role="tablist"
+          aria-label={t.settings.title}
+        >
           {TABS.map((item) => {
             const active = tab === item.id;
             return (
@@ -118,6 +125,11 @@ export function SettingsPage() {
           {tab === 'llm' ? (
             <SettingsBlock title={t.settings.llm.title} description={t.settings.llm.hint}>
               <LlmSection />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'tokens' ? (
+            <SettingsBlock title={t.settings.tokens.title} description={t.settings.tokens.hint}>
+              <TokensSection />
             </SettingsBlock>
           ) : null}
         </div>

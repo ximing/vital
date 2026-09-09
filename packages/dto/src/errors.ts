@@ -34,6 +34,7 @@ export const ERROR_MESSAGES = {
     '模型输出被截断，请提高 max_tokens / max_completion_tokens 或降低 reasoning_effort',
   LLM_TIMEOUT: '模型响应超时，请降低推理强度后重试',
   LLM_UNAVAILABLE: '大模型暂时不可用，请检查 API Base、密钥和模型名称',
+  TOKEN_LIMIT_REACHED: '访问令牌数量已达上限',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

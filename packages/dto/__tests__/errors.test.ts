@@ -27,5 +27,6 @@ describe('ERROR_MESSAGES', () => {
     expect(ERROR_MESSAGES.LLM_UNAVAILABLE).toBe(
       '大模型暂时不可用，请检查 API Base、密钥和模型名称',
     );
+    expect(ERROR_MESSAGES.TOKEN_LIMIT_REACHED).toBe('访问令牌数量已达上限');
   });
 });

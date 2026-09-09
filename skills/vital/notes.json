@@ -1,0 +1,10 @@
+{
+  "POST /api/v1/inbox/extract": "Fetch a URL and return a preview. Follow with POST /api/v1/inbox using the preview fields.",
+  "POST /api/v1/inbox": "Capture an item. `source` defaults to `manual`. Optional header `Idempotency-Key` (64 hex chars); required when `source` is `extension`.",
+  "POST /api/v1/tasks": "Create a task. `listId` must be a user or inbox list UUID, not a `smart:*` id. Call GET /api/v1/lists first.",
+  "POST /api/v1/tasks/from-text": "Parse natural language into a task using the account LLM settings.",
+  "GET /api/v1/tasks": "List tasks in a list. `listId` may be a UUID or `smart:today` / `smart:inbox` / `smart:upcoming` / `smart:someday` / `smart:done`.",
+  "GET /api/v1/reports/current": "Get or create the report for the period containing `at` (defaults to now).",
+  "POST /api/v1/tokens": "Create a personal access token. The `token` field is returned once.",
+  "GET /api/v1/tokens/:id/access": "Call log for one token, newest first, retained 30 days."
+}

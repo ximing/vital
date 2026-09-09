@@ -62,6 +62,10 @@ import type {
   UploadCompleteResponse,
   UploadUrlResponse,
   UserProfile,
+  ApiTokenAccessCollection,
+  ApiTokenCollection,
+  CreateApiTokenInput,
+  CreatedApiToken,
 } from '@vital/dto';
 import { Http, isAuthResponse, tokensForStore } from './http.js';
 import { ApiError, type VitalClientOptions } from './types.js';
@@ -78,6 +82,13 @@ export interface VitalClient {
   logout(): Promise<void>;
   me(): Promise<UserProfile>;
   updateMe(input: UpdateMeInput): Promise<UserProfile>;
+  listApiTokens(): Promise<ApiTokenCollection>;
+  createApiToken(input: CreateApiTokenInput): Promise<CreatedApiToken>;
+  revokeApiToken(id: string): Promise<void>;
+  listApiTokenAccess(
+    id: string,
+    query?: { cursor?: string; limit?: number },
+  ): Promise<ApiTokenAccessCollection>;
   listNotificationChannels(): Promise<NotificationChannelCollection>;
   createNotificationChannel(input: CreateNotificationChannelInput): Promise<NotificationChannel>;
   patchNotificationChannel(
@@ -225,6 +236,15 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     },
     me: () => http.request('/api/v1/auth/me'),
     updateMe: (input) => http.request('/api/v1/auth/me', { method: 'PATCH', body: input }),
+    listApiTokens: () => http.request('/api/v1/tokens'),
+    createApiToken: (input) => http.request('/api/v1/tokens', { method: 'POST', body: input }),
+    revokeApiToken: (id) => http.request(`/api/v1/tokens/${id}`, { method: 'DELETE' }),
+    listApiTokenAccess: (id, query = {}) => {
+      const q: Record<string, string | number | boolean | undefined> = {};
+      if (query.cursor !== undefined) q.cursor = query.cursor;
+      if (query.limit !== undefined) q.limit = query.limit;
+      return http.request(`/api/v1/tokens/${id}/access`, { query: q });
+    },
     listNotificationChannels: () => http.request('/api/v1/notification-channels'),
     createNotificationChannel: (input) =>
       http.request('/api/v1/notification-channels', { method: 'POST', body: input }),

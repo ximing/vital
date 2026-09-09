@@ -21,6 +21,10 @@ vi.mock('@/api/client', async (importOriginal) => {
       testNotificationChannel: vi.fn(),
       updateMe: vi.fn(),
       testLlm: vi.fn(),
+      listApiTokens: vi.fn(),
+      createApiToken: vi.fn(),
+      revokeApiToken: vi.fn(),
+      listApiTokenAccess: vi.fn(),
     },
   };
 });
@@ -45,6 +49,7 @@ describe('NotificationsSection', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
     vi.mocked(client.listNotificationChannels).mockResolvedValue({ items: [] });
+    vi.mocked(client.listApiTokens).mockResolvedValue({ items: [] });
     vi.mocked(client.createNotificationChannel).mockResolvedValue({
       id: 'c1',
       type: 'meow',
@@ -103,6 +108,10 @@ describe('NotificationsSection', () => {
     await user.click(screen.getByRole('tab', { name: t.settings.tabs.llm }));
     await waitFor(() => {
       expect(screen.getByLabelText(t.settings.llm.apiBase)).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('tab', { name: t.settings.tabs.tokens }));
+    await waitFor(() => {
+      expect(screen.getByLabelText(t.settings.tokens.name)).toBeInTheDocument();
     });
   });
 

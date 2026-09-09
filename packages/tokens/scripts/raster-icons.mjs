@@ -30,10 +30,27 @@ function iconSvg(size) {
 </svg>`;
 }
 
+/** Black-on-transparent mark for macOS template tray / menu-bar extras. */
+function traySvg(size) {
+  const mark = inner.replaceAll(PULSE, '#000000');
+  const innerPx = size * 0.82;
+  const offset = (size - innerPx) / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+  <svg x="${offset}" y="${offset}" width="${innerPx}" height="${innerPx}" viewBox="0 0 32 32" fill="none">${mark}</svg>
+</svg>`;
+}
+
 function renderPng(size) {
   const resvg = new Resvg(iconSvg(size), {
     fitTo: { mode: 'width', value: size },
     background: INK,
+  });
+  return resvg.render().asPng();
+}
+
+function renderTrayPng(size) {
+  const resvg = new Resvg(traySvg(size), {
+    fitTo: { mode: 'width', value: size },
   });
   return resvg.render().asPng();
 }
@@ -102,10 +119,13 @@ writePng(join(extensionAssets, 'icon-32.png'), 32);
 writePng(join(extensionAssets, 'icon-48.png'), 48);
 writePng(join(extensionAssets, 'icon-128.png'), 128);
 
+writePng(join(desktopIcons, '16x16.png'), 16);
 writePng(join(desktopIcons, '32x32.png'), 32);
 writePng(join(desktopIcons, '128x128.png'), 128);
+writePng(join(desktopIcons, '128x128@2x.png'), 256);
 writePng(join(desktopIcons, '256x256.png'), 256);
 writePng(join(desktopIcons, 'icon.png'), 256);
+writeFileSync(join(desktopIcons, 'tray.png'), renderTrayPng(64));
 
 writePng(join(mobileAssets, 'icon.png'), 1024);
 writePng(join(mobileAssets, 'adaptive-icon.png'), 1024);

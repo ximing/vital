@@ -42,6 +42,15 @@ describe('Tauri desktop contract', () => {
     assert.doesNotMatch(cargo, /features = \[[^\]]*cookies/);
   });
 
+  it('puts a template tray icon in the macOS menu bar', () => {
+    assert.match(lib, /TrayIconBuilder/);
+    assert.match(lib, /icon_as_template\(true\)/);
+    assert.match(lib, /icons\/tray\.png/);
+    assert.match(cargo, /tray-icon/);
+    assert.match(cargo, /image-png/);
+    assert.ok(read('src-tauri/icons/tray.png').length > 0);
+  });
+
   it('allows native HTTP to the API and https (S3), and IPC from Vite', () => {
     const http = caps.permissions.find(
       (p) => typeof p === 'object' && p.identifier === 'http:default',
@@ -58,8 +67,10 @@ describe('Tauri desktop contract', () => {
 
   it('bundles PR1 raster icons', () => {
     for (const icon of [
+      'icons/16x16.png',
       'icons/32x32.png',
       'icons/128x128.png',
+      'icons/128x128@2x.png',
       'icons/256x256.png',
       'icons/icon.png',
       'icons/icon.icns',

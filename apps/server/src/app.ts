@@ -13,7 +13,7 @@ import { registerLlmRoutes } from './llm/llm.routes.js';
 import { registerListRoutes } from './lists/lists.routes.js';
 import { populateUser } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
-import { globalRateLimit } from './plugins/rate-limit.js';
+import { globalRateLimit, ipFrom } from './plugins/rate-limit.js';
 import { isTrustedProxy } from './plugins/trust-proxy.js';
 import { registerReportRoutes } from './reports/reports.routes.js';
 import { registerSearchRoutes } from './search/search.routes.js';
@@ -22,10 +22,22 @@ import { registerSyncRoutes } from './sync/sync.routes.js';
 import { setStorageAdapter, type UnifiedStorageAdapter } from './storage/factory.js';
 import { registerTagRoutes } from './tags/tags.routes.js';
 import { registerTaskRoutes } from './tasks/tasks.routes.js';
+import { registerTokenRoutes } from './tokens/tokens.routes.js';
+import { recordApiTokenAccess } from './tokens/tokens.service.js';
 import './types.js';
 import { registerNotificationRoutes } from './notifications/notifications.routes.js';
 import { registerUploadRoutes } from './uploads/uploads.routes.js';
 import { logger } from './utils/logger.js';
+
+function firstHeader(value: string | string[] | undefined): string | null {
+  if (typeof value === 'string') return value === '' ? null : value.slice(0, 255);
+  if (Array.isArray(value)) {
+    const first = value[0];
+    if (typeof first !== 'string' || first === '') return null;
+    return first.slice(0, 255);
+  }
+  return null;
+}
 
 export interface BuildFastifyOptions {
   db?: Database;
@@ -60,11 +72,9 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
     void reply.header('x-request-id', req.id);
     done(null, payload);
   });
-  app.addHook('onResponse', (req, reply, done) => {
-    if (req.url === '/api/health') {
-      done();
-      return;
-    }
+  app.addHook('onResponse', async (req, reply) => {
+    const path = req.url.split('?')[0] ?? req.url;
+    if (path === '/api/health') return;
     maybePublish(req.method, req.url, reply.statusCode, req.user?.id);
     logger.info('http_request', {
       method: req.method,
@@ -73,12 +83,28 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
       reqId: req.id,
       ms: reply.elapsedTime,
     });
-    done();
+    const token = req.apiToken;
+    const user = req.user;
+    if (!token || !user) return;
+    try {
+      await recordApiTokenAccess({
+        tokenId: token.id,
+        userId: user.id,
+        method: req.method,
+        path: path.slice(0, 512),
+        status: reply.statusCode,
+        ip: ipFrom(req),
+        userAgent: firstHeader(req.headers['user-agent']),
+      });
+    } catch (err) {
+      logger.error('api_token.access.failed', err);
+    }
   });
 
   registerErrorHandler(app);
   registerHealthRoutes(app);
   registerAuthRoutes(app);
+  registerTokenRoutes(app);
   registerUploadRoutes(app);
   registerNotificationRoutes(app);
   registerListRoutes(app);

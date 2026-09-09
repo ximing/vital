@@ -1,5 +1,7 @@
 import { db, pool } from '../../src/db/index.js';
 import {
+  apiTokenAccessLogs,
+  apiTokens,
   attachments,
   entityLinks,
   extensionAuthCodes,
@@ -63,6 +65,8 @@ export async function resetDb(): Promise<void> {
     await db.delete(attachments);
     await db.delete(reports);
     await db.delete(refreshTokens);
+    await db.delete(apiTokenAccessLogs);
+    await db.delete(apiTokens);
     await db.delete(extensionAuthCodes);
     await db.delete(users);
   });

@@ -172,6 +172,36 @@ describe('createVitalClient auth + upload methods', () => {
     expect(calls[3]?.body).toEqual({ type: 'meow', config: { nickname: 'Ada' } });
   });
 
+  it('api token methods hit /api/v1/tokens', async () => {
+    const store = memoryStore({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
+    const calls: { method: string; url: string; body: unknown }[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        const u = urlOf(url);
+        calls.push({ method: init?.method ?? 'GET', url: u, body: bodyOf(init) });
+        if (init?.method === 'DELETE') return respond204();
+        if (u.endsWith('/tokens') && init?.method === 'POST') {
+          return respond(201, { id: 'tok1', token: 'vt_secret', tokenPrefix: 'vt_secretxx' });
+        }
+        return respond(200, { items: [] });
+      },
+    });
+    await client.listApiTokens();
+    await client.createApiToken({ name: 'agent' });
+    await client.listApiTokenAccess('tok1', { limit: 20 });
+    await client.revokeApiToken('tok1');
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://x/api/v1/tokens',
+      'POST http://x/api/v1/tokens',
+      'GET http://x/api/v1/tokens/tok1/access?limit=20',
+      'DELETE http://x/api/v1/tokens/tok1',
+    ]);
+    expect(calls[1]?.body).toEqual({ name: 'agent' });
+  });
+
   it('lists/tasks/tags/search/bind methods hit the spec routes', async () => {
     const store = memoryStore({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
     const calls: { method: string; url: string; body: unknown }[] = [];
