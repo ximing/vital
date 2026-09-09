@@ -75,7 +75,6 @@ describe('llm settings + create from text', () => {
             dueDate: '2026-09-09',
             dueTime: '15:00',
             isAllDay: false,
-            timeBucket: 'dated',
             reminder: '15',
             recurrenceKind: null,
             listName: null,

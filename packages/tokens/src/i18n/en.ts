@@ -18,8 +18,7 @@ export const en = {
     inbox: 'Inbox',
     today: 'Today',
     upcoming: 'Upcoming',
-    anytime: 'Anytime',
-    someday: 'Someday',
+    someday: 'No Date',
     done: 'Done',
   },
   reports: {

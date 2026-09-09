@@ -3,7 +3,6 @@ import {
   createTaskInputSchema,
   recurrenceKindSchema,
   taskPrioritySchema,
-  timeBucketSchema,
   type CreateTaskFromTextInput,
   type CreateTaskInput,
   type List,
@@ -11,7 +10,6 @@ import {
   type ReminderOffsetMinutes,
   type Tag,
   type TaskPriority,
-  type TimeBucket,
 } from '@vital/dto';
 import { z } from 'zod';
 import { AppError } from '../errors.js';
@@ -29,7 +27,7 @@ const extractedSchema = z.object({
   startDate: z.string().nullable().optional(),
   startTime: z.string().nullable().optional(),
   isAllDay: z.boolean().optional(),
-  timeBucket: timeBucketSchema.optional(),
+  someday: z.boolean().optional(),
   reminder: z.enum(['none', 'due', '5', '15', '30', '60', '1440']).optional(),
   recurrenceKind: recurrenceKindSchema.nullable().optional(),
   listName: z.string().trim().min(1).max(80).nullable().optional(),
@@ -163,7 +161,6 @@ export function buildCreateInputFromIntent(
   let dueAt: string | null | undefined;
   let startAt: string | null | undefined;
   let isAllDay: boolean | undefined;
-  let timeBucket: TimeBucket | undefined = extracted?.timeBucket;
 
   if (dueYmd) {
     const timed = dueHm !== null;
@@ -178,30 +175,17 @@ export function buildCreateInputFromIntent(
   }
 
   if (dueAt === undefined && startAt === undefined && input.dueYmd === undefined) {
-    const bucket = extracted?.timeBucket;
-    if (bucket === 'anytime' || bucket === 'someday') {
-      timeBucket = bucket;
-      if (bucket === 'someday') {
-        dueAt = null;
-        startAt = null;
-      }
+    if (extracted?.someday === true) {
+      dueAt = null;
+      startAt = null;
     } else {
       const smart = input.smartListId;
       if (smart === 'smart:today' || smart === 'smart:upcoming') {
         dueAt = wallIso(todayYmd(zone, now), null, zone);
         isAllDay = true;
-        timeBucket = 'dated';
-      } else if (smart === 'smart:anytime') {
-        timeBucket = 'anytime';
-      } else if (smart === 'smart:someday') {
-        timeBucket = 'someday';
-        dueAt = null;
-        startAt = null;
       }
     }
   }
-
-  if (dueAt) timeBucket = 'dated';
 
   const hasDue = dueAt !== undefined && dueAt !== null;
   const reminder = reminderOf(extracted?.reminder, hasDue);
@@ -221,7 +205,6 @@ export function buildCreateInputFromIntent(
   if (dueAt !== undefined) draft.dueAt = dueAt;
   if (startAt !== undefined) draft.startAt = startAt;
   if (isAllDay !== undefined) draft.isAllDay = isAllDay;
-  if (timeBucket !== undefined) draft.timeBucket = timeBucket;
   if (reminder.reminderMode !== undefined) draft.reminderMode = reminder.reminderMode;
   if (reminder.reminderOffsetMinutes !== undefined) {
     draft.reminderOffsetMinutes = reminder.reminderOffsetMinutes;
@@ -252,13 +235,13 @@ function buildPrompt(input: {
   const tags = input.tags.map((item) => item.name).join('、');
   const system = [
     '你把用户的一句话理解成一条待办任务，只输出 JSON 对象，不要 markdown。',
-    '字段：title, notes, priority, dueDate, dueTime, startDate, startTime, isAllDay, timeBucket, reminder, recurrenceKind, listName, tagNames。',
+    '字段：title, notes, priority, dueDate, dueTime, startDate, startTime, isAllDay, someday, reminder, recurrenceKind, listName, tagNames。',
     'title：短标题，去掉日期时间等调度用语。',
     'notes：仅当用户补充了说明、上下文或摘要时填写，否则 null。',
     'priority：0 最高紧急，3 普通。没说紧急程度时用 3。',
     '日期用 YYYY-MM-DD，时间用 HH:mm，相对今天的时区计算。没有日期则 dueDate 为 null。',
     '有日期无时刻则 isAllDay true，dueTime null。有时刻则 isAllDay false。',
-    'timeBucket：有日期用 dated；没有日期且像随时可做 anytime；很久以后 someday。',
+    'someday：没有日期且用户表达"某天/以后/不着急"时 true，否则 false。',
     'reminder：none / due / 5 / 15 / 30 / 60 / 1440。有明确时刻的约会默认 15；全天任务默认 none；没提提醒则 none。',
     'recurrenceKind：daily weekly monthly yearly weekdays weekends holidays legal_workdays，否则 null。',
     'listName 必须是给定清单之一，否则 null。tagNames 必须是已有标签，否则 []。',

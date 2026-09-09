@@ -27,7 +27,6 @@ function task(over: Partial<Task> = {}): Task {
     reminderAt: null,
     isAllDay: false,
     timezone: TZ,
-    timeBucket: 'dated',
     recurrence: null,
     recurrenceKind: null,
     recurrenceDtstart: null,

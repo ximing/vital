@@ -18,8 +18,7 @@ export const zhCN = {
     inbox: '收集箱',
     today: '今天',
     upcoming: '最近',
-    anytime: '随时',
-    someday: '某天',
+    someday: '无日期',
     done: '已完成',
   },
   reports: {

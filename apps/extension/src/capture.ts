@@ -545,7 +545,6 @@ async function saveTask(
     title,
     listId: await inboxListId(),
     notes: taskNotesFromCapture(pageUrl, selection),
-    timeBucket: 'anytime',
   });
   const outcome = { kind: 'task' as const, id: task.id };
   await announceSaved(report, outcome);
@@ -669,7 +668,6 @@ export async function commitCapture(input: {
       title,
       listId: input.listId ?? (await inboxListId()),
       notes: taskNotesFromCapture(capture.originalUrl, input.note || capture.selection),
-      timeBucket: 'anytime',
     });
     const outcome: CaptureOutcome = { kind: 'task', id: task.id };
     await input.onCreated?.(outcome);

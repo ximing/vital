@@ -82,7 +82,6 @@ function sectionTitle(section: ListSection, timeZone: string): string | null {
   if (section.heading === 'overdue') return t.todos.overdue;
   if (section.heading === 'today') return t.lists.today;
   if (section.heading === 'done') return t.lists.done;
-  if (section.heading === 'anytime') return t.lists.anytime;
   if (section.heading === 'day' && section.ymd) return formatHumanDay(section.ymd, timeZone);
   return null;
 }

@@ -8,7 +8,6 @@ import {
   Cloud,
   Folder,
   Inbox,
-  Infinity as InfinityIcon,
   Plus,
   Sun,
 } from 'lucide-react';
@@ -33,7 +32,6 @@ const SMART_ITEMS: { id: string; icon: typeof Sun; label: string }[] = [
   { id: 'smart:today', icon: Sun, label: t.lists.today },
   { id: 'smart:upcoming', icon: CalendarClock, label: t.lists.upcoming },
   { id: 'smart:inbox', icon: Inbox, label: t.lists.inbox },
-  { id: 'smart:anytime', icon: InfinityIcon, label: t.lists.anytime },
   { id: 'smart:someday', icon: Cloud, label: t.lists.someday },
   { id: 'smart:done', icon: CircleCheck, label: t.lists.done },
 ];

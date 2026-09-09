@@ -4,7 +4,6 @@ export const SMART_LIST_IDS = [
   'smart:inbox',
   'smart:today',
   'smart:upcoming',
-  'smart:anytime',
   'smart:someday',
   'smart:done',
 ] as const;

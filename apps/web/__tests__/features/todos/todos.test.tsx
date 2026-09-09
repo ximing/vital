@@ -111,7 +111,6 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     reminderAt: null,
     isAllDay: true,
     timezone: TZ,
-    timeBucket: 'dated',
     recurrence: null,
     recurrenceKind: null,
     recurrenceDtstart: null,
@@ -182,7 +181,7 @@ describe('todos workspace', () => {
     const { unmount: u1 } = renderAt('/todos/lists/smart:inbox');
     expect(await screen.findByText(t.empty.inboxList)).toBeInTheDocument();
     u1();
-    const { unmount: u2 } = renderAt('/todos/lists/smart:anytime');
+    const { unmount: u2 } = renderAt('/todos/lists/smart:someday');
     expect(await screen.findByText(t.empty.upcoming)).toBeInTheDocument();
     u2();
     const { unmount: u3 } = renderAt('/todos/lists/smart:done');

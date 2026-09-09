@@ -14,9 +14,6 @@ export const taskPrioritySchema = z.union([
 ]);
 export type TaskPriority = z.infer<typeof taskPrioritySchema>;
 
-export const timeBucketSchema = z.enum(['dated', 'anytime', 'someday']);
-export type TimeBucket = z.infer<typeof timeBucketSchema>;
-
 export const reminderModeSchema = z.enum(['none', 'due', 'offset', 'custom']);
 export type ReminderMode = z.infer<typeof reminderModeSchema>;
 
@@ -58,7 +55,6 @@ export interface Task {
   reminderAt: string | null;
   isAllDay: boolean;
   timezone: string;
-  timeBucket: TimeBucket;
   recurrence: string | null;
   recurrenceKind: RecurrenceKind | null;
   recurrenceDtstart: string | null;
@@ -104,7 +100,6 @@ export const createTaskInputSchema = z.object({
   reminderAt: isoDateTimeSchema.nullable().optional(),
   isAllDay: z.boolean().optional(),
   timezone: ianaTimezoneSchema.optional(),
-  timeBucket: timeBucketSchema.optional(),
   recurrence: z.string().trim().min(1).max(500).nullable().optional(),
   recurrenceKind: recurrenceKindSchema.nullable().optional(),
   tagIds: tagIdsSchema.optional(),
@@ -132,7 +127,6 @@ export const patchTaskInputSchema = z
     reminderAt: isoDateTimeSchema.nullable().optional(),
     isAllDay: z.boolean().optional(),
     timezone: ianaTimezoneSchema.optional(),
-    timeBucket: timeBucketSchema.optional(),
     recurrence: z.string().trim().min(1).max(500).nullable().optional(),
     recurrenceKind: recurrenceKindSchema.nullable().optional(),
     tagIds: tagIdsSchema.optional(),

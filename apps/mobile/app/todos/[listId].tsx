@@ -23,7 +23,6 @@ function titleCopy(listId: string): string {
   if (listId === 'smart:today') return copy.lists.today;
   if (listId === 'smart:inbox') return copy.lists.inbox;
   if (listId === 'smart:upcoming') return copy.lists.upcoming;
-  if (listId === 'smart:anytime') return copy.lists.anytime;
   if (listId === 'smart:someday') return copy.lists.someday;
   if (listId === 'smart:done') return copy.lists.done;
   return copy.nav.todos;

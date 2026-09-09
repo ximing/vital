@@ -35,7 +35,7 @@ export async function seedSampleTasks(userId: string): Promise<{ created: number
   let created = 0;
   for (const title of SAMPLE_TITLES) {
     if (have.some((task) => task.title === title)) continue;
-    await createTask(userId, { title, listId: inbox.id, tagIds: [tagId], timeBucket: 'anytime' });
+    await createTask(userId, { title, listId: inbox.id, tagIds: [tagId] });
     created += 1;
   }
   return { created, tagId };

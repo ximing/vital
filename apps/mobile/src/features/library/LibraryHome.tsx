@@ -20,7 +20,6 @@ const SMART_ORDER = [
   'smart:today',
   'smart:inbox',
   'smart:upcoming',
-  'smart:anytime',
   'smart:someday',
   'smart:done',
 ] as const;
@@ -29,7 +28,6 @@ function listLabel(list: List): string {
   if (list.id === 'smart:today') return copy.lists.today;
   if (list.id === 'smart:inbox') return copy.lists.inbox;
   if (list.id === 'smart:upcoming') return copy.lists.upcoming;
-  if (list.id === 'smart:anytime') return copy.lists.anytime;
   if (list.id === 'smart:someday') return copy.lists.someday;
   if (list.id === 'smart:done') return copy.lists.done;
   return list.name;

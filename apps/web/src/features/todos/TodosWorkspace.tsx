@@ -143,13 +143,11 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
         ? t.lists.upcoming
         : listId === 'smart:inbox'
           ? t.lists.inbox
-          : listId === 'smart:anytime'
-            ? t.lists.anytime
-            : listId === 'smart:someday'
-              ? t.lists.someday
-              : listId === 'smart:done'
-                ? t.lists.done
-                : t.nav.todos,
+          : listId === 'smart:someday'
+            ? t.lists.someday
+            : listId === 'smart:done'
+              ? t.lists.done
+              : t.nav.todos,
   );
 
   useTodosKeyboard({

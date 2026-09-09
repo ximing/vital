@@ -58,7 +58,6 @@ describe('command palette', () => {
             reminderAt: null,
             isAllDay: true,
             timezone: 'Asia/Shanghai',
-            timeBucket: 'anytime',
             recurrence: null,
             recurrenceKind: null,
             recurrenceDtstart: null,

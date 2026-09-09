@@ -35,7 +35,6 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     reminderAt: null,
     isAllDay: true,
     timezone: TZ,
-    timeBucket: 'dated',
     recurrence: null,
     recurrenceKind: null,
     recurrenceDtstart: null,
@@ -135,10 +134,10 @@ describe('todo model', () => {
     expect(payload.isAllDay).toBe(true);
   });
 
-  it('creates someday tasks with the someday bucket', () => {
+  it('creates someday tasks with no dates', () => {
     const payload = createPayload('以后再说', 'smart:someday', 'inbox-1', TZ, NOW);
-    expect(payload.timeBucket).toBe('someday');
     expect(payload.dueAt).toBeNull();
+    expect(payload.startAt).toBeNull();
   });
 
   it('reorders siblings before the drop target', () => {
@@ -165,7 +164,6 @@ describe('todo model', () => {
   it('maps empty copy keys from spec screens', () => {
     expect(emptyCopyKey('smart:today')).toBe('today');
     expect(emptyCopyKey('smart:inbox')).toBe('inboxList');
-    expect(emptyCopyKey('smart:anytime')).toBe('upcoming');
     expect(emptyCopyKey('uuid-list')).toBe('userList');
   });
 

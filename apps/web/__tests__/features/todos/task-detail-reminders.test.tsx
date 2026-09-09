@@ -21,7 +21,6 @@ const task: Task = {
   reminderAt: null,
   isAllDay: false,
   timezone: 'Asia/Shanghai',
-  timeBucket: 'dated',
   recurrence: null,
   recurrenceKind: null,
   recurrenceDtstart: null,

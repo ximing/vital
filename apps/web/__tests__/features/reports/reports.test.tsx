@@ -366,7 +366,6 @@ describe('reports workspace', () => {
         reminderAt: null,
         isAllDay: true,
         timezone: TZ,
-        timeBucket: 'dated',
         recurrence: null,
         recurrenceKind: null,
         recurrenceDtstart: null,

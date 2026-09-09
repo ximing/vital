@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
-import type { List, PatchTaskInput, Tag, Task, TaskPriority, TimeBucket } from '@vital/dto';
+import type { List, PatchTaskInput, Tag, Task, TaskPriority } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../auth/AuthProvider';
 import { Banner } from '../../components/Banner';
@@ -10,7 +10,6 @@ import { DateField } from '../../components/DateField';
 import { Field } from '../../components/Field';
 import { Loading } from '../../components/Loading';
 import { Screen } from '../../components/Screen';
-import { SelectField } from '../../components/SelectField';
 import { toast } from '../../components/toast';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { client } from '../../lib/api';
@@ -228,19 +227,6 @@ export function TaskDetail({ taskId }: { taskId: string }) {
         weekStartsOn={weekStartsOn}
         onChange={(next) => setStamp('startAt', next)}
       />
-
-      {task.dueAt === null && task.startAt === null ? (
-        <SelectField
-          label={copy.todos.timeBucket}
-          value={task.timeBucket}
-          options={[
-            { value: 'anytime', label: copy.lists.anytime },
-            { value: 'someday', label: copy.lists.someday },
-            { value: 'dated', label: copy.todos.due },
-          ]}
-          onChange={(timeBucket) => void patch({ timeBucket: timeBucket as TimeBucket, dueAt: null, startAt: null })}
-        />
-      ) : null}
 
       <RecurrenceField task={task} onPatch={(input) => void patch(input)} />
       <ReminderField

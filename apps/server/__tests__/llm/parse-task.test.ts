@@ -89,10 +89,9 @@ describe('buildCreateInputFromIntent', () => {
   it('does not force today when the model says someday', () => {
     const payload = buildCreateInputFromIntent(
       { text: '某天读完这本书', timezone: 'Asia/Shanghai', smartListId: 'smart:today' },
-      extractedOf({ title: '读完这本书', timeBucket: 'someday', dueDate: null }),
+      extractedOf({ title: '读完这本书', someday: true, dueDate: null }),
       ctx,
     );
-    expect(payload.timeBucket).toBe('someday');
     expect(payload.dueAt).toBeNull();
   });
 

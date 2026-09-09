@@ -77,7 +77,6 @@ describe('tasks', () => {
     expect(undone.statusCode).toBe(200);
     expect(undone.json().dueAt).toBeNull();
     expect(undone.json().status).toBe('todo');
-    expect(undone.json().timeBucket).not.toBe('dated');
   });
 
   it('complete without dueAt still returns completionId', async () => {
@@ -188,16 +187,24 @@ describe('tasks', () => {
     expect(reject.statusCode).toBe(400);
   });
 
-  it('timeBucket someday write and recurrence requires dueAt', async () => {
+  it('undated tasks land in the someday list and recurrence requires dueAt', async () => {
     const alice = await registerUser(app);
     const inbox = await inboxId(app, alice.token);
-    const someday = await injectJson(app, {
+    const created = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/tasks',
       token: alice.token,
-      payload: { title: 'Later', listId: inbox, timeBucket: 'someday' },
+      payload: { title: 'Later', listId: inbox },
     });
-    expect(someday.json().timeBucket).toBe('someday');
+    expect(created.statusCode).toBe(201);
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks?listId=smart:someday',
+      token: alice.token,
+    });
+    expect(listed.json().items.map((task: { id: string }) => task.id)).toContain(
+      created.json().id,
+    );
     const noDue = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/tasks',

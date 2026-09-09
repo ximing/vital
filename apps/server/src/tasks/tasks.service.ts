@@ -12,7 +12,6 @@ import {
   type TaskCollection,
   type TaskCounts,
   type TaskStatus,
-  type TimeBucket,
   type UncompleteTaskInput,
 } from '@vital/dto';
 import {
@@ -63,7 +62,6 @@ import {
   type RecurrenceTask,
 } from './recurrence.js';
 import {
-  asBucket,
   asPriority,
   asRecurrenceKind,
   asReminderMode,
@@ -144,19 +142,6 @@ function snapExisting(d: Date | null, allDay: boolean, zone: string): Date | nul
   return DateTime.fromJSDate(d, { zone }).startOf('day').toJSDate();
 }
 
-function bucketAfter(
-  dueAt: Date | null,
-  startAt: Date | null,
-  requested: TimeBucket | undefined,
-  previous: TimeBucket,
-): TimeBucket {
-  if (dueAt !== null || startAt !== null) return 'dated';
-  if (requested === 'someday') return 'someday';
-  if (requested !== undefined) return requested;
-  if (previous === 'someday') return 'someday';
-  return 'anytime';
-}
-
 function shiftBy(d: Date | null, deltaMs: number): Date | null {
   if (d === null) return null;
   return new Date(d.getTime() + deltaMs);
@@ -218,10 +203,8 @@ async function smartFilter(userId: string, listId: string, tz: string): Promise<
           ),
         ),
       ) as SQL;
-    case 'smart:anytime':
-      return and(openCond(userId), eq(tasks.timeBucket, 'anytime')) as SQL;
     case 'smart:someday':
-      return and(openCond(userId), eq(tasks.timeBucket, 'someday')) as SQL;
+      return and(openCond(userId), isNull(tasks.dueAt), isNull(tasks.startAt)) as SQL;
     case 'smart:done':
       return and(
         eq(tasks.userId, userId),
@@ -295,7 +278,6 @@ const COUNTED_SMART_IDS = [
   'smart:inbox',
   'smart:today',
   'smart:upcoming',
-  'smart:anytime',
   'smart:someday',
 ] as const;
 
@@ -386,7 +368,6 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     reminderAt,
     isAllDay,
     timezone: zone,
-    timeBucket: bucketAfter(dueAt, startAt, input.timeBucket, 'anytime'),
     recurrenceRrule: recurrence,
     recurrenceKind,
     recurrenceDtstart,
@@ -585,7 +566,6 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     recurrenceRrule: recurrence,
     recurrenceKind,
     recurrenceDtstart,
-    timeBucket: bucketAfter(dueAt, startAt, input.timeBucket, asBucket(task.timeBucket)),
   };
   if (input.title !== undefined) patch.title = input.title;
   if (input.notes !== undefined) patch.notesMd = input.notes ?? '';

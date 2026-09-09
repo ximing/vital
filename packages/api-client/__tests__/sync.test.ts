@@ -22,7 +22,6 @@ const task = (over: Partial<Task> & Pick<Task, 'id' | 'listId'>): Task => ({
   reminderAt: null,
   isAllDay: false,
   timezone: 'UTC',
-  timeBucket: 'anytime',
   recurrence: null,
   recurrenceKind: null,
   recurrenceDtstart: null,

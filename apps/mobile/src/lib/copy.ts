@@ -238,7 +238,6 @@ export const copy = {
     recurrenceHolidays: '节假日',
     recurrenceLegalWorkdays: '法定工作日',
     allDay: '全天',
-    timeBucket: '安排',
     status: { todo: '待办', doing: '进行中' },
     subtasks: '子任务',
   },

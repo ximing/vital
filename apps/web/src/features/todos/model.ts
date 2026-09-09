@@ -295,27 +295,21 @@ export function groupByDay(
   timeZone: string,
 ): { ymd: string; nodes: TaskNode[] }[] {
   const buckets = new Map<string, TaskNode[]>();
-  const undated: TaskNode[] = [];
   for (const node of nodes) {
     const ymd = taskDayYmd(node.task, timeZone);
-    if (ymd === null) {
-      undated.push(node);
-      continue;
-    }
+    if (ymd === null) continue;
     const list = buckets.get(ymd) ?? [];
     list.push(node);
     buckets.set(ymd, list);
   }
   const keys = [...buckets.keys()].sort();
-  const groups = keys.map((ymd) => ({ ymd, nodes: buckets.get(ymd) ?? [] }));
-  if (undated.length > 0) groups.push({ ymd: '', nodes: undated });
-  return groups;
+  return keys.map((ymd) => ({ ymd, nodes: buckets.get(ymd) ?? [] }));
 }
 
 /** Same grouping ListView paints — j/k must walk this order, not raw sortOrder. */
 export type ListSection = {
   key: string;
-  heading: 'pinned' | 'overdue' | 'today' | 'done' | 'anytime' | 'day' | null;
+  heading: 'pinned' | 'overdue' | 'today' | 'done' | 'day' | null;
   ymd?: string;
   nodes: TaskNode[];
 };
@@ -347,8 +341,8 @@ export function listSections(
   if (listId === 'smart:upcoming') {
     return nonempty(
       groupByDay(openNodes, timeZone).map((group) => ({
-        key: group.ymd || 'undated',
-        heading: group.ymd === '' ? ('anytime' as const) : ('day' as const),
+        key: group.ymd,
+        heading: 'day' as const,
         ymd: group.ymd,
         nodes: group.nodes,
       })),
@@ -431,18 +425,8 @@ export function createPayload(
   if (listId === 'smart:today' || listId === 'smart:upcoming') {
     return { title: trimmed, listId: target, dueAt: midnight, isAllDay: true, timezone: timeZone };
   }
-  if (listId === 'smart:anytime') {
-    return { title: trimmed, listId: target, timeBucket: 'anytime', timezone: timeZone };
-  }
   if (listId === 'smart:someday') {
-    return {
-      title: trimmed,
-      listId: target,
-      timeBucket: 'someday',
-      dueAt: null,
-      startAt: null,
-      timezone: timeZone,
-    };
+    return { title: trimmed, listId: target, dueAt: null, startAt: null, timezone: timeZone };
   }
   return { title: trimmed, listId: target, timezone: timeZone };
 }
@@ -453,7 +437,7 @@ export function emptyCopyKey(
   if (listId === 'smart:today') return 'today';
   if (listId === 'smart:inbox') return 'inboxList';
   if (listId === 'smart:done') return 'done';
-  if (listId === 'smart:upcoming' || listId === 'smart:anytime' || listId === 'smart:someday') {
+  if (listId === 'smart:upcoming' || listId === 'smart:someday') {
     return 'upcoming';
   }
   return 'userList';
@@ -517,11 +501,7 @@ export function formatHumanDay(ymd: string, timeZone: string, now = new Date()):
 }
 
 export function dueMeta(task: Task, timeZone: string, now = new Date()): string | null {
-  if (task.dueAt === null && task.startAt === null) {
-    if (task.timeBucket === 'someday') return '某天';
-    if (task.timeBucket === 'anytime') return '随时';
-    return null;
-  }
+  if (task.dueAt === null && task.startAt === null) return null;
   const ymd = taskDayYmd(task, timeZone);
   if (ymd === null) return null;
   const day = formatHumanDay(ymd, timeZone, now);

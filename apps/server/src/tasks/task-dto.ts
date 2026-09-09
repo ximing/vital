@@ -5,7 +5,6 @@ import type {
   Task,
   TaskPriority,
   TaskStatus,
-  TimeBucket,
 } from '@vital/dto';
 import type { TaskRow } from '../db/schema.js';
 
@@ -19,11 +18,6 @@ export function asStatus(value: string): TaskStatus {
 export function asPriority(value: number): TaskPriority {
   if (value === 0 || value === 1 || value === 2 || value === 3) return value;
   return 3;
-}
-
-export function asBucket(value: string): TimeBucket {
-  if (value === 'dated' || value === 'anytime' || value === 'someday') return value;
-  return 'anytime';
 }
 
 export function asReminderMode(value: string | null): ReminderMode | null {
@@ -67,7 +61,6 @@ export function toTaskDto(row: TaskRow, tagIds: string[]): Task {
     reminderAt: iso(row.reminderAt),
     isAllDay: row.isAllDay,
     timezone: row.timezone,
-    timeBucket: asBucket(row.timeBucket),
     recurrence: row.recurrenceRrule,
     recurrenceKind: asRecurrenceKind(row.recurrenceKind),
     recurrenceDtstart: iso(row.recurrenceDtstart),

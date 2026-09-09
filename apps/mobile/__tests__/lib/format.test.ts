@@ -16,7 +16,6 @@ function sample(over: Partial<Task> & Pick<Task, 'dueAt' | 'timezone'>): Task {
     reminderOffsetMinutes: null,
     reminderAt: null,
     isAllDay: true,
-    timeBucket: 'dated',
     recurrence: null,
     recurrenceKind: null,
     recurrenceDtstart: null,

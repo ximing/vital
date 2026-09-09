@@ -5,7 +5,6 @@ export type AppSection = 'todos' | 'capture' | 'reflect' | 'search' | 'settings'
 export const RHYTHM_LIST_IDS = [
   'smart:today',
   'smart:upcoming',
-  'smart:anytime',
   'smart:someday',
   'smart:done',
 ] as const;

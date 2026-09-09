@@ -39,11 +39,7 @@ export function offsetLabel(minutes: ReminderOffsetMinutes): string {
 }
 
 export function dueMeta(task: Task, timeZone: string, now = new Date()): string | null {
-  if (task.dueAt === null && task.startAt === null) {
-    if (task.timeBucket === 'someday') return '某天';
-    if (task.timeBucket === 'anytime') return '随时';
-    return null;
-  }
+  if (task.dueAt === null && task.startAt === null) return null;
   const iso = task.dueAt ?? task.startAt;
   if (iso === null) return null;
   const ymd = localDateStamp(timeZone, new Date(iso));

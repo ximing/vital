@@ -19,8 +19,7 @@ const SMART_NAMES: Record<(typeof SMART_LIST_IDS)[number], string> = {
   'smart:inbox': '收集箱',
   'smart:today': '今天',
   'smart:upcoming': '最近',
-  'smart:anytime': '随时',
-  'smart:someday': '某天',
+  'smart:someday': '无日期',
   'smart:done': '已完成',
 };
 

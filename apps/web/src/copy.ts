@@ -282,7 +282,6 @@ export const t = {
     pickTask: '点一条待办，详情会开在右边。',
     newList: '新建清单',
     newListPlaceholder: '清单名称',
-    timeBucket: '安排',
     complete: '完成',
     more: '更多',
     loading: '加载中',

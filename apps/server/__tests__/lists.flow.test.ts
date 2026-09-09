@@ -35,10 +35,10 @@ describe('lists', () => {
       'smart:inbox',
       'smart:today',
       'smart:upcoming',
-      'smart:anytime',
       'smart:someday',
       'smart:done',
     ]));
+    expect(smart).not.toContain('smart:anytime');
   });
 
   it('backfill inserts 收集箱 for existing users', async () => {
