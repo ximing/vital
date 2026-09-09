@@ -6,7 +6,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router';
 import { t } from '@/copy';
 import { RAIL_NAV, railNavClass } from '@/shell/rail-nav';
 import { listIdFrom, rhythmHref } from '@/shell/section';
-import { pointAnchor } from '@/ui/anchor-menu';
+import { pointAnchor, type MenuAnchor } from '@/ui/anchor-menu';
 import { Icon } from '@/ui/icon';
 import { ListContextMenu } from './ListContextMenu';
 import { ListIconPopover } from './ListIconPopover';
@@ -100,7 +100,7 @@ export function UserListsNav({
   const [renameValue, setRenameValue] = useState('');
   const [folded, setFolded] = useState<Set<string>>(() => loadFolded());
   const [menu, setMenu] = useState<{ list: List; x: number; y: number } | null>(null);
-  const [iconFor, setIconFor] = useState<{ list: List; anchor: DOMRect } | null>(null);
+  const [iconFor, setIconFor] = useState<{ list: List; anchor: MenuAnchor } | null>(null);
   const lists = data ?? [];
   const roots = listRoots(lists);
 
