@@ -467,7 +467,7 @@ export function WysiwygEditor({
           {uploadError}
         </p>
       ) : null}
-      <div className="min-h-[16rem] min-w-0 flex-1 overflow-y-auto py-4">
+      <div className="min-h-[16rem] min-w-0 flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
       {slash && editor ? (

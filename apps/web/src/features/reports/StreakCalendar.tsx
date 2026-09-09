@@ -36,6 +36,12 @@ export function StreakCalendar({
 }) {
   const today = todayYmd(timeZone);
   const maxCompleted = Math.max(1, ...heatmap.map((cell) => cell.completed));
+  // Day-grain heat uses an absolute cap so sparse days stay pale: 1 completion
+  // reads ~30% accent, 5+ saturates at 80% — never confused with the solid
+  // selected day. Month-grain counts are aggregates, so they stay relative.
+  const HEAT_DAY_CAP = 5;
+  const dayFill = (completed: number): number =>
+    completed > 0 ? 0.18 + (0.62 * Math.min(completed, HEAT_DAY_CAP)) / HEAT_DAY_CAP : 0;
   const weekday = t.todos.weekday;
   const labels =
     weekStartsOn === 1
@@ -171,8 +177,8 @@ export function StreakCalendar({
               ? cell.date >= selectedStart && cell.date < addDaysYmd(selectedStart, 7)
               : false;
           const future = cell.date > today;
-          const fill = cell.completed > 0 ? 0.2 + (0.7 * cell.completed) / maxCompleted : 0;
-          const heat = !sel && !future && !isToday && fill > 0;
+          const fill = dayFill(cell.completed);
+          const heat = !sel && !future && fill > 0;
           return (
             <button
               key={cell.date}

@@ -319,6 +319,36 @@ describe('reports workspace', () => {
     expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
   });
 
+  it('switches period type from the segmented control in the title row', async () => {
+    const user = userEvent.setup();
+    renderAt('/reports/r-daily');
+    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: t.reports.daily })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.click(screen.getByRole('tab', { name: t.reports.weekly }));
+    await waitFor(() => {
+      expect(
+        vi.mocked(client.getCurrentReport).mock.calls.some((call) => call[0] === 'weekly'),
+      ).toBe(true);
+    });
+    expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: t.reports.weekly })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('shows the period range and inline review stats in the meta row', async () => {
+    renderAt('/reports/r-daily');
+    expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
+    expect(screen.getByText('2026-09-06')).toBeInTheDocument();
+    // Inline stats: review counts rendered as Sora numerals next to caption labels.
+    const main = screen.getByRole('main');
+    expect(main.textContent).toContain(t.reports.carried);
+  });
+
   it('toggles a carried task via complete, not a markdown patch', async () => {
     vi.mocked(client.completeTask).mockResolvedValue({
       task: {

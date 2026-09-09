@@ -25,14 +25,13 @@ export function StatsBlock({ type }: { type: ReportType }) {
 
   if (query.error || query.isLoading || !data) {
     return query.isLoading ? (
-      <div className="skeleton-pulse mt-4 h-12 rounded-lg" aria-busy="true" />
+      <div className="skeleton-pulse mt-3 h-12 rounded-lg" aria-busy="true" />
     ) : null;
   }
 
   return (
-    <div className="mt-5 border-t border-border/80 pt-4">
-      <p className="eyebrow">{data.period.label}</p>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+    <div className="mt-3">
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
         <Stat
           label={t.reports.completed}
           value={data.totals.completed}

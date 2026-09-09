@@ -7,6 +7,7 @@ import type {
 } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
 import { normalizeTrailingNewlines, renderToken, type EntityKind } from '@vital/markdown';
+import { addDaysYmd } from '@/features/todos/model';
 
 export type { ReportType };
 
@@ -133,6 +134,28 @@ export function insertEntityToken(
 
 export function reportHref(id: string, type: ReportType): string {
   return `/reports/${id}?type=${type}`;
+}
+
+/** ISO-8601 week number (1–53) of a YMD date. */
+export function isoWeek(ymd: string): number {
+  const [y = 0, m = 1, d = 1] = ymd.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = (date.getUTCDay() + 6) % 7; // Monday = 0
+  date.setUTCDate(date.getUTCDate() - day + 3); // Thursday of this week
+  const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const firstDay = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
+  return 1 + Math.round((date.getTime() - firstThursday.getTime()) / (7 * 86400000));
+}
+
+/** Compact period label for the meta row. `end` is the exclusive period end. */
+export function formatPeriodRange(type: ReportType, start: string, end: string): string {
+  if (type === 'daily') return start;
+  if (type === 'monthly') return start.slice(0, 7);
+  if (type === 'yearly') return start.slice(0, 4);
+  const last = addDaysYmd(end, -1);
+  const tail = last.slice(0, 7) === start.slice(0, 7) ? last.slice(5) : last;
+  return `${start} – ${tail} · W${isoWeek(start)}`;
 }
 
 export function chipLabel(

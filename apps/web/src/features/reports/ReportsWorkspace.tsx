@@ -13,10 +13,12 @@ import { Button } from '@/ui/button';
 import {
   applyRemoteBody,
   decidePoll,
+  formatPeriodRange,
   isDirty,
   isRevisionConflict,
   parseReportType,
   POLL_MS,
+  REPORT_TYPES,
   reportHref,
   SAVE_DEBOUNCE_MS,
 } from './model';
@@ -70,6 +72,23 @@ function sessionFrom(report: Report, prev?: Session | null): Session {
 
 function sessionDirty(s: Session): boolean {
   return isDirty(s.draftMd, s.serverMd) || s.draftTitle.trim() !== s.serverTitle.trim();
+}
+
+/** Inline period stat — Sora numeral + caption label, no KPI card chrome. */
+function MetaStat({ tone, value, label }: { tone: string; value: number; label: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span
+        className="h-1.5 w-1.5 shrink-0 self-center rounded-full"
+        style={{ background: tone }}
+        aria-hidden
+      />
+      <span className="font-display text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tabular-nums text-fg">
+        {value}
+      </span>
+      <span className="text-[length:var(--text-caption)] text-tertiary">{label}</span>
+    </span>
+  );
 }
 
 export function ReportsWorkspace() {
@@ -410,14 +429,17 @@ export function ReportsWorkspace() {
       <main
         id="main"
         data-region="reflection-canvas"
-        className="order-2 flex min-h-0 min-w-0 flex-1 flex-col bg-canvas lg:order-1"
+        className="flex min-h-0 min-w-0 flex-1 flex-col bg-canvas"
       >
         <div className="flex w-full min-h-0 flex-1 flex-col">
           <header className="flex shrink-0 items-end justify-between gap-3 pb-3">
             <p className="eyebrow eyebrow-accent eyebrow-rule">
               {t.reports.kicker}
             </p>
-            <span className="text-[length:var(--text-caption)] text-muted" role="status">
+            <span
+              className="shrink-0 font-mono text-[length:var(--text-caption)] tabular-nums text-tertiary"
+              role="status"
+            >
               {session && session.id === id
                 ? session.saveState === 'saving'
                   ? t.reports.saving
@@ -501,29 +523,95 @@ export function ReportsWorkspace() {
               <div className="skeleton-pulse h-64 rounded-lg" />
             </div>
           ) : (
-            <div className="flex min-h-0 flex-1 flex-col gap-6 pt-2">
-              <div className="flex shrink-0 items-center gap-3">
-                <span className="h-7 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
-                <input
-                  aria-label={t.reports.title}
-                  value={session.draftTitle}
-                  disabled={!online || session.filling}
-                  onChange={(event) => patchLive((s) => ({ ...s, draftTitle: event.target.value }))}
-                  className="report-title w-full bg-transparent text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)] text-fg outline-none"
-                />
+            <div className="flex min-h-0 flex-1 flex-col pt-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="h-7 w-1 shrink-0 rounded-full bg-accent" aria-hidden />
+                  <input
+                    aria-label={t.reports.title}
+                    value={session.draftTitle}
+                    disabled={!online || session.filling}
+                    onChange={(event) =>
+                      patchLive((s) => ({ ...s, draftTitle: event.target.value }))
+                    }
+                    className="report-title w-full bg-transparent text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)] text-fg outline-none"
+                  />
+                </div>
+                <div
+                  className="inline-flex shrink-0 gap-1 self-center rounded-full bg-surface-muted p-1"
+                  role="tablist"
+                  aria-label={t.reports.period}
+                >
+                  {REPORT_TYPES.map((type) => {
+                    const active = type === liveType;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        disabled={!online || session.filling}
+                        onClick={() => {
+                          if (!active) void openPeriod(type);
+                        }}
+                        className={`inline-flex h-7 items-center rounded-full px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color,box-shadow] duration-[var(--ease-out)] ${
+                          active
+                            ? 'bg-elevated font-medium text-fg shadow-[var(--shadow-xs)]'
+                            : 'text-muted hover:text-fg'
+                        }`}
+                      >
+                        {t.reports[type]}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              {reviewQuery.data ? (
-                <ReviewLists
-                  review={reviewQuery.data}
-                  onToggleTask={(task) => void toggleReviewTask(task)}
-                  onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
-                  onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
-                  formatCompletedAt={formatCompletedAt}
-                />
-              ) : (
-                <div className="skeleton-pulse h-24 rounded-2xl" aria-busy="true" />
-              )}
-              <div className="report-paper flex min-h-[16rem] min-w-0 flex-1 flex-col">
+
+              <div className="mt-2 flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1 pl-4">
+                {report ? (
+                  <span className="font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums text-tertiary">
+                    {formatPeriodRange(liveType, report.periodStart, report.periodEnd)}
+                  </span>
+                ) : null}
+                {reviewQuery.data ? (
+                  <>
+                    <span className="text-tertiary/60" aria-hidden>
+                      ·
+                    </span>
+                    <MetaStat
+                      tone="var(--status-done)"
+                      value={reviewQuery.data.completed.length}
+                      label={t.reports.completed}
+                    />
+                    <MetaStat
+                      tone="var(--status-due-soon)"
+                      value={reviewQuery.data.carried.length}
+                      label={t.reports.carried}
+                    />
+                    <MetaStat
+                      tone="var(--status-doing)"
+                      value={reviewQuery.data.captured.length}
+                      label={t.reports.captured}
+                    />
+                  </>
+                ) : null}
+              </div>
+
+              <div className="mt-5 shrink-0">
+                {reviewQuery.data ? (
+                  <ReviewLists
+                    review={reviewQuery.data}
+                    onToggleTask={(task) => void toggleReviewTask(task)}
+                    onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
+                    onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
+                    formatCompletedAt={formatCompletedAt}
+                  />
+                ) : (
+                  <div className="skeleton-pulse h-24 rounded-2xl" aria-busy="true" />
+                )}
+              </div>
+
+              <div className="report-paper mt-6 flex min-h-[16rem] min-w-0 flex-1 flex-col">
                 <WysiwygEditor
                   key={`${session.id}:${session.editorKey}`}
                   reportId={session.id}
@@ -543,15 +631,19 @@ export function ReportsWorkspace() {
       <aside
         data-region="calendar-pane"
         aria-label={t.reports.history}
-        className="order-1 shrink-0 border-b border-border bg-surface px-5 py-5 lg:order-2 lg:h-full lg:w-[20rem] lg:border-b-0 lg:border-l lg:px-5 lg:py-6"
+        className="shrink-0 border-b border-border bg-surface px-5 py-5 lg:h-full lg:w-[20rem] lg:border-b-0 lg:border-l lg:px-5 lg:py-6"
       >
-        <ReportsCalendar
-          type={liveType}
-          selectedStart={report?.periodStart}
-          weekStartsOn={weekStartsOn}
-          timeZone={timeZone}
-          onPick={(ymd) => void openPeriod(liveType, ymd)}
-        />
+        <p className="eyebrow eyebrow-rule">{t.reports.history}</p>
+        <div className="mt-3">
+          <ReportsCalendar
+            type={liveType}
+            selectedStart={report?.periodStart}
+            weekStartsOn={weekStartsOn}
+            timeZone={timeZone}
+            onPick={(ymd) => void openPeriod(liveType, ymd)}
+          />
+        </div>
+        <p className="eyebrow eyebrow-rule mt-6">{t.reports.periodStats}</p>
         <StatsBlock type={liveType} />
       </aside>
     </div>

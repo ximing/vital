@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   applyRemoteBody,
   decidePoll,
+  formatPeriodRange,
   insertEntityToken,
   isDirty,
   isRevisionConflict,
+  isoWeek,
   mergeEmbeds,
   parseReportType,
   slashFromText,
@@ -118,5 +120,27 @@ describe('revision and embeds', () => {
     expect(parseReportType('weekly')).toBe('weekly');
     expect(parseReportType('nope')).toBe('daily');
     expect(parseReportType(null)).toBe('daily');
+  });
+});
+
+describe('period range label', () => {
+  it('formats each grain from the exclusive end', () => {
+    expect(formatPeriodRange('daily', '2026-09-06', '2026-09-07')).toBe('2026-09-06');
+    expect(formatPeriodRange('monthly', '2026-09-01', '2026-10-01')).toBe('2026-09');
+    expect(formatPeriodRange('yearly', '2026-01-01', '2027-01-01')).toBe('2026');
+  });
+
+  it('compacts the weekly end within the same month and stamps the ISO week', () => {
+    expect(formatPeriodRange('weekly', '2026-09-07', '2026-09-14')).toBe('2026-09-07 – 09-13 · W37');
+  });
+
+  it('keeps the full end date when a week crosses months', () => {
+    expect(formatPeriodRange('weekly', '2026-08-31', '2026-09-07')).toBe('2026-08-31 – 2026-09-06 · W36');
+  });
+
+  it('computes ISO week numbers across year boundaries', () => {
+    expect(isoWeek('2026-09-07')).toBe(37);
+    expect(isoWeek('2026-01-01')).toBe(1);
+    expect(isoWeek('2025-12-29')).toBe(1); // ISO week 1 of 2026
   });
 });
