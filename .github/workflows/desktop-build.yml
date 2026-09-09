@@ -4,6 +4,8 @@
 #   GitHub Release published → attach installers to that release
 #
 # Production API origin is baked into the web bundle as VITE_TAURI_API_URL.
+# Override with repository secret or variable VITE_TAURI_API_URL; otherwise
+# https://vital.aimo.plus. The origin is not confidential — a variable is enough.
 name: Build Desktop
 
 on:
@@ -16,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  VITE_TAURI_API_URL: https://vital.aimo.plus
+  VITE_TAURI_API_URL: ${{ secrets.VITE_TAURI_API_URL || vars.VITE_TAURI_API_URL || 'https://vital.aimo.plus' }}
 
 jobs:
   build-desktop:
