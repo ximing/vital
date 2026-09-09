@@ -1,5 +1,5 @@
 import { DEFAULT_LLM_SETTINGS, DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,6 +114,7 @@ describe('NotificationsSection', () => {
         apiBase: 'https://open.bigmodel.cn/api/paas/v4',
         model: 'glm-4-flash',
         apiKeySet: true,
+        parameters: { thinking: { type: 'enabled' }, reasoning_effort: 'low', max_tokens: 4096 },
       },
     });
     render(
@@ -125,9 +126,18 @@ describe('NotificationsSection', () => {
         </MemoryRouter>
       </RabRoot>,
     );
-    await user.type(screen.getByLabelText(t.settings.llm.apiBase), 'https://open.bigmodel.cn/api/paas/v4');
+    await user.type(
+      screen.getByLabelText(t.settings.llm.apiBase),
+      'https://open.bigmodel.cn/api/paas/v4',
+    );
     await user.type(screen.getByLabelText(t.settings.llm.model), 'glm-4-flash');
     await user.type(screen.getByLabelText(t.settings.llm.apiKey), 'sk-test');
+    fireEvent.change(screen.getByLabelText(t.settings.llm.parametersJson), {
+      target: {
+        value: '{"thinking":{"type":"enabled"},"reasoning_effort":"low","max_tokens":4096}',
+      },
+    });
+    expect(screen.getByRole('button', { name: t.settings.llm.test })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: t.settings.llm.save }));
     await waitFor(() =>
       expect(client.updateMe).toHaveBeenCalledWith({
@@ -135,8 +145,12 @@ describe('NotificationsSection', () => {
           apiBase: 'https://open.bigmodel.cn/api/paas/v4',
           model: 'glm-4-flash',
           apiKey: 'sk-test',
+          parameters: { thinking: { type: 'enabled' }, reasoning_effort: 'low', max_tokens: 4096 },
         },
       }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: t.settings.llm.test })).toBeEnabled(),
     );
   });
 

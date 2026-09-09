@@ -1,8 +1,9 @@
-import type { InboxItem, ReportListItem, SyncChanges, Task } from '@vital/dto';
+import type { InboxItem, List, ReportListItem, SyncChanges, Task } from '@vital/dto';
 import { mergeInboxItems, mergeReportListItems, mergeTasksIntoList } from '@vital/api-client';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { inboxKeys } from '@/features/inbox/queries';
 import { reportKeys } from '@/features/reports/queries';
+import { descendantListIds } from '@/features/todos/model';
 import { todoKeys } from '@/features/todos/queries';
 
 function listIdOf(key: QueryKey): string | undefined {
@@ -11,6 +12,7 @@ function listIdOf(key: QueryKey): string | undefined {
 
 export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
   if (changes.tasks.length > 0) {
+    const lists = qc.getQueryData<List[]>(todoKeys.lists) ?? [];
     for (const [key, data] of qc.getQueriesData<Task[]>({ queryKey: todoKeys.all })) {
       if (!Array.isArray(data) || key[1] !== 'tasks') continue;
       const listId = listIdOf(key);
@@ -19,10 +21,14 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
         void qc.invalidateQueries({ queryKey: key });
         continue;
       }
-      qc.setQueryData(key, mergeTasksIntoList(data, changes.tasks, listId));
+      const memberIds = descendantListIds(lists, listId);
+      qc.setQueryData(key, mergeTasksIntoList(data, changes.tasks, memberIds));
     }
     void qc.invalidateQueries({ queryKey: ['todos', 'calendar'] });
+    void qc.invalidateQueries({ queryKey: todoKeys.counts });
   }
+
+  void qc.invalidateQueries({ queryKey: todoKeys.lists });
 
   if (changes.inbox.length > 0) {
     const list = qc.getQueryData<InboxItem[]>(inboxKeys.list);

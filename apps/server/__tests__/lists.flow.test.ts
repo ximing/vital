@@ -118,4 +118,160 @@ describe('lists', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('nests a child under a user list, rejects depth 3 and inbox parents', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const parent = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '工作', icon: '🔥' },
+    });
+    expect(parent.statusCode).toBe(201);
+    expect(parent.json().parentId).toBeNull();
+    expect(parent.json().icon).toBe('🔥');
+    expect(parent.json().iconUrl).toBeNull();
+
+    const child = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '本周', parentId: parent.json().id },
+    });
+    expect(child.statusCode).toBe(201);
+    expect(child.json().parentId).toBe(parent.json().id);
+
+    const grandchild = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '太深', parentId: child.json().id },
+    });
+    expect(grandchild.statusCode).toBe(400);
+
+    const underInbox = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '不行', parentId: inbox },
+    });
+    expect(underInbox.statusCode).toBe(400);
+
+    const nestParent = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/lists/${parent.json().id}`,
+      token: alice.token,
+      payload: { parentId: child.json().id },
+    });
+    expect(nestParent.statusCode).toBe(400);
+  });
+
+  it('promotes children and moves only the deleted list tasks to 收集箱', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const parent = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '父' },
+    });
+    const child = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '子', parentId: parent.json().id },
+    });
+    const parentTask = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '父任务', listId: parent.json().id },
+    });
+    const childTask = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '子任务', listId: child.json().id },
+    });
+    const gone = await injectJson(app, {
+      method: 'DELETE',
+      url: `/api/v1/lists/${parent.json().id}`,
+      token: alice.token,
+    });
+    expect(gone.statusCode).toBe(204);
+    const lists = await injectJson(app, { method: 'GET', url: '/api/v1/lists', token: alice.token });
+    const childRow = lists.json().items.find((item: { id: string }) => item.id === child.json().id);
+    expect(childRow.parentId).toBeNull();
+    const movedParent = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${parentTask.json().id}`,
+      token: alice.token,
+    });
+    expect(movedParent.json().listId).toBe(inbox);
+    const keptChild = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${childTask.json().id}`,
+      token: alice.token,
+    });
+    expect(keptChild.json().listId).toBe(child.json().id);
+  });
+
+  it('reorders siblings under a parent', async () => {
+    const alice = await registerUser(app);
+    const parent = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '父' },
+    });
+    const a = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: 'A', parentId: parent.json().id },
+    });
+    const b = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: 'B', parentId: parent.json().id },
+    });
+    const res = await injectJson(app, {
+      method: 'PUT',
+      url: '/api/v1/lists/reorder',
+      token: alice.token,
+      payload: { parentId: parent.json().id, orderedIds: [b.json().id, a.json().id] },
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json().items as { id: string; sortOrder: number }[];
+    const orderB = items.find((item) => item.id === b.json().id)?.sortOrder ?? 0;
+    const orderA = items.find((item) => item.id === a.json().id)?.sortOrder ?? 0;
+    expect(orderB).toBeLessThan(orderA);
+  });
+
+  it('clears emoji when setting iconAttachmentId and the reverse', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '图标', icon: '📁' },
+    });
+    const both = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/lists/${created.json().id}`,
+      token: alice.token,
+      payload: { icon: '🔥', iconAttachmentId: created.json().id },
+    });
+    expect(both.statusCode).toBe(400);
+    const clear = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/lists/${created.json().id}`,
+      token: alice.token,
+      payload: { icon: null },
+    });
+    expect(clear.statusCode).toBe(200);
+    expect(clear.json().icon).toBeNull();
+  });
 });

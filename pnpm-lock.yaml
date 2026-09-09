@@ -55,6 +55,9 @@ importers:
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
+      '@vital/tokens':
+        specifier: workspace:*
+        version: link:../../packages/tokens
     devDependencies:
       '@types/chrome':
         specifier: ^0.1.24
@@ -355,6 +358,12 @@ importers:
       dompurify:
         specifier: ^3.4.14
         version: 3.4.14
+      emojibase-data:
+        specifier: ^17.0.0
+        version: 17.0.0(emojibase@17.0.0)
+      frimousse:
+        specifier: ^0.3.0
+        version: 0.3.0(react@19.1.0)(typescript@5.9.3)
       lucide-react:
         specifier: ^1.41.0
         version: 1.41.0(react@19.1.0)
@@ -4547,6 +4556,15 @@ packages:
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
 
+  emojibase-data@17.0.0:
+    resolution: {integrity: sha512-Yvgb5AWoHViHV/gq1qr5ZAarcBip+B27/ZLRsUJkbgAEaLlZ/fof9g882LTpmEpyhBNEC0m2SEmItljHsTygjA==}
+    peerDependencies:
+      emojibase: '*'
+
+  emojibase@17.0.0:
+    resolution: {integrity: sha512-bXdpf4HPY3p41zK5swVKZdC/VynsMZ4LoLxdYDE+GucqkFwzcM1GVc4ODfYAlwoKaf2U2oNNUoOO78N96ovpBA==}
+    engines: {node: '>=18.12.0'}
+
   encodeurl@1.0.2:
     resolution: {integrity: sha512-TPJXq8JqFaVYm2CWmPvnP2Iyo4ZSM7/QKcSmuMLDObfpH5fi7RUGmd/rTDf+rut/saiDiQEeVTNgAmJEdAOx0w==}
     engines: {node: '>= 0.8'}
@@ -4978,6 +4996,15 @@ packages:
   fresh@0.5.2:
     resolution: {integrity: sha512-zJ2mQYM18rEFOudeV4GShTGIQ7RbzA7ozbU9I/XBpm7kqgMywgmylMwXHxZJmkVoYkna9d2pVXVXPdYTP9ej8Q==}
     engines: {node: '>= 0.6'}
+
+  frimousse@0.3.0:
+    resolution: {integrity: sha512-kO6LMoKY/cLAYEhXXtqLRaLIE6L/DagpFPrUZaLv3LsUa1/8Iza3HhwZcgN8eZ+weXnhv69eoclNUPohcCa/IQ==}
+    peerDependencies:
+      react: 19.1.0
+      typescript: '>=5.1.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   fs-extra@11.4.0:
     resolution: {integrity: sha512-EQsFzMUJkCKGr1ePqlYADkIUmHW1s3ZXr5Yqy6wbGrfUCphpl2maM/kyOIRA2HpP3AaFQTZXD4ldjek+nccddA==}
@@ -11992,6 +12019,12 @@ snapshots:
 
   emoji-regex@8.0.0: {}
 
+  emojibase-data@17.0.0(emojibase@17.0.0):
+    dependencies:
+      emojibase: 17.0.0
+
+  emojibase@17.0.0: {}
+
   encodeurl@1.0.2: {}
 
   encodeurl@2.0.0: {}
@@ -12545,6 +12578,12 @@ snapshots:
   freeport-async@2.0.0: {}
 
   fresh@0.5.2: {}
+
+  frimousse@0.3.0(react@19.1.0)(typescript@5.9.3):
+    dependencies:
+      react: 19.1.0
+    optionalDependencies:
+      typescript: 5.9.3
 
   fs-extra@11.4.0:
     dependencies:

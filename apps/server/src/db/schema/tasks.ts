@@ -40,6 +40,7 @@ export const tasks = pgTable(
     notesMd: text('notes_md').notNull().default(''),
     status: varchar('status', { length: 16 }).notNull().default('todo'),
     priority: smallint('priority').notNull().default(3),
+    pinned: boolean('pinned').notNull().default(false),
     dueAt: timestamp('due_at', { withTimezone: true, mode: 'date' }),
     startAt: timestamp('start_at', { withTimezone: true, mode: 'date' }),
     reminderMode: varchar('reminder_mode', { length: 16 }),

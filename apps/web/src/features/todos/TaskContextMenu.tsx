@@ -1,5 +1,15 @@
 import type { List, PatchTaskInput, Task } from '@vital/dto';
-import { Folder } from 'lucide-react';
+import {
+  Calendar,
+  CalendarOff,
+  CalendarPlus,
+  Check,
+  Folder,
+  PanelRight,
+  Pin,
+  PinOff,
+  Trash2,
+} from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { t } from '@/copy';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
@@ -7,18 +17,20 @@ import { Icon } from '@/ui/icon';
 import {
   addDaysYmd,
   inboxList,
+  listPickerRows,
   todayYmd,
-  userLists,
 } from './model';
 import { PriorityPicker } from './priority';
 import { scheduleDayPatch } from './schedule-draft';
 
 function Item({
   label,
+  icon,
   danger = false,
   onSelect,
 }: {
   label: string;
+  icon?: typeof Pin;
   danger?: boolean;
   onSelect: () => void;
 }) {
@@ -26,11 +38,12 @@ function Item({
     <button
       type="button"
       role="menuitem"
-      className={`flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] ${
+      className={`flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] ${
         danger ? 'text-danger hover:bg-surface-muted' : 'text-fg hover:bg-surface-muted'
       }`}
       onClick={onSelect}
     >
+      {icon ? <Icon icon={icon} size={14} className="shrink-0 opacity-80" /> : null}
       {label}
     </button>
   );
@@ -96,8 +109,8 @@ export function TaskContextMenu({
   const inbox = inboxList(lists);
   const movable = task.parentId === null;
   const listOptions = [
-    ...(inbox ? [{ id: inbox.id, name: t.lists.inbox }] : []),
-    ...userLists(lists).map((list) => ({ id: list.id, name: list.name })),
+    ...(inbox ? [{ id: inbox.id, name: t.lists.inbox, depth: 0 }] : []),
+    ...listPickerRows(lists),
   ];
   const done = task.status === 'done';
 
@@ -123,21 +136,31 @@ export function TaskContextMenu({
         className={`fixed w-60 ${FIELD_POPOVER_CLASS} p-1.5`}
         onClick={(event) => event.stopPropagation()}
       >
-        <Item label={t.todos.openDetail} onSelect={act(onOpen)} />
+        <Item icon={PanelRight} label={t.todos.openDetail} onSelect={act(onOpen)} />
         {done ? null : (
-          <Item label={t.todos.complete} onSelect={act(() => onComplete(task))} />
+          <Item icon={Check} label={t.todos.complete} onSelect={act(() => onComplete(task))} />
         )}
+        {task.parentId === null ? (
+          <Item
+            icon={task.pinned ? PinOff : Pin}
+            label={task.pinned ? t.todos.unpin : t.todos.pin}
+            onSelect={act(() => onPatch(task, { pinned: !task.pinned }))}
+          />
+        ) : null}
         <Divider />
         <Item
+          icon={Calendar}
           label={t.todos.scheduleToday}
           onSelect={act(() => onPatch(task, scheduleDayPatch(task, today, zone)))}
         />
         <Item
+          icon={CalendarPlus}
           label={t.todos.scheduleTomorrow}
           onSelect={act(() => onPatch(task, scheduleDayPatch(task, addDaysYmd(today, 1), zone)))}
         />
         {task.dueAt !== null || task.startAt !== null ? (
           <Item
+            icon={CalendarOff}
             label={t.todos.clearDate}
             onSelect={act(() => onPatch(task, { startAt: null, dueAt: null, isAllDay: true }))}
           />
@@ -167,7 +190,7 @@ export function TaskContextMenu({
                   role="menuitem"
                   className={`flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] hover:bg-surface-muted ${
                     option.id === task.listId ? 'text-fg' : 'text-muted'
-                  }`}
+                  } ${'depth' in option && option.depth > 0 ? 'pl-5' : ''}`}
                   onClick={act(() => onPatch(task, { listId: option.id }))}
                 >
                   {option.name}
@@ -177,7 +200,7 @@ export function TaskContextMenu({
           </>
         ) : null}
         <Divider />
-        <Item label={t.todos.deleteTask} danger onSelect={act(() => onDelete(task))} />
+        <Item icon={Trash2} label={t.todos.deleteTask} danger onSelect={act(() => onDelete(task))} />
       </div>
     </div>
   );

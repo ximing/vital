@@ -54,15 +54,26 @@ function wechat(doc: Document): SiteExtract | null {
   return pack(title, root, { byline, siteName: byline });
 }
 
-function zhihu(doc: Document): SiteExtract | null {
+function zhihu(doc: Document, url: string): SiteExtract | null {
   const title =
     textOf(doc.querySelector('h1.Post-Title, h1.QuestionHeader-title, h1')) ||
     og(doc, 'og:title') ||
     '';
-  const byline = textOf(doc.querySelector('.AuthorInfo-name, meta[itemprop="name"]'));
-  const root = doc.querySelector(
-    '.Post-RichText, .Post-RichTextContainer, .RichText, .QuestionRichText, article',
-  );
+  // A selector list uses document order, not selector priority. Question details
+  // precede the answer, and recommendations can contain other AnswerItems.
+  const answerId = new URL(url).pathname.match(/\/answer\/(\d+)(?:\/|$)/)?.[1];
+  const answer = answerId === undefined
+    ? doc.querySelector('.AnswerItem')
+    : doc.querySelector(`.AnswerItem[name="${answerId}"]`);
+  if (answerId !== undefined && answer === null) return null;
+  const authorScope = answer ?? doc;
+  const byline = textOf(authorScope.querySelector('.AuthorInfo-name')) ||
+    authorScope.querySelector('meta[itemprop="name"]')?.getAttribute('content') || null;
+  const root = answer !== null
+    ? answer.querySelector('.RichContent-inner .RichText') ?? answer.querySelector('.RichText')
+    : doc.querySelector('.Post-RichText') ??
+      doc.querySelector('.Post-RichTextContainer') ??
+      doc.querySelector('article');
   return pack(title, root, { byline, siteName: '知乎' });
 }
 
@@ -109,7 +120,7 @@ function twitter(doc: Document): SiteExtract | null {
 export function extractSite(doc: Document, url: string): SiteExtract | null {
   const host = hostOf(url);
   if (host === 'mp.weixin.qq.com') return wechat(doc);
-  if (host === 'zhihu.com' || host.endsWith('.zhihu.com')) return zhihu(doc);
+  if (host === 'zhihu.com' || host.endsWith('.zhihu.com')) return zhihu(doc, url);
   if (host.endsWith('xiaohongshu.com') || host.endsWith('xhslink.com')) return xhs(doc);
   if (
     host === 'x.com' ||

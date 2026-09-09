@@ -68,6 +68,9 @@ const inbox: List = {
   name: '收集箱',
   color: null,
   icon: null,
+  iconAttachmentId: null,
+  iconUrl: null,
+  parentId: null,
   sortOrder: 0,
   isArchived: false,
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -104,6 +107,7 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     notes: '',
     status: 'todo',
     priority: 3,
+    pinned: false,
     dueAt: null,
     startAt: null,
     reminderMode: null,
@@ -387,6 +391,7 @@ describe('todos workspace', () => {
           isAllDay: true,
           status: 'todo',
           priority: 2,
+          pinned: false,
         },
         {
           taskId: 'timed',
@@ -396,6 +401,7 @@ describe('todos workspace', () => {
           isAllDay: false,
           status: 'todo',
           priority: 1,
+          pinned: false,
         },
       ],
     });
@@ -427,14 +433,35 @@ describe('todos workspace', () => {
     const row = await screen.findByRole('option', { name: '写周报' });
     fireEvent.contextMenu(row);
     const menu = await screen.findByRole('menu', { name: '写周报' });
+    expect(within(menu).getByText(t.todos.pin)).toBeInTheDocument();
     expect(within(menu).getByText(t.todos.scheduleTomorrow)).toBeInTheDocument();
     expect(within(menu).getByText(t.todos.deleteTask)).toBeInTheDocument();
-    await user.click(within(menu).getByText(t.todos.scheduleToday));
+    await user.click(within(menu).getByText(t.todos.pin));
+    expect(client.patchTask).toHaveBeenCalledWith('t1', { pinned: true });
+    fireEvent.contextMenu(row);
+    await user.click(within(screen.getByRole('menu', { name: '写周报' })).getByText(t.todos.scheduleToday));
     expect(client.patchTask).toHaveBeenCalledWith(
       't1',
       expect.objectContaining({ startAt: null, isAllDay: true, dueAt: expect.any(String) }),
     );
     expect(screen.queryByRole('menu', { name: '写周报' })).not.toBeInTheDocument();
+  });
+
+  it('renders a pinned section above other tasks in any list', async () => {
+    vi.mocked(client.listTasks).mockResolvedValue({
+      items: [
+        makeTask({ id: 'a', title: '普通任务', sortOrder: 1 }),
+        makeTask({ id: 'b', title: '钉住的任务', pinned: true, sortOrder: 2 }),
+      ],
+      nextCursor: null,
+    });
+    renderAt('/todos/lists/smart:inbox');
+    expect(await screen.findByText('钉住的任务')).toBeInTheDocument();
+    expect(screen.getByText(t.todos.pinned)).toBeInTheDocument();
+    expect(screen.getAllByRole('option').map((el) => el.getAttribute('aria-label'))).toEqual([
+      '钉住的任务',
+      '普通任务',
+    ]);
   });
 
   it('uses the model to create a task and hides date/priority pickers', async () => {

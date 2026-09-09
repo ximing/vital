@@ -1,5 +1,6 @@
 import { ApiError, createVitalClient, type VitalClient } from '@vital/api-client';
 import type { AuthResponse, UserProfile } from '@vital/dto';
+import { captureActiveTabPayload } from './capture.js';
 import { extensionLoginUrl, isTrustedWebOrigin } from './capture-helpers.js';
 import { API_URL, WEB_URL } from './config.js';
 import { copy } from './i18n.js';
@@ -152,7 +153,6 @@ export async function handlePanelMessage(message: PanelRequest): Promise<PanelRe
     }
     case 'capture-active-tab': {
       try {
-        const { captureActiveTabPayload } = await import('./capture.js');
         return { ok: true, capture: await captureActiveTabPayload() };
       } catch {
         return { ok: true, capture: null };

@@ -171,6 +171,10 @@ export const copy = {
       apiKeySet: '已保存。留空则不更改。',
       model: '模型名称',
       modelHint: '例如 glm-4-flash',
+      parameters: '调用参数（JSON）',
+      parametersHint:
+        '保存后用于连接测试和任务解析。支持 thinking、reasoning_effort、max_tokens 等参数，留空或 {} 使用服务商默认值。GLM-5.3-Flash 必须开启思考，强度可选 low、high、max。',
+      saveBeforeTest: '有未保存的修改，请先保存再测试连接。',
       save: '保存',
       test: '测试连接',
       testOk: '连接正常',

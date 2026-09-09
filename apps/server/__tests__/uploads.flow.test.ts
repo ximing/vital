@@ -396,6 +396,50 @@ describe('uploads (multipart)', () => {
     expect(storage.generateAccessUrl).toHaveBeenCalledWith(expect.any(String), expect.anything(), 21_600);
   });
 
+  it('list icon bind then PATCH returns iconUrl', async () => {
+    const alice = await register('alice');
+    const list = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '带图' },
+    });
+    expect(list.statusCode).toBe(201);
+    const { id, totalParts } = (await initUploadFor(alice, { mime: 'image/png', size: PART })).json();
+    storage.headObject.mockResolvedValueOnce({
+      size: PART,
+      contentType: 'image/png',
+      lastModified: new Date(),
+    });
+    const complete = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
+    });
+    expect(complete.statusCode).toBe(200);
+    const bind = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/bind`,
+      token: alice.token,
+      payload: { ownerType: 'list', ownerId: list.json().id },
+    });
+    expect(bind.statusCode).toBe(200);
+    expect(bind.json().ownerType).toBe('list');
+    const patch = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/lists/${list.json().id}`,
+      token: alice.token,
+      payload: { iconAttachmentId: id },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect(patch.json().icon).toBeNull();
+    expect(patch.json().iconAttachmentId).toBe(id);
+    expect(patch.json().iconUrl).toBe('https://fake.local/presigned-get');
+  });
+
   it('old presign and 302 GET routes are gone', async () => {
     const alice = await register('alice');
     const presign = await injectJson(app, {

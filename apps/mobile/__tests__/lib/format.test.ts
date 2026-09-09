@@ -11,6 +11,7 @@ function sample(over: Partial<Task> & Pick<Task, 'dueAt' | 'timezone'>): Task {
     notes: '',
     status: 'todo',
     priority: 2,
+    pinned: false,
     startAt: null,
     reminderMode: null,
     reminderOffsetMinutes: null,

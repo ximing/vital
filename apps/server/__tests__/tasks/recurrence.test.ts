@@ -21,6 +21,7 @@ function task(partial: Partial<RecurrenceTask> & { recurrenceRrule: string; recu
     startAt: null,
     status: 'todo',
     priority: 3,
+    pinned: false,
     ...partial,
   };
 }
@@ -155,6 +156,7 @@ describe('fixed recurrence kinds', () => {
         recurrenceDtstart: dueAt,
         status: 'todo',
         priority: 3,
+        pinned: false,
         recurrenceKind: 'daily',
       },
       [],
@@ -184,6 +186,7 @@ describe('fixed recurrence kinds', () => {
         recurrenceDtstart: dueAt,
         status: 'todo',
         priority: 3,
+        pinned: false,
         recurrenceKind: 'daily',
       },
       [{ occurrenceAt: done }],

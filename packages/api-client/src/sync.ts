@@ -46,16 +46,21 @@ function upsertById<T extends { id: string }>(items: T[], next: T): T[] {
   return copy;
 }
 
-export function mergeTasksIntoList(items: Task[], changes: Task[], listId?: string): Task[] {
+export function mergeTasksIntoList(
+  items: Task[],
+  changes: Task[],
+  listIds?: string | readonly string[],
+): Task[] {
   let next = items;
-  const smart = listId !== undefined && listId.startsWith('smart:');
+  const ids = listIds === undefined ? undefined : typeof listIds === 'string' ? [listIds] : [...listIds];
+  const smart = ids?.length === 1 && (ids[0]?.startsWith('smart:') ?? false);
   for (const task of changes) {
     const idx = next.findIndex((row) => row.id === task.id);
     if (task.deletedAt) {
       if (idx >= 0) next = next.filter((row) => row.id !== task.id);
       continue;
     }
-    if (listId && !smart && task.listId !== listId) {
+    if (ids && !smart && !ids.includes(task.listId)) {
       if (idx >= 0) next = next.filter((row) => row.id !== task.id);
       continue;
     }

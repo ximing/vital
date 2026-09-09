@@ -9,7 +9,7 @@ import {
 } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +32,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       listLists: vi.fn(),
       listTasks: vi.fn(),
       listTags: vi.fn(),
+      createTag: vi.fn(),
       listInbox: vi.fn(),
       getInbox: vi.fn(),
       extractInbox: vi.fn(),
@@ -68,6 +69,9 @@ const inboxList: List = {
   name: '收集箱',
   color: null,
   icon: null,
+  iconAttachmentId: null,
+  iconUrl: null,
+  parentId: null,
   sortOrder: 0,
   isArchived: false,
   createdAt: '2026-01-01T00:00:00.000Z',
@@ -81,6 +85,7 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     notes: '',
     status: 'todo',
     priority: 3,
+    pinned: false,
     dueAt: null,
     startAt: null,
     reminderMode: null,
@@ -115,6 +120,7 @@ function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): I
     capturedAt: '2026-09-06T00:00:00.000Z',
     readAt: null,
     convertedTaskId: null,
+    tagIds: [],
     assets: [],
     deletedAt: null,
     createdAt: '2026-09-06T00:00:00.000Z',
@@ -136,6 +142,7 @@ const preview: InboxPreview = {
   source: 'web',
   readAt: null,
   convertedTaskId: null,
+  tagIds: [],
   assets: [],
 };
 
@@ -266,6 +273,87 @@ describe('inbox workspace', () => {
     await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: /收藏/ }));
     expect(await screen.findByText('收藏文章')).toBeInTheDocument();
     expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
+  });
+
+  it('filters the canvas list by a library tag', async () => {
+    const workTag = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: '工作',
+      color: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    vi.mocked(client.listTags).mockResolvedValue({ items: [workTag] });
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: [
+        makeItem({ id: 'i1', title: '带标签', tagIds: [workTag.id] }),
+        makeItem({ id: 'i2', title: '无标签' }),
+      ],
+      nextCursor: null,
+    });
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    expect(await screen.findByText('带标签')).toBeInTheDocument();
+    expect(screen.getByText('无标签')).toBeInTheDocument();
+    await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: /#工作/ }));
+    expect(await screen.findByText('带标签')).toBeInTheDocument();
+    expect(screen.queryByText('无标签')).not.toBeInTheDocument();
+  });
+
+  it('adds a tag from the reader', async () => {
+    const workTag = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: '工作',
+      color: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const item = makeItem({ id: 'i1', title: '一篇' });
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [item], nextCursor: null });
+    vi.mocked(client.getInbox).mockResolvedValue(item);
+    vi.mocked(client.createTag).mockResolvedValue(workTag);
+    vi.mocked(client.patchInbox).mockImplementation(async (id, input) => ({
+      ...item,
+      ...input,
+      tagIds: input.tagIds ?? item.tagIds,
+      readAt: input.readAt ?? item.readAt,
+    }));
+    const user = userEvent.setup();
+    renderAt('/inbox/i1');
+    expect(await screen.findByRole('heading', { name: '一篇' })).toBeInTheDocument();
+    await user.type(screen.getByLabelText(t.todos.addTag), '工作');
+    await user.keyboard('{Enter}');
+    await waitFor(() => {
+      expect(client.createTag).toHaveBeenCalledWith({ name: '工作' });
+    });
+    await waitFor(() => {
+      expect(client.patchInbox).toHaveBeenCalledWith('i1', { tagIds: [workTag.id] });
+    });
+  });
+
+  it('opens a collection-row context menu with actions and tags', async () => {
+    const workTag = {
+      id: '11111111-1111-4111-8111-111111111111',
+      name: '工作',
+      color: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    vi.mocked(client.listTags).mockResolvedValue({ items: [workTag] });
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: [makeItem({ id: 'i1', title: '未读文章' })],
+      nextCursor: null,
+    });
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    fireEvent.contextMenu(await screen.findByRole('link', { name: /未读文章/ }));
+    const menu = screen.getByRole('menu', { name: '未读文章' });
+    expect(within(menu).getByText(t.inbox.openItem)).toBeInTheDocument();
+    expect(within(menu).getByText(t.inbox.favorite)).toBeInTheDocument();
+    expect(within(menu).getByText(t.inbox.archive)).toBeInTheDocument();
+    expect(within(menu).getByText(t.inbox.convert)).toBeInTheDocument();
+    expect(within(menu).getByText(t.inbox.tags)).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: '#工作' })).toBeInTheDocument();
+    expect(within(menu).getByText(t.inbox.deleteItem)).toBeInTheDocument();
+    await user.click(within(menu).getByRole('menuitem', { name: '#工作' }));
+    expect(client.patchInbox).toHaveBeenCalledWith('i1', { tagIds: [workTag.id] });
   });
 
   it('previews a pasted URL then creates with originalUrl', async () => {

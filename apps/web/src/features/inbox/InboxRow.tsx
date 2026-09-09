@@ -1,4 +1,4 @@
-import type { InboxItem, InboxSource } from '@vital/dto';
+import type { InboxItem, InboxSource, Tag } from '@vital/dto';
 import {
   Archive,
   ArchiveRestore,
@@ -11,6 +11,7 @@ import {
   Smartphone,
   Star,
 } from 'lucide-react';
+import type { MouseEvent } from 'react';
 import { Link } from 'react-router';
 import { t } from '@/copy';
 import { Button } from '@/ui/button';
@@ -81,24 +82,30 @@ function StatusChip({ status }: { status: 'favorite' | 'archived' | 'converted' 
 
 export function SaveRow({
   item,
+  tags = [],
   timeZone,
   selected = false,
   compact = false,
   onFavorite,
   onArchive,
+  onContextMenu,
 }: {
   item: InboxItem;
+  tags?: Tag[];
   timeZone: string;
   selected?: boolean;
   compact?: boolean;
   onFavorite?: () => void;
   onArchive?: () => void;
+  onContextMenu?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   const host = hostLabel(item.originalUrl) ?? item.siteName;
   const when = formatCapturedAt(item.capturedAt, timeZone);
   const status = statusLabelKey(item.status);
   const unread = item.readAt === null && item.status === 'unread';
   const archived = item.status === 'archived';
+  const namedTags = tags.filter((tag) => (item.tagIds ?? []).includes(tag.id)).slice(0, 3);
+  const extraTags = Math.max(0, (item.tagIds ?? []).length - namedTags.length);
   return (
     <Link
       to={`/inbox/${item.id}`}
@@ -106,6 +113,7 @@ export function SaveRow({
       className={`group relative mx-1 flex gap-2.5 rounded-lg px-3 py-2.5 transition-[background-color] duration-[var(--ease-out)] ${
         selected ? 'bg-surface-muted' : 'hover:bg-surface-muted'
       }`}
+      onContextMenu={onContextMenu}
     >
       {selected ? (
         <span aria-hidden="true" className="absolute inset-y-2.5 left-0.5 w-[3px] rounded-full bg-accent" />
@@ -153,6 +161,19 @@ export function SaveRow({
             }`}
           >
             {item.excerpt}
+          </span>
+        ) : null}
+        {namedTags.length > 0 ? (
+          <span className="mt-1 flex flex-wrap items-center gap-1">
+            {namedTags.map((tag) => (
+              <span
+                key={tag.id}
+                className="inline-flex h-5 items-center rounded-full bg-accent-subtle px-2 text-[length:var(--text-caption)] font-medium text-accent"
+              >
+                #{tag.name}
+              </span>
+            ))}
+            {extraTags > 0 ? <span className="text-tertiary">+{extraTags}</span> : null}
           </span>
         ) : null}
       </span>

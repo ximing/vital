@@ -3,6 +3,7 @@ import {
   boolean,
   char,
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -23,6 +24,8 @@ export const lists = pgTable(
     name: varchar('name', { length: 80 }).notNull(),
     color: varchar('color', { length: 16 }),
     icon: varchar('icon', { length: 32 }),
+    iconAttachmentId: char('icon_attachment_id', { length: 36 }),
+    parentId: char('parent_id', { length: 36 }),
     sortOrder: integer('sort_order').notNull().default(0),
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -33,6 +36,12 @@ export const lists = pgTable(
       .on(t.userId)
       .where(sql`${t.kind} = 'inbox'`),
     index('idx_lists_user_sort').on(t.userId, t.sortOrder),
+    index('idx_lists_user_parent_sort').on(t.userId, t.parentId, t.sortOrder),
+    foreignKey({
+      name: 'lists_parent_id_lists_id_fk',
+      columns: [t.parentId],
+      foreignColumns: [t.id],
+    }).onDelete('set null'),
     check('lists_kind_check', sql`${t.kind} IN ('user', 'inbox')`),
   ],
 );

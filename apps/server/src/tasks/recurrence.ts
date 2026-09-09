@@ -63,6 +63,7 @@ export interface RecurrenceTask {
   listId: string;
   title: string;
   priority: number;
+  pinned: boolean;
 }
 
 export interface CalendarInstance {
@@ -73,6 +74,7 @@ export interface CalendarInstance {
   isAllDay: boolean;
   status: 'todo' | 'doing' | 'done' | 'canceled';
   priority: number;
+  pinned: boolean;
 }
 
 export type FixedRecurrenceKind =
@@ -486,6 +488,7 @@ function rowIfOverlaps(
     isAllDay: task.isAllDay,
     status,
     priority: task.priority,
+    pinned: task.pinned,
   }));
 }
 
@@ -532,6 +535,7 @@ export function expandTask(
       isAllDay: task.isAllDay,
       status,
       priority: task.priority,
+      pinned: task.pinned,
     });
   }
   return out;
@@ -559,6 +563,7 @@ export async function expandFixedTask(
     isAllDay: task.isAllDay,
     status: 'done',
     priority: task.priority,
+    pinned: task.pinned,
   }));
   const dueMs = task.dueAt?.getTime();
   let cursor = await firstFixedOccurrenceOnOrAfter(task, fromUtc);
@@ -572,6 +577,7 @@ export async function expandFixedTask(
         isAllDay: task.isAllDay,
         status: dueMs === cursor.getTime() ? status : 'todo',
         priority: task.priority,
+        pinned: task.pinned,
       });
     }
     cursor = await nextFixedOccurrenceAfter(task, cursor);

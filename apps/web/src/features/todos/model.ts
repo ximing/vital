@@ -37,6 +37,46 @@ export function userLists(lists: List[]): List[] {
   return lists.filter((item) => item.kind === 'user' && !item.isArchived);
 }
 
+function bySort(a: List, b: List): number {
+  return a.sortOrder - b.sortOrder || a.id.localeCompare(b.id);
+}
+
+export function listRoots(lists: List[]): List[] {
+  return userLists(lists)
+    .filter((item) => item.parentId === null)
+    .sort(bySort);
+}
+
+export function listChildren(lists: List[], parentId: string): List[] {
+  return userLists(lists)
+    .filter((item) => item.parentId === parentId)
+    .sort(bySort);
+}
+
+/** `id` plus child ids (depth 2). */
+export function descendantListIds(lists: List[], id: string): string[] {
+  return [id, ...listChildren(lists, id).map((item) => item.id)];
+}
+
+export function countWithDescendants(
+  counts: Record<string, number>,
+  lists: List[],
+  id: string,
+): number {
+  return descendantListIds(lists, id).reduce((sum, listId) => sum + (counts[listId] ?? 0), 0);
+}
+
+export function listPickerRows(lists: List[]): { id: string; name: string; depth: number }[] {
+  const rows: { id: string; name: string; depth: number }[] = [];
+  for (const root of listRoots(lists)) {
+    rows.push({ id: root.id, name: root.name, depth: 0 });
+    for (const child of listChildren(lists, root.id)) {
+      rows.push({ id: child.id, name: child.name, depth: 1 });
+    }
+  }
+  return rows;
+}
+
 export function listTitle(listId: string, lists: List[], fallback: string): string {
   const found = lists.find((item) => item.id === listId);
   return found?.name ?? fallback;
@@ -309,53 +349,100 @@ export function groupByDay(
 /** Same grouping ListView paints — j/k must walk this order, not raw sortOrder. */
 export type ListSection = {
   key: string;
-  heading: 'pinned' | 'overdue' | 'today' | 'done' | 'day' | null;
+  heading: 'pinned' | 'overdue' | 'today' | 'done' | 'day' | 'list' | null;
   ymd?: string;
+  listName?: string;
   nodes: TaskNode[];
 };
+
+function isPinnedRoot(task: Task): boolean {
+  return task.pinned && task.parentId === null;
+}
+
+function splitPinned(tasks: Task[]): { pinned: Task[]; rest: Task[] } {
+  const pinnedIds = new Set(tasks.filter(isPinnedRoot).map((task) => task.id));
+  const inPinnedTree = (task: Task) =>
+    isPinnedRoot(task) || (task.parentId !== null && pinnedIds.has(task.parentId));
+  return {
+    pinned: tasks.filter(inPinnedTree),
+    rest: tasks.filter((task) => !inPinnedTree(task)),
+  };
+}
+
+export function pinnedFirst<T extends { pinned?: boolean }>(items: T[]): T[] {
+  return [...items].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
+}
+
+function nestPinnedFirst(tasks: Task[]): TaskNode[] {
+  const { pinned, rest } = splitPinned(tasks);
+  return [...nestTasks(pinned), ...nestTasks(rest)];
+}
 
 export function listSections(
   listId: string,
   tasks: Task[],
   timeZone: string,
   now = new Date(),
+  lists: List[] = [],
 ): ListSection[] {
-  const nodes = nestTasks(tasks);
-  const openNodes = nestTasks(
-    tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled'),
-  );
-  const doneNodes = nestTasks(tasks.filter((task) => task.status === 'done'));
+  const open = tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled');
+  const done = tasks.filter((task) => task.status === 'done');
+  const { pinned: pinnedOpen, rest: restOpen } = splitPinned(open);
+  const pinnedNodes = nestTasks(pinnedOpen);
+  const openNodes = nestTasks(restOpen);
+  const doneNodes = nestPinnedFirst(done);
   const nonempty = (sections: ListSection[]): ListSection[] =>
     sections.filter((section) => section.nodes.length > 0);
+  const pinnedSection: ListSection = { key: 'pinned', heading: 'pinned', nodes: pinnedNodes };
 
   if (listId === 'smart:today') {
     const { overdue, today } = partitionToday(openNodes, timeZone, now);
-    const pinned = today.filter((node) => node.task.priority === 0);
-    const rest = today.filter((node) => node.task.priority !== 0);
     return nonempty([
-      { key: 'pinned', heading: 'pinned', nodes: pinned },
+      pinnedSection,
       { key: 'overdue', heading: 'overdue', nodes: overdue },
-      { key: 'today', heading: 'today', nodes: rest },
+      { key: 'today', heading: 'today', nodes: today },
     ]);
   }
   if (listId === 'smart:upcoming') {
-    return nonempty(
-      groupByDay(openNodes, timeZone).map((group) => ({
+    return nonempty([
+      pinnedSection,
+      ...groupByDay(openNodes, timeZone).map((group) => ({
         key: group.ymd,
         heading: 'day' as const,
         ymd: group.ymd,
         nodes: group.nodes,
       })),
-    );
+    ]);
   }
   if (listId === 'smart:done') {
-    return nonempty([{ key: 'done', heading: null, nodes: doneNodes }]);
+    const { pinned: pinnedDone, rest: restDone } = splitPinned(done);
+    return nonempty([
+      { key: 'pinned', heading: 'pinned', nodes: nestTasks(pinnedDone) },
+      { key: 'done', heading: null, nodes: nestTasks(restDone) },
+    ]);
   }
   if (listId.startsWith('smart:')) {
-    return nonempty([{ key: 'open', heading: null, nodes: openNodes }]);
+    return nonempty([pinnedSection, { key: 'open', heading: null, nodes: openNodes }]);
+  }
+  const children = listChildren(lists, listId);
+  if (children.length > 0) {
+    const openOf = (id: string) =>
+      nestTasks(restOpen.filter((task) => task.listId === id));
+    return nonempty([
+      pinnedSection,
+      { key: 'own', heading: 'list', listName: t.todos.thisList, nodes: openOf(listId) },
+      ...children.map((child) => ({
+        key: child.id,
+        heading: 'list' as const,
+        listName: child.name,
+        nodes: openOf(child.id),
+      })),
+      { key: 'done', heading: 'done', nodes: doneNodes },
+    ]);
   }
   return nonempty([
-    { key: 'open', heading: null, nodes: nodes.filter((node) => node.task.status !== 'done') },
+    pinnedSection,
+    { key: 'open', heading: null, nodes: nestTasks(restOpen) },
     { key: 'done', heading: 'done', nodes: doneNodes },
   ]);
 }
@@ -365,8 +452,9 @@ export function listVisibleIds(
   tasks: Task[],
   timeZone: string,
   now = new Date(),
+  lists: List[] = [],
 ): string[] {
-  return listSections(listId, tasks, timeZone, now).flatMap((section) =>
+  return listSections(listId, tasks, timeZone, now, lists).flatMap((section) =>
     flattenNodes(section.nodes).map((row) => row.task.id),
   );
 }
@@ -382,18 +470,18 @@ export function boardVisibleIds(tasks: Task[], mode: BoardMode): string[] {
 
 export function splitByStatus(tasks: Task[]): Record<'todo' | 'doing' | 'done', Task[]> {
   return {
-    todo: tasks.filter((task) => task.status === 'todo'),
-    doing: tasks.filter((task) => task.status === 'doing'),
-    done: tasks.filter((task) => task.status === 'done'),
+    todo: pinnedFirst(tasks.filter((task) => task.status === 'todo')),
+    doing: pinnedFirst(tasks.filter((task) => task.status === 'doing')),
+    done: pinnedFirst(tasks.filter((task) => task.status === 'done')),
   };
 }
 
 export function splitByPriority(tasks: Task[]): Record<TaskPriority, Task[]> {
   return {
-    0: tasks.filter((task) => task.priority === 0),
-    1: tasks.filter((task) => task.priority === 1),
-    2: tasks.filter((task) => task.priority === 2),
-    3: tasks.filter((task) => task.priority === 3),
+    0: pinnedFirst(tasks.filter((task) => task.priority === 0)),
+    1: pinnedFirst(tasks.filter((task) => task.priority === 1)),
+    2: pinnedFirst(tasks.filter((task) => task.priority === 2)),
+    3: pinnedFirst(tasks.filter((task) => task.priority === 3)),
   };
 }
 

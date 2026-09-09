@@ -1,5 +1,5 @@
 import type { Task, Tag } from '@vital/dto';
-import { Check } from 'lucide-react';
+import { Check, Pin } from 'lucide-react';
 import type { DragEvent, MouseEvent } from 'react';
 import { t } from '@/copy';
 import {
@@ -123,6 +123,9 @@ export function TaskRow({
             done ? 'text-muted line-through' : 'text-fg'
           }`}
         >
+          {task.pinned ? (
+            <Pin size={12} strokeWidth={2.2} className="mr-1.5 inline align-middle text-accent" aria-hidden />
+          ) : null}
           <PriorityMark priority={task.priority} className="mr-1.5 align-middle" />
           {task.title}
         </p>

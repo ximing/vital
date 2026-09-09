@@ -6,6 +6,7 @@ import {
   DEFAULT_NOTIFICATION_PREFS,
   IMAGE_MIME_TYPES,
   llmReady,
+  parseLlmParameters,
   type NotificationChannel,
 } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
@@ -59,6 +60,22 @@ export function SettingsHome() {
   const [llmApiBase, setLlmApiBase] = useState(auth.user?.llm.apiBase ?? '');
   const [llmModel, setLlmModel] = useState(auth.user?.llm.model ?? '');
   const [llmApiKey, setLlmApiKey] = useState('');
+  const [llmParameters, setLlmParameters] = useState(
+    JSON.stringify(auth.user?.llm.parameters ?? {}, null, 2),
+  );
+  let llmParametersDirty = true;
+  try {
+    llmParametersDirty =
+      JSON.stringify(parseLlmParameters(llmParameters)) !==
+      JSON.stringify(auth.user?.llm.parameters ?? {});
+  } catch {
+    /* Invalid JSON cannot be tested. */
+  }
+  const llmDirty =
+    llmParametersDirty ||
+    llmApiBase.trim() !== (auth.user?.llm.apiBase ?? '') ||
+    llmModel.trim() !== (auth.user?.llm.model ?? '') ||
+    llmApiKey.trim() !== '';
 
   const prefs = auth.user?.notifications ?? DEFAULT_NOTIFICATION_PREFS;
   const meow = channels.find((c) => c.type === 'meow');
@@ -173,11 +190,13 @@ export function SettingsHome() {
         llm: {
           apiBase: nextBase === '' ? null : nextBase,
           model: nextModel === '' ? null : nextModel,
+          parameters: parseLlmParameters(llmParameters),
           ...(llmApiKey.trim() === '' ? {} : { apiKey: llmApiKey.trim() }),
         },
       });
       auth.refreshUser(user);
       setLlmApiKey('');
+      setLlmParameters(JSON.stringify(user.llm.parameters ?? {}, null, 2));
       toast(copy.toast.saved);
     } catch (err) {
       toast(humanError(err));
@@ -273,7 +292,9 @@ export function SettingsHome() {
               <Text style={styles.rowTitle}>{copy.settings.notify.taskRemind}</Text>
               <Switch
                 value={prefs.taskRemind}
-                onValueChange={(v) => void patchPrefs({ notifications: { ...prefs, taskRemind: v } })}
+                onValueChange={(v) =>
+                  void patchPrefs({ notifications: { ...prefs, taskRemind: v } })
+                }
               />
             </View>
             <View style={styles.switchRow}>
@@ -298,7 +319,9 @@ export function SettingsHome() {
               onChange={(start) => {
                 const nextStart = start === '' ? null : start;
                 const end = nextStart === null ? null : (prefs.quietHoursEnd ?? '08:00');
-                void patchPrefs({ notifications: { ...prefs, quietHoursStart: nextStart, quietHoursEnd: end } });
+                void patchPrefs({
+                  notifications: { ...prefs, quietHoursStart: nextStart, quietHoursEnd: end },
+                });
               }}
             />
             <TimeField
@@ -309,7 +332,9 @@ export function SettingsHome() {
               onChange={(end) => {
                 const nextEnd = end === '' ? null : end;
                 const start = nextEnd === null ? null : prefs.quietHoursStart;
-                void patchPrefs({ notifications: { ...prefs, quietHoursStart: start, quietHoursEnd: nextEnd } });
+                void patchPrefs({
+                  notifications: { ...prefs, quietHoursStart: start, quietHoursEnd: nextEnd },
+                });
               }}
             />
             <Text style={styles.section}>{copy.settings.notify.nickname}</Text>
@@ -323,7 +348,11 @@ export function SettingsHome() {
               <Text style={styles.rowTitle}>{copy.settings.notify.enabled}</Text>
               <Switch value={enabled} onValueChange={setEnabled} />
             </View>
-            <Button loading={busy} disabled={nickname.trim() === ''} onPress={() => void saveChannel()}>
+            <Button
+              loading={busy}
+              disabled={nickname.trim() === ''}
+              onPress={() => void saveChannel()}
+            >
               {copy.settings.notify.saveChannel}
             </Button>
             <Button
@@ -400,12 +429,25 @@ export function SettingsHome() {
                 auth.user?.llm.apiKeySet ? copy.settings.llm.apiKeySet : copy.settings.llm.apiKey
               }
             />
+            <Field
+              label={copy.settings.llm.parameters}
+              value={llmParameters}
+              onChangeText={setLlmParameters}
+              multiline
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder={
+                '{\n  "thinking": { "type": "enabled" },\n  "reasoning_effort": "low",\n  "max_tokens": 4096\n}'
+              }
+            />
+            <Text style={styles.hint}>{copy.settings.llm.parametersHint}</Text>
+            {llmDirty ? <Text style={styles.hint}>{copy.settings.llm.saveBeforeTest}</Text> : null}
             <Button loading={busy} onPress={() => void saveLlm()}>
               {copy.settings.llm.save}
             </Button>
             <Button
               variant="secondary"
-              disabled={!llmReady(auth.user?.llm)}
+              disabled={!llmReady(auth.user?.llm) || llmDirty || busy}
               onPress={() =>
                 void client
                   .testLlm()
@@ -483,7 +525,12 @@ const createStyles = (t: Theme) =>
     avatarInitial: { fontSize: t.type.title.fontSize, fontWeight: '600', color: t.accentDeep },
     identityCopy: { flex: 1, minWidth: 0, gap: t.space[1] },
     displayName: { fontSize: t.type.title.fontSize, fontWeight: '600', color: t.fgPrimary },
-    identityActions: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2], marginTop: t.space[1] },
+    identityActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: t.space[2],
+      marginTop: t.space[1],
+    },
     hint: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
     section: {
       fontSize: t.type.meta.fontSize,
@@ -491,7 +538,12 @@ const createStyles = (t: Theme) =>
       color: t.fgMuted,
       marginTop: t.space[2],
     },
-    rowTitle: { fontSize: t.type.body.fontSize, color: t.fgPrimary, flex: 1, paddingRight: t.space[3] },
+    rowTitle: {
+      fontSize: t.type.body.fontSize,
+      color: t.fgPrimary,
+      flex: 1,
+      paddingRight: t.space[3],
+    },
     active: { color: t.fgPrimary, fontWeight: '600' },
     switchRow: {
       flexDirection: 'row',

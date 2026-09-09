@@ -83,12 +83,105 @@ export const llmApiBaseSchema = z
 
 export const llmModelSchema = z.string().trim().min(1).max(128);
 
+export type LlmJsonValue =
+  string | number | boolean | null | LlmJsonValue[] | { [key: string]: LlmJsonValue };
+export type LlmParameters = Record<string, LlmJsonValue>;
+
+const llmJsonValueSchema: z.ZodType<LlmJsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(llmJsonValueSchema),
+    z.record(llmJsonValueSchema),
+  ]),
+);
+
+// These fields belong to the application or transport, not model tuning.
+const reservedLlmParameters = new Set([
+  'model',
+  'messages',
+  'stream',
+  'stream_options',
+  'response_format',
+  'n',
+  'tools',
+  'tool_choice',
+  'functions',
+  'function_call',
+  'api_key',
+  'apiKey',
+  'apiBase',
+  'base_url',
+  'headers',
+  'authorization',
+  '__proto__',
+  'constructor',
+  'prototype',
+]);
+
+export const llmParametersSchema = z.record(llmJsonValueSchema).superRefine((value, ctx) => {
+  if (JSON.stringify(value).length > 16_384) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: '参数不能超过 16 KB' });
+  }
+  for (const key of Object.keys(value)) {
+    if (reservedLlmParameters.has(key)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: '此字段由应用管理，不能在模型参数中设置',
+      });
+    }
+  }
+  const known = z
+    .object({
+      thinking: z
+        .object({ type: z.enum(['enabled', 'disabled']) })
+        .passthrough()
+        .optional(),
+      reasoning_effort: z.string().trim().min(1).max(64).optional(),
+      max_tokens: z.number().int().positive().optional(),
+      max_completion_tokens: z.number().int().positive().optional(),
+      temperature: z.number().finite().min(0).max(2).optional(),
+      top_p: z.number().finite().min(0).max(1).optional(),
+    })
+    .safeParse(value);
+  if (!known.success) for (const issue of known.error.issues) ctx.addIssue(issue);
+  if (value.max_tokens !== undefined && value.max_completion_tokens !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'max_tokens 和 max_completion_tokens 只能设置一个',
+    });
+  }
+});
+
+/** Shared by web and mobile; an empty editor resets provider parameters. */
+export function parseLlmParameters(raw: string): LlmParameters {
+  if (raw.trim() === '') return {};
+  if (raw.length > 16_384) throw new Error('模型参数不能超过 16 KB');
+  let value: unknown;
+  try {
+    value = JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error('模型参数必须是有效的 JSON 对象');
+  }
+  const result = llmParametersSchema.safeParse(value);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    throw new Error(`模型参数无效：${issue?.path.join('.') || 'JSON'} ${issue?.message ?? ''}`);
+  }
+  return result.data;
+}
+
 export const patchLlmSettingsSchema = z
   .object({
     apiBase: z.union([llmApiBaseSchema, z.null()]).optional(),
     /** Omit to keep; `null` clears the stored key. Never returned on profile. */
     apiKey: z.string().min(1).max(512).nullable().optional(),
     model: z.union([llmModelSchema, z.null()]).optional(),
+    /** Replaces the parameter object; null resets it. Omit to preserve it. */
+    parameters: llmParametersSchema.nullable().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',
@@ -99,12 +192,14 @@ export interface LlmSettingsPublic {
   apiBase: string | null;
   model: string | null;
   apiKeySet: boolean;
+  parameters?: LlmParameters;
 }
 
 export const DEFAULT_LLM_SETTINGS: LlmSettingsPublic = {
   apiBase: null,
   model: null,
   apiKeySet: false,
+  parameters: {},
 };
 
 export function llmReady(llm: LlmSettingsPublic | null | undefined): boolean {

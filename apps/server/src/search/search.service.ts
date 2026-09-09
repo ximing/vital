@@ -16,7 +16,7 @@ import {
   type ReportRow,
   type TaskRow,
 } from '../db/schema.js';
-import { loadAssetsByItemIds, toInboxDto } from '../inbox/inbox.service.js';
+import { loadAssetsByItemIds, tagIdsByInbox, toInboxDto } from '../inbox/inbox.service.js';
 import { toReportListItem } from '../reports/reports.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 import { decodeSearchCursor, encodeSearchCursor } from '../utils/cursor.js';
@@ -170,7 +170,10 @@ export async function searchTasks(userId: string, input: SearchInput): Promise<S
       if (list) list.push(link.tagId);
     }
   }
-  const assetMap = await loadAssetsByItemIds(inboxIds);
+  const [assetMap, inboxTagMap] = await Promise.all([
+    loadAssetsByItemIds(inboxIds),
+    tagIdsByInbox(inboxIds),
+  ]);
 
   const items: SearchHit[] = page.map((row) => {
     if (row.type === 'task') {
@@ -180,7 +183,11 @@ export async function searchTasks(userId: string, input: SearchInput): Promise<S
       const report: ReportListItem = toReportListItem(row.row);
       return { type: 'report' as const, report };
     }
-    const inbox: InboxItem = toInboxDto(row.row, assetMap.get(row.id) ?? []);
+    const inbox: InboxItem = toInboxDto(
+      row.row,
+      assetMap.get(row.id) ?? [],
+      inboxTagMap.get(row.id) ?? [],
+    );
     return { type: 'inbox' as const, inbox };
   });
 

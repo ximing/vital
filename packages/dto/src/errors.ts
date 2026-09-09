@@ -22,7 +22,7 @@ export const ERROR_MESSAGES = {
   MEDIA_INVALID_STATE: '上传状态不允许此操作',
   MEDIA_PART_INVALID: '分片号不合法',
   MEDIA_PART_MISSING: '缺少分片上传记录',
-  LIST_NOT_FOUND: '清单不存在',
+  LIST_NOT_FOUND: '集合不存在',
   TAG_NOT_FOUND: '标签不存在',
   CHANNEL_NOT_FOUND: '通知渠道不存在',
   CHANNEL_EXISTS: '该类型的通知渠道已存在',
@@ -30,6 +30,9 @@ export const ERROR_MESSAGES = {
   MEOW_NICKNAME_INVALID: 'MeoW 昵称不合法',
   CHANNEL_DELIVERY_FAILED: '通知发送失败',
   LLM_NOT_CONFIGURED: '还没有配置大模型',
+  LLM_OUTPUT_TRUNCATED:
+    '模型输出被截断，请提高 max_tokens / max_completion_tokens 或降低 reasoning_effort',
+  LLM_TIMEOUT: '模型响应超时，请降低推理强度后重试',
   LLM_UNAVAILABLE: '大模型暂时不可用，请检查 API Base、密钥和模型名称',
 } as const;
 

@@ -34,6 +34,7 @@ export function WeekView({
   }
   for (const list of byDay.values()) {
     list.sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
       if (a.isAllDay !== b.isAllDay) return a.isAllDay ? -1 : 1;
       return a.occurrenceAt.localeCompare(b.occurrenceAt);
     });

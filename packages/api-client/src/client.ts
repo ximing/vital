@@ -117,7 +117,12 @@ export interface VitalClient {
   deleteTag(id: string): Promise<void>;
   search(input: SearchInput): Promise<SearchResponse>;
   extractInbox(input: ExtractInboxInput): Promise<InboxPreview>;
-  listInbox(query?: { status?: string; cursor?: string; limit?: number }): Promise<InboxCollection>;
+  listInbox(query?: {
+    status?: string;
+    tagId?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<InboxCollection>;
   createInbox(input: CreateInboxInput, idempotencyKey?: string): Promise<InboxItem>;
   createInboxResult(
     input: CreateInboxInput,
@@ -281,6 +286,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     listInbox: (query = {}) => {
       const q: Record<string, string | number | boolean | undefined> = {};
       if (query.status !== undefined) q.status = query.status;
+      if (query.tagId !== undefined) q.tagId = query.tagId;
       if (query.cursor !== undefined) q.cursor = query.cursor;
       if (query.limit !== undefined) q.limit = query.limit;
       return http.request('/api/v1/inbox', { query: q });

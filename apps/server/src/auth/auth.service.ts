@@ -165,6 +165,7 @@ export async function registerUser(
     llmApiBase: null,
     llmApiKey: null,
     llmModel: null,
+    llmParameters: {},
     passwordChangedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -257,6 +258,7 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
       patch.llmApiBase = input.llm.apiBase;
     }
     if (input.llm.model !== undefined) patch.llmModel = input.llm.model;
+    if (input.llm.parameters !== undefined) patch.llmParameters = input.llm.parameters ?? {};
     if (input.llm.apiKey !== undefined) {
       patch.llmApiKey = input.llm.apiKey === null ? null : encryptSecret(input.llm.apiKey);
     }

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { char, pgTable, primaryKey, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 import { users } from './users.js';
 import { tasks } from './tasks.js';
+import { inboxItems } from './inbox.js';
 
 export const tags = pgTable(
   'tags',
@@ -30,6 +31,20 @@ export const taskTags = pgTable(
   (t) => [primaryKey({ columns: [t.taskId, t.tagId] })],
 );
 
+export const inboxItemTags = pgTable(
+  'inbox_item_tags',
+  {
+    inboxItemId: char('inbox_item_id', { length: 36 })
+      .notNull()
+      .references(() => inboxItems.id, { onDelete: 'cascade' }),
+    tagId: char('tag_id', { length: 36 })
+      .notNull()
+      .references(() => tags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.inboxItemId, t.tagId] })],
+);
+
 export type TagRow = typeof tags.$inferSelect;
 export type NewTag = typeof tags.$inferInsert;
 export type TaskTagRow = typeof taskTags.$inferSelect;
+export type InboxItemTagRow = typeof inboxItemTags.$inferSelect;

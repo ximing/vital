@@ -1,4 +1,12 @@
 import type { InboxItem, List } from '@vital/dto';
+import './style.css';
+
+const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
+const syncTheme = (): void => {
+  document.documentElement.dataset.theme = colorScheme.matches ? 'dark' : 'light';
+};
+syncTheme();
+colorScheme.addEventListener('change', syncTheme);
 import { inboxListUrl, inboxReaderUrl } from '../../src/capture-helpers.js';
 import { WEB_URL } from '../../src/config.js';
 import { copy } from '../../src/i18n.js';
@@ -69,6 +77,7 @@ function renderCapture(): void {
     // Direct-file pages have no selection or task content to offer.
     show(btn, !(mode === 'file' && (m === 'selection' || m === 'task')));
     btn.classList.toggle('active', m === mode);
+    btn.setAttribute('aria-pressed', String(m === mode));
     btn.disabled = m === 'file' ? capture.file === null : modeDisabled(m, capture.selection);
   }
   $<HTMLInputElement>('capture-title').value = titleForMode(capture, mode);

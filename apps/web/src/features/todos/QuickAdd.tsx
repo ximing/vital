@@ -7,7 +7,7 @@ import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { usePopover } from '@/ui/use-popover';
 import { QUICK_ADD_ID } from './keyboard';
-import { inboxList, userLists } from './model';
+import { inboxList, listPickerRows } from './model';
 import { PriorityMenu } from './priority';
 import { emptyScheduleDraft, type ScheduleDraft } from './schedule-draft';
 import { SchedulePopover } from './SchedulePopover';
@@ -201,8 +201,8 @@ function ListMenu({
   const popover = usePopover(popoverRef);
   const inbox = inboxList(lists);
   const options = [
-    ...(inbox ? [{ id: inbox.id, name: t.lists.inbox }] : []),
-    ...userLists(lists).map((list) => ({ id: list.id, name: list.name })),
+    ...(inbox ? [{ id: inbox.id, name: t.lists.inbox, depth: 0 }] : []),
+    ...listPickerRows(lists),
   ];
   return (
     <div ref={popoverRef} className="relative">
@@ -227,7 +227,7 @@ function ListMenu({
               role="menuitem"
               className={`flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] hover:bg-surface-muted ${
                 item.id === value ? 'text-fg' : 'text-muted'
-              }`}
+              } ${item.depth > 0 ? 'pl-5' : ''}`}
               onClick={() => {
                 onChange(item.id);
                 popover.close();

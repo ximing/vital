@@ -1,12 +1,13 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { badgeText } from '../src/capture-helpers.js';
 import {
+  commitCapture,
   handleCommand,
   handleContextMenu,
   registerMenus,
   setBadge,
 } from '../src/capture.js';
-import { handleExternalAuth, handlePanelMessage } from '../src/client.js';
+import { errorMessage, handleExternalAuth, handlePanelMessage } from '../src/client.js';
 import {
   COMMIT_PORT_NAME,
   isCommitPortMessage,
@@ -67,7 +68,6 @@ export default defineBackground({
             if (event.type === 'error') await setBadge(badgeText('fail'));
           };
           try {
-            const { commitCapture } = await import('../src/capture.js');
             const { failed } = await commitCapture({
               capture: message.capture,
               title: message.title,
@@ -80,7 +80,6 @@ export default defineBackground({
             });
             await send({ type: 'done', failed });
           } catch (err) {
-            const { errorMessage } = await import('../src/client.js');
             await send({ type: 'error', message: errorMessage(err) });
           }
         })();

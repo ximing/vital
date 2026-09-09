@@ -82,6 +82,7 @@ function sectionTitle(section: ListSection, timeZone: string): string | null {
   if (section.heading === 'overdue') return t.todos.overdue;
   if (section.heading === 'today') return t.lists.today;
   if (section.heading === 'done') return t.lists.done;
+  if (section.heading === 'list') return section.listName ?? t.todos.thisList;
   if (section.heading === 'day' && section.ymd) return formatHumanDay(section.ymd, timeZone);
   return null;
 }
@@ -177,7 +178,7 @@ export function ListView({
 
   if (tasks.length === 0) return <EmptyTasks listId={listId} kind="list" />;
 
-  const sections = listSections(listId, tasks, timeZone);
+  const sections = listSections(listId, tasks, timeZone, undefined, lists);
   const boxLabel =
     listId === 'smart:today'
       ? t.lists.today

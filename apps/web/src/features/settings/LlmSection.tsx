@@ -1,4 +1,4 @@
-import { llmReady } from '@vital/dto';
+import { llmReady, parseLlmParameters } from '@vital/dto';
 import { useState, type FormEvent } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -7,6 +7,7 @@ import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
+import { LlmParametersEditor } from './LlmParametersEditor';
 
 export function LlmSection() {
   const user = useAuth((s) => s.user);
@@ -15,10 +16,23 @@ export function LlmSection() {
   const [apiBase, setApiBase] = useState(llm?.apiBase ?? '');
   const [model, setModel] = useState(llm?.model ?? '');
   const [apiKey, setApiKey] = useState('');
+  const [parameters, setParameters] = useState(JSON.stringify(llm?.parameters ?? {}, null, 2));
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  let parametersDirty = true;
+  try {
+    parametersDirty =
+      JSON.stringify(parseLlmParameters(parameters)) !== JSON.stringify(llm?.parameters ?? {});
+  } catch {
+    /* Invalid edits must be saved or corrected before testing. */
+  }
+  const dirty =
+    parametersDirty ||
+    apiBase.trim() !== (llm?.apiBase ?? '') ||
+    model.trim() !== (llm?.model ?? '') ||
+    apiKey.trim() !== '';
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -32,11 +46,13 @@ export function LlmSection() {
         llm: {
           apiBase: nextBase === '' ? null : nextBase,
           model: nextModel === '' ? null : nextModel,
+          parameters: parseLlmParameters(parameters),
           ...(apiKey.trim() === '' ? {} : { apiKey: apiKey.trim() }),
         },
       });
       setUser(updated);
       setApiKey('');
+      setParameters(JSON.stringify(updated.llm.parameters ?? {}, null, 2));
       setNotice(t.settings.llm.saved);
     } catch (err) {
       setError(humanError(err));
@@ -120,25 +136,34 @@ export function LlmSection() {
           {t.settings.llm.notConfigured}
         </p>
       )}
+      <LlmParametersEditor value={parameters} onChange={setParameters} />
+      {dirty ? <p className="text-sm text-muted">{t.settings.llm.saveBeforeTest}</p> : null}
       {error ? <Banner>{error}</Banner> : null}
       {notice ? (
-        <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">{notice}</p>
+        <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          {notice}
+        </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" loading={saving}>
+        <Button type="submit" loading={saving} disabled={testing}>
           {t.settings.llm.save}
         </Button>
         <Button
           type="button"
           variant="ghost"
           loading={testing}
-          disabled={!llmReady(user?.llm)}
+          disabled={!llmReady(user?.llm) || dirty || saving}
           onClick={() => void onTest()}
         >
           {t.settings.llm.test}
         </Button>
         {llm?.apiKeySet ? (
-          <Button type="button" variant="quiet" disabled={saving} onClick={() => void onClearKey()}>
+          <Button
+            type="button"
+            variant="quiet"
+            disabled={saving || testing}
+            onClick={() => void onClearKey()}
+          >
             {t.settings.llm.clearKey}
           </Button>
         ) : null}

@@ -1,5 +1,10 @@
 import { Agent, request } from 'undici';
-import { llmReady, type LlmSettingsPublic } from '@vital/dto';
+import {
+  llmParametersSchema,
+  llmReady,
+  type LlmParameters,
+  type LlmSettingsPublic,
+} from '@vital/dto';
 import { config } from '../config.js';
 import type { User } from '../db/schema.js';
 import { AppError } from '../errors.js';
@@ -7,8 +12,8 @@ import { assertSafeUrl } from '../extract/ssrf.js';
 import { logger } from '../utils/logger.js';
 import { decryptSecret } from './crypto.js';
 
-const COMPLETE_TIMEOUT_MS = 20_000;
-const TEST_TIMEOUT_MS = 12_000;
+const COMPLETE_TIMEOUT_MS = 60_000;
+const TEST_TIMEOUT_MS = 60_000;
 
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
@@ -20,6 +25,7 @@ export type LlmCompleteInput = {
   json?: boolean;
   timeoutMs?: number;
   maxTokens?: number;
+  parameters?: LlmParameters;
 };
 
 export interface LlmTransport {
@@ -59,6 +65,7 @@ function contentOf(json: unknown): string | null {
   if (!isRecord(json) || !Array.isArray(json.choices)) return null;
   const first: unknown = json.choices[0];
   if (!isRecord(first)) return null;
+  if (first.finish_reason === 'length') throw AppError.of(502, 'LLM_OUTPUT_TRUNCATED');
   const message: unknown = first.message;
   if (!isRecord(message)) return null;
   return typeof message.content === 'string' ? message.content : null;
@@ -68,12 +75,18 @@ const defaultTransport: LlmTransport = {
   async complete(input) {
     const url = completionsUrl(input.apiBase);
     const body: Record<string, unknown> = {
+      ...input.parameters,
       model: input.model,
       messages: input.messages,
-      temperature: 0,
     };
     if (input.json) body.response_format = { type: 'json_object' };
-    if (input.maxTokens !== undefined) body.max_tokens = input.maxTokens;
+    if (
+      body.max_tokens === undefined &&
+      body.max_completion_tokens === undefined &&
+      input.maxTokens !== undefined
+    ) {
+      body.max_tokens = input.maxTokens;
+    }
     const res = await request(url, {
       method: 'POST',
       dispatcher: agent,
@@ -115,21 +128,34 @@ export function llmPublicOf(user: User): LlmSettingsPublic {
     apiBase: user.llmApiBase,
     model: user.llmModel,
     apiKeySet: user.llmApiKey !== null && user.llmApiKey !== '',
+    parameters: user.llmParameters,
   };
 }
 
-export function llmCredentialsOf(user: User): { apiBase: string; apiKey: string; model: string } | null {
+export function llmCredentialsOf(
+  user: User,
+): { apiBase: string; apiKey: string; model: string; parameters: LlmParameters } | null {
   const pub = llmPublicOf(user);
   if (!llmReady(pub) || user.llmApiKey === null) return null;
   const apiKey = decryptSecret(user.llmApiKey);
   if (apiKey === null || apiKey === '') throw AppError.of(400, 'LLM_NOT_CONFIGURED');
   if (pub.apiBase === null || pub.model === null) return null;
-  return { apiBase: pub.apiBase, apiKey, model: pub.model };
+  return { apiBase: pub.apiBase, apiKey, model: pub.model, parameters: user.llmParameters };
 }
 
 export async function completeChat(input: LlmCompleteInput): Promise<string> {
   assertLlmApiBase(input.apiBase);
-  return transport.complete(input);
+  if (!llmParametersSchema.safeParse(input.parameters ?? {}).success) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
+  try {
+    return await transport.complete(input);
+  } catch (err) {
+    if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      throw AppError.of(504, 'LLM_TIMEOUT');
+    }
+    throw err;
+  }
 }
 
 export async function testLlmConnection(user: User): Promise<{ ok: true }> {
@@ -137,10 +163,10 @@ export async function testLlmConnection(user: User): Promise<{ ok: true }> {
   if (!creds) throw AppError.of(400, 'LLM_NOT_CONFIGURED');
   await completeChat({
     ...creds,
-    messages: [{ role: 'user', content: 'ping' }],
+    messages: [{ role: 'user', content: 'Reply with only: pong' }],
     json: false,
     timeoutMs: TEST_TIMEOUT_MS,
-    maxTokens: 8,
+    maxTokens: 1024,
   });
   return { ok: true };
 }

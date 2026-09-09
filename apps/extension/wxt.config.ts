@@ -1,4 +1,5 @@
 import { defineConfig } from 'wxt';
+import { fileURLToPath } from 'node:url';
 
 function originPattern(raw: string): string {
   const url = new URL(raw);
@@ -22,6 +23,15 @@ export default defineConfig({
   outDir: 'dist',
   imports: false,
   browser: 'chrome',
+  vite: () => ({
+    resolve: {
+      alias: {
+        '/fonts/sora-latin-wght-normal.woff2': fileURLToPath(
+          new URL('../../packages/tokens/fonts/sora-latin-wght-normal.woff2', import.meta.url),
+        ),
+      },
+    },
+  }),
   dev: {
     server: { port: 5181 },
   },

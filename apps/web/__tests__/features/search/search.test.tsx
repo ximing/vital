@@ -39,6 +39,7 @@ describe('search page', () => {
             capturedAt: '2026-01-01T00:00:00.000Z',
             readAt: null,
             convertedTaskId: null,
+            tagIds: [],
             assets: [],
             deletedAt: null,
             createdAt: '2026-01-01T00:00:00.000Z',

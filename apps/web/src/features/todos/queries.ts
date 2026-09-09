@@ -4,7 +4,9 @@ import type {
   CreateTaskFromTextInput,
   CreateTaskInput,
   List,
+  PatchListInput,
   PatchTaskInput,
+  ReorderListsInput,
   Tag,
   Task,
   TaskPriority,
@@ -133,6 +135,22 @@ export function useTodoActions() {
     onSuccess: () => invalidate(),
   });
 
+  const patchList = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: PatchListInput }) =>
+      client.patchList(id, input),
+    onSuccess: () => invalidate(),
+  });
+
+  const deleteList = useMutation({
+    mutationFn: (id: string) => client.deleteList(id),
+    onSuccess: () => invalidate(),
+  });
+
+  const reorderLists = useMutation({
+    mutationFn: (input: ReorderListsInput) => client.reorderLists(input),
+    onSuccess: () => invalidate(),
+  });
+
   const createTag = useMutation({
     mutationFn: (name: string) => client.createTag({ name }),
     onSuccess: () => invalidate(),
@@ -200,6 +218,9 @@ export function useTodoActions() {
     remove,
     reorder,
     createList,
+    patchList,
+    deleteList,
+    reorderLists,
     createTag,
     complete,
     undoComplete,

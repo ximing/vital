@@ -15,6 +15,13 @@ describe('createTaskInputSchema', () => {
     });
     expect(parsed.title).toBe('Buy milk');
     expect(parsed.priority).toBe(0);
+    expect(
+      createTaskInputSchema.parse({
+        title: 'Pin me',
+        listId: '11111111-1111-4111-8111-111111111111',
+        pinned: true,
+      }).pinned,
+    ).toBe(true);
     expect(createTaskInputSchema.safeParse({ title: 'x', listId: 'smart:today' }).success).toBe(
       false,
     );
@@ -49,6 +56,7 @@ describe('patchTaskInputSchema', () => {
     expect(patchTaskInputSchema.safeParse({}).success).toBe(false);
     expect(patchTaskInputSchema.parse({ dueAt: null })).toEqual({ dueAt: null });
     expect(patchTaskInputSchema.parse({ tagIds: [] }).tagIds).toEqual([]);
+    expect(patchTaskInputSchema.parse({ pinned: true })).toEqual({ pinned: true });
   });
 });
 

@@ -187,6 +187,65 @@ describe('tasks', () => {
     expect(reject.statusCode).toBe(400);
   });
 
+  it('persists pinned on roots and rejects pinning a subtask', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'Pin me', listId: inbox, pinned: true },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().pinned).toBe(true);
+    const cleared = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${created.json().id}`,
+      token: alice.token,
+      payload: { pinned: false },
+    });
+    expect(cleared.json().pinned).toBe(false);
+    const pinned = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${created.json().id}`,
+      token: alice.token,
+      payload: { pinned: true },
+    });
+    expect(pinned.statusCode).toBe(200);
+    expect(pinned.json().pinned).toBe(true);
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks?listId=${inbox}`,
+      token: alice.token,
+    });
+    expect(
+      (listed.json().items as { id: string; pinned: boolean }[]).find(
+        (task) => task.id === created.json().id,
+      )?.pinned,
+    ).toBe(true);
+    const child = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'Child', listId: inbox, parentId: created.json().id, pinned: true },
+    });
+    expect(child.statusCode).toBe(400);
+    const sub = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'Child', listId: inbox, parentId: created.json().id },
+    });
+    expect(sub.statusCode).toBe(201);
+    const pinChild = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${sub.json().id}`,
+      token: alice.token,
+      payload: { pinned: true },
+    });
+    expect(pinChild.statusCode).toBe(400);
+  });
+
   it('undated tasks land in the someday list and recurrence requires dueAt', async () => {
     const alice = await registerUser(app);
     const inbox = await inboxId(app, alice.token);
@@ -315,5 +374,47 @@ describe('tasks', () => {
     expect(counts[inbox]).toBe(2);
     expect(counts['smart:inbox']).toBe(2);
     expect(counts['smart:today']).toBe(1);
+  });
+
+  it('listing a parent list includes tasks from child lists', async () => {
+    const alice = await registerUser(app);
+    const parent = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '父' },
+    });
+    const child = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '子', parentId: parent.json().id },
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '父任务', listId: parent.json().id },
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '子任务', listId: child.json().id },
+    });
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks?listId=${parent.json().id}`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    const titles = (res.json().items as { title: string }[]).map((item) => item.title);
+    expect(titles).toEqual(expect.arrayContaining(['父任务', '子任务']));
+    const childOnly = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks?listId=${child.json().id}`,
+      token: alice.token,
+    });
+    expect((childOnly.json().items as { title: string }[]).map((item) => item.title)).toEqual(['子任务']);
   });
 });

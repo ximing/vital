@@ -46,8 +46,29 @@ export function parseInboxFilter(raw: string | null): InboxFilter {
   return 'all';
 }
 
-export function filterSaves(items: InboxItem[], filter: InboxFilter): InboxItem[] {
-  const live = items.filter((item) => item.deletedAt === null);
+const TAG_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function parseInboxTagId(raw: string | null): string | null {
+  if (raw === null || raw === '') return null;
+  return TAG_ID_RE.test(raw) ? raw.toLowerCase() : null;
+}
+
+export function inboxHref(filter: InboxFilter, tagId: string | null): string {
+  const q = new URLSearchParams();
+  if (filter !== 'all') q.set('filter', filter);
+  if (tagId) q.set('tag', tagId);
+  const s = q.toString();
+  return s === '' ? '/inbox' : `/inbox?${s}`;
+}
+
+export function filterSaves(
+  items: InboxItem[],
+  filter: InboxFilter,
+  tagId: string | null = null,
+): InboxItem[] {
+  let live = items.filter((item) => item.deletedAt === null);
+  if (tagId) live = live.filter((item) => (item.tagIds ?? []).includes(tagId));
   if (filter === 'archived') return newestFirst(live.filter((item) => item.status === 'archived'));
   if (filter === 'unread') return newestFirst(live.filter((item) => item.status === 'unread'));
   if (filter === 'favorite') return newestFirst(live.filter((item) => item.status === 'later'));

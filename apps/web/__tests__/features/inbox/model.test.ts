@@ -5,8 +5,10 @@ import {
   createInputFromPreview,
   filterSaves,
   hostLabel,
+  inboxHref,
   normalizePasteUrl,
   parseInboxFilter,
+  parseInboxTagId,
   pendingIdForUrl,
   visibleSaves,
 } from '../../../src/features/inbox/model';
@@ -25,6 +27,7 @@ function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): I
     capturedAt: '2026-09-06T00:00:00.000Z',
     readAt: null,
     convertedTaskId: null,
+    tagIds: [],
     assets: [],
     deletedAt: null,
     createdAt: '2026-09-06T00:00:00.000Z',
@@ -107,6 +110,17 @@ describe('parseInboxFilter / filterSaves', () => {
     expect(filterSaves(items, 'favorite').map((item) => item.id)).toEqual(['b']);
     expect(filterSaves(items, 'archived').map((item) => item.id)).toEqual(['c']);
   });
+
+  it('filters by tag and composes inbox hrefs', () => {
+    const tag = '11111111-1111-4111-8111-111111111111';
+    const tagged = makeItem({ id: 'a', title: 'A', tagIds: [tag] });
+    const plain = makeItem({ id: 'b', title: 'B' });
+    expect(filterSaves([tagged, plain], 'all', tag).map((item) => item.id)).toEqual(['a']);
+    expect(parseInboxTagId(tag)).toBe(tag);
+    expect(parseInboxTagId('nope')).toBeNull();
+    expect(inboxHref('unread', tag)).toBe(`/inbox?filter=unread&tag=${tag}`);
+    expect(inboxHref('all', null)).toBe('/inbox');
+  });
 });
 
 describe('createInputFromPreview', () => {
@@ -124,6 +138,7 @@ describe('createInputFromPreview', () => {
       source: 'web',
       readAt: null,
       convertedTaskId: null,
+      tagIds: [],
       assets: [],
     };
     expect(createInputFromPreview(preview, '  New  ')).toEqual({

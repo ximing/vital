@@ -45,9 +45,19 @@ import {
   type TaskRow,
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
-import { getInboxList, getOwnedListOr404, listLists, SORT_GAP } from '../lists/lists.service.js';
+import {
+  getInboxList,
+  getOwnedListOr404,
+  listIdAndDescendants,
+  listLists,
+  SORT_GAP,
+} from '../lists/lists.service.js';
 import { llmCredentialsOf } from '../llm/client.js';
-import { buildCreateInputFromIntent, interpretTaskText, type ExtractedTask } from '../llm/parse-task.js';
+import {
+  buildCreateInputFromIntent,
+  interpretTaskText,
+  type ExtractedTask,
+} from '../llm/parse-task.js';
 import { syncTaskNotifications } from '../notifications/outbox.js';
 import { assertOwnedTagIds, listTags } from '../tags/tags.service.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
@@ -82,6 +92,7 @@ function toRecurrence(row: TaskRow): RecurrenceTask {
     recurrenceDtstart: row.recurrenceDtstart,
     status: row.status,
     priority: row.priority,
+    pinned: row.pinned,
   };
 }
 
@@ -152,7 +163,10 @@ async function nextSortOrder(listId: string, parentId: string | null): Promise<n
     parentId === null
       ? and(eq(tasks.listId, listId), isNull(tasks.parentId))
       : and(eq(tasks.listId, listId), eq(tasks.parentId, parentId));
-  const [agg] = await getDb().select({ m: max(tasks.sortOrder) }).from(tasks).where(cond);
+  const [agg] = await getDb()
+    .select({ m: max(tasks.sortOrder) })
+    .from(tasks)
+    .where(cond);
   return (agg?.m ?? 0) + SORT_GAP;
 }
 
@@ -214,8 +228,12 @@ async function smartFilter(userId: string, listId: string, tz: string): Promise<
         sql`${tasks.completedAt} >= now() - interval '30 days'`,
       ) as SQL;
     default: {
-      const list = await getOwnedListOr404(userId, listId);
-      return and(eq(tasks.userId, userId), isNull(tasks.deletedAt), eq(tasks.listId, list.id)) as SQL;
+      const ids = await listIdAndDescendants(userId, listId);
+      return and(
+        eq(tasks.userId, userId),
+        isNull(tasks.deletedAt),
+        inArray(tasks.listId, ids),
+      ) as SQL;
     }
   }
 }
@@ -242,7 +260,10 @@ export async function listTasks(userId: string, query: ListTasksQuery): Promise<
       const sort = Number(cur.t);
       cond = and(
         where,
-        or(sql`${tasks.sortOrder} > ${sort}`, and(eq(tasks.sortOrder, sort), sql`${tasks.id} > ${cur.id}`)),
+        or(
+          sql`${tasks.sortOrder} > ${sort}`,
+          and(eq(tasks.sortOrder, sort), sql`${tasks.id} > ${cur.id}`),
+        ),
       ) as SQL;
     }
   }
@@ -311,19 +332,23 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
   } else {
     await getOwnedListOr404(userId, listId);
   }
+  if (parentId && input.pinned) throw AppError.of(400, 'VALIDATION_ERROR');
   if (input.tagIds !== undefined) await assertOwnedTagIds(userId, input.tagIds);
 
   const zone = input.timezone ?? user.timezone;
   const isAllDay = input.isAllDay ?? false;
   const dueAt =
-    input.dueAt === undefined || input.dueAt === null ? null : parseInstant(input.dueAt, isAllDay, zone);
+    input.dueAt === undefined || input.dueAt === null
+      ? null
+      : parseInstant(input.dueAt, isAllDay, zone);
   const startAt =
     input.startAt === undefined || input.startAt === null
       ? null
       : parseInstant(input.startAt, isAllDay, zone);
 
   const reminderMode = input.reminderMode ?? null;
-  const reminderOffsetMinutes = reminderMode === 'offset' ? input.reminderOffsetMinutes ?? null : null;
+  const reminderOffsetMinutes =
+    reminderMode === 'offset' ? (input.reminderOffsetMinutes ?? null) : null;
   const reminderAt =
     reminderMode === 'custom' && input.reminderAt !== null && input.reminderAt !== undefined
       ? parseInstant(input.reminderAt, false, zone)
@@ -361,6 +386,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     notesMd: input.notes ?? '',
     status: input.status ?? 'todo',
     priority: input.priority ?? 3,
+    pinned: input.pinned ?? false,
     dueAt,
     startAt,
     reminderMode,
@@ -424,6 +450,7 @@ export async function createTaskFromText(
       apiBase: creds.apiBase,
       apiKey: creds.apiKey,
       model: creds.model,
+      parameters: creds.parameters,
       timezone: zone,
       now,
       lists: lists.items,
@@ -442,6 +469,7 @@ export async function createTaskFromText(
 
 export async function patchTask(userId: string, id: string, input: PatchTaskInput): Promise<Task> {
   const task = await getOwnedTaskOr404(userId, id);
+  if (input.pinned && task.parentId) throw AppError.of(400, 'VALIDATION_ERROR');
   if (input.tagIds !== undefined) await assertOwnedTagIds(userId, input.tagIds);
   if (input.listId !== undefined && task.parentId && input.listId !== task.listId) {
     throw AppError.of(400, 'VALIDATION_ERROR');
@@ -571,6 +599,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   if (input.notes !== undefined) patch.notesMd = input.notes ?? '';
   if (input.status !== undefined) patch.status = input.status;
   if (input.priority !== undefined) patch.priority = input.priority;
+  if (input.pinned !== undefined) patch.pinned = input.pinned;
   if (input.listId !== undefined) patch.listId = input.listId;
 
   const user = await getUserEntity(userId);
@@ -623,9 +652,7 @@ export async function deleteTask(userId: string, id: string): Promise<void> {
     await tx
       .update(tasks)
       .set({ deletedAt: now, updatedAt: now })
-      .where(
-        and(eq(tasks.userId, userId), or(eq(tasks.id, task.id), eq(tasks.parentId, task.id))),
-      );
+      .where(and(eq(tasks.userId, userId), or(eq(tasks.id, task.id), eq(tasks.parentId, task.id))));
     await syncTaskNotifications({ ...task, deletedAt: now }, user, now, tx);
     for (const child of children) {
       await syncTaskNotifications({ ...child, deletedAt: now }, user, now, tx);
@@ -639,17 +666,16 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
   const now = new Date();
   await getDb().transaction(async (tx) => {
     if (task.parentId) {
-      await tx
-        .update(tasks)
-        .set({ deletedAt: null, updatedAt: now })
-        .where(eq(tasks.id, task.id));
+      await tx.update(tasks).set({ deletedAt: null, updatedAt: now }).where(eq(tasks.id, task.id));
       await syncTaskNotifications({ ...task, deletedAt: null }, user, now, tx);
       return;
     }
     const children = await tx
       .select()
       .from(tasks)
-      .where(and(eq(tasks.parentId, task.id), eq(tasks.userId, userId), isNotNull(tasks.deletedAt)));
+      .where(
+        and(eq(tasks.parentId, task.id), eq(tasks.userId, userId), isNotNull(tasks.deletedAt)),
+      );
     await tx
       .update(tasks)
       .set({ deletedAt: null, updatedAt: now })
@@ -917,6 +943,7 @@ export async function calendar(userId: string, query: CalendarQuery): Promise<Ca
         isAllDay: inst.isAllDay,
         status: inst.status,
         priority: asPriority(inst.priority),
+        pinned: inst.pinned,
       }));
     }),
   );

@@ -34,6 +34,7 @@ describe('llm settings + create from text', () => {
           apiBase: 'https://open.bigmodel.cn/api/paas/v4',
           apiKey: 'sk-secret-do-not-leak',
           model: 'glm-4-flash',
+          parameters: { thinking: { type: 'enabled' }, reasoning_effort: 'low' },
         },
       },
     });
@@ -42,12 +43,34 @@ describe('llm settings + create from text', () => {
       apiBase: 'https://open.bigmodel.cn/api/paas/v4',
       model: 'glm-4-flash',
       apiKeySet: true,
+      parameters: { thinking: { type: 'enabled' }, reasoning_effort: 'low' },
     });
     expect(JSON.stringify(saved.json())).not.toContain('sk-secret-do-not-leak');
 
     const me = await injectJson(app, { method: 'GET', url: '/api/v1/auth/me', token: alice.token });
     expect(me.json().llm.apiKeySet).toBe(true);
+    expect(me.json().llm.parameters).toEqual({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'low',
+    });
     expect(JSON.stringify(me.json())).not.toContain('sk-secret-do-not-leak');
+    const preserved = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { llm: { model: 'another-model' } },
+    });
+    expect(preserved.json().llm.parameters).toEqual({
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'low',
+    });
+    const cleared = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { llm: { parameters: null } },
+    });
+    expect(cleared.json().llm.parameters).toEqual({});
   });
 
   it('creates a task from natural language when the model is configured', async () => {
@@ -62,11 +85,13 @@ describe('llm settings + create from text', () => {
           apiBase: 'https://open.bigmodel.cn/api/paas/v4',
           apiKey: 'sk-test',
           model: 'glm-4-flash',
+          parameters: { thinking: { type: 'disabled' }, temperature: 0.3 },
         },
       },
     });
     setLlmTransport({
-      complete() {
+      complete(input) {
+        expect(input.parameters).toEqual({ thinking: { type: 'disabled' }, temperature: 0.3 });
         return Promise.resolve(
           JSON.stringify({
             title: '和设计组开会',
@@ -111,7 +136,12 @@ describe('llm settings + create from text', () => {
       method: 'POST',
       url: '/api/v1/tasks/from-text',
       token: alice.token,
-      payload: { text: '买牛奶', listId: inbox, smartListId: 'smart:today', timezone: 'Asia/Shanghai' },
+      payload: {
+        text: '买牛奶',
+        listId: inbox,
+        smartListId: 'smart:today',
+        timezone: 'Asia/Shanghai',
+      },
     });
     expect(created.statusCode).toBe(201);
     expect(created.json().title).toBe('买牛奶');

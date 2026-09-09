@@ -54,6 +54,7 @@ export function toTaskDto(row: TaskRow, tagIds: string[]): Task {
     notes: row.notesMd,
     status: asStatus(row.status),
     priority: asPriority(row.priority),
+    pinned: row.pinned,
     dueAt: iso(row.dueAt),
     startAt: iso(row.startAt),
     reminderMode: asReminderMode(row.reminderMode),

@@ -359,6 +359,7 @@ describe('reports workspace', () => {
         notes: '',
         status: 'done',
         priority: 3,
+        pinned: false,
         dueAt: null,
         startAt: null,
         reminderMode: null,

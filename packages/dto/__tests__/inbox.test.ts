@@ -45,6 +45,9 @@ describe('patchInboxInputSchema', () => {
     expect(patchInboxInputSchema.safeParse({}).success).toBe(false);
     expect(patchInboxInputSchema.parse({ excerpt: null })).toEqual({ excerpt: null });
     expect(patchInboxInputSchema.safeParse({ status: 'converted' }).success).toBe(false);
+    expect(
+      patchInboxInputSchema.parse({ tagIds: ['11111111-1111-4111-8111-111111111111'] }).tagIds,
+    ).toEqual(['11111111-1111-4111-8111-111111111111']);
   });
 });
 

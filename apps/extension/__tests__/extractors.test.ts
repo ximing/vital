@@ -76,6 +76,42 @@ describe('extractSite', () => {
 });
 
 describe('parseArticle site extractors', () => {
+  it('captures the linked Zhihu answer, excluding question details and other answers', () => {
+    const html = `<h1 class="QuestionHeader-title">团队冲突如何处理？</h1>
+      <div class="QuestionRichText">问题描述，不是回答正文。这是提问者补充的背景信息，不能代替回答。显示全部</div>
+      <div class="AnswerItem" name="1934631031434085454">
+        <span class="AuthorInfo-name">其他作者</span>
+        <div class="RichText"><p>推荐回答，不应保存。</p></div>
+      </div>
+      <div class="AnswerItem" name="1939319305469666412">
+        <span class="AuthorInfo-name">目标作者</span>
+        <div class="RichContent-inner"><span class="RichText ztext">
+          <p>目标回答第一段：先了解双方的诉求，再讨论协作方式。</p>
+          <p>目标回答最后一段。</p>
+          <img data-src="https://pic.zhimg.com/answer.jpg" width="800" height="600" />
+        </span></div>
+        <div class="RichText">评论区不应保存。</div>
+      </div>`;
+    const parsed = parseArticle(html,
+      'https://www.zhihu.com/question/1919551834101646324/answer/1939319305469666412');
+    expect(parsed.title).toBe('团队冲突如何处理？');
+    expect(parsed.byline).toBe('目标作者');
+    expect(parsed.extractedText).toContain('目标回答第一段');
+    expect(parsed.extractedText).toContain('目标回答最后一段');
+    expect(parsed.extractedText).not.toMatch(/问题描述|推荐回答|评论区|显示全部/);
+    expect(parsed.imageSrcs).toEqual(['https://pic.zhimg.com/answer.jpg']);
+  });
+
+  it('prefers Zhihu post content over earlier unrelated rich text', () => {
+    const parsed = parseArticle(`<div class="RichText">导航和推荐内容不应保存，这是页面侧栏的其他内容，不是专栏文章。</div>
+      <h1 class="Post-Title">专栏标题</h1>
+      <div class="Post-RichTextContainer"><div class="Post-RichText">
+        <p>专栏的完整正文，应当优先选择文章内容而不是页面其他富文本。</p>
+      </div></div>`, 'https://zhuanlan.zhihu.com/p/123');
+    expect(parsed.extractedText).toContain('专栏的完整正文');
+    expect(parsed.extractedText).not.toContain('导航和推荐');
+  });
+
   it('prefers the WeChat extractor over Readability chrome', () => {
     const html = `<!doctype html>
       <html>

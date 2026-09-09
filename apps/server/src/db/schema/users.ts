@@ -9,7 +9,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
-import type { OnboardingState } from '@vital/dto';
+import type { LlmParameters, OnboardingState } from '@vital/dto';
 
 export const users = pgTable(
   'users',
@@ -33,6 +33,7 @@ export const users = pgTable(
     llmApiBase: varchar('llm_api_base', { length: 512 }),
     llmApiKey: varchar('llm_api_key', { length: 1024 }),
     llmModel: varchar('llm_model', { length: 128 }),
+    llmParameters: jsonb('llm_parameters').$type<LlmParameters>().notNull().default({}),
     passwordChangedAt: timestamp('password_changed_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

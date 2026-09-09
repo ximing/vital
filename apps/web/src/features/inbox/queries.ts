@@ -4,6 +4,7 @@ import type {
   InboxItem,
   InboxPreview,
   PatchInboxInput,
+  Tag,
 } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
@@ -60,6 +61,13 @@ export function useInboxActions() {
     onSuccess: () => invalidate(),
   });
 
+  const createTag = useMutation({
+    mutationFn: (name: string): Promise<Tag> => client.createTag({ name }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: todoKeys.tags });
+    },
+  });
+
   const convert = useMutation({
     mutationFn: ({ id, input }: { id: string; input?: ConvertInboxInput }) =>
       client.convertInbox(id, input),
@@ -67,6 +75,11 @@ export function useInboxActions() {
       await invalidate();
       await qc.invalidateQueries({ queryKey: todoKeys.all });
     },
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => client.deleteInbox(id),
+    onSuccess: () => invalidate(),
   });
 
   async function extract(url: string): Promise<InboxPreview> {
@@ -142,7 +155,9 @@ export function useInboxActions() {
 
   return {
     patch,
+    createTag,
     convert,
+    remove,
     extract,
     createFromPreview,
     createManual,

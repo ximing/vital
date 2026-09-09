@@ -27,6 +27,10 @@ export interface List {
   name: string;
   color: string | null;
   icon: string | null;
+  iconAttachmentId: string | null;
+  /** Private S3 URL, signed by the server for six hours. */
+  iconUrl: string | null;
+  parentId: string | null;
   sortOrder: number;
   isArchived: boolean;
   createdAt: string;
@@ -37,6 +41,8 @@ export const createListInputSchema = z.object({
   name: z.string().trim().min(1).max(80),
   color: z.string().trim().min(1).max(16).optional(),
   icon: z.string().trim().min(1).max(32).optional(),
+  iconAttachmentId: uuidSchema.optional(),
+  parentId: uuidSchema.optional(),
 });
 export type CreateListInput = z.infer<typeof createListInputSchema>;
 
@@ -45,6 +51,8 @@ export const patchListInputSchema = z
     name: z.string().trim().min(1).max(80).optional(),
     color: z.string().trim().min(1).max(16).nullable().optional(),
     icon: z.string().trim().min(1).max(32).nullable().optional(),
+    iconAttachmentId: uuidSchema.nullable().optional(),
+    parentId: uuidSchema.nullable().optional(),
     isArchived: z.boolean().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
@@ -53,6 +61,7 @@ export const patchListInputSchema = z
 export type PatchListInput = z.infer<typeof patchListInputSchema>;
 
 export const reorderListsInputSchema = z.object({
+  parentId: uuidSchema.nullable(),
   orderedIds: z.array(uuidSchema).min(1),
 });
 export type ReorderListsInput = z.infer<typeof reorderListsInputSchema>;

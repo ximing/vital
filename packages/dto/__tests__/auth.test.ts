@@ -87,6 +87,35 @@ describe('changePasswordInputSchema', () => {
 });
 
 describe('updateMeInputSchema', () => {
+  it('preserves generic nested model parameters and supports clearing them', () => {
+    const parameters = {
+      thinking: { type: 'enabled', clear_thinking: false },
+      reasoning_effort: 'future-effort',
+      max_tokens: 4096,
+      custom: { values: [true, 1, null] },
+    };
+    expect(updateMeInputSchema.parse({ llm: { parameters } }).llm?.parameters).toEqual(parameters);
+    expect(updateMeInputSchema.parse({ llm: { parameters: null } }).llm?.parameters).toBeNull();
+  });
+
+  it.each([
+    [],
+    'invalid',
+    { max_tokens: 0 },
+    { max_tokens: 1.5 },
+    { thinking: { type: 'invalid' } },
+    { reasoning_effort: '' },
+    { model: 'override' },
+    { messages: [] },
+    { stream: true },
+    { response_format: { type: 'text' } },
+    { api_key: 'secret' },
+    { n: 2 },
+    { custom: 'x'.repeat(17000) },
+  ])('rejects invalid or reserved model parameters: %j', (parameters) => {
+    expect(updateMeInputSchema.safeParse({ llm: { parameters } }).success).toBe(false);
+  });
+
   it('rejects empty patch; accepts IANA timezone and theme', () => {
     expect(() => updateMeInputSchema.parse({})).toThrow();
     const ok = updateMeInputSchema.parse({
@@ -114,9 +143,7 @@ describe('updateMeInputSchema', () => {
     expect(ok.llm?.apiBase).toBe('https://open.bigmodel.cn/api/paas/v4');
     expect(ok.llm?.model).toBe('glm-4-flash');
     expect(() => updateMeInputSchema.parse({ llm: {} })).toThrow();
-    expect(() =>
-      updateMeInputSchema.parse({ llm: { apiBase: 'not-a-url' } }),
-    ).toThrow();
+    expect(() => updateMeInputSchema.parse({ llm: { apiBase: 'not-a-url' } })).toThrow();
   });
 });
 

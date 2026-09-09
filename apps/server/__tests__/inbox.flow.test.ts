@@ -273,6 +273,45 @@ describe('inbox', () => {
     expect(bind.json().ownerType).toBe('inbox');
   });
 
+  it('tags an article, filters the list, and copies tags onto convert', async () => {
+    const alice = await registerUser(app);
+    const tag = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tags',
+      token: alice.token,
+      payload: { name: '工作' },
+    });
+    expect(tag.statusCode).toBe(201);
+    const tagged = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: 'Tagged', tagIds: [tag.json().id] },
+    });
+    expect(tagged.statusCode).toBe(201);
+    expect(tagged.json().tagIds).toEqual([tag.json().id]);
+    await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: 'Plain' },
+    });
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/inbox?tagId=${tag.json().id}`,
+      token: alice.token,
+    });
+    expect(listed.json().items.map((item: { title: string }) => item.title)).toEqual(['Tagged']);
+    const convert = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/inbox/${tagged.json().id}/convert`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(convert.statusCode).toBe(201);
+    expect(convert.json().task.tagIds).toEqual([tag.json().id]);
+  });
+
   it('convert writes two entity_links and a task', async () => {
     const alice = await registerUser(app);
     const list = await inboxId(app, alice.token);

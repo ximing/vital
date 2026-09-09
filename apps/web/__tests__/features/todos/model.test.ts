@@ -1,13 +1,18 @@
-import type { Task } from '@vital/dto';
+import type { List, Task } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import {
   applyOptimisticComplete,
+  countWithDescendants,
   createPayload,
+  descendantListIds,
   emptyCopyKey,
   filterTasks,
   formatYmd,
   isDueSoon,
   isOverdue,
+  listChildren,
+  listRoots,
+  listSections,
   listVisibleIds,
   nestTasks,
   orderedAfterDrop,
@@ -21,6 +26,22 @@ import {
 const TZ = 'Asia/Shanghai';
 const NOW = new Date('2026-09-06T00:00:00.000Z'); // 08:00 in Shanghai
 
+function makeList(over: Partial<List> & Pick<List, 'id' | 'name'>): List {
+  return {
+    kind: 'user',
+    color: null,
+    icon: null,
+    iconAttachmentId: null,
+    iconUrl: null,
+    parentId: null,
+    sortOrder: 0,
+    isArchived: false,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
 function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
   return {
     listId: 'inbox-1',
@@ -28,6 +49,7 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     notes: '',
     status: 'todo',
     priority: 3,
+    pinned: false,
     dueAt: null,
     startAt: null,
     reminderMode: null,
@@ -169,5 +191,83 @@ describe('todo model', () => {
 
   it('formats ymd in the given zone', () => {
     expect(formatYmd(new Date('2026-09-05T16:00:00.000Z'), TZ)).toBe('2026-09-06');
+  });
+
+  it('builds a depth-2 list tree and sums descendant counts', () => {
+    const parent = makeList({ id: 'p', name: '父', sortOrder: 1 });
+    const child = makeList({ id: 'c', name: '子', parentId: 'p', sortOrder: 1 });
+    const other = makeList({ id: 'o', name: '其它', sortOrder: 2 });
+    const lists = [parent, child, other];
+    expect(listRoots(lists).map((item) => item.id)).toEqual(['p', 'o']);
+    expect(listChildren(lists, 'p').map((item) => item.id)).toEqual(['c']);
+    expect(descendantListIds(lists, 'p')).toEqual(['p', 'c']);
+    expect(countWithDescendants({ p: 2, c: 3, o: 1 }, lists, 'p')).toBe(5);
+  });
+
+  it('sections a parent list by own tasks then children', () => {
+    const parent = makeList({ id: 'p', name: '父' });
+    const child = makeList({ id: 'c', name: '子', parentId: 'p' });
+    const sections = listSections(
+      'p',
+      [
+        makeTask({ id: 't1', title: '父任务', listId: 'p' }),
+        makeTask({ id: 't2', title: '子任务', listId: 'c' }),
+      ],
+      TZ,
+      NOW,
+      [parent, child],
+    );
+    expect(sections.map((section) => section.listName ?? section.heading)).toEqual(['本集合', '子']);
+    expect(sections[0]?.nodes[0]?.task.id).toBe('t1');
+    expect(sections[1]?.nodes[0]?.task.id).toBe('t2');
+  });
+
+  it('floats pinned tasks to the top of today, a user list, and a parent collection', () => {
+    const pinnedToday = makeTask({
+      id: 'pin',
+      title: '钉住',
+      pinned: true,
+      sortOrder: 9,
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+    });
+    const overdueTask = makeTask({
+      id: 'over',
+      title: '逾期',
+      dueAt: zonedLocalMidnightIso('2026-09-05', TZ),
+      sortOrder: 1,
+    });
+    const todayTask = makeTask({
+      id: 'now',
+      title: '今天',
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+      sortOrder: 2,
+    });
+    expect(listVisibleIds('smart:today', [todayTask, overdueTask, pinnedToday], TZ, NOW)).toEqual([
+      'pin',
+      'over',
+      'now',
+    ]);
+
+    const plain = makeTask({ id: 'a', title: '普通', listId: 'l1', sortOrder: 1 });
+    const pinned = makeTask({ id: 'b', title: '置顶', listId: 'l1', pinned: true, sortOrder: 2 });
+    const userSections = listSections('l1', [plain, pinned], TZ, NOW);
+    expect(userSections.map((section) => section.heading)).toEqual(['pinned', null]);
+    expect(userSections[0]?.nodes[0]?.task.id).toBe('b');
+    expect(userSections[1]?.nodes[0]?.task.id).toBe('a');
+
+    const parent = makeList({ id: 'p', name: '父' });
+    const child = makeList({ id: 'c', name: '子', parentId: 'p' });
+    const parentSections = listSections(
+      'p',
+      [
+        makeTask({ id: 't1', title: '父任务', listId: 'p' }),
+        makeTask({ id: 't2', title: '子任务', listId: 'c', pinned: true }),
+      ],
+      TZ,
+      NOW,
+      [parent, child],
+    );
+    expect(parentSections[0]?.heading).toBe('pinned');
+    expect(parentSections[0]?.nodes[0]?.task.id).toBe('t2');
   });
 });

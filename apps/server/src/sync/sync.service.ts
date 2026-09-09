@@ -2,7 +2,7 @@ import type { InboxItem, SyncChanges, SyncChangesQuery, SyncHead, Task } from '@
 import { and, asc, eq, gt, inArray, max } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { inboxItems, reports, tasks, taskTags } from '../db/schema.js';
-import { loadAssetsByItemIds, toInboxDto } from '../inbox/inbox.service.js';
+import { loadAssetsByItemIds, tagIdsByInbox, toInboxDto } from '../inbox/inbox.service.js';
 import { toReportListItem } from '../reports/reports.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 
@@ -91,14 +91,16 @@ export async function getSyncChanges(
   const inboxPage = inboxRows.slice(0, limit);
   const reportPage = reportRows.slice(0, limit);
 
-  const [tags, assets] = await Promise.all([
+  const inboxIds = inboxPage.map((row) => row.id);
+  const [tags, inboxTags, assets] = await Promise.all([
     tagIdsByTask(taskPage.map((row) => row.id)),
-    loadAssetsByItemIds(inboxPage.map((row) => row.id)),
+    tagIdsByInbox(inboxIds),
+    loadAssetsByItemIds(inboxIds),
   ]);
 
   const mappedTasks: Task[] = taskPage.map((row) => toTaskDto(row, tags.get(row.id) ?? []));
   const mappedInbox: InboxItem[] = inboxPage.map((row) =>
-    toInboxDto(row, assets.get(row.id) ?? []),
+    toInboxDto(row, assets.get(row.id) ?? [], inboxTags.get(row.id) ?? []),
   );
 
   return {

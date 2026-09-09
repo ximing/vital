@@ -48,6 +48,7 @@ export interface Task {
   notes: string;
   status: TaskStatus;
   priority: TaskPriority;
+  pinned: boolean;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;
@@ -93,6 +94,7 @@ export const createTaskInputSchema = z.object({
   notes: z.string().max(50_000).optional(),
   status: z.enum(['todo', 'doing', 'canceled']).optional(),
   priority: taskPrioritySchema.optional(),
+  pinned: z.boolean().optional(),
   dueAt: isoDateTimeSchema.nullable().optional(),
   startAt: isoDateTimeSchema.nullable().optional(),
   reminderMode: reminderModeSchema.optional(),
@@ -120,6 +122,7 @@ export const patchTaskInputSchema = z
     notes: z.string().max(50_000).nullable().optional(),
     status: z.enum(['todo', 'doing', 'canceled']).optional(),
     priority: taskPrioritySchema.optional(),
+    pinned: z.boolean().optional(),
     dueAt: isoDateTimeSchema.nullable().optional(),
     startAt: isoDateTimeSchema.nullable().optional(),
     reminderMode: reminderModeSchema.nullable().optional(),
@@ -161,6 +164,7 @@ export interface CalendarInstance {
   isAllDay: boolean;
   status: TaskStatus;
   priority: TaskPriority;
+  pinned: boolean;
 }
 
 export interface CalendarResponse {

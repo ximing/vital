@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type UIEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { useTagsQuery } from '@/features/todos/queries';
 import { todosUi } from '@/features/todos/todos-ui.service';
 import { humanError } from '@/lib/errors';
 import { useAuth } from '@/services/auth.service';
@@ -30,6 +31,7 @@ import {
   nextFavoriteStatus,
   READER_SIZES,
 } from './model';
+import { InboxTagEditor } from './InboxTags';
 import { useOnline } from './online';
 import { useInboxActions, useInboxItemQuery } from './queries';
 import { ReaderArticle } from './ReaderArticle';
@@ -76,6 +78,7 @@ export function InboxReader() {
   const online = useOnline();
   const timeZone = useAuth((s) => s.user?.timezone) ?? 'UTC';
   const query = useInboxItemQuery(id);
+  const tags = useTagsQuery().data ?? [];
   const actions = useInboxActions();
   const fontSize = useInboxUi((s) => s.fontSize);
   const setFontSize = useInboxUi((s) => s.setFontSize);
@@ -313,7 +316,7 @@ export function InboxReader() {
             <h1 className="font-display text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em]">
               {item.title}
             </h1>
-            <p className="mt-2.5 flex items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+            <p className="mt-2 flex items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
               <Icon
                 icon={inboxSourceIcon(item.source)}
                 size={13}
@@ -348,14 +351,34 @@ export function InboxReader() {
                 </button>
               </p>
             ) : null}
-            <div className="mt-7">
-              <ReaderArticle
-                html={item.extractedHtml}
-                text={item.extractedText}
-                assets={item.assets}
-                size={fontSize}
+            <div className="mt-2">
+              <InboxTagEditor
+                tagIds={item.tagIds ?? []}
+                tags={tags}
+                disabled={!online}
+                onChange={(tagIds) => {
+                  setActionError(null);
+                  void actions.patch.mutateAsync({ id: item.id, input: { tagIds } }).catch((err) => {
+                    setActionError(humanError(err));
+                  });
+                }}
+                onCreate={(name) => actions.createTag.mutateAsync(name)}
               />
             </div>
+            {item.extractedHtml || item.extractedText || item.assets.length > 0 ? (
+              <div className="mt-7">
+                <ReaderArticle
+                  html={item.extractedHtml}
+                  text={item.extractedText}
+                  assets={item.assets}
+                  size={fontSize}
+                />
+              </div>
+            ) : (
+              <p className="mt-3 text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
+                {t.inbox.noBody}
+              </p>
+            )}
           </>
         )}
       </div>

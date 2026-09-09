@@ -14,7 +14,7 @@ describe('ERROR_MESSAGES', () => {
     expect(ERROR_MESSAGES.EMAIL_ALREADY_REGISTERED).toBe('邮箱已注册');
     expect(ERROR_MESSAGES.ATTACHMENT_NOT_FOUND).toBe('附件不存在');
     expect(ERROR_MESSAGES.RRULE_DUE_REQUIRED).toBe('设置重复需要截止日期');
-    expect(ERROR_MESSAGES.LIST_NOT_FOUND).toBe('清单不存在');
+    expect(ERROR_MESSAGES.LIST_NOT_FOUND).toBe('集合不存在');
     expect(ERROR_MESSAGES.TAG_NOT_FOUND).toBe('标签不存在');
     expect(ERROR_MESSAGES.INBOX_NOT_FOUND).toBe('条目不存在');
     expect(ERROR_MESSAGES.REPORT_NOT_FOUND).toBe('报告不存在');

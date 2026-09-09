@@ -90,6 +90,7 @@ Vital 的体验是 **Calm Productivity（安静而有行动力的效率）**：�
 | `status.done` | `#2F9E63` | `#63C78D` | 已完成 |
 | `status.doing` | `#3D6FD1` | `#6FA0EE` | 进行中、今天的时间 |
 | `status.due-soon` | `#B4761E` | `#E0A94E` | 临近截止 |
+| `status.favorite` | `#D9A62E` | `#F2CC6B` | 收藏星标专用：比 due-soon 更浅更黄的金色，不表示时间状态 |
 | `status.overdue` / `danger` | `#CE4A45` | `#E8756C` | 逾期、破坏性操作 |
 | `report.*` | `#1C7A4F / #155E3D` | `#5FD3A1 / #82E0B6` | 复盘周期强调，取自品牌色族 |
 | `src.*`（收集来源） |  muted 紫/绿/蓝/琥珀/青 | 对应提亮 | 仅 24px 来源 tile，不扩散 |
@@ -179,19 +180,27 @@ Vital 的体验是 **Calm Productivity（安静而有行动力的效率）**：�
 - 列表/看板/周视图切换收进 `⋯` 菜单；分组用 eyebrow-rule；快速添加紧贴页头。
 - 详情面板 400px：左发丝线；顶部工具行（checkbox、日程、优先级、清单、更多、关闭）；标题 Sora 20/700；标签胶囊 + 虚线描边添加胶囊；"备注/子任务" eyebrow-rule 分节；子任务用描边画布底卡片。
 
-### 6.2 稍后阅读
+### 6.2 稍后阅读（2026-09-09 按实现回写）
 
-- 收集面板以**预览列表为主**：新建入口是 header 右侧「+」图标弹浮层（fixed 定位防裁剪），无常驻输入框。
-- 日期分组眉 eyebrow-rule；来源 24px tile；收藏/归档 chip 用 pill。
-- Reader 640–700px 阅读列，进度 2px 主色线。
+- 预览列表是 Focus Canvas 的主角并**始终贴左**：`/inbox` 与 `/inbox/:id` 共用同一列表列，打开文章不跳动；未选中时右侧为 EmptyReader 占位。列宽默认 360px，可拖拽 320–520px（`vital:pane-width:inbox-list`，复用 chrome.ts 宽度持久化模式）。
+- Library 的「收集」section 只做**筛选索引**：全部/未读/收藏/归档 + mono 计数，筛选用 `?filter=` query 表达，不做常驻列表。
+- 列表行：标题 14px/**600**；已读/未读靠颜色（text-secondary / text-fg）+ 主色未读圆点区分，不靠字重；时间戳**右对齐** mono tabular-nums；来源 24px tile（`--src-*` 仅限 tile）；收藏是**实心星**（`--status-favorite`）；归档/已转任务用 pill chip（标题行内）；收藏/归档快捷操作 hover 才浮出。
+- 日期分组眉 eyebrow-rule：今天/昨天/本周/更早 + mono 计数；新建入口是 header 右侧「+」弹浮层（fixed 定位、align=end 防裁剪），无常驻输入框。
+- Reader：工具行 sticky **无分割线**（bg-canvas/90 + blur 分层），顶部 2px 主色**滚动进度线**；标题块 = Sora 标题 → 来源 meta 行 → 原文链接行（truncate + 复制按钮，复制成功 1.5s 对勾反馈）。
+- 阅读列响应式：`max-w 700px / 840px(xl) / 920px(2xl)`，工具行与正文同宽。
+- 正文字级（`.reader-article`）：md **15.5px/1.8**（sm 14/1.75、lg 17/1.8），段落间距固定 18px，文内标题用 Sora（h1 22/30、h2 20/28、h3 16/24），blockquote 2px 主色左边线。
 
 ### 6.3 复盘
 
-- kicker 一行 eyebrow-accent + 发丝线（如"把完成的事留下痕迹"），右侧对齐保存状态。
-- 标题 26px Sora + 左侧 4px 主色竖条。
-- 统计摘要用**行内数字**（Sora 20px + caption 标签），不做 KPI 大数字卡堆叠。
+- kicker 一行 eyebrow-accent + 发丝线（如"把完成的事留下痕迹"），右侧对齐保存状态（mono caption）。
+- 标题 26px Sora + 左侧 4px 主色竖条；标题行右侧放**周期切换胶囊分段控件**（日/周/月/年，同设置页 tab 模式），Library 导航仍是入口。
+- meta 行：mono 周期范围（日报 `YYYY-MM-DD`，周报 `起 – 止 · W{ISO周数}`，月/年紧凑格式）+ **行内统计**（语义色 6px 圆点 + Sora 20px 数字 + caption 标签），不做 KPI 大数字卡堆叠。
+- 回顾列表（完成/结转/收集）**去卡片化**：eyebrow-rule + chevron 可折叠分节，信息行直接落在画布上；报告纸卡是页面唯一卡片。
 - 报告纸卡：`bg-elevated` + 1px 描边 + radius-xl + `--shadow` + 顶部 3px 主色渐变发丝线（`.report-paper`）。
-- 右侧日历/统计栏 320px，`bg-surface` + 左发丝线，是上下文不是主角。
+- 编辑器排版（`.report-doc`）：正文 14px/1.75；纸卡 padding 24/28/32；正文栏宽 680px（子元素限宽，编辑器点击区保持满宽）；h1 用 Display，h2/h3 用 Section 16/24（`--text-section`）；段距 0.45em，靠行高保持呼吸。
+- 右侧日历/统计栏 320px，`bg-surface` + 左发丝线，是上下文不是主角；日历与统计各配一条 eyebrow-rule 分组眉（往期 / 周期统计）。
+- **日历热力刻度**：日粒度用绝对刻度 `fill = 18% + 62% × min(n, 5) / 5`（完成 1 件 ≈ 30% 淡洗，5+ 饱和 80%）——选中日独享 100% 实心主色，热力日永不相撞；今天 = 热力底 + 主色描边环 + wrote 小点叠加。月/年粒度是聚合计数，保持相对归一化。
+- 移动端：上下文栏沉到正文之后（DOM 序即视觉序），书写面优先。
 
 ### 6.4 设置与搜索
 
@@ -202,6 +211,7 @@ Vital 的体验是 **Calm Productivity（安静而有行动力的效率）**：�
 
 - 组件**禁止直接引用 hex**；`@vital/tokens` 是唯一色彩来源。
 - `theme.ts`（TS/RN 端）与 `css/semantic.css`（Web CSS 变量）必须同步修改；`packages/tokens/__tests__` 锁定关键值。
+- 例外：字号刻度（`--text-caption/meta/body/section/title/display`）只存在于 `semantic.css`，`theme.ts` 无字号表，新增字号 token 只改 CSS 一处即可。
 - Web 端 Tailwind 映射在 `apps/web/src/styles/app.css` 的 `@theme` 块；语义工具类（`.eyebrow`、`.eyebrow-rule`、`.font-display`、`.report-paper`）也定义在这里。
 - 共享样式类集中在 `apps/web/src/ui/`：`FIELD_CONTROL_CLASS`、`FIELD_POPOVER_CLASS`、`Button` variant、`RAIL_NAV`/`railNavClass`。
 

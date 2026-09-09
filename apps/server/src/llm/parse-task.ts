@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { AppError } from '../errors.js';
 import { logger } from '../utils/logger.js';
 import { completeChat } from './client.js';
+import type { LlmParameters } from '@vital/dto';
 
 const OFFSETS = new Set<number>([5, 15, 30, 60, 1440]);
 
@@ -217,7 +218,10 @@ export function buildCreateInputFromIntent(
 }
 
 function weekdayZh(zone: string, now: Date): string {
-  return DateTime.fromJSDate(now).setZone(zone).setLocale('zh-CN').toFormat('yyyy-MM-dd cccc HH:mm');
+  return DateTime.fromJSDate(now)
+    .setZone(zone)
+    .setLocale('zh-CN')
+    .toFormat('yyyy-MM-dd cccc HH:mm');
 }
 
 function buildPrompt(input: {
@@ -244,13 +248,13 @@ function buildPrompt(input: {
     'someday：没有日期且用户表达"某天/以后/不着急"时 true，否则 false。',
     'reminder：none / due / 5 / 15 / 30 / 60 / 1440。有明确时刻的约会默认 15；全天任务默认 none；没提提醒则 none。',
     'recurrenceKind：daily weekly monthly yearly weekdays weekends holidays legal_workdays，否则 null。',
-    'listName 必须是给定清单之一，否则 null。tagNames 必须是已有标签，否则 []。',
+    'listName 必须是给定集合之一，否则 null。tagNames 必须是已有标签，否则 []。',
     '不要编造用户没说的截止日期。',
   ].join('');
   const user = [
     `现在是 ${weekdayZh(input.zone, input.now)}，时区 ${input.zone}。`,
     input.smartListId ? `当前视图 ${input.smartListId}。` : '',
-    lists !== '' ? `清单：${lists}。` : '清单：无。',
+    lists !== '' ? `集合：${lists}。` : '集合：无。',
     tags !== '' ? `标签：${tags}。` : '标签：无。',
     `用户说：${input.text}`,
   ]
@@ -264,6 +268,7 @@ export async function interpretTaskText(input: {
   apiBase: string;
   apiKey: string;
   model: string;
+  parameters?: LlmParameters;
   timezone: string;
   now: Date;
   lists: List[];
@@ -282,6 +287,7 @@ export async function interpretTaskText(input: {
     apiBase: input.apiBase,
     apiKey: input.apiKey,
     model: input.model,
+    ...(input.parameters !== undefined ? { parameters: input.parameters } : {}),
     json: true,
     messages: [
       { role: 'system', content: prompt.system },

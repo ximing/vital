@@ -18,7 +18,7 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
-import { attachments, inboxItems, type Attachment } from '../db/schema.js';
+import { attachments, inboxItems, lists, type Attachment } from '../db/schema.js';
 import { getOwnedReportOr404 } from '../reports/reports.service.js';
 import { AppError } from '../errors.js';
 import { currentStorageMeta, getStorage } from '../storage/factory.js';
@@ -228,6 +228,15 @@ export async function bindUpload(
     }
   } else if (input.ownerType === 'report') {
     await getOwnedReportOr404(userId, input.ownerId);
+  } else if (input.ownerType === 'list') {
+    const [owner] = await getDb()
+      .select({ id: lists.id, userId: lists.userId, kind: lists.kind })
+      .from(lists)
+      .where(eq(lists.id, input.ownerId))
+      .limit(1);
+    if (!owner || owner.userId !== userId || owner.kind !== 'user') {
+      throw AppError.of(404, 'LIST_NOT_FOUND');
+    }
   } else if (input.ownerId !== userId) {
     throw AppError.of(404, 'NOT_FOUND');
   }

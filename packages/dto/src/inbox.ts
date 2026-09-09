@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { uuidSchema } from './lists.js';
+import { tagIdsSchema } from './tags.js';
 import type { Task } from './tasks.js';
 
 /** Request-thread extract HTML cap (v1). */
@@ -52,6 +53,7 @@ export interface InboxItem {
   capturedAt: string;
   readAt: string | null;
   convertedTaskId: string | null;
+  tagIds: string[];
   assets: InboxAsset[];
   deletedAt: string | null;
   createdAt: string;
@@ -83,6 +85,7 @@ export const createInboxInputSchema = z.object({
   byline: z.string().trim().max(200).nullable().optional(),
   siteName: z.string().trim().max(200).nullable().optional(),
   source: inboxSourceSchema.optional(),
+  tagIds: tagIdsSchema.optional(),
 });
 export type CreateInboxInput = z.infer<typeof createInboxInputSchema>;
 
@@ -96,6 +99,7 @@ export const patchInboxInputSchema = z
     byline: z.string().trim().max(200).nullable().optional(),
     siteName: z.string().trim().max(200).nullable().optional(),
     readAt: z.string().datetime({ offset: true }).nullable().optional(),
+    tagIds: tagIdsSchema.optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',
@@ -129,6 +133,7 @@ export interface ConvertInboxResponse {
 
 export const listInboxQuerySchema = z.object({
   status: inboxStatusSchema.optional(),
+  tagId: uuidSchema.optional(),
   cursor: z.string().min(1).optional(),
   limit: z
     .string()

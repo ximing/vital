@@ -14,6 +14,7 @@ const task: Task = {
   notes: '',
   status: 'todo',
   priority: 3,
+  pinned: false,
   dueAt: '2026-09-08T01:00:00.000Z',
   startAt: null,
   reminderMode: 'none',

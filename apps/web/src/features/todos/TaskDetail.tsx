@@ -1,5 +1,5 @@
 import type { List, PatchTaskInput, Tag, Task } from '@vital/dto';
-import { Ellipsis, Folder, Plus, X } from 'lucide-react';
+import { Ellipsis, Folder, Pin, Plus, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { useAuth } from '@/services/auth.service';
@@ -7,7 +7,7 @@ import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { usePopover } from '@/ui/use-popover';
 import { NotesEditor } from './NotesEditor';
-import { addDaysYmd, inboxList, todayYmd, userLists } from './model';
+import { addDaysYmd, inboxList, listPickerRows, todayYmd } from './model';
 import { PriorityMenu } from './priority';
 import { draftFromTask, draftToPatch, scheduleDayPatch } from './schedule-draft';
 import { SchedulePopover } from './SchedulePopover';
@@ -94,8 +94,8 @@ export function TaskDetail({
 
   const schedule = draftFromTask(task, zone);
   const listOptions = [
-    ...(inbox ? [{ id: inbox.id, name: t.lists.inbox }] : []),
-    ...userLists(lists).map((list) => ({ id: list.id, name: list.name })),
+    ...(inbox ? [{ id: inbox.id, name: t.lists.inbox, depth: 0 }] : []),
+    ...listPickerRows(lists),
   ];
 
   return (
@@ -114,6 +114,19 @@ export function TaskDetail({
           onChange={(next) => onPatch(draftToPatch(next, zone))}
         />
         <div className="ml-auto flex items-center gap-1">
+          {movable ? (
+            <button
+              type="button"
+              aria-label={task.pinned ? t.todos.unpin : t.todos.pin}
+              aria-pressed={task.pinned}
+              onClick={() => onPatch({ pinned: !task.pinned })}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted ${
+                task.pinned ? 'text-accent' : 'text-muted hover:text-fg'
+              }`}
+            >
+              <Icon icon={Pin} size={15} fill={task.pinned ? 'currentColor' : 'none'} />
+            </button>
+          ) : null}
           <PriorityMenu value={task.priority} onChange={(priority) => onPatch({ priority })} />
           {movable ? (
             <ListPicker
@@ -306,7 +319,7 @@ function ListPicker({
   onChange,
 }: {
   value: string;
-  options: { id: string; name: string }[];
+  options: { id: string; name: string; depth?: number }[];
   onChange: (id: string) => void;
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -334,7 +347,7 @@ function ListPicker({
               role="menuitem"
               className={`flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] hover:bg-surface-muted ${
                 item.id === value ? 'text-fg' : 'text-muted'
-              }`}
+              } ${(item.depth ?? 0) > 0 ? 'pl-5' : ''}`}
               onClick={() => {
                 onChange(item.id);
                 popover.close();

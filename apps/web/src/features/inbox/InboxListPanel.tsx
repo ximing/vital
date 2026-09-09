@@ -1,7 +1,9 @@
+import type { InboxItem } from '@vital/dto';
 import { Plus } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
+import { useTagsQuery } from '@/features/todos/queries';
 import { humanError } from '@/lib/errors';
 import { useAuth } from '@/services/auth.service';
 import {
@@ -15,6 +17,7 @@ import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { usePopover } from '@/ui/use-popover';
 import { EmptyInbox, InboxSkeleton } from './EmptyInbox';
+import { InboxContextMenu } from './InboxContextMenu';
 import { PendingRow, SaveRow } from './InboxRow';
 import {
   canPatchStatus,
@@ -22,6 +25,7 @@ import {
   groupSavesByDay,
   nextFavoriteStatus,
   parseInboxFilter,
+  parseInboxTagId,
   PASTE_URL_ID,
 } from './model';
 import { useOnline } from './online';
@@ -95,9 +99,11 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const filter = parseInboxFilter(search.get('filter'));
+  const tagId = parseInboxTagId(search.get('tag'));
   const online = useOnline();
   const timeZone = useAuth((s) => s.user?.timezone) ?? 'UTC';
   const inboxQuery = useInboxListQuery();
+  const tags = useTagsQuery().data ?? [];
   const actions = useInboxActions();
   const pending = useInboxUi((s) => s.pending);
   const pasteNonce = useInboxUi((s) => s.pasteNonce);
@@ -107,6 +113,8 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
   const pastePopover = usePopover(pasteRef);
   const [pasteAnchor, setPasteAnchor] = useState<{ right: number; top: number } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [statusNote, setStatusNote] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ item: InboxItem; x: number; y: number } | null>(null);
 
   function openPaste(): void {
     const rect = pasteBtnRef.current?.getBoundingClientRect();
@@ -130,9 +138,11 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
   }, [preview]);
 
   const all = inboxQuery.data ?? [];
-  const items = filterSaves(all, filter);
-  const unreadCount = filterSaves(all, 'unread').length;
-  const totalCount = filterSaves(all, 'all').length;
+  const items = filterSaves(all, filter, tagId);
+  const unreadCount = filterSaves(all, 'unread', tagId).length;
+  const totalCount = filterSaves(all, 'all', tagId).length;
+  const activeTag = tags.find((tag) => tag.id === tagId);
+  const menuItem = menu ? (all.find((item) => item.id === menu.item.id) ?? menu.item) : null;
   const groups = groupSavesByDay(items, timeZone);
   const summary = `${totalCount} ${t.inbox.unit} · ${unreadCount} ${t.inbox.unread}`;
   const empty =
@@ -191,6 +201,7 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
         </div>
         <p className="mt-2 pl-4 font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums text-tertiary">
           {summary}
+          {activeTag ? ` · #${activeTag.name}` : ''}
         </p>
       </header>
 
@@ -207,6 +218,12 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
         <div className="mt-4 px-1">
           <Banner>{actionError}</Banner>
         </div>
+      ) : null}
+
+      {statusNote ? (
+        <p role="status" className="mt-3 px-3 text-[length:var(--text-meta)] text-muted">
+          {statusNote}
+        </p>
       ) : null}
 
       {inboxQuery.isLoading ? (
@@ -249,6 +266,7 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
                 <SaveRow
                   key={item.id}
                   item={item}
+                  tags={tags}
                   timeZone={timeZone}
                   selected={selectedId === item.id}
                   compact
@@ -262,12 +280,62 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
                       ? () => patchStatus(item.id, item.status === 'archived' ? 'unread' : 'archived')
                       : undefined
                   }
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setMenu({ item, x: event.clientX, y: event.clientY });
+                  }}
                 />
               ))}
             </div>
           ))}
         </div>
       )}
+      {menu && menuItem ? (
+        <InboxContextMenu
+          item={menuItem}
+          tags={tags}
+          x={menu.x}
+          y={menu.y}
+          disabled={!online}
+          onClose={() => setMenu(null)}
+          onOpen={() => navigate(`/inbox/${menuItem.id}`)}
+          onFavorite={() => patchStatus(menuItem.id, nextFavoriteStatus(menuItem))}
+          onArchive={() =>
+            patchStatus(menuItem.id, menuItem.status === 'archived' ? 'unread' : 'archived')
+          }
+          onConvert={() => {
+            setActionError(null);
+            void actions.convertKeepUrl(menuItem.id).catch((err) => {
+              setActionError(humanError(err));
+            });
+          }}
+          onCopyUrl={() => {
+            if (!menuItem.originalUrl) return;
+            void navigator.clipboard.writeText(menuItem.originalUrl).catch(() => {
+              // Clipboard unavailable.
+            });
+          }}
+          onAddToReport={() => setStatusNote(t.inbox.addToReportStub)}
+          onPatchTags={(tagIds) => {
+            setActionError(null);
+            void actions.patch.mutateAsync({ id: menuItem.id, input: { tagIds } }).catch((err) => {
+              setActionError(humanError(err));
+            });
+          }}
+          onCreateTag={(name) => actions.createTag.mutateAsync(name)}
+          onDelete={() => {
+            if (!window.confirm(t.inbox.deleteItemConfirm)) return;
+            void actions.remove
+              .mutateAsync(menuItem.id)
+              .then(() => {
+                if (selectedId === menuItem.id) navigate('/inbox');
+              })
+              .catch((err) => {
+                setActionError(humanError(err));
+              });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

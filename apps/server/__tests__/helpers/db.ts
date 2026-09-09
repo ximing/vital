@@ -5,6 +5,7 @@ import {
   extensionAuthCodes,
   holidayCalendar,
   inboxAssets,
+  inboxItemTags,
   inboxItems,
   lists,
   notificationChannels,
@@ -50,6 +51,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(notificationOutbox);
     await db.delete(notificationChannels);
     await db.delete(inboxAssets);
+    await db.delete(inboxItemTags);
     await db.delete(entityLinks);
     await db.delete(inboxItems);
     await db.delete(taskTags);
