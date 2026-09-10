@@ -8,6 +8,7 @@ import type {
 import { getDb } from '../db/index.js';
 import { agentMemory, agentMemoryHistory, users, AGENT_MEMORY_SCOPES, type AgentMemoryRow } from '../db/schema.js';
 import { AppError } from '../errors.js';
+import { indexMemory, removeMemoryIndex, trackIndexJob } from '../retrieval/pipeline.js';
 
 function toAgentMemoryDto(row: AgentMemoryRow): AgentMemoryItem {
   return {
@@ -68,6 +69,7 @@ export async function createAgentMemory(
     await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: row.id, revision: row.version, operation: 'manual.add', before: null, after: row, sourceFeedback: [], createdAt: row.createdAt });
     return row;
   });
+  trackIndexJob(indexMemory(row), 'indexMemory');
   return toAgentMemoryDto(row);
 }
 
@@ -90,14 +92,17 @@ export async function patchAgentMemory(
     await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: id, revision: updated.version, operation: 'manual.update', before: row, after: updated, sourceFeedback: [], createdAt: updated.updatedAt });
     return updated;
   });
+  trackIndexJob(indexMemory(updated), 'indexMemory');
   return toAgentMemoryDto(updated);
 }
 
 export async function deleteAgentMemory(userId: string, id: string): Promise<void> {
-  await getDb().transaction(async tx => {
+  const deleted = await getDb().transaction(async tx => {
     await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('no key update');
     const [row] = await tx.delete(agentMemory).where(and(eq(agentMemory.id, id), eq(agentMemory.userId, userId))).returning();
     if (!row) throw AppError.of(404, 'NOT_FOUND');
     await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: id, revision: row.version + 1, operation: 'manual.drop', before: row, after: null, sourceFeedback: [], createdAt: new Date() });
+    return row;
   });
+  trackIndexJob(removeMemoryIndex(deleted.id), 'removeMemoryIndex');
 }

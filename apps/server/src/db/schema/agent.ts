@@ -68,7 +68,7 @@ export const agentJobs = pgTable(
     index('idx_agent_jobs_user_type').on(t.userId, t.jobType),
     check(
       'agent_jobs_type_check',
-      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'memory.distill', 'habit.spawn', 'notify.scan')`,
+      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'memory.distill', 'habit.spawn', 'notify.scan', 'index.sync')`,
     ),
     check(
       'agent_jobs_status_check',

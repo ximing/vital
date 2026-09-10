@@ -74,6 +74,7 @@ import {
   type ExtractedTask,
 } from '../llm/parse-task.js';
 import { syncTaskNotifications } from '../notifications/outbox.js';
+import { indexTask, removeTaskIndex, trackTaskIndexJob } from '../retrieval/tasks.js';
 import { assertOwnedTagIds, listTags } from '../tags/tags.service.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import {
@@ -131,6 +132,26 @@ async function tagIdsByTask(taskIds: string[]): Promise<Map<string, string[]>> {
 async function dtoOf(row: TaskRow): Promise<Task> {
   const tags = await tagIdsByTask([row.id]);
   return toTaskDto(row, tags.get(row.id) ?? []);
+}
+
+/**
+ * Fire-and-forget retrieval indexing. PG stays the source of truth; index
+ * failures are logged, never thrown, and drift is healed by index.sync.
+ */
+function fireIndexTask(row: TaskRow): void {
+  trackTaskIndexJob(
+    indexTask(row).catch((err: unknown) => {
+      console.error('[retrieval] indexTask failed', err);
+    }),
+  );
+}
+
+function fireRemoveTaskIndex(taskId: string): void {
+  trackTaskIndexJob(
+    removeTaskIndex(taskId).catch((err: unknown) => {
+      console.error('[retrieval] removeTaskIndex failed', err);
+    }),
+  );
 }
 
 async function replaceTags(
@@ -448,6 +469,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
   });
   const [created] = await getDb().select().from(tasks).where(eq(tasks.id, row.id)).limit(1);
   if (!created) throw AppError.of(500, 'INTERNAL_ERROR');
+  fireIndexTask(created);
   return dtoOf(created);
 }
 
@@ -675,7 +697,9 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
       await enqueueTaskDecompose(tx, userId, task.id, now);
     }
   });
-  return dtoOf(await getOwnedTaskOr404(userId, id));
+  const updated = await getOwnedTaskOr404(userId, id);
+  fireIndexTask(updated);
+  return dtoOf(updated);
 }
 
 /**
@@ -711,6 +735,7 @@ export async function deleteTask(userId: string, id: string): Promise<void> {
   const task = await getOwnedTaskOr404(userId, id);
   const user = await getUserEntity(userId);
   const now = new Date();
+  const removedIds: string[] = [task.id];
   await getDb().transaction(async (tx) => {
     await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     if (task.parentId) {
@@ -723,6 +748,7 @@ export async function deleteTask(userId: string, id: string): Promise<void> {
       .select()
       .from(tasks)
       .where(and(eq(tasks.parentId, task.id), eq(tasks.userId, userId)));
+    removedIds.push(...children.map((child) => child.id));
     await tx
       .update(tasks)
       .set({ deletedAt: now, updatedAt: now })
@@ -733,12 +759,17 @@ export async function deleteTask(userId: string, id: string): Promise<void> {
     }
     if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
   });
+  for (const removedId of removedIds) fireRemoveTaskIndex(removedId);
 }
 
 export async function restoreTask(userId: string, id: string): Promise<Task> {
   const task = await getOwnedTaskOr404(userId, id, { includeDeleted: true });
   const user = await getUserEntity(userId);
   const now = new Date();
+  // Rows whose index entries were dropped on delete and must be re-indexed.
+  // Only deletedAt changes on restore, so the pre-update rows carry the
+  // correct payload fields (title/notes/status/...).
+  const restored: TaskRow[] = [task];
   await getDb().transaction(async (tx) => {
     await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     if (task.parentId) {
@@ -753,6 +784,7 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
       .where(
         and(eq(tasks.parentId, task.id), eq(tasks.userId, userId), isNotNull(tasks.deletedAt)),
       );
+    restored.push(...children);
     await tx
       .update(tasks)
       .set({ deletedAt: null, updatedAt: now })
@@ -768,6 +800,7 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
     }
     if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
   });
+  for (const row of restored) fireIndexTask(row);
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }
 
@@ -872,6 +905,7 @@ export async function completeTask(userId: string, id: string): Promise<Complete
   }
 
   const updated = await getOwnedTaskOr404(userId, id);
+  fireIndexTask(updated);
   const dto = await dtoOf(updated);
   // Habit relay: completing one count-habit instance spawns the next (rule layer).
   await spawnNextOnComplete(userId, dto, now);
@@ -940,7 +974,9 @@ export async function uncompleteTask(
     );
     if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
   });
-  return dtoOf(await getOwnedTaskOr404(userId, id));
+  const restored = await getOwnedTaskOr404(userId, id);
+  fireIndexTask(restored);
+  return dtoOf(restored);
 }
 
 export async function reorderTasks(userId: string, input: ReorderTasksInput): Promise<void> {

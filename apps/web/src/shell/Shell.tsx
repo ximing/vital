@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation } from 'react-router';
 import { HOME_PATH, TODOS_HOME_PATH, t } from '@/copy';
 import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
+import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
 import { AccountMenu } from '@/shell/AccountMenu';
 import { loadPaneWidth, RAIL_WIDTH, savePaneWidth, type PaneSection } from '@/shell/chrome';
 import { SecondaryPane } from '@/shell/SecondaryPane';
@@ -18,7 +19,6 @@ const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[]
   { id: 'todos', to: TODOS_HOME_PATH, icon: CheckSquare, label: t.rail.todos },
   { id: 'capture', to: '/inbox', icon: BookOpen, label: t.rail.capture },
   { id: 'reflect', to: '/reports', icon: Calendar, label: t.rail.reflect },
-  { id: 'search', to: '/search', icon: Search, label: t.nav.search },
 ];
 
 function railItemClass(active: boolean): string {
@@ -68,6 +68,16 @@ export function Shell() {
               </NavLink>
             );
           })}
+          {/* 全局快搜入口：打开命令面板（任务/线程/收集箱分组结果）。 */}
+          <button
+            type="button"
+            title={t.nav.searchHint}
+            aria-label={t.nav.search}
+            className={railItemClass(false)}
+            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT))}
+          >
+            <Icon icon={Search} className="shrink-0" />
+          </button>
         </nav>
 
         <div

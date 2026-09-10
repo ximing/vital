@@ -35,3 +35,42 @@ export interface SearchResponse {
   items: SearchHit[];
   nextCursor: string | null;
 }
+
+/* ------------------------------------------------------------------------
+ * Meilisearch 全局快搜（GET /api/v1/search）：跨 任务/线程/收集箱 分组返回精简命中。
+ * --------------------------------------------------------------------- */
+
+export const searchAllQuerySchema = z.object({
+  q: z.string().trim().min(1).max(100),
+  limit: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined ? 5 : Number(value)))
+    .pipe(z.number().int().min(1).max(20)),
+});
+export type SearchAllQuery = z.infer<typeof searchAllQuerySchema>;
+
+export interface SearchResultTask {
+  id: string;
+  listId: string;
+  title: string;
+  status: string;
+}
+
+export interface SearchResultOutcome {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export interface SearchResultInbox {
+  id: string;
+  title: string;
+  excerpt: string | null;
+}
+
+export interface SearchResults {
+  tasks: SearchResultTask[];
+  outcomes: SearchResultOutcome[];
+  inbox: SearchResultInbox[];
+}

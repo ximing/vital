@@ -57,6 +57,7 @@ export async function runAgentScheduler(now = new Date()): Promise<number> {
         const notifySlot = zoned.startOf('minute').minus({ minutes: zoned.minute % 30 }).toFormat('yyyyLLddHHmm');
         await enqueueAgentJobOnce(db, { userId, jobType: 'notify.scan', payload: { date: day }, dedupKey: `notify.scan:${userId}:${notifySlot}`, scheduledAt: now });
         await enqueueAgentJobOnce(db, { userId, jobType: 'reflect.daily', payload: { date: day }, dedupKey: `reflect.daily:${userId}:${day}`, scheduledAt: now });
+        await enqueueAgentJobOnce(db, { userId, jobType: 'index.sync', payload: { date: day }, dedupKey: `index.sync:${userId}:${day}`, scheduledAt: now });
         await spawnDailyHabits(userId, user.timezone, now);
         scheduled += 1;
       }

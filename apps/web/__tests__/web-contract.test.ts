@@ -108,12 +108,14 @@ describe('web shell contract', () => {
     expect(app).not.toContain('LibraryPage');
     const shell = read('src/shell/Shell.tsx');
     expect(shell).toContain('CommandPalette');
-    expect(shell).toContain('/search');
+    // 侧栏搜索入口是打开命令面板的按钮（/search 页面仍在，由面板命令进入）。
+    expect(shell).toContain('OPEN_PALETTE_EVENT');
     expect(shell).not.toContain('to="/library"');
     expect(shell).not.toContain('即将推出');
     const palette = read('src/features/palette/model.ts');
     expect(palette).toContain('isPaletteToggle');
     expect(palette).toContain("event.key === 'k'");
+    expect(palette).toContain('searchResultsToItems');
     const search = read('src/features/search/SearchPage.tsx');
     expect(search).toContain('.search({ q, limit: 20 })');
     const copy = read('src/copy.ts');

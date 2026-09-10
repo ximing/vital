@@ -15,7 +15,9 @@ import {
   tasks,
   users,
   type AgentJobRow,
+  type AgentMemoryRow,
   type AgentMemoryScope,
+  type TaskRow,
   type User,
 } from '../db/schema.js';
 import { isOverdue, needsDecomposition } from '../outcomes/rule-engine.js';
@@ -26,9 +28,16 @@ import {
   buildDraftPrompt,
   buildHeadlinePrompt,
   type DistillActionFact,
+  type SimilarTaskExample,
 } from './prompts.js';
 import { loadAgentMemory, runProposalPass, runWithCritic } from './harness.js';
 import { enqueueOutcomeRefresh, UnknownAgentJobTypeError } from './jobs.js';
+import { getRetrievalClients } from '../retrieval/registry.js';
+import {
+  groupTasksBySimilarity,
+  searchSimilarTasks,
+  TASKS_COLLECTION,
+} from '../retrieval/tasks.js';
 import {
   proposeSubtasksTool,
   proposeThreadsTool,
@@ -45,6 +54,10 @@ import {
 } from './tools.js';
 import { executionResult, skipExecution, withExecution } from './executions.service.js';
 import { enqueueProactiveInsights } from '../notifications/insights.js';
+import { indexMemory, removeMemoryIndex, trackIndexJob } from '../retrieval/pipeline.js';
+import { memorySimilarityPairs } from '../retrieval/dedup.js';
+import { syncUserIndexes } from '../retrieval/sync.js';
+import { syncSearchIndexes } from '../retrieval/search.js';
 
 export type AgentJobResult = 'done' | 'skipped:no-llm';
 
@@ -109,7 +122,7 @@ async function processOutcomeRefresh(
       ),
     );
 
-  const memory = await loadAgentMemory(user.id, 'headline');
+  const memory = await loadAgentMemory(user.id, 'headline', outcome.name);
   executionResult({ inputSummary: `仅当前用户：线程内 ${String(openTasks.length)} 项未完成任务，${String(memory.length)} 条记忆` });
   const prompt = buildHeadlinePrompt({
     outcomeName: outcome.name,
@@ -183,6 +196,86 @@ async function processOutcomeRefresh(
   return 'done';
 }
 
+/**
+ * Vector pre-grouping hint for outcome.cluster: scroll this user's task
+ * vectors, keep the unassigned ones (cluster only ever groups unassigned
+ * tasks — the payload's outcomeId is null for them, so filtering happens
+ * in-process), and greedily group by cosine similarity. The LLM still owns
+ * naming and the final grouping. Any failure degrades to no hint.
+ */
+async function suggestClusterGroups(
+  userId: string,
+  unassigned: { id: string; title: string }[],
+): Promise<string[][] | undefined> {
+  try {
+    const { qdrant } = getRetrievalClients();
+    if (!qdrant) return undefined;
+    const points = await qdrant.scrollPoints(
+      TASKS_COLLECTION,
+      { must: [{ key: 'userId', match: { value: userId } }] },
+      { withVector: true },
+    );
+    const vectorById = new Map<string, number[]>();
+    for (const point of points) {
+      if (point.vector) vectorById.set(String(point.id), point.vector);
+    }
+    const ordered = unassigned.flatMap((task) => {
+      const vector = vectorById.get(task.id);
+      return vector ? [{ id: task.id, vector }] : [];
+    });
+    if (ordered.length < 2) return undefined;
+    const titleById = new Map(unassigned.map((task) => [task.id, task.title]));
+    const groups = groupTasksBySimilarity(ordered)
+      .filter((ids) => ids.length >= 2)
+      .map((ids) => ids.map((id) => titleById.get(id) ?? id));
+    return groups.length > 0 ? groups : undefined;
+  } catch (err) {
+    console.error('[retrieval] cluster pre-grouping failed', err);
+    return undefined;
+  }
+}
+
+/**
+ * Similar completed tasks (plus their subtask structure) as reference
+ * examples for decompose/draft prompts. Any failure degrades to no examples.
+ */
+async function findSimilarTaskExamples(
+  userId: string,
+  task: TaskRow,
+): Promise<SimilarTaskExample[] | undefined> {
+  try {
+    const similar = await searchSimilarTasks({
+      userId,
+      query: task.title,
+      excludeId: task.id,
+      status: 'done',
+      limit: 5,
+    });
+    if (!similar || similar.length === 0) return undefined;
+    const db = getDb();
+    const children = await db
+      .select({ parentId: tasks.parentId, title: tasks.title })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.userId, userId),
+          inArray(
+            tasks.parentId,
+            similar.map((hit) => hit.id),
+          ),
+          isNull(tasks.deletedAt),
+        ),
+      );
+    return similar.map((hit) => ({
+      title: hit.title,
+      subtasks: children.filter((child) => child.parentId === hit.id).map((child) => child.title),
+    }));
+  } catch (err) {
+    console.error('[retrieval] similar task search failed', err);
+    return undefined;
+  }
+}
+
 async function processOutcomeCluster(
   job: AgentJobRow,
   user: User,
@@ -215,10 +308,12 @@ async function processOutcomeCluster(
     .from(outcomes)
     .where(and(eq(outcomes.userId, user.id), eq(outcomes.status, 'open')));
   const memory = await loadAgentMemory(user.id, 'cluster');
+  const suggestedGroups = await suggestClusterGroups(user.id, unassigned);
   const prompt = buildClusterPrompt({
     existingNames: existing.map((o) => o.name),
     unassignedTasks: unassigned.map((t) => ({ id: t.id, title: t.title, dueAt: iso(t.dueAt) })),
     memory: memory.map((m) => m.content),
+    ...(suggestedGroups ? { suggestedGroups } : {}),
   });
 
   const result = await runWithCritic<ProposeThreadsArgs>({
@@ -346,7 +441,12 @@ async function processTaskDecompose(
     .select({ title: tasks.title })
     .from(tasks)
     .where(and(eq(tasks.userId, user.id), eq(tasks.parentId, taskId), isNull(tasks.deletedAt)));
-  const memory = await loadAgentMemory(user.id, 'decompose');
+  const memory = await loadAgentMemory(
+    user.id,
+    'decompose',
+    task.title + (task.notesMd ? '\n' + task.notesMd.slice(0, 200) : ''),
+  );
+  const similarExamples = await findSimilarTaskExamples(user.id, task);
   executionResult({ inputSummary: `仅当前用户：当前任务、${String(subtasks.length)} 项子任务、${String(memory.length)} 条记忆` });
   const prompt = buildDecomposePrompt({
     taskTitle: task.title,
@@ -355,6 +455,7 @@ async function processTaskDecompose(
     estimateMinutes: task.estimateMinutes,
     existingSubtasks: subtasks.map((s) => s.title),
     memory: memory.map((m) => m.content),
+    ...(similarExamples ? { similarExamples } : {}),
   });
 
   const result = await runWithCritic<ProposeSubtasksArgs>({
@@ -444,7 +545,8 @@ async function processTaskDraft(
     .select({ title: tasks.title })
     .from(tasks)
     .where(and(eq(tasks.userId, user.id), eq(tasks.parentId, taskId), isNull(tasks.deletedAt)));
-  const memory = await loadAgentMemory(user.id, 'draft');
+  const memory = await loadAgentMemory(user.id, 'draft', task.title);
+  const similarExamples = await findSimilarTaskExamples(user.id, task);
   executionResult({ inputSummary: `仅当前用户：当前任务、${String(subtasks.length)} 项子任务、${String(memory.length)} 条记忆` });
   const prompt = buildDraftPrompt({
     taskTitle: task.title,
@@ -454,6 +556,7 @@ async function processTaskDraft(
     estimateMinutes: task.estimateMinutes,
     existingSubtasks: subtasks.map((s) => s.title),
     memory: memory.map((m) => m.content),
+    ...(similarExamples ? { similarExamples } : {}),
   });
 
   const result = await runWithCritic<SubmitDraftArgs>({
@@ -550,12 +653,32 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
   const recent = candidates;
   executionResult({ inputSummary: `仅当前用户：${String(recent.length)} 条新反馈，${String(existing.length)} 条记忆` });
   const facts: DistillActionFact[] = recent.map(a => ({ actionType: a.actionType, feedback: a.feedback, summary: JSON.stringify(a.payload).slice(0, 200), editedSummary: a.feedbackPayload ? JSON.stringify(a.feedbackPayload).slice(0, 200) : null }));
-  const prompt = buildDistillPrompt({ actions: facts, existingMemory: existing, mode: maintenance ? 'maintenance' : 'incremental' });
+  // Semantic dedup hint: near-duplicate existing memories are annotated in the
+  // prompt so the model prefers update-merges over new adds. Best-effort — any
+  // retrieval failure (or missing Qdrant) leaves the prompt as before.
+  let similarPairs: [string, string][] | null = null;
+  try {
+    similarPairs = await memorySimilarityPairs(user.id);
+  } catch (err) {
+    console.error('[retrieval] memory.distill memorySimilarityPairs failed', err);
+  }
+  let similarPairsHint: [string, string][] | undefined;
+  if (similarPairs && similarPairs.length > 0) {
+    const existingIds = new Set(existing.map(m => m.id));
+    // Index lag defense: drop pairs referencing ids no longer in PG.
+    const fresh = similarPairs.filter(([a, b]) => existingIds.has(a) && existingIds.has(b));
+    if (fresh.length > 0) similarPairsHint = fresh;
+  }
+  const prompt = buildDistillPrompt({ actions: facts, existingMemory: existing, mode: maintenance ? 'maintenance' : 'incremental', ...(similarPairsHint ? { similarPairs: similarPairsHint } : {}) });
   const result = await runProposalPass<SubmitMemoriesArgs>({ user, capability: 'agent.distill', systemPrompt: prompt.system, userPrompt: prompt.user, makeTool: submitMemoriesTool });
   if (!result) return 'skipped:no-llm';
   const updates = (result.args.update ?? []).map(u => ({ id: u.id, content: u.content.trim(), scope: sanitizeScope(u.scope) })).filter(u => u.content !== '');
   const adds = (result.args.add ?? []).map(a => ({ kind: a.kind, content: a.content.trim(), scope: sanitizeScope(a.scope) })).filter(a => a.content !== '').slice(0, 5);
   const drops = new Set(result.args.drop ?? []);
+  // Rows whose derived index entries change in the distill transaction;
+  // reindexed fire-and-forget after commit (never inside, never blocking).
+  const indexUpserts: AgentMemoryRow[] = [];
+  const indexRemovals: string[] = [];
   const counts = await withAgentJobEffects(job, async tx => {
     // Serialize governance against other runs and user memory edits; abort stale
     // proposals instead of overwriting changes made during model latency.
@@ -583,17 +706,17 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
       const scope = u.scope ?? before.scope;
       if (before.content === u.content && JSON.stringify(before.scope) === JSON.stringify(scope)) continue;
       const [after] = await tx.update(agentMemory).set({ content: u.content, scope, version: before.version + 1, sourceCount: before.sourceCount + sources.length, updatedAt: now }).where(and(eq(agentMemory.userId, user.id), eq(agentMemory.id, u.id), eq(agentMemory.manual, false))).returning();
-      if (after) { counts.updated++; await history('update', before, after); Object.assign(before, after); }
+      if (after) { counts.updated++; await history('update', before, after); Object.assign(before, after); indexUpserts.push(after); }
     }
     for (const before of current.filter(m => !m.manual && drops.has(m.id))) {
       const removed = await tx.delete(agentMemory).where(and(eq(agentMemory.userId, user.id), eq(agentMemory.id, before.id), eq(agentMemory.manual, false))).returning();
-      if (removed.length) { counts.deleted++; await history('drop', before, null); }
+      if (removed.length) { counts.deleted++; await history('drop', before, null); indexRemovals.push(before.id); }
     }
     for (const a of adds) {
       const duplicate = current.some(m => !drops.has(m.id) && m.content === a.content && m.kind === a.kind);
       if (duplicate) continue;
       const [after] = await tx.insert(agentMemory).values({ id: randomUUID(), userId: user.id, kind: a.kind, content: a.content, sourceCount: sources.length, scope: a.scope ?? ['all'], createdAt: now, updatedAt: now }).returning();
-      if (after) { counts.added++; await history('add', null, after); current.push(after); }
+      if (after) { counts.added++; await history('add', null, after); current.push(after); indexUpserts.push(after); }
     }
     const all = await tx.select().from(agentMemory).where(eq(agentMemory.userId, user.id)).orderBy(asc(agentMemory.createdAt), asc(agentMemory.id));
     let over = all.length - MEMORY_TOTAL_LIMIT;
@@ -601,13 +724,33 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
       if (over <= 0) break;
       if (before.manual) continue;
       const removed = await tx.delete(agentMemory).where(and(eq(agentMemory.userId, user.id), eq(agentMemory.id, before.id), eq(agentMemory.manual, false))).returning();
-      if (removed.length) { over--; counts.deleted++; await history('evict', before, null); }
+      if (removed.length) { over--; counts.deleted++; await history('evict', before, null); indexRemovals.push(before.id); }
     }
     const final = await tx.select().from(agentMemory).where(eq(agentMemory.userId, user.id));
     if (maintenance) await tx.insert(agentMemoryMaintenance).values({ userId: user.id, fingerprint: memoryFingerprint(final), updatedAt: now }).onConflictDoUpdate({ target: agentMemoryMaintenance.userId, set: { fingerprint: memoryFingerprint(final), updatedAt: now } });
     if (!maintenance && 'scheduleGeneration' in job.payload && typeof job.payload.scheduleGeneration === 'number') await finishAgentSchedule(tx, user.id, 'memory.distill', job.payload.scheduleGeneration, now);
     return counts;
   });
+  // Fire-and-forget reindex after commit. Sequential (upserts before removals)
+  // so a row updated then evicted in the same run ends up removed; per-item
+  // failures are logged without failing the batch, and index.sync heals drift.
+  if (indexUpserts.length > 0 || indexRemovals.length > 0) {
+    trackIndexJob(
+      (async () => {
+        for (const row of indexUpserts) {
+          await indexMemory(row).catch((err: unknown) => {
+            console.error('[retrieval] memory.distill indexMemory failed', err);
+          });
+        }
+        for (const id of indexRemovals) {
+          await removeMemoryIndex(id).catch((err: unknown) => {
+            console.error('[retrieval] memory.distill removeMemoryIndex failed', err);
+          });
+        }
+      })(),
+      'memory.distill reindex',
+    );
+  }
   executionResult({ resultSummary: `记忆整理：新增 ${String(counts.added)}，更新 ${String(counts.updated)}，删除 ${String(counts.deleted)}` });
   if (counts.added + counts.updated + counts.deleted === 0) skipExecution('NO_CHANGES');
   return 'done';
@@ -623,6 +766,31 @@ export async function processAgentJob(job: AgentJobRow, now: Date): Promise<Agen
     if (result === 'skipped:no-llm') skipExecution('NO_MODEL');
     return result;
   });
+}
+
+/**
+ * Healing job: rebuilds the user's derived indexes from PG and prunes stale
+ * ids. External-service failures are retryable — a half-finished sync must
+ * back off and retry, never report done.
+ */
+async function processIndexSync(
+  _job: AgentJobRow,
+  user: User,
+  _now: Date,
+): Promise<AgentJobResult> {
+  let stats: Awaited<ReturnType<typeof syncUserIndexes>>;
+  let searchStats: Awaited<ReturnType<typeof syncSearchIndexes>>;
+  try {
+    stats = await syncUserIndexes(user.id);
+    searchStats = await syncSearchIndexes(user.id);
+  } catch (err) {
+    throw new RetryableAgentJobError('index.sync failed', { cause: err });
+  }
+  executionResult({
+    resultSummary: `同步记忆 ${String(stats.memories)} 条、任务 ${String(stats.tasks)} 条、线程 ${String(searchStats.outcomes)} 条、收集箱 ${String(searchStats.inbox)} 条，清理 ${String(stats.removed + searchStats.removed)} 条`,
+    inputSummary: '仅当前用户的记忆、任务、线程与收集箱索引全量对齐',
+  });
+  return 'done';
 }
 
 async function processAgentJobInner(job: AgentJobRow, now: Date): Promise<AgentJobResult> {
@@ -641,9 +809,11 @@ async function processAgentJobInner(job: AgentJobRow, now: Date): Promise<AgentJ
       return processReflectDaily(job, user, now);
     case 'memory.distill':
       return processMemoryDistill(job, user, now);
+    case 'index.sync':
+      return processIndexSync(job, user, now);
     case 'notify.scan': {
       const inserted = await enqueueProactiveInsights(user, now, async (item) => {
-        const memory = await loadAgentMemory(user.id, 'notify');
+        const memory = await loadAgentMemory(user.id, 'notify', item.message);
         const result = await runProposalPass<SubmitNotificationArgs>({ user, capability: 'agent.notify', systemPrompt: '你为个人任务系统写一句简短、温和、可行动的手机提醒。不得添加事实。必须调用 submit_notification。', userPrompt: `规则提醒：${item.message}\n长期偏好：${memory.map((m) => m.content).join('；')}`, makeTool: submitNotificationTool });
         if (!result) return null;
         return result.args.message;

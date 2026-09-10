@@ -1,7 +1,14 @@
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
 
-loadEnv({ path: [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'] });
+// Test runs load only .env.test: falling back to the dev .env would leak real
+// service credentials (Qdrant/Meili/DashScope) into the test environment.
+loadEnv({
+  path:
+    process.env.NODE_ENV === 'test'
+      ? ['.env.test']
+      : [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'],
+});
 
 const boolEnum = z.enum(['true', 'false']).transform((value) => value === 'true');
 
@@ -61,6 +68,23 @@ export const envSchema = z.object({
   AGENT_SCHEDULER_INTERVAL_MS: z.coerce.number().int().min(10_000).default(30_000),
   AGENT_UNDO_WINDOW_HOURS: z.coerce.number().int().min(1).default(24),
   AGENT_CLUSTER_MIN_UNASSIGNED: z.coerce.number().int().min(1).default(4),
+  // Retrieval infrastructure (embedding / rerank / Qdrant / Meilisearch). All
+  // optional: missing pieces degrade the matching capability to null clients.
+  DASHSCOPE_API_KEY: z.string().min(1).optional(),
+  DASHSCOPE_BASE_URL: z.string().url().default('https://dashscope.aliyuncs.com/api/v1'),
+  EMBEDDING_MODEL: z.string().min(1).default('qwen3-vl-embedding'),
+  EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(2560),
+  RERANK_MODEL: z.string().min(1).default('qwen3.7-text-rerank'),
+  QDRANT_URL: z.string().url().optional(),
+  QDRANT_API_KEY: z.string().min(1).optional(),
+  MEILI_URL: z.string().url().optional(),
+  MEILI_ADMIN_KEY: z.string().min(1).optional(),
+  // Isolates Qdrant collections / Meili indexes on a shared cluster.
+  // Unset → development=dev, production=prod, test=test.
+  RETRIEVAL_NAMESPACE: z
+    .string()
+    .regex(/^[a-z][a-z0-9]{0,31}$/)
+    .optional(),
 });
 
 export const config = envSchema.parse(process.env);

@@ -28,6 +28,8 @@ import {
 import { AppError } from '../errors.js';
 import { getUserEntity } from '../auth/auth.service.js';
 import { summarizePayload, targetNamesFor, toAgentActionDto } from '../agent/actions.service.js';
+import { trackIndexJob } from '../retrieval/pipeline.js';
+import { indexOutcome, removeOutcomeIndex } from '../retrieval/search.js';
 import { listTasks } from '../tasks/tasks.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 import { computeNow } from './now-engine.js';
@@ -179,6 +181,7 @@ export async function createOutcome(userId: string, input: CreateOutcomeInput): 
     })
     .returning();
   if (!row) throw AppError.of(404, 'NOT_FOUND');
+  trackIndexJob(indexOutcome(row), 'indexOutcome');
   return toOutcomeDto(row);
 }
 
@@ -214,6 +217,7 @@ export async function patchOutcome(
   }
   const stats = await statsForOutcomes(userId, [id]);
   if (!next) throw AppError.of(404, 'NOT_FOUND');
+  trackIndexJob(indexOutcome(next), 'indexOutcome');
   return toOutcomeDto(next, stats.get(id));
 }
 
@@ -226,6 +230,7 @@ export async function closeOutcome(userId: string, id: string): Promise<Outcome>
     .where(and(eq(outcomes.id, id), eq(outcomes.status, 'open')))
     .returning();
   const final = row ?? (await getOwnedOutcomeOr404(userId, id));
+  trackIndexJob(indexOutcome(final), 'indexOutcome');
   return toOutcomeDto(final);
 }
 
@@ -237,6 +242,7 @@ export async function reopenOutcome(userId: string, id: string): Promise<Outcome
     .where(and(eq(outcomes.id, id), eq(outcomes.status, 'closed')))
     .returning();
   const final = row ?? (await getOwnedOutcomeOr404(userId, id));
+  trackIndexJob(indexOutcome(final), 'indexOutcome');
   return toOutcomeDto(final);
 }
 
@@ -268,6 +274,7 @@ export async function undoOutcome(userId: string, id: string): Promise<void> {
       );
     await tx.delete(outcomes).where(eq(outcomes.id, id));
   });
+  trackIndexJob(removeOutcomeIndex(id), 'removeOutcomeIndex');
 }
 
 /** Hard cap for the detail timeline — mirrors the actions listing. */

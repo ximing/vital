@@ -27,6 +27,8 @@ import {
 import { AppError } from '../errors.js';
 import { getInboxList } from '../lists/lists.service.js';
 import { assertOwnedOutcomeId } from '../outcomes/shared.js';
+import { trackIndexJob } from '../retrieval/pipeline.js';
+import { indexInboxItem, removeInboxItemIndex } from '../retrieval/search.js';
 import { assertOwnedTagIds } from '../tags/tags.service.js';
 import { createTask, getTask } from '../tasks/tasks.service.js';
 import { bindUpload } from '../uploads/uploads.service.js';
@@ -308,11 +310,13 @@ export async function createInbox(
   if (key === null) {
     await getDb().insert(inboxItems).values(row);
     if (input.tagIds !== undefined) await replaceInboxTags(id, input.tagIds);
-    const created = await dtoOf(await getOwnedInboxOr404(userId, id));
+    const stored = await getOwnedInboxOr404(userId, id);
+    trackIndexJob(indexInboxItem(stored), 'indexInboxItem');
+    const created = await dtoOf(stored);
     return { status: 201, item: created };
   }
 
-  return getDb().transaction(async (tx) => {
+  const { createdRow, ...result } = await getDb().transaction(async (tx) => {
     await tx
       .insert(inboxItems)
       .values(row)
@@ -331,12 +335,13 @@ export async function createInbox(
       if (replay && isInboxItemBody(replay.body)) {
         const body = replay.body;
         return {
-          status: 200,
+          status: 200 as const,
           item: { ...body, tagIds: Array.isArray(body.tagIds) ? body.tagIds : [] },
+          createdRow: null,
         };
       }
       const current = await dtoOf(stored);
-      return { status: 200, item: current };
+      return { status: 200 as const, item: current, createdRow: null };
     }
     if (input.tagIds !== undefined) await replaceInboxTags(stored.id, input.tagIds, tx);
     const created = toInboxDto(stored, [], input.tagIds ?? []);
@@ -345,8 +350,12 @@ export async function createInbox(
       .update(inboxItems)
       .set({ idempotencyResponse: payload })
       .where(eq(inboxItems.id, stored.id));
-    return { status: 201, item: created };
+    return { status: 201 as const, item: created, createdRow: stored };
   });
+  if (createdRow !== null) {
+    trackIndexJob(indexInboxItem(createdRow), 'indexInboxItem');
+  }
+  return result;
 }
 
 export async function patchInbox(
@@ -375,7 +384,9 @@ export async function patchInbox(
   }
   await getDb().update(inboxItems).set(patch).where(eq(inboxItems.id, row.id));
   if (input.tagIds !== undefined) await replaceInboxTags(row.id, input.tagIds);
-  return dtoOf(await getOwnedInboxOr404(userId, id));
+  const fresh = await getOwnedInboxOr404(userId, id);
+  trackIndexJob(indexInboxItem(fresh), 'indexInboxItem');
+  return dtoOf(fresh);
 }
 
 export async function deleteInbox(userId: string, id: string): Promise<void> {
@@ -385,6 +396,7 @@ export async function deleteInbox(userId: string, id: string): Promise<void> {
     .update(inboxItems)
     .set({ deletedAt: now, updatedAt: now })
     .where(eq(inboxItems.id, row.id));
+  trackIndexJob(removeInboxItemIndex(id), 'removeInboxItemIndex');
 }
 
 function isImageMime(mime: string): boolean {
@@ -493,5 +505,6 @@ export async function convertInbox(
       .where(eq(inboxItems.id, item.id));
   });
   const updated = await getOwnedInboxOr404(userId, id);
+  trackIndexJob(indexInboxItem(updated), 'indexInboxItem');
   return { created: true, result: { inbox: await dtoOf(updated), task } };
 }

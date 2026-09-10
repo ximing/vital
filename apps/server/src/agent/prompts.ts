@@ -70,6 +70,8 @@ export function buildClusterPrompt(input: {
   existingNames: string[];
   unassignedTasks: ClusterTaskFact[];
   memory: string[];
+  /** Vector pre-grouping hint: groups of task titles that are semantically close. */
+  suggestedGroups?: string[][];
 }): PromptPair {
   const system = [
     '你是个人目标看板的线程组织者。把未挂载的任务按「同一件事/同一个目标」聚成 1-5 个线程，为每个线程起短名（≤20 字）并写一句话状态。',
@@ -84,6 +86,9 @@ export function buildClusterPrompt(input: {
   const user = [
     `已有线程：<data>${input.existingNames.length > 0 ? input.existingNames.join('、') : '（无）'}</data>`,
     `未挂载任务：\n<data>\n${tasks}\n</data>`,
+    input.suggestedGroups && input.suggestedGroups.length > 0
+      ? `以下任务语义接近，可作为分组参考（最终分组与命名仍由你决定）：\n<data>\n${input.suggestedGroups.map((group, i) => `- 组${String(i + 1)}：${group.join('、')}`).join('\n')}\n</data>`
+      : '',
     input.memory.length > 0
       ? `从用户纠偏中学到的偏好（参考）：\n<data>\n${input.memory.map((m) => `- ${m}`).join('\n')}\n</data>`
       : '',
@@ -93,6 +98,23 @@ export function buildClusterPrompt(input: {
   return { system, user };
 }
 
+/** A completed task similar to the one at hand, with its subtask structure. */
+export interface SimilarTaskExample {
+  title: string;
+  subtasks: string[];
+}
+
+function renderSimilarExamples(examples: SimilarTaskExample[]): string {
+  return examples
+    .map(
+      (example) =>
+        `- 「${example.title}」${
+          example.subtasks.length > 0 ? `的子任务：${example.subtasks.join('；')}` : ''
+        }`,
+    )
+    .join('\n');
+}
+
 export function buildDecomposePrompt(input: {
   taskTitle: string;
   notes: string;
@@ -100,6 +122,8 @@ export function buildDecomposePrompt(input: {
   estimateMinutes: number | null;
   existingSubtasks: string[];
   memory: string[];
+  /** Similar completed tasks with their subtask splits, as reference examples. */
+  similarExamples?: SimilarTaskExample[];
 }): PromptPair {
   const system = [
     '你是任务拆解助手。一个任务被反复推迟，通常说明它太大或第一步不清晰。把它拆成 2-10 个可在一次专注内完成的子任务，每个给出标题和预估分钟数。',
@@ -114,6 +138,9 @@ export function buildDecomposePrompt(input: {
     `已推迟 ${String(input.deferCount)} 次${input.estimateMinutes ? `；预估 ${String(input.estimateMinutes)} 分钟` : ''}。`,
     input.existingSubtasks.length > 0
       ? `已有子任务：\n<data>\n${input.existingSubtasks.map((t) => `- ${t}`).join('\n')}\n</data>`
+      : '',
+    input.similarExamples && input.similarExamples.length > 0
+      ? `相似历史任务及其拆解结构（参考示例，不要照抄）：\n<data>\n${renderSimilarExamples(input.similarExamples)}\n</data>`
       : '',
     input.memory.length > 0
       ? `从用户纠偏中学到的偏好（参考）：\n<data>\n${input.memory.map((m) => `- ${m}`).join('\n')}\n</data>`
@@ -132,6 +159,8 @@ export function buildDraftPrompt(input: {
   estimateMinutes: number | null;
   existingSubtasks: string[];
   memory: string[];
+  /** Similar completed tasks with their subtask splits, as reference examples. */
+  similarExamples?: SimilarTaskExample[];
 }): PromptPair {
   const system = [
     '你是执行方案起草助手。用户把一个任务标记为「可交给 Agent」，为它起草一份可执行方案（draft）：先做什么、后做什么、需要准备的材料和容易卡住的点。用中文分点列出，≤500 字。',
@@ -147,6 +176,9 @@ export function buildDraftPrompt(input: {
     input.estimateMinutes !== null ? `预估 ${String(input.estimateMinutes)} 分钟。` : '',
     input.existingSubtasks.length > 0
       ? `已有子任务（不要重复）：\n<data>\n${input.existingSubtasks.map((t) => `- ${t}`).join('\n')}\n</data>`
+      : '',
+    input.similarExamples && input.similarExamples.length > 0
+      ? `相似历史任务及其拆解结构（参考示例，不要照抄）：\n<data>\n${renderSimilarExamples(input.similarExamples)}\n</data>`
       : '',
     input.memory.length > 0
       ? `从用户纠偏中学到的偏好（参考）：\n<data>\n${input.memory.map((m) => `- ${m}`).join('\n')}\n</data>`
@@ -208,6 +240,8 @@ export function buildDistillPrompt(input: {
   actions: DistillActionFact[];
   existingMemory: DistillExistingMemory[];
   mode?: 'incremental' | 'maintenance';
+  /** Semantically near-duplicate existing memory id pairs, from vector search. */
+  similarPairs?: [string, string][];
 }): PromptPair {
   const system = [
     input.mode === 'maintenance' ? '这是日常维护：只整理重复或过时记忆，不得从缺失反馈推断新偏好。' : '只学习本次尚未处理的新增反馈，不得将已有记忆视作新增反馈。',
@@ -237,6 +271,11 @@ export function buildDistillPrompt(input: {
   const user = [
     `近期反馈：\n<data>\n${actions}\n</data>`,
     `已有记忆：\n<data>\n${existing}\n</data>`,
-  ].join('\n');
+    input.similarPairs && input.similarPairs.length > 0
+      ? `以下已有记忆两两语义高度相似，如内容重复请优先用 update 合并为一条而不是 add 新条目：${input.similarPairs.map(([a, b]) => `id=${a} ⇔ id=${b}`).join('；')}`
+      : '',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
   return { system, user };
 }

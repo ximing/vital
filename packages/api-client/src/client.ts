@@ -69,6 +69,7 @@ import type {
   ReorderTasksInput,
   SearchInput,
   SearchResponse,
+  SearchResults,
   SyncChanges,
   SyncHead,
   TagCollection,
@@ -181,6 +182,8 @@ export interface VitalClient {
   patchTag(id: string, input: PatchTagInput): Promise<Tag>;
   deleteTag(id: string): Promise<void>;
   search(input: SearchInput): Promise<SearchResponse>;
+  /** Meilisearch 全局快搜：跨 任务/线程/收集箱 分组返回精简命中。 */
+  searchAll(q: string, limit?: number): Promise<SearchResults>;
   extractInbox(input: ExtractInboxInput): Promise<InboxPreview>;
   listInbox(query?: {
     status?: string;
@@ -418,6 +421,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     patchTag: (id, input) => http.request(`/api/v1/tags/${id}`, { method: 'PATCH', body: input }),
     deleteTag: (id) => http.request(`/api/v1/tags/${id}`, { method: 'DELETE' }),
     search: (input) => http.request('/api/v1/search', { method: 'POST', body: input }),
+    searchAll: (q, limit) =>
+      http.request('/api/v1/search', { query: { q, limit } }),
     extractInbox: (input) => http.request('/api/v1/inbox/extract', { method: 'POST', body: input }),
     listInbox: (query = {}) => {
       const q: Record<string, string | number | boolean | undefined> = {};

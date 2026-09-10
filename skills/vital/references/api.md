@@ -729,6 +729,39 @@ export interface SearchResponse {
 ```
 
 ```ts
+export interface SearchResultTask {
+  id: string;
+  listId: string;
+  title: string;
+  status: string;
+}
+```
+
+```ts
+export interface SearchResultOutcome {
+  id: string;
+  name: string;
+  status: string;
+}
+```
+
+```ts
+export interface SearchResultInbox {
+  id: string;
+  title: string;
+  excerpt: string | null;
+}
+```
+
+```ts
+export interface SearchResults {
+  tasks: SearchResultTask[];
+  outcomes: SearchResultOutcome[];
+  inbox: SearchResultInbox[];
+}
+```
+
+```ts
 export interface SyncHead {
   tasksMaxUpdatedAt: string | null;
   inboxMaxUpdatedAt: string | null;
@@ -1707,6 +1740,21 @@ Query (`reportOverviewQuerySchema`):
 - `at`: string pattern (optional)
 
 ### search
+
+#### `GET /api/v1/search`
+
+Meilisearch 全局快搜（任务/线程/收集箱分组）。Meili 未配置时 searchAll
+返回 null —— 降级返回空分组而不是 503，搜索对业务不是硬依赖；Meili
+故障同样记日志后降级为空分组。
+
+- Auth: Bearer required
+- Client: `searchAll`
+- Response: `SearchResults`
+
+Query (`searchAllQuerySchema`):
+
+- `q`: string 1–100
+- `limit`: number int min 1 max 20
 
 #### `POST /api/v1/search`
 

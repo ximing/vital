@@ -1,8 +1,8 @@
-import type { List, SearchHit } from '@vital/dto';
+import type { List, SearchResults } from '@vital/dto';
 import { HOME_PATH, t } from '@/copy';
 import { userLists } from '@/features/todos/model';
 
-export type PaletteKind = 'goto' | 'list' | 'task' | 'inbox' | 'report';
+export type PaletteKind = 'goto' | 'list' | 'task' | 'outcome' | 'inbox';
 
 export type PaletteItem = {
   id: string;
@@ -11,6 +11,9 @@ export type PaletteItem = {
   hint: string;
   href: string;
 };
+
+/** Window event that opens the command palette (rail search button dispatches it). */
+export const OPEN_PALETTE_EVENT = 'vital:open-palette';
 
 export function isPaletteToggle(event: KeyboardEvent): boolean {
   if (!(event.metaKey || event.ctrlKey) || event.altKey) return false;
@@ -73,36 +76,45 @@ export function listItems(lists: List[]): PaletteItem[] {
   }));
 }
 
-export function hitsToItems(hits: SearchHit[]): PaletteItem[] {
+/** Meili 全局快搜结果 → 面板条目，按 任务/线程/收集箱 顺序排列。 */
+export function searchResultsToItems(results: SearchResults): PaletteItem[] {
   const out: PaletteItem[] = [];
-  for (const hit of hits) {
-    if (hit.type === 'task') {
-      out.push({
-        id: `task-${hit.task.id}`,
-        kind: 'task',
-        title: hit.task.title,
-        hint: t.palette.task,
-        href: `/todos/lists/${hit.task.listId}?task=${hit.task.id}`,
-      });
-    } else if (hit.type === 'inbox') {
-      out.push({
-        id: `inbox-${hit.inbox.id}`,
-        kind: 'inbox',
-        title: hit.inbox.title,
-        hint: t.palette.inbox,
-        href: `/inbox/${hit.inbox.id}`,
-      });
-    } else {
-      out.push({
-        id: `report-${hit.report.id}`,
-        kind: 'report',
-        title: hit.report.title,
-        hint: t.palette.report,
-        href: `/reports/${hit.report.id}?type=${hit.report.type}`,
-      });
-    }
+  for (const task of results.tasks) {
+    out.push({
+      id: `task-${task.id}`,
+      kind: 'task',
+      title: task.title,
+      hint: t.palette.task,
+      href: `/todos/lists/${task.listId}?task=${task.id}`,
+    });
+  }
+  for (const outcome of results.outcomes) {
+    out.push({
+      id: `outcome-${outcome.id}`,
+      kind: 'outcome',
+      title: outcome.name,
+      hint: t.palette.outcome,
+      href: `/today/threads/${outcome.id}`,
+    });
+  }
+  for (const item of results.inbox) {
+    out.push({
+      id: `inbox-${item.id}`,
+      kind: 'inbox',
+      title: item.title,
+      hint: t.palette.inbox,
+      href: `/inbox/${item.id}`,
+    });
   }
   return out;
+}
+
+/** Section header label for search-hit groups; commands stay ungrouped. */
+export function groupLabelOf(kind: PaletteKind): string | null {
+  if (kind === 'task') return t.palette.task;
+  if (kind === 'outcome') return t.palette.outcome;
+  if (kind === 'inbox') return t.palette.inbox;
+  return null;
 }
 
 export function filterItems(items: PaletteItem[], q: string): PaletteItem[] {

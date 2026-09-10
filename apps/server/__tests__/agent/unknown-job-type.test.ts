@@ -2,11 +2,15 @@
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { enqueueAgentJob, processDueAgentJobs } from '../../src/agent/jobs.js';
+import {
+  enqueueAgentJob,
+  processDueAgentJobs,
+  UnknownAgentJobTypeError,
+} from '../../src/agent/jobs.js';
 import { processAgentJob } from '../../src/agent/processors.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
-import { agentJobs, type AgentJobRow } from '../../src/db/schema.js';
+import { agentJobs } from '../../src/db/schema.js';
 import { resetDb } from '../helpers/db.js';
 import { registerUser } from '../helpers/session.js';
 
@@ -22,31 +26,25 @@ afterAll(async () => {
   await app.close();
 });
 
-function fakeJob(userId: string, jobType: string): AgentJobRow {
-  const now = new Date();
-  return {
-    id: '00000000-0000-0000-0000-000000000001',
-    userId,
-    jobType,
-    payload: { taskId: userId },
-    dedupKey: `test:${jobType}`,
-    scheduledAt: now,
-    status: 'running',
-    attemptCount: 0,
-    generation: 1, claimedGeneration: 1, claimedPayload: { taskId: userId },
-    appliedGeneration: null, effectResult: null, leaseToken: null, leaseExpiresAt: null, firstAttemptAt: null,
-    nextAttemptAt: null,
-    lastError: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
 describe('unknown agent jobType', () => {
-  it('processAgentJob throws for a type the worker does not know', async () => {
+  it('processAgentJob throws UnknownAgentJobTypeError for a type the worker does not know', async () => {
     const alice = await registerUser(app);
-    await expect(processAgentJob(fakeJob(alice.id, 'future.unknown'), new Date())).rejects.toThrow(
-      /future\.unknown/,
+    // Persisted job: 'habit.spawn' passes the DB check constraint but has no
+    // processor, so the rejection must come from the processor switch — not
+    // from a foreign-key error on a fabricated job row (the old fake green).
+    const id = await enqueueAgentJob(getDb(), {
+      userId: alice.id,
+      jobType: 'habit.spawn',
+      payload: { taskId: alice.id },
+      dedupKey: 'test:unknown-type-throw',
+      scheduledAt: new Date(),
+    });
+    expect(id).toBeTruthy();
+    const [job] = await getDb().select().from(agentJobs).where(eq(agentJobs.id, id!));
+
+    await expect(processAgentJob(job!, new Date())).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof UnknownAgentJobTypeError && err.message.includes('habit.spawn'),
     );
   });
 

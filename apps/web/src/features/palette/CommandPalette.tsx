@@ -5,20 +5,44 @@ import { t } from '@/copy';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { useListsQuery } from '@/features/todos/queries';
 import {
+  OPEN_PALETTE_EVENT,
   commandItems,
   filterItems,
-  hitsToItems,
+  groupLabelOf,
   isPaletteToggle,
   listItems,
   mergePalette,
+  searchResultsToItems,
   type PaletteItem,
 } from './model';
+
+/** Debounce for the global search call while typing. */
+const SEARCH_DEBOUNCE_MS = 300;
+
+type PaletteRow =
+  | { type: 'header'; key: string; label: string }
+  | { type: 'item'; key: string; item: PaletteItem; index: number };
+
+/** Insert group headers (任务/线程/收集箱) between search-hit sections. */
+function withGroupHeaders(items: PaletteItem[]): PaletteRow[] {
+  const rows: PaletteRow[] = [];
+  let lastGroup: string | null = null;
+  items.forEach((item, index) => {
+    const group = groupLabelOf(item.kind);
+    if (group !== null && group !== lastGroup) {
+      rows.push({ type: 'header', key: `header-${group}`, label: group });
+    }
+    lastGroup = group;
+    rows.push({ type: 'item', key: item.id, item, index });
+  });
+  return rows;
+}
 
 export function CommandPalette() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [result, setResult] = useState<{ q: string; hits: PaletteItem[] } | null>(null);
+  const [result, setResult] = useState<{ q: string; items: PaletteItem[] } | null>(null);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listsQuery = useListsQuery();
@@ -30,11 +54,19 @@ export function CommandPalette() {
   const filtered = useMemo(() => filterItems(commands, query), [commands, query]);
   const q = query.trim();
   const items = useMemo(
-    () => mergePalette(filtered, q === '' || result?.q !== q ? [] : result.hits),
+    () => mergePalette(filtered, q === '' || result?.q !== q ? [] : result.items),
     [filtered, q, result],
   );
+  const rows = useMemo(() => withGroupHeaders(items), [items]);
   const safeActive = items.length === 0 ? 0 : Math.min(active, items.length - 1);
   const activeItem = items[safeActive];
+
+  const openPalette = useCallback((): void => {
+    setQuery('');
+    setResult(null);
+    setActive(0);
+    setOpen(true);
+  }, []);
 
   function close(): void {
     setOpen(false);
@@ -48,14 +80,16 @@ export function CommandPalette() {
         setOpen(false);
         return;
       }
-      setQuery('');
-      setResult(null);
-      setActive(0);
-      setOpen(true);
+      openPalette();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, openPalette]);
+
+  useEffect(() => {
+    window.addEventListener(OPEN_PALETTE_EVENT, openPalette);
+    return () => window.removeEventListener(OPEN_PALETTE_EVENT, openPalette);
+  }, [openPalette]);
 
   useEffect(() => {
     if (!open) return;
@@ -68,14 +102,14 @@ export function CommandPalette() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void client
-        .search({ q, limit: 20 })
+        .searchAll(q)
         .then((res) => {
-          if (!cancelled) setResult({ q, hits: hitsToItems(res.items) });
+          if (!cancelled) setResult({ q, items: searchResultsToItems(res) });
         })
         .catch(() => {
-          if (!cancelled) setResult({ q, hits: [] });
+          if (!cancelled) setResult({ q, items: [] });
         });
-    }, 120);
+    }, SEARCH_DEBOUNCE_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -150,23 +184,33 @@ export function CommandPalette() {
           {items.length === 0 ? (
             <li className="px-4 py-3 text-[length:var(--text-meta)] text-muted">{t.palette.empty}</li>
           ) : (
-            items.map((item, index) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={item.id === activeItem?.id}
-                  className={`flex min-h-[var(--touch-min)] w-full items-center justify-between px-4 text-left text-[length:var(--text-meta)] ${
-                    item.id === activeItem?.id ? 'bg-accent-subtle text-fg' : 'text-fg hover:bg-surface-muted'
-                  }`}
-                  onMouseEnter={() => setActive(index)}
-                  onClick={() => go(item)}
+            rows.map((row) =>
+              row.type === 'header' ? (
+                <li
+                  key={row.key}
+                  role="presentation"
+                  className="px-4 pb-1 pt-2 text-[length:var(--text-caption)] font-medium text-muted"
                 >
-                  <span>{item.title}</span>
-                  <span className="text-[length:var(--text-caption)] text-muted">{item.hint}</span>
-                </button>
-              </li>
-            ))
+                  {row.label}
+                </li>
+              ) : (
+                <li key={row.key}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={row.item.id === activeItem?.id}
+                    className={`flex min-h-[var(--touch-min)] w-full items-center justify-between px-4 text-left text-[length:var(--text-meta)] ${
+                      row.item.id === activeItem?.id ? 'bg-accent-subtle text-fg' : 'text-fg hover:bg-surface-muted'
+                    }`}
+                    onMouseEnter={() => setActive(row.index)}
+                    onClick={() => go(row.item)}
+                  >
+                    <span>{row.item.title}</span>
+                    <span className="text-[length:var(--text-caption)] text-muted">{row.item.hint}</span>
+                  </button>
+                </li>
+              ),
+            )
           )}
         </ul>
       </div>

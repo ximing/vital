@@ -88,19 +88,27 @@ describe('primary rail', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('puts today first, then todos, capture, reflect, search', () => {
+  it('puts today first, then todos, capture, reflect, and a palette search button', () => {
     renderShell();
     const rail = screen.getByLabelText('主导航');
-    const hrefs = within(rail)
-      .getByRole('navigation')
-      .querySelectorAll('a');
+    const nav = within(rail).getByRole('navigation');
+    const hrefs = nav.querySelectorAll('a');
     expect([...hrefs].map((el) => el.getAttribute('href'))).toEqual([
       HOME_PATH,
       TODOS_HOME_PATH,
       '/inbox',
       '/reports',
-      '/search',
     ]);
+    // 搜索入口是打开命令面板的按钮，不再跳转独立页。
+    expect(within(nav).getByRole('button', { name: t.nav.search })).toBeInTheDocument();
+  });
+
+  it('opens the command palette from the rail search button', async () => {
+    const user = userEvent.setup();
+    renderShell();
+    const rail = screen.getByLabelText('主导航');
+    await user.click(within(rail).getByRole('button', { name: t.nav.search }));
+    expect(await screen.findByRole('dialog', { name: t.nav.palette })).toBeInTheDocument();
   });
 
   it('groups theme, settings, and avatar at the bottom of the rail', () => {

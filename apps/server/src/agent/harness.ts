@@ -10,6 +10,7 @@ import { streamModel } from '../llm/model-transport.js';
 import { skipExecution, withExecution } from './executions.service.js';
 import { AppError } from '../errors.js';
 import { modelResponseError } from '../llm/model-errors.js';
+import { searchMemories } from '../retrieval/pipeline.js';
 
 /** Hard cap for one agent run; abort lands as stopReason 'aborted' → backoff. */
 const RUN_TIMEOUT_MS = 120_000;
@@ -25,11 +26,55 @@ export interface MemoryItem {
  * observe: latest distilled memories, newest first.
  * With a capability, only rows whose scope contains 'all' or that capability
  * are injected; without one, everything is returned (distill reads full).
+ *
+ * With a non-empty query, hybrid retrieval (vector ∪ sparse, RRF + rerank)
+ * replaces the recency cut; any infra failure or unavailable clients falls
+ * back to the PG recency path. Hand-written (manual) memories are merged at
+ * the head of hybrid results — filtered by the same capability scope as the
+ * PG path, deduped by id against the hits and immune to the inject limit,
+ * which caps only the retrieved portion.
  */
 export async function loadAgentMemory(
   userId: string,
   capability?: AgentMemoryScope,
+  query?: string,
 ): Promise<MemoryItem[]> {
+  if (query !== undefined && query.trim() !== '') {
+    try {
+      const hits = await searchMemories({
+        userId,
+        ...(capability !== undefined ? { capability } : {}),
+        query,
+        limit: MEMORY_INJECT_LIMIT,
+      });
+      if (hits !== null) {
+        const manualRows = await getDb()
+          .select({ id: agentMemory.id, kind: agentMemory.kind, content: agentMemory.content })
+          .from(agentMemory)
+          .where(
+            capability === undefined
+              ? and(eq(agentMemory.userId, userId), eq(agentMemory.manual, true))
+              : and(
+                  eq(agentMemory.userId, userId),
+                  eq(agentMemory.manual, true),
+                  or(
+                    arrayContains(agentMemory.scope, ['all']),
+                    arrayContains(agentMemory.scope, [capability]),
+                  ),
+                ),
+          )
+          .orderBy(desc(agentMemory.createdAt));
+        const hitIds = new Set(hits.map((hit) => hit.id));
+        const manual = manualRows.filter((row) => !hitIds.has(row.id));
+        return [
+          ...manual.map(({ kind, content }) => ({ kind, content })),
+          ...hits.slice(0, MEMORY_INJECT_LIMIT).map(({ kind, content }) => ({ kind, content })),
+        ];
+      }
+    } catch (error) {
+      console.error('[retrieval] memory search failed; falling back to PG recency', error);
+    }
+  }
   const rows = await getDb()
     .select({ kind: agentMemory.kind, content: agentMemory.content })
     .from(agentMemory)
