@@ -26,6 +26,8 @@ import { xaiProvider } from '@earendil-works/pi-ai/providers/xai';
 import type { LlmCapability, LlmCatalogProvider, LlmParameters, LlmRouteTarget } from '@vital/dto';
 import { AppError } from '../errors.js';
 import type { StoredLlmProvider, User } from '../db/schema.js';
+import { completeModel } from './model-transport.js';
+import { executionContext, skipExecution, withExecution } from '../agent/executions.service.js';
 import { decryptSecret } from './crypto.js';
 
 const COMPLETE_TIMEOUT_MS = 60_000;
@@ -261,14 +263,22 @@ export async function completeText(
     json?: boolean;
   },
 ): Promise<LlmRunResult | null> {
+  if (!executionContext()) {
+    return withExecution({ userId: user.id, capability }, () => completeText(user, capability, input));
+  }
   const resolved = resolveModelFor(user, capability);
-  if (!resolved) return null;
+  if (!resolved) {
+    skipExecution('NO_MODEL');
+    return null;
+  }
   const context: Context = {
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
     messages: input.messages.map((m) => ({ ...m, timestamp: Date.now() })),
   };
   try {
-    const res = await resolved.models.completeSimple(resolved.model, context, {
+    const res = await completeModel({
+      userId: user.id, capability, models: resolved.models, model: resolved.model, provider: resolved.stored.id,
+    }, context, {
       ...modelOptions(resolved.model, resolved.route.parameters, input.json),
       apiKey: resolved.apiKey,
       signal: AbortSignal.timeout(input.timeoutMs ?? COMPLETE_TIMEOUT_MS),
@@ -294,9 +304,13 @@ export async function completeText(
 
 /** Ping a provider+model, e.g. from the settings "test connection" button. */
 export async function testProviderModel(
+  userId: string,
   stored: StoredLlmProvider,
   modelId: string,
 ): Promise<{ ok: true }> {
+  if (!executionContext()) {
+    return withExecution({ userId, capability: 'llm.test' }, () => testProviderModel(userId, stored, modelId));
+  }
   const apiKey = decryptSecret(stored.apiKeyEnc);
   if (!apiKey) throw AppError.of(400, 'LLM_NOT_CONFIGURED');
   if (!stored.models.includes(modelId)) throw AppError.of(400, 'VALIDATION_ERROR');
@@ -324,7 +338,9 @@ export async function testProviderModel(
     messages: [{ role: 'user', content: 'Reply with only: pong', timestamp: Date.now() }],
   };
   try {
-    const result = await models.completeSimple(target, context, {
+    const result = await completeModel({
+      userId, capability: 'llm.test', models, model: target, provider: stored.id,
+    }, context, {
       ...modelOptions(target, route.parameters),
       apiKey,
       signal: AbortSignal.timeout(COMPLETE_TIMEOUT_MS),

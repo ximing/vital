@@ -6,7 +6,8 @@ import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { agentMemory, type AgentJobRow, type AgentMemoryScope, type User } from '../db/schema.js';
 import { modelOptions, resolveModelFor, type LlmRunUsage } from '../llm/pi.js';
-import { recordUsage } from './usage.service.js';
+import { streamModel } from '../llm/model-transport.js';
+import { skipExecution, withExecution } from './executions.service.js';
 
 /** Hard cap for one agent run; abort lands as stopReason 'aborted' → backoff. */
 const RUN_TIMEOUT_MS = 120_000;
@@ -64,20 +65,25 @@ export async function runProposalPass<T>(input: {
   userPrompt: string;
   makeTool: (capture: (args: T) => void) => AgentTool;
 }): Promise<ProposalPassResult<T> | null> {
+  return withExecution({ userId: input.user.id, capability: input.capability }, async () => {
   const resolved = resolveModelFor(input.user, input.capability);
-  if (!resolved) return null;
+  if (!resolved) { skipExecution('NO_MODEL'); return null; }
 
   // Holder object: TS control-flow can't see closure assignments into a bare let.
   const box: { value: T | null } = { value: null };
   const tool = input.makeTool((args) => {
     box.value = args;
   });
+  const pendingCalls: Promise<void>[] = [];
   const agent = new Agent({
-    streamFn: (model, context, options) =>
-      resolved.models.streamSimple(model, context, {
-        ...options,
-        ...modelOptions(model, resolved.route.parameters),
-      }),
+    streamFn: async (model, context, options) => {
+      const tracked = await streamModel({
+        userId: input.user.id, capability: input.capability,
+        models: resolved.models, model, provider: resolved.stored.id,
+      }, context, { ...options, ...modelOptions(model, resolved.route.parameters) });
+      pendingCalls.push(tracked.finished);
+      return tracked.stream;
+    },
     getApiKey: () => resolved.apiKey,
     initialState: {
       systemPrompt: input.systemPrompt,
@@ -94,6 +100,7 @@ export async function runProposalPass<T>(input: {
     await agent.prompt(input.userPrompt);
   } finally {
     clearTimeout(timeout);
+    await Promise.all(pendingCalls);
   }
 
   const assistant = agent.state.messages.filter(
@@ -112,10 +119,11 @@ export async function runProposalPass<T>(input: {
     { promptTokens: 0, completionTokens: 0, costMicros: 0 },
   );
   return { args: box.value, usage, model: resolved.model.id };
+  });
 }
 
 /**
- * reason → review: runs the proposal pass, records usage, then — when the
+ * reason → review: runs the proposal pass, then — when the
  * critic is enabled — a second pass on capability 'agent.critic' that may
  * replace the proposal. Critic failures never fail the job.
  */
@@ -136,13 +144,7 @@ export async function runWithCritic<T>(input: {
     makeTool: input.makeTool,
   });
   if (!first) return null;
-  await recordUsage(getDb(), {
-    userId: input.user.id,
-    jobId: input.job.id,
-    capability: input.usageCapability,
-    model: first.model,
-    usage: first.usage,
-  });
+
 
   if (!config.AGENT_CRITIC_ENABLED) return first;
   try {
@@ -154,13 +156,6 @@ export async function runWithCritic<T>(input: {
       makeTool: input.makeTool,
     });
     if (!second) return first;
-    await recordUsage(getDb(), {
-      userId: input.user.id,
-      jobId: input.job.id,
-      capability: 'critic',
-      model: second.model,
-      usage: second.usage,
-    });
     return second;
   } catch {
     return first;

@@ -13,6 +13,7 @@ vi.mock('@/api/client', async (importOriginal) => {
   return {
     ...actual,
     client: {
+      listAgentExecutions: vi.fn(),
       listAgentActions: vi.fn(),
       sendAgentActionFeedback: vi.fn(),
       getAgentMetrics: vi.fn(),
@@ -118,6 +119,7 @@ const baseItems: AgentActionLogItem[] = [
 
 describe('settings activity tab', () => {
   beforeEach(() => {
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listAgentActions).mockResolvedValue(baseItems);
     vi.mocked(client.sendAgentActionFeedback).mockResolvedValue(
       baseItems[0]! as unknown as AgentAction,
@@ -263,5 +265,71 @@ describe('settings activity tab', () => {
     });
     expect(bar).toHaveAttribute('data-trend', 'none');
     expect(bar.textContent).toContain(t.settings.activity.metrics.empty);
+  });
+});
+
+describe('execution telemetry', () => {
+  beforeEach(() => {
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics());
+  });
+
+  it('shows failed and skipped executions without proposals and preserves reasons', async () => {
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([
+      {
+        id: 'e1',
+        parentId: null,
+        jobId: null,
+        capability: 'agent.distill',
+        status: 'failed',
+        attempt: 2,
+        reason: 'LLM_TIMEOUT',
+        targetType: null,
+        targetId: null,
+        resultSummary: null,
+        createdAt: todayIso,
+        finishedAt: todayIso,
+        durationMs: 1200,
+      },
+      {
+        id: 'e2',
+        parentId: 'e1',
+        jobId: null,
+        capability: 'agent.notify',
+        status: 'skipped',
+        attempt: 1,
+        reason: 'NO_CHANGES',
+        targetType: null,
+        targetId: null,
+        resultSummary: null,
+        createdAt: todayIso,
+        finishedAt: todayIso,
+        durationMs: 0,
+      },
+    ]);
+    renderAt('/settings?tab=activity');
+    expect(await screen.findByText('模型请求超时')).toBeInTheDocument();
+    expect(screen.getByText('没有需要更新的内容')).toBeInTheDocument();
+    expect(screen.getByText('记忆蒸馏')).toBeInTheDocument();
+    expect(screen.getByText('主动通知')).toBeInTheDocument();
+    expect(screen.getByText('失败')).toBeInTheDocument();
+    expect(screen.getByText('已跳过')).toBeInTheDocument();
+    expect(screen.getByText('子步骤')).toBeInTheDocument();
+    expect(screen.queryByText('LLM_TIMEOUT')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '采纳' })).not.toBeInTheDocument();
+  });
+
+  it('distinguishes execution load errors from an empty history', async () => {
+    vi.mocked(client.listAgentExecutions).mockRejectedValue(new Error('offline'));
+    renderAt('/settings?tab=activity');
+    expect(await screen.findByRole('alert')).toHaveTextContent('执行记录加载失败');
+    expect(screen.queryByText('近 7 天没有执行记录。')).not.toBeInTheDocument();
+  });
+
+  it('shows a successful empty execution history', async () => {
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
+    renderAt('/settings?tab=activity');
+    expect(await screen.findByText('近 7 天没有执行记录。')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

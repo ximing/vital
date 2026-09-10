@@ -2,7 +2,7 @@ import type { List } from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { UserListsNav } from '../../../src/features/todos/ListsNav';
@@ -55,7 +55,17 @@ function renderNav(items: List[]) {
 describe('UserListsNav', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('nests a child list and sums descendant counts on the parent', async () => {
     renderNav([
@@ -86,5 +96,17 @@ describe('UserListsNav', () => {
     renderNav([makeList({ id: 'p', name: '工作', sortOrder: 1 })]);
     fireEvent.click(await screen.findByRole('button', { name: t.todos.setListIcon }));
     expect(screen.getByRole('dialog', { name: t.todos.setListIcon })).toBeInTheDocument();
+  });
+
+  it('keeps the icon panel open for internal scrolling and closes for outside scrolling', async () => {
+    renderNav([makeList({ id: 'p', name: '工作', sortOrder: 1 })]);
+    fireEvent.click(await screen.findByRole('button', { name: t.todos.setListIcon }));
+    const panel = screen.getByRole('dialog', { name: t.todos.setListIcon });
+    fireEvent.scroll(panel.firstElementChild!);
+    expect(panel).toBeInTheDocument();
+    fireEvent.scroll(panel);
+    expect(panel).toBeInTheDocument();
+    fireEvent.scroll(window);
+    expect(panel).not.toBeInTheDocument();
   });
 });

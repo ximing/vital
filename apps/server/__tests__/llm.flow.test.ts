@@ -210,6 +210,23 @@ describe('llm providers + routing', () => {
     });
     expect(ok.statusCode).toBe(200);
     expect(ok.json()).toEqual({ ok: true });
+    const usage = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/agent/usage',
+      token: alice.token,
+    });
+    expect(usage.json()).toMatchObject({ modelRequests: 1, failedRequests: 0, legacyRuns: 0 });
+    const executions = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/agent/executions',
+      token: alice.token,
+    });
+    expect(executions.statusCode).toBe(200);
+    expect(executions.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ capability: 'llm.test', status: 'succeeded' }),
+      ]),
+    );
   });
 });
 
@@ -257,7 +274,106 @@ describe('create from text', () => {
     expect(created.json().reminderMode).toBe('offset');
     expect(created.json().reminderOffsetMinutes).toBe(15);
     expect(created.json().dueAt).toBeTruthy();
+    const usage = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/agent/usage',
+      token: alice.token,
+    });
+    expect(usage.json().totalRuns).toBe(1);
+    expect(usage.json().items[0].capability).toBe('parse');
+    expect(usage.json().totalPromptTokens).toBeGreaterThan(0);
+    expect(usage.json().totalCompletionTokens).toBeGreaterThan(0);
   });
+
+  it.each([true, false])(
+    'retries malformed model output at most three times (success=%s)',
+    async (success) => {
+      const alice = await registerUser(app);
+      const providerId = await addFauxProvider(alice.token);
+      await injectJson(app, {
+        method: 'PUT',
+        url: '/api/v1/llm/routing',
+        token: alice.token,
+        payload: { routing: { default: { providerId, model: 'faux-1' } } },
+      });
+      installFaux([
+        'bad json',
+        'bad json',
+        'bad json',
+        success ? '{"title":"买牛奶"}' : 'bad json',
+      ]);
+      const response = await injectJson(app, {
+        method: 'POST',
+        url: '/api/v1/tasks/from-text',
+        token: alice.token,
+        payload: { text: '买牛奶' },
+      });
+      expect(response.statusCode).toBe(success ? 201 : 502);
+      const usage = await injectJson(app, {
+        method: 'GET',
+        url: '/api/v1/agent/usage',
+        token: alice.token,
+      });
+      expect(usage.json().totalRuns).toBe(4);
+      const inbox = await inboxId(app, alice.token);
+      const tasks = await injectJson(app, {
+        method: 'GET',
+        url: '/api/v1/tasks?listId=' + inbox,
+        token: alice.token,
+      });
+      expect(tasks.json().items).toHaveLength(success ? 1 : 0);
+    },
+    15000,
+  );
+
+  it.each(['error', 'aborted', 'length'] as const)(
+    'recovers from model %s responses',
+    async (stopReason) => {
+      const alice = await registerUser(app);
+      const providerId = await addFauxProvider(alice.token);
+      await injectJson(app, {
+        method: 'PUT',
+        url: '/api/v1/llm/routing',
+        token: alice.token,
+        payload: { routing: { default: { providerId, model: 'faux-1' } } },
+      });
+      const faux = installFaux([]);
+      faux.setResponses([
+        fauxAssistantMessage('incomplete', { stopReason }),
+        fauxAssistantMessage('{"title":"买牛奶"}'),
+      ]);
+      const response = await injectJson(app, {
+        method: 'POST',
+        url: '/api/v1/tasks/from-text',
+        token: alice.token,
+        payload: { text: '买牛奶' },
+      });
+      expect(response.statusCode).toBe(201);
+      expect(response.json().title).toBe('买牛奶');
+      expect(faux.getPendingResponseCount()).toBe(0);
+      const usage = await injectJson(app, {
+        method: 'GET',
+        url: '/api/v1/agent/usage',
+        token: alice.token,
+      });
+      expect(usage.json()).toMatchObject({ modelRequests: 2, failedRequests: 1, legacyRuns: 0 });
+      const executions = await injectJson(app, {
+        method: 'GET',
+        url: '/api/v1/agent/executions',
+        token: alice.token,
+      });
+      expect(executions.statusCode).toBe(200);
+      expect(executions.json()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            capability: 'task.parse',
+            status: 'succeeded',
+            targetId: response.json().id,
+          }),
+        ]),
+      );
+    },
+  );
 
   it('falls back to a title-only task when no model is routed', async () => {
     const alice = await registerUser(app);

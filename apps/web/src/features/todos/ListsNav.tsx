@@ -10,12 +10,7 @@ import { pointAnchor, type MenuAnchor } from '@/ui/anchor-menu';
 import { Icon } from '@/ui/icon';
 import { ListContextMenu } from './ListContextMenu';
 import { ListIconPopover } from './ListIconPopover';
-import {
-  countWithDescendants,
-  listChildren,
-  listRoots,
-  userLists,
-} from './model';
+import { countWithDescendants, listChildren, listRoots, userLists } from './model';
 import { useCountsQuery, useListsQuery, useTodoActions } from './queries';
 
 const FOLD_KEY = 'vital:list-folded';
@@ -181,7 +176,7 @@ export function UserListsNav({
     return (
       <div key={list.id}>
         <div
-          className={`${railNavClass(current === list.id)} ${depth > 0 ? 'pl-6' : ''}`}
+          className={`relative ${railNavClass(current === list.id)} ${depth > 0 ? 'pl-6' : ''}`}
           onContextMenu={(event) => {
             event.preventDefault();
             setMenu({ list, x: event.clientX, y: event.clientY });
@@ -192,18 +187,16 @@ export function UserListsNav({
               type="button"
               aria-expanded={expanded}
               aria-label={expanded ? t.todos.more : t.todos.newChildList}
-              className="-ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted hover:text-fg"
+              className={`absolute ${depth > 0 ? 'left-4' : 'left-1'} flex h-5 w-3 items-center justify-center rounded text-muted hover:text-fg`}
               onClick={() => toggleFold(list.id)}
             >
               <Icon icon={expanded ? ChevronDown : ChevronRight} size={12} />
             </button>
-          ) : (
-            <span className="w-4 shrink-0" />
-          )}
+          ) : null}
           <button
             type="button"
             aria-label={t.todos.setListIcon}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded hover:bg-surface-muted"
+            className={`flex h-5 w-4 shrink-0 items-center justify-center rounded hover:bg-surface-muted ${kids.length > 0 ? 'ml-2' : ''}`}
             onClick={(event) => {
               event.stopPropagation();
               setIconFor({ list, anchor: event.currentTarget.getBoundingClientRect() });
@@ -219,9 +212,7 @@ export function UserListsNav({
             <CountBadge value={countWithDescendants(counts, lists, list.id)} />
           </NavLink>
         </div>
-        {expanded
-          ? kids.map((child) => renderRow(child, depth + 1))
-          : null}
+        {expanded ? kids.map((child) => renderRow(child, depth + 1)) : null}
         {creatingHere ? (
           <form onSubmit={(e) => void submit(e)} className="px-3 py-1 pl-6">
             <input
@@ -319,7 +310,9 @@ export function UserListsNav({
 export function ListShortcuts() {
   const { data } = useListsQuery();
   const location = useLocation();
-  const lists = userLists(data ?? []).filter((item) => item.parentId === null).slice(0, 8);
+  const lists = userLists(data ?? [])
+    .filter((item) => item.parentId === null)
+    .slice(0, 8);
   if (lists.length < 2) return null;
   const current = listIdFrom(location.pathname, location.search);
   return (

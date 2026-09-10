@@ -1,6 +1,6 @@
 import type { Task } from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { t } from '@/copy';
@@ -75,6 +75,28 @@ async function editTitleAndBlur(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('TaskDetail save status', () => {
+  it('saves the title on Enter without inserting a hidden newline', async () => {
+    const user = userEvent.setup();
+    const onPatch = vi.fn().mockResolvedValue(undefined);
+    renderDetail(onPatch);
+    const title = screen.getByLabelText(t.todos.title);
+    await user.type(title, '改{Enter}');
+    expect(title).toHaveValue('发送周报改');
+    expect(onPatch).toHaveBeenCalledExactlyOnceWith({ title: '发送周报改' });
+    expect(title).not.toHaveFocus();
+  });
+
+  it('does not submit Enter while the input method is composing', () => {
+    const onPatch = vi.fn().mockResolvedValue(undefined);
+    renderDetail(onPatch);
+    const title = screen.getByLabelText(t.todos.title);
+    title.focus();
+    fireEvent.change(title, { target: { value: '输入中' } });
+    fireEvent.keyDown(title, { key: 'Enter', isComposing: true });
+    expect(title).toHaveFocus();
+    expect(onPatch).not.toHaveBeenCalled();
+  });
+
   it('is hidden before any edit', () => {
     renderDetail(vi.fn().mockResolvedValue(undefined));
     expect(document.querySelector('[data-region="save-status"]')).toBeNull();

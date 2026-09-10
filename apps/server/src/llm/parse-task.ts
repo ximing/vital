@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { DateTime } from 'luxon';
 import {
   createTaskInputSchema,
@@ -280,13 +281,32 @@ export async function interpretTaskText(input: {
     tags: input.tags,
     ...(input.smartListId !== undefined ? { smartListId: input.smartListId } : {}),
   });
-  const result = await completeText(input.user, 'task.parse', {
-    systemPrompt: prompt.system,
-    messages: [{ role: 'user', content: prompt.user }],
-    json: true,
-  });
-  if (!result) throw AppError.of(400, 'LLM_NOT_CONFIGURED');
-  const extracted = extractedOf(parseModelJson(result.text));
-  logger.info('llm.parse.ok', { model: result.model });
-  return extracted;
+  for (let attempt = 0; ; attempt += 1) {
+    let result;
+    try {
+      result = await completeText(input.user, 'task.parse', {
+        systemPrompt: prompt.system,
+        messages: [{ role: 'user', content: prompt.user }],
+        json: true,
+      });
+    } catch (err) {
+      if (
+        !(err instanceof AppError) ||
+        !['LLM_UNAVAILABLE', 'LLM_TIMEOUT', 'LLM_OUTPUT_TRUNCATED'].includes(err.code) ||
+        attempt >= 3
+      )
+        throw err;
+      await delay(250 * 2 ** attempt);
+      continue;
+    }
+    if (!result) throw AppError.of(400, 'LLM_NOT_CONFIGURED');
+    try {
+      const extracted = extractedOf(parseModelJson(result.text));
+      logger.info('llm.parse.ok', { model: result.model });
+      return extracted;
+    } catch (err) {
+      if (!(err instanceof AppError) || err.code !== 'LLM_UNAVAILABLE' || attempt >= 3) throw err;
+      await delay(250 * 2 ** attempt);
+    }
+  }
 }

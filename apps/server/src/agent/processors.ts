@@ -1,3 +1,4 @@
+import { recordAgentAction } from './action-ledger.js';
 import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { config } from '../config.js';
@@ -39,7 +40,7 @@ import {
   submitDraftTool,
   type SubmitDraftArgs,
 } from './tools.js';
-import { recordUsage } from './usage.service.js';
+import { executionResult, skipExecution, withExecution } from './executions.service.js';
 import { enqueueProactiveInsights } from '../notifications/insights.js';
 
 export type AgentJobResult = 'done' | 'skipped:no-llm';
@@ -153,7 +154,7 @@ async function processOutcomeRefresh(
         updatedAt: now,
       })
       .where(eq(outcomes.id, outcomeId));
-    await tx.insert(agentActions).values({
+    await recordAgentAction(tx, {
       id: randomUUID(),
       userId: user.id,
       jobId: job.id,
@@ -164,7 +165,7 @@ async function processOutcomeRefresh(
       feedback: 'pending',
     });
     if (suggestion !== '') {
-      await tx.insert(agentActions).values({
+      await recordAgentAction(tx, {
         id: randomUUID(),
         userId: user.id,
         jobId: job.id,
@@ -199,7 +200,10 @@ async function processOutcomeCluster(
     )
     .orderBy(desc(tasks.updatedAt))
     .limit(50);
-  if (unassigned.length < config.AGENT_CLUSTER_MIN_UNASSIGNED) return 'done';
+  if (unassigned.length < config.AGENT_CLUSTER_MIN_UNASSIGNED) {
+    skipExecution('INSUFFICIENT_TASKS');
+    return 'done';
+  }
 
   const existing = await db
     .select({ name: outcomes.name })
@@ -273,7 +277,7 @@ async function processOutcomeCluster(
             isNull(tasks.outcomeId),
           ),
         );
-      await tx.insert(agentActions).values({
+      await recordAgentAction(tx, {
         id: randomUUID(),
         userId: user.id,
         jobId: job.id,
@@ -293,13 +297,13 @@ async function processTaskDecompose(
   user: User,
   _now: Date,
 ): Promise<AgentJobResult> {
-  if (!('taskId' in job.payload)) return 'done';
+  if (!('taskId' in job.payload)) { skipExecution('INVALID_PAYLOAD'); return 'done'; }
   const taskId = job.payload.taskId;
   const db = getDb();
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
-  if (!task || task.userId !== user.id || task.deletedAt) return 'done';
-  if (task.status === 'done' || task.status === 'canceled') return 'done';
-  if (!needsDecomposition(task.deferCount)) return 'done';
+  if (!task || task.userId !== user.id || task.deletedAt) { skipExecution('TASK_NOT_FOUND'); return 'done'; }
+  if (task.status === 'done' || task.status === 'canceled') { skipExecution('TASK_CLOSED'); return 'done'; }
+  if (!needsDecomposition(task.deferCount)) { skipExecution('NOT_ELIGIBLE'); return 'done'; }
 
   const pending = await db
     .select({ id: agentActions.id })
@@ -313,7 +317,7 @@ async function processTaskDecompose(
       ),
     )
     .limit(1);
-  if (pending.length > 0) return 'done';
+  if (pending.length > 0) { skipExecution('ALREADY_PENDING'); return 'done'; }
 
   const subtasks = await db
     .select({ title: tasks.title })
@@ -350,7 +354,7 @@ async function processTaskDecompose(
   if (proposed.length === 0) return 'done';
 
   // v1: proposal only — the web DecomposeBanner creates the subtasks on accept.
-  await db.insert(agentActions).values({
+  await recordAgentAction(db, {
     id: randomUUID(),
     userId: user.id,
     jobId: job.id,
@@ -373,13 +377,13 @@ async function processTaskDraft(
   user: User,
   _now: Date,
 ): Promise<AgentJobResult> {
-  if (!('taskId' in job.payload)) return 'done';
+  if (!('taskId' in job.payload)) { skipExecution('INVALID_PAYLOAD'); return 'done'; }
   const taskId = job.payload.taskId;
   const db = getDb();
   const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
-  if (!task || task.userId !== user.id || task.deletedAt) return 'done';
-  if (task.status === 'done' || task.status === 'canceled') return 'done';
-  if (!task.delegable) return 'done';
+  if (!task || task.userId !== user.id || task.deletedAt) { skipExecution('TASK_NOT_FOUND'); return 'done'; }
+  if (task.status === 'done' || task.status === 'canceled') { skipExecution('TASK_CLOSED'); return 'done'; }
+  if (!task.delegable) { skipExecution('NOT_DELEGABLE'); return 'done'; }
 
   const pending = await db
     .select({ id: agentActions.id })
@@ -393,7 +397,7 @@ async function processTaskDraft(
       ),
     )
     .limit(1);
-  if (pending.length > 0) return 'done';
+  if (pending.length > 0) { skipExecution('ALREADY_PENDING'); return 'done'; }
 
   let outcomeName: string | null = null;
   if (task.outcomeId) {
@@ -433,7 +437,7 @@ async function processTaskDraft(
   const draft = result.args.draft.trim().slice(0, 2000);
   if (draft === '') return 'done';
 
-  await db.insert(agentActions).values({
+  await recordAgentAction(db, {
     id: randomUUID(),
     userId: user.id,
     jobId: job.id,
@@ -514,7 +518,7 @@ async function processMemoryDistill(
     )
     .orderBy(desc(agentActions.createdAt))
     .limit(50);
-  if (recent.length < DISTILL_MIN_ACTIONS) return 'done';
+  if (recent.length < DISTILL_MIN_ACTIONS) { skipExecution('INSUFFICIENT_ACTIONS'); return 'done'; }
 
   // Governance reads the FULL memory list (no scope filter) so the model can
   // decide merges/evictions across everything the user has accumulated.
@@ -545,13 +549,7 @@ async function processMemoryDistill(
     makeTool: submitMemoriesTool,
   });
   if (!result) return 'skipped:no-llm';
-  await recordUsage(db, {
-    userId: user.id,
-    jobId: job.id,
-    capability: 'distill',
-    model: result.model,
-    usage: result.usage,
-  });
+
 
   const updates = (result.args.update ?? [])
     .map((u) => ({ id: u.id, content: u.content.trim(), scope: sanitizeScope(u.scope) }))
@@ -561,8 +559,11 @@ async function processMemoryDistill(
     .filter((a) => a.content !== '')
     .slice(0, 5);
   const drops = [...new Set(result.args.drop ?? [])];
-  if (updates.length === 0 && adds.length === 0 && drops.length === 0) return 'done';
+  if (updates.length === 0 && adds.length === 0 && drops.length === 0) { skipExecution('NO_CHANGES'); return 'done'; }
 
+  executionResult({
+    resultSummary: `记忆整理：新增 ${String(adds.length)}，更新 ${String(updates.length)}，删除 ${String(drops.length)}`,
+  });
   await db.transaction(async (tx) => {
     for (const u of updates) {
       // Ownership + manual guard: model may only touch its own non-manual rows.
@@ -633,6 +634,18 @@ async function processMemoryDistill(
 }
 
 export async function processAgentJob(job: AgentJobRow, now: Date): Promise<AgentJobResult> {
+  return withExecution({
+    userId: job.userId, capability: job.jobType, jobId: job.id, attempt: job.attemptCount + 1,
+    ...('taskId' in job.payload ? { targetType: 'task', targetId: job.payload.taskId } : {}),
+    ...('outcomeId' in job.payload ? { targetType: 'outcome', targetId: job.payload.outcomeId } : {}),
+  }, async () => {
+    const result = await processAgentJobInner(job, now);
+    if (result === 'skipped:no-llm') skipExecution('NO_MODEL');
+    return result;
+  });
+}
+
+async function processAgentJobInner(job: AgentJobRow, now: Date): Promise<AgentJobResult> {
   const [user] = await getDb().select().from(users).where(eq(users.id, job.userId)).limit(1);
   if (!user) return 'done';
   switch (job.jobType) {
@@ -653,7 +666,6 @@ export async function processAgentJob(job: AgentJobRow, now: Date): Promise<Agen
         const memory = await loadAgentMemory(user.id, 'notify');
         const result = await runProposalPass<SubmitNotificationArgs>({ user, capability: 'agent.notify', systemPrompt: '你为个人任务系统写一句简短、温和、可行动的手机提醒。不得添加事实。必须调用 submit_notification。', userPrompt: `规则提醒：${item.message}\n长期偏好：${memory.map((m) => m.content).join('；')}`, makeTool: submitNotificationTool });
         if (!result) return null;
-        await recordUsage(getDb(), { userId: user.id, jobId: job.id, capability: 'notify', model: result.model, usage: result.usage });
         return result.args.message;
       });
       return 'done';

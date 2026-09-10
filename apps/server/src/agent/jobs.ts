@@ -10,6 +10,7 @@ import {
   type AgentJobRow,
 } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
+import { recoverStuckExecutions } from './executions.service.js';
 
 export const BACKOFF_MS = [
   30_000, 120_000, 600_000, 1_800_000, 7_200_000, 21_600_000, 43_200_000,
@@ -210,6 +211,7 @@ export async function claimDueJobs(now: Date, limit: number): Promise<AgentJobRo
 /** Re-arm jobs stuck in 'running' (worker crash mid-processing). */
 export async function recoverStuckAgentJobs(now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - STUCK_MS);
+  await recoverStuckExecutions(cutoff);
   const rows = await getDb()
     .update(agentJobs)
     .set({ status: 'pending', updatedAt: now })

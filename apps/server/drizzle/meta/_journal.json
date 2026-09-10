@@ -162,6 +162,27 @@
       "when": 1789606800005,
       "tag": "0022_rich_goliath",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789606800006,
+      "tag": "0023_round_morbius",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789606800007,
+      "tag": "0024_tan_sphinx",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789606800008,
+      "tag": "0025_lively_moira_mactaggert",
+      "breakpoints": true
     }
   ]
 }

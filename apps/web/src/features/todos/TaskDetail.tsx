@@ -268,6 +268,13 @@ export function TaskDetail({
         <textarea
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229)
+              return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.blur();
+          }}
           onBlur={saveTitle}
           rows={1}
           className="font-display w-full resize-none bg-transparent text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] text-fg outline-none"

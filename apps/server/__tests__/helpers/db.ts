@@ -1,6 +1,7 @@
 import { db, pool } from '../../src/db/index.js';
 import {
   agentActions,
+  agentExecutions,
   agentJobs,
   agentMemory,
   agentUsage,
@@ -60,6 +61,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(notificationChannels);
     await db.delete(agentUsage);
     await db.delete(agentActions);
+    await db.delete(agentExecutions);
     await db.delete(agentMemory);
     await db.delete(agentJobs);
     await db.delete(inboxAssets);

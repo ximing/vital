@@ -3,33 +3,6 @@ import { DateTime } from 'luxon';
 import type { AgentUsageDaily, AgentUsageSummary } from '@vital/dto';
 import { getDb } from '../db/index.js';
 import { agentUsage } from '../db/schema.js';
-import type { LlmRunUsage } from '../llm/pi.js';
-
-type DbOrTx = Pick<ReturnType<typeof getDb>, 'insert'>;
-
-/** One row per LLM run. Cost comes from pi's usage (catalog rates; 0 for unknown models). */
-export async function recordUsage(
-  tx: DbOrTx,
-  input: {
-    userId: string;
-    jobId: string;
-    capability: string;
-    model: string;
-    usage: LlmRunUsage;
-  },
-): Promise<void> {
-  await tx.insert(agentUsage).values({
-    id: crypto.randomUUID(),
-    userId: input.userId,
-    jobId: input.jobId,
-    capability: input.capability,
-    model: input.model,
-    promptTokens: input.usage.promptTokens,
-    completionTokens: input.usage.completionTokens,
-    costMicros: input.usage.costMicros,
-  });
-}
-
 /** Daily × capability aggregation over the last N days, in the user's timezone. */
 export async function dailyUsage(
   userId: string,
@@ -42,6 +15,7 @@ export async function dailyUsage(
     .select({
       date: sql<string>`(timezone(${timezone}, ${agentUsage.createdAt}))::date`.as('date'),
       capability: agentUsage.capability,
+      status: agentUsage.status,
       promptTokens: agentUsage.promptTokens,
       completionTokens: agentUsage.completionTokens,
       costMicros: agentUsage.costMicros,
@@ -54,6 +28,11 @@ export async function dailyUsage(
       date: scoped.date,
       capability: scoped.capability,
       runs: sql<number>`count(*)::int`,
+      modelRequests: sql<number>`count(*) FILTER (WHERE ${scoped.status} != 'legacy')::int`,
+      failedRequests: sql<number>`count(*) FILTER (WHERE ${scoped.status} = 'failed')::int`,
+      unknownUsageRequests: sql<number>`count(*) FILTER (WHERE ${scoped.status} != 'legacy' AND ${scoped.promptTokens} IS NULL)::int`,
+      unknownCostRequests: sql<number>`count(*) FILTER (WHERE ${scoped.status} != 'legacy' AND ${scoped.costMicros} IS NULL)::int`,
+      legacyRuns: sql<number>`count(*) FILTER (WHERE ${scoped.status} = 'legacy')::int`,
       promptTokens: sql<number>`coalesce(sum(${scoped.promptTokens}), 0)::int`,
       completionTokens: sql<number>`coalesce(sum(${scoped.completionTokens}), 0)::int`,
       costMicros: sql<number>`coalesce(sum(${scoped.costMicros}), 0)::bigint`,
@@ -72,6 +51,11 @@ export async function dailyUsage(
   }));
   return {
     days,
+    modelRequests: rows.reduce((sum, row) => sum + row.modelRequests, 0),
+    failedRequests: rows.reduce((sum, row) => sum + row.failedRequests, 0),
+    unknownUsageRequests: rows.reduce((sum, row) => sum + row.unknownUsageRequests, 0),
+    unknownCostRequests: rows.reduce((sum, row) => sum + row.unknownCostRequests, 0),
+    legacyRuns: rows.reduce((sum, row) => sum + row.legacyRuns, 0),
     totalRuns: items.reduce((acc, item) => acc + item.runs, 0),
     totalPromptTokens: items.reduce((acc, item) => acc + item.promptTokens, 0),
     totalCompletionTokens: items.reduce((acc, item) => acc + item.completionTokens, 0),

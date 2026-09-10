@@ -1,3 +1,4 @@
+import { AgentExecutionSection } from './AgentExecutionSection';
 import type { ReactNode } from 'react';
 import type { AgentActionLogItem, AgentMetricsResponse } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -148,7 +149,13 @@ export function AgentActivitySection() {
     body = (
       <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">…</p>
     );
-  } else if (query.isError || !query.data || query.data.length === 0) {
+  } else if (query.isError) {
+    body = (
+      <p role="alert" className="text-[length:var(--text-meta)] text-muted">
+        {copy.error}
+      </p>
+    );
+  } else if (!query.data || query.data.length === 0) {
     body = (
       <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {copy.empty}
@@ -226,6 +233,8 @@ export function AgentActivitySection() {
 
   return (
     <div className="flex flex-col gap-5">
+      <AgentExecutionSection />
+      <h3 className="text-[length:var(--text-meta)] font-semibold text-fg">{copy.proposals}</h3>
       <AdoptionSummary data={metricsQuery.data} />
       {body}
     </div>

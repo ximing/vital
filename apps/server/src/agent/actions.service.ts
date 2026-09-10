@@ -161,8 +161,7 @@ export async function applyActionFeedback(
   const now = new Date();
   const next = await db.transaction(async (tx) => {
     if (input.feedback === 'accepted' && row.actionType === 'task.draft') {
-      const draft =
-        typeof row.payload['draft'] === 'string' ? row.payload['draft'].trim() : '';
+      const draft = typeof row.payload['draft'] === 'string' ? row.payload['draft'].trim() : '';
       if (draft !== '') {
         const [task] = await tx
           .select({

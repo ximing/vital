@@ -20,9 +20,14 @@ import {
   listAgentMemory,
   patchAgentMemory,
 } from './memory.service.js';
+import { listExecutions } from './executions.service.js';
 import { dailyUsage } from './usage.service.js';
 
 export function registerAgentRoutes(app: FastifyInstance): void {
+  app.get('/api/v1/agent/executions', { preHandler: [requireAuth] }, async (req) => {
+    if (!req.user) throw AppError.of(401, 'INVALID_TOKEN');
+    return listExecutions(req.user.id, agentUsageQuerySchema.parse(req.query).days);
+  });
   app.get('/api/v1/agent/actions', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');

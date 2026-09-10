@@ -1,5 +1,9 @@
+import { buildFastify } from '../../src/app.js';
+import { resetDb } from '../helpers/db.js';
+import { registerUser } from '../helpers/session.js';
+import type { FastifyInstance } from 'fastify';
 import { createServer, type Server } from 'node:http';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { StoredLlmProvider, User } from '../../src/db/schema.js';
 import { encryptSecret } from '../../src/llm/crypto.js';
 import {
@@ -9,6 +13,9 @@ import {
   testProviderModel,
 } from '../../src/llm/pi.js';
 
+let app: FastifyInstance;
+beforeAll(async () => { app = await buildFastify(); });
+afterAll(async () => { await app.close(); });
 let server: Server;
 let requests: Record<string, unknown>[];
 let reject = false;
@@ -25,6 +32,8 @@ const user = {
 } as unknown as User;
 
 beforeEach(async () => {
+  await resetDb();
+  user.id = (await registerUser(app)).id;
   requests = [];
   reject = false;
   stored.modelParameters = {};
@@ -90,7 +99,7 @@ describe('always-thinking models', () => {
     });
   });
   it('enables supported reasoning for connection tests', async () => {
-    await expect(testProviderModel(stored, 'glm-5.3-flash')).resolves.toEqual({ ok: true });
+    await expect(testProviderModel(user.id, stored, 'glm-5.3-flash')).resolves.toEqual({ ok: true });
     expect(requests[0]).toMatchObject({ thinking: { type: 'enabled' }, reasoning_effort: 'low' });
   });
   it('uses saved per-model parameters for tasks and connection tests', async () => {
@@ -104,7 +113,7 @@ describe('always-thinking models', () => {
       },
     };
     await completeText(user, 'task.parse', { messages: [{ role: 'user', content: '测试' }] });
-    await testProviderModel(stored, 'glm-5.3-flash');
+    await testProviderModel(user.id, stored, 'glm-5.3-flash');
     for (const request of requests)
       expect(request).toMatchObject({
         thinking: { type: 'enabled' },
@@ -127,7 +136,7 @@ describe('always-thinking models', () => {
   });
   it('does not report success when the provider returns an error', async () => {
     reject = true;
-    await expect(testProviderModel(stored, 'glm-5.3-flash')).rejects.toMatchObject({
+    await expect(testProviderModel(user.id, stored, 'glm-5.3-flash')).rejects.toMatchObject({
       code: 'LLM_UNAVAILABLE',
     });
   });

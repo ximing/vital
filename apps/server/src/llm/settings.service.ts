@@ -167,5 +167,5 @@ export async function testLlmProvider(
   const user = await loadUser(userId);
   const stored = findProviderOr404(user, id);
   if (!stored.models.includes(model)) throw AppError.of(400, 'VALIDATION_ERROR');
-  return testProviderModel(stored, model);
+  return testProviderModel(userId, stored, model);
 }

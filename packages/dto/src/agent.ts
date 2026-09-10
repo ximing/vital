@@ -87,7 +87,13 @@ export interface AgentUsageDaily {
 
 export interface AgentUsageSummary {
   days: number;
+  /** Historical rows plus new model requests; use modelRequests for actual request count. */
   totalRuns: number;
+  modelRequests?: number;
+  failedRequests?: number;
+  unknownUsageRequests?: number;
+  unknownCostRequests?: number;
+  legacyRuns?: number;
   totalPromptTokens: number;
   totalCompletionTokens: number;
   totalCostMicros: number;
@@ -200,3 +206,20 @@ export const agentMemoryIdParamsSchema = z.object({
   id: uuidSchema,
 });
 export type AgentMemoryIdParams = z.infer<typeof agentMemoryIdParamsSchema>;
+
+/** Execution history is separate from actionable proposals and their feedback. */
+export interface AgentExecution {
+  id: string;
+  parentId: string | null;
+  jobId: string | null;
+  capability: string;
+  status: 'running' | 'succeeded' | 'failed' | 'skipped';
+  attempt: number;
+  reason: string | null;
+  targetType: string | null;
+  targetId: string | null;
+  resultSummary: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+}

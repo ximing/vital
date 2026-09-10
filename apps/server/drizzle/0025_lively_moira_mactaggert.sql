@@ -1,0 +1,2 @@
+ALTER TABLE "agent_actions" DROP CONSTRAINT "agent_actions_type_check";--> statement-breakpoint
+ALTER TABLE "agent_actions" ADD CONSTRAINT "agent_actions_type_check" CHECK ("agent_actions"."action_type" IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'task.draft', 'habit.create', 'habit.adjust', 'habit.nudge'));

@@ -22,7 +22,11 @@ async function windowDaily(
   until?: Date,
 ): Promise<AgentAdoptionDaily[]> {
   const db = getDb();
-  const filters: SQL[] = [eq(agentActions.userId, userId), gte(agentActions.createdAt, since)];
+  const filters: SQL[] = [
+    eq(agentActions.userId, userId),
+    gte(agentActions.createdAt, since),
+    sql`${agentActions.actionType} <> 'task.parse'`,
+  ];
   if (until !== undefined) filters.push(lt(agentActions.createdAt, until));
 
   const scoped = db

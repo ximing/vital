@@ -138,3 +138,49 @@ describe('settings usage tab', () => {
     expect(document.querySelector('[data-region="usage-table"]')).toBeNull();
   });
 });
+
+describe('request telemetry', () => {
+  it('keeps failed requests visible when no token usage was reported', async () => {
+    vi.mocked(client.getAgentUsage).mockResolvedValue({
+      days: 30,
+      totalRuns: 7,
+      modelRequests: 2,
+      failedRequests: 2,
+      unknownUsageRequests: 2,
+      legacyRuns: 5,
+      totalPromptTokens: 0,
+      totalCompletionTokens: 0,
+      totalCostMicros: 0,
+      items: [],
+    });
+    renderAt('/settings?tab=usage');
+    expect(await screen.findByText('模型请求')).toBeInTheDocument();
+    expect(screen.getByText('模型请求').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('失败请求').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('用量未知请求').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('历史聚合记录').parentElement).toHaveTextContent('5');
+    expect(screen.getByText(/未返回用量的请求不计入/)).toBeInTheDocument();
+    expect(screen.queryByText(t.settings.usage.empty)).not.toBeInTheDocument();
+  });
+
+  it('marks incomplete cost even when token usage is known', async () => {
+    vi.mocked(client.getAgentUsage).mockResolvedValue({
+      ...summary,
+      modelRequests: 3,
+      unknownUsageRequests: 0,
+      unknownCostRequests: 1,
+      legacyRuns: 0,
+    });
+    renderAt('/settings?tab=usage');
+    expect(await screen.findByText('成本未知请求')).toBeInTheDocument();
+    expect(screen.getByText('成本未知请求').parentElement).toHaveTextContent('1');
+    expect(screen.getByText(/成本合计不完整/)).toBeInTheDocument();
+  });
+
+  it('reports a loading error instead of claiming there was no usage', async () => {
+    vi.mocked(client.getAgentUsage).mockRejectedValue(new Error('offline'));
+    renderAt('/settings?tab=usage');
+    expect(await screen.findByRole('alert')).toHaveTextContent('用量加载失败');
+    expect(screen.queryByText(t.settings.usage.empty)).not.toBeInTheDocument();
+  });
+});

@@ -31,10 +31,7 @@ export const AGENT_MEMORY_SCOPES = [
 export type AgentMemoryScope = (typeof AGENT_MEMORY_SCOPES)[number];
 
 /** Discriminated per job_type. */
-export type AgentJobPayload =
-  | { outcomeId: string }
-  | { taskId: string }
-  | { date: string };
+export type AgentJobPayload = { outcomeId: string } | { taskId: string } | { date: string };
 
 export const agentJobs = pgTable(
   'agent_jobs',
@@ -77,6 +74,9 @@ export const agentActions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     jobId: char('job_id', { length: 36 }).references(() => agentJobs.id, { onDelete: 'set null' }),
+    executionId: char('execution_id', { length: 36 }).references(() => agentExecutions.id, {
+      onDelete: 'set null',
+    }),
     actionType: varchar('action_type', { length: 32 }).notNull(),
     targetType: varchar('target_type', { length: 16 }).notNull(),
     /** Plain column, no FK — the target may be undone or deleted. */
@@ -94,10 +94,7 @@ export const agentActions = pgTable(
       'agent_actions_type_check',
       sql`${t.actionType} IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'task.draft', 'habit.create', 'habit.adjust', 'habit.nudge')`,
     ),
-    check(
-      'agent_actions_target_type_check',
-      sql`${t.targetType} IN ('outcome', 'task', 'habit')`,
-    ),
+    check('agent_actions_target_type_check', sql`${t.targetType} IN ('outcome', 'task', 'habit')`),
     check(
       'agent_actions_feedback_check',
       sql`${t.feedback} IN ('pending', 'accepted', 'edited', 'dismissed')`,
@@ -118,7 +115,10 @@ export const agentMemory = pgTable(
     /** User-written rows are protected: distill may never update or drop them. */
     manual: boolean('manual').notNull().default(false),
     /** Injection filter: capabilities this row may be injected into. */
-    scope: text('scope').array().notNull().default(sql`'{all}'`),
+    scope: text('scope')
+      .array()
+      .notNull()
+      .default(sql`'{all}'`),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
@@ -132,6 +132,36 @@ export const agentMemory = pgTable(
   ],
 );
 
+export const agentExecutions = pgTable(
+  'agent_executions',
+  {
+    id: char('id', { length: 36 }).primaryKey(),
+    userId: char('user_id', { length: 36 })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    parentId: char('parent_id', { length: 36 }),
+    jobId: char('job_id', { length: 36 }).references(() => agentJobs.id, { onDelete: 'set null' }),
+    capability: varchar('capability', { length: 64 }).notNull(),
+    status: varchar('status', { length: 16 }).notNull().default('running'),
+    attempt: integer('attempt').notNull().default(1),
+    reason: varchar('reason', { length: 80 }),
+    targetType: varchar('target_type', { length: 16 }),
+    targetId: char('target_id', { length: 36 }),
+    resultSummary: text('result_summary'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
+    durationMs: integer('duration_ms'),
+  },
+  (t) => [
+    index('idx_agent_executions_user_created').on(t.userId, t.createdAt),
+    index('idx_agent_executions_job').on(t.jobId),
+    check(
+      'agent_executions_status_check',
+      sql`${t.status} IN ('running', 'succeeded', 'failed', 'skipped')`,
+    ),
+  ],
+);
+
 export const agentUsage = pgTable(
   'agent_usage',
   {
@@ -139,22 +169,30 @@ export const agentUsage = pgTable(
     userId: char('user_id', { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    jobId: char('job_id', { length: 36 })
-      .notNull()
-      .references(() => agentJobs.id, { onDelete: 'cascade' }),
-    capability: varchar('capability', { length: 24 }).notNull(),
+    /** Synchronous task parsing has no background job. */
+    jobId: char('job_id', { length: 36 }).references(() => agentJobs.id, { onDelete: 'cascade' }),
+    executionId: char('execution_id', { length: 36 }).references(() => agentExecutions.id, {
+      onDelete: 'set null',
+    }),
+    provider: varchar('provider', { length: 120 }),
+    /** Pre-migration rows counted whole passes, not individual model requests. */
+    status: varchar('status', { length: 16 }).notNull().default('legacy'),
+    reason: varchar('reason', { length: 80 }),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
+    durationMs: integer('duration_ms'),
+    capability: varchar('capability', { length: 64 }).notNull(),
     model: varchar('model', { length: 120 }).notNull(),
-    promptTokens: integer('prompt_tokens').notNull(),
-    completionTokens: integer('completion_tokens').notNull(),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
     /** Micro-USD, computed at write time. 0 when the model's price is unknown. */
-    costMicros: bigint('cost_micros', { mode: 'number' }).notNull(),
+    costMicros: bigint('cost_micros', { mode: 'number' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [
     index('idx_agent_usage_user_created').on(t.userId, t.createdAt),
     check(
-      'agent_usage_capability_check',
-      sql`${t.capability} IN ('parse', 'headline', 'suggestion', 'cluster', 'decompose', 'draft', 'reflect', 'distill', 'notify', 'critic')`,
+      'agent_usage_status_check',
+      sql`${t.status} IN ('legacy', 'running', 'succeeded', 'failed')`,
     ),
   ],
 );

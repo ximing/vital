@@ -31,7 +31,7 @@ const EmojiGrid = lazy(async () => {
             placeholder={t.nav.search}
             className="mx-1 mt-1 rounded-md border border-border bg-surface px-2 py-1.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
           />
-          <EmojiPicker.Viewport className="relative min-h-0 flex-1 overflow-auto">
+          <EmojiPicker.Viewport className="relative min-h-0 flex-1 overflow-auto overscroll-contain">
             <EmojiPicker.Loading className="absolute inset-0 flex items-center justify-center text-[length:var(--text-caption)] text-muted">
               {t.todos.loading}
             </EmojiPicker.Loading>
@@ -100,12 +100,16 @@ export function ListIconPopover({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && panelRef.current?.contains(event.target)) return;
+      onClose();
+    };
     window.addEventListener('keydown', onKey);
-    window.addEventListener('scroll', onClose, true);
+    window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onClose);
     return () => {
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('scroll', onClose, true);
+      window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onClose);
     };
   }, [onClose]);

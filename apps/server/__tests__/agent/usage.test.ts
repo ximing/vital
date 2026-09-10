@@ -2,7 +2,7 @@
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { dailyUsage, recordUsage } from '../../src/agent/usage.service.js';
+import { dailyUsage } from '../../src/agent/usage.service.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
 import { agentJobs, agentUsage } from '../../src/db/schema.js';
@@ -66,7 +66,7 @@ async function insertUsageRow(
 }
 
 describe('agent usage ledger', () => {
-  it('recordUsage persists tokens and micro-USD cost verbatim', async () => {
+  it('legacy rows retain tokens and micro-USD cost verbatim', async () => {
     const alice = await registerUser(app);
     const jobId = await makeJob(alice.id, 'record');
 
@@ -187,3 +187,14 @@ describe('agent usage ledger', () => {
     expect(bad.statusCode).toBe(400);
   });
 });
+
+async function recordUsage(
+  tx: Pick<ReturnType<typeof getDb>, 'insert'>,
+  input: { userId: string; jobId: string; capability: string; model: string;
+    usage: { promptTokens: number; completionTokens: number; costMicros: number } },
+): Promise<void> {
+  await tx.insert(agentUsage).values({
+    id: crypto.randomUUID(), userId: input.userId, jobId: input.jobId,
+    capability: input.capability, model: input.model, ...input.usage, status: 'legacy',
+  });
+}

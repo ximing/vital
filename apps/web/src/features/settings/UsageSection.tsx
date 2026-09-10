@@ -66,14 +66,22 @@ export function UsageSection() {
 
   if (query.isError || !query.data) {
     return (
-      <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-        {copy.empty}
+      <p
+        role="alert"
+        className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted"
+      >
+        {copy.error}
       </p>
     );
   }
 
   const summary = query.data;
-  if (summary.items.length === 0) {
+  if (
+    summary.items.length === 0 &&
+    summary.totalRuns === 0 &&
+    !summary.modelRequests &&
+    !summary.legacyRuns
+  ) {
     return (
       <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {copy.empty}
@@ -87,7 +95,7 @@ export function UsageSection() {
 
   return (
     <div>
-      <div className="mt-1 flex gap-7">
+      <div className="mt-1 flex flex-wrap gap-x-7 gap-y-4">
         <div>
           <p className="font-display text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] tracking-tight text-fg">
             {formatTokens(totalTokens)}
@@ -106,13 +114,33 @@ export function UsageSection() {
         </div>
         <div>
           <p className="font-display text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] tracking-tight text-fg">
-            {summary.totalRuns}
+            {summary.modelRequests ?? '—'}
           </p>
           <p className="mt-0.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
             {copy.totalRuns}
           </p>
         </div>
+        {[
+          [copy.failedRequests, summary.failedRequests],
+          [copy.unknownUsageRequests, summary.unknownUsageRequests],
+          [copy.unknownCostRequests, summary.unknownCostRequests],
+          [copy.legacyRuns, summary.legacyRuns ?? summary.totalRuns],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <p className="font-display text-[length:var(--text-title)] font-bold text-fg">
+              {value ?? '—'}
+            </p>
+            <p className="mt-0.5 text-[length:var(--text-caption)] text-tertiary">{label}</p>
+          </div>
+        ))}
       </div>
+      <p className="mt-3 text-[length:var(--text-caption)] text-muted">{copy.unknownUsageHint}</p>
+      {(summary.unknownCostRequests ?? 0) > 0 && (
+        <p className="mt-1 text-[length:var(--text-caption)] text-muted">{copy.unknownCostHint}</p>
+      )}
+      {(summary.legacyRuns ?? summary.totalRuns) > 0 && (
+        <p className="mt-1 text-[length:var(--text-caption)] text-muted">{copy.legacyHint}</p>
+      )}
 
       <div className="mt-4 overflow-x-auto">
         <table className="w-full border-collapse" data-region="usage-table">
