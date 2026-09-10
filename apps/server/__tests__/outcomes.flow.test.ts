@@ -253,6 +253,78 @@ describe('GET /api/v1/today', () => {
     expect(byName.get('带时刻已过点')).toBe('alert');
   });
 
+  it('includes the now card with rule-based recommendations', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const outcomeId = await createOutcome(alice.token, '换工作');
+    // smart:today only surfaces tasks due on/before today (or starting today).
+    const today = DateTime.now().setZone('Asia/Shanghai').toISODate();
+    if (!today) throw new Error('invalid local date');
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '简历最后一轮校对',
+        listId: inbox,
+        outcomeId,
+        estimateMinutes: 30,
+        dueAt: `${today}T00:00:00+08:00`,
+        isAllDay: true,
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const taskId = created.json().id as string;
+
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/today',
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    const now = res.json().now;
+    expect(now.quiet).toBe(false);
+    expect(now.continuousMinutes).toBeGreaterThan(0);
+    expect(typeof now.reason).toBe('string');
+    const rec = now.recommendations.find(
+      (r: { taskId: string }) => r.taskId === taskId,
+    );
+    expect(rec).toMatchObject({
+      title: '简历最后一轮校对',
+      estimateMinutes: 30,
+      outcomeId,
+    });
+  });
+
+  it('suppresses now recommendations inside quiet hours', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '改简历', listId: inbox },
+    });
+    const prefs = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { notifications: { quietHoursStart: '00:00', quietHoursEnd: '23:59' } },
+    });
+    expect(prefs.statusCode).toBe(200);
+
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/today',
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    const now = res.json().now;
+    expect(now.quiet).toBe(true);
+    expect(now.recommendations).toEqual([]);
+    expect(now.reason).toContain('静默');
+  });
+
   it('requires auth', async () => {
     const res = await injectJson(app, { method: 'GET', url: '/api/v1/today' });
     expect(res.statusCode).toBe(401);

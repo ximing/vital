@@ -12,6 +12,7 @@ import {
   type Task,
   type TaskCollection,
   type TaskCounts,
+  type TaskDraftTrigger,
   type TaskStatus,
   type UncompleteTaskInput,
 } from '@vital/dto';
@@ -39,6 +40,7 @@ import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
 import {
   inboxItems,
+  agentActions,
   taskCompletions,
   tasks,
   taskTags,
@@ -57,8 +59,10 @@ import { llmPublicOf } from '../llm/settings.service.js';
 import {
   enqueueOutcomeRefresh,
   enqueueTaskDecompose,
+  enqueueTaskDraft,
   hasPendingDecomposeAction,
 } from '../agent/jobs.js';
+import { toAgentActionDto } from '../agent/actions.service.js';
 import { spawnNextOnComplete } from '../habits/habits.service.js';
 import { isDefer, needsDecomposition } from '../outcomes/rule-engine.js';
 import { assertOwnedOutcomeId } from '../outcomes/shared.js';
@@ -479,6 +483,12 @@ export async function createTaskFromText(
 export async function patchTask(userId: string, id: string, input: PatchTaskInput): Promise<Task> {
   const task = await getOwnedTaskOr404(userId, id);
   if (input.pinned && task.parentId) throw AppError.of(400, 'VALIDATION_ERROR');
+  if (
+    input.delegable === true &&
+    (task.status === 'done' || task.status === 'canceled')
+  ) {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
   if (input.tagIds !== undefined) await assertOwnedTagIds(userId, input.tagIds);
   if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
   if (input.listId !== undefined && task.parentId && input.listId !== task.listId) {
@@ -615,6 +625,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   if (input.listId !== undefined) patch.listId = input.listId;
   if (input.outcomeId !== undefined) patch.outcomeId = input.outcomeId;
   if (input.estimateMinutes !== undefined) patch.estimateMinutes = input.estimateMinutes;
+  if (input.delegable !== undefined) patch.delegable = input.delegable;
 
   const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {
@@ -659,6 +670,35 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     }
   });
   return dtoOf(await getOwnedTaskOr404(userId, id));
+}
+
+/**
+ * Manual trigger: the user asks the agent to draft an execution plan for a
+ * delegable task. Idempotent — an existing pending draft is returned as-is;
+ * otherwise a task.draft job is (re)armed and runs in the worker.
+ */
+export async function requestTaskDraft(userId: string, id: string): Promise<TaskDraftTrigger> {
+  const task = await getOwnedTaskOr404(userId, id);
+  if (!task.delegable || task.status === 'done' || task.status === 'canceled') {
+    throw AppError.of(400, 'VALIDATION_ERROR');
+  }
+  const db = getDb();
+  const [pending] = await db
+    .select()
+    .from(agentActions)
+    .where(
+      and(
+        eq(agentActions.userId, userId),
+        eq(agentActions.targetType, 'task'),
+        eq(agentActions.targetId, task.id),
+        eq(agentActions.actionType, 'task.draft'),
+        eq(agentActions.feedback, 'pending'),
+      ),
+    )
+    .limit(1);
+  if (pending) return { status: 'pending', action: toAgentActionDto(pending) };
+  await enqueueTaskDraft(db, userId, task.id, new Date());
+  return { status: 'queued', action: null };
 }
 
 export async function deleteTask(userId: string, id: string): Promise<void> {

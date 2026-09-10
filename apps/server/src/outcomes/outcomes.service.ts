@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type {
   CreateOutcomeInput,
   ListOutcomesQuery,
   Outcome,
+  OutcomeDetail,
+  OutcomeMaterial,
   OutcomeSignal,
   PatchOutcomeInput,
   Task,
@@ -14,16 +16,21 @@ import type {
 import { getDb } from '../db/index.js';
 import {
   agentActions,
+  habits,
   inboxItems,
   outcomes,
   reports,
   taskCompletions,
   tasks,
+  taskTags,
   type OutcomeRow,
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { getUserEntity } from '../auth/auth.service.js';
+import { summarizePayload, targetNamesFor, toAgentActionDto } from '../agent/actions.service.js';
 import { listTasks } from '../tasks/tasks.service.js';
+import { toTaskDto } from '../tasks/task-dto.js';
+import { computeNow } from './now-engine.js';
 import { computeSignal, isOverdue, selectRuleNextStep, type OutcomeFacts } from './rule-engine.js';
 import { getOwnedOutcomeOr404 } from './shared.js';
 
@@ -263,6 +270,104 @@ export async function undoOutcome(userId: string, id: string): Promise<void> {
   });
 }
 
+/** Hard cap for the detail timeline — mirrors the actions listing. */
+const DETAIL_ACTIONS_LIMIT = 50;
+
+/**
+ * Aggregated drill-down for one thread: outcome (with fresh rule fields), its
+ * non-deleted tasks, attached inbox materials, and the agent ledger rows that
+ * touch the thread itself or any of its tasks (newest first).
+ */
+export async function getOutcomeDetail(userId: string, id: string): Promise<OutcomeDetail> {
+  await getOwnedOutcomeOr404(userId, id);
+  // Read-through: rule layer is always fresh, same contract as the dashboard.
+  await refreshOutcomeRuleFields(userId, id);
+  const row = await getOwnedOutcomeOr404(userId, id);
+  const stats = await statsForOutcomes(userId, [id]);
+
+  const taskRows = await getDb()
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.userId, userId), eq(tasks.outcomeId, id), isNull(tasks.deletedAt)))
+    .orderBy(asc(tasks.sortOrder), asc(tasks.id));
+  const tagRows =
+    taskRows.length === 0
+      ? []
+      : await getDb()
+          .select()
+          .from(taskTags)
+          .where(
+            inArray(
+              taskTags.taskId,
+              taskRows.map((r) => r.id),
+            ),
+          );
+  const tagsByTask = new Map<string, string[]>();
+  for (const tagRow of tagRows) {
+    const current = tagsByTask.get(tagRow.taskId);
+    if (current) current.push(tagRow.tagId);
+    else tagsByTask.set(tagRow.taskId, [tagRow.tagId]);
+  }
+
+  const materialRows = await getDb()
+    .select({
+      id: inboxItems.id,
+      title: inboxItems.title,
+      excerpt: inboxItems.excerpt,
+      siteName: inboxItems.siteName,
+      source: inboxItems.source,
+      status: inboxItems.status,
+      capturedAt: inboxItems.capturedAt,
+    })
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.userId, userId),
+        eq(inboxItems.outcomeId, id),
+        isNull(inboxItems.deletedAt),
+        ne(inboxItems.status, 'converted'),
+      ),
+    )
+    .orderBy(desc(inboxItems.capturedAt));
+  const materials: OutcomeMaterial[] = materialRows.map((m) => ({
+    id: m.id,
+    title: m.title,
+    excerpt: m.excerpt,
+    siteName: m.siteName,
+    source: m.source as OutcomeMaterial['source'],
+    status: m.status as OutcomeMaterial['status'],
+    capturedAt: m.capturedAt.toISOString(),
+  }));
+
+  const taskIds = taskRows.map((r) => r.id);
+  const actionConds: SQL[] = [
+    and(eq(agentActions.targetType, 'outcome'), eq(agentActions.targetId, id)) as SQL,
+  ];
+  if (taskIds.length > 0) {
+    actionConds.push(
+      and(eq(agentActions.targetType, 'task'), inArray(agentActions.targetId, taskIds)) as SQL,
+    );
+  }
+  const actionRows = await getDb()
+    .select()
+    .from(agentActions)
+    .where(and(eq(agentActions.userId, userId), or(...actionConds)))
+    .orderBy(desc(agentActions.createdAt))
+    .limit(DETAIL_ACTIONS_LIMIT);
+  const names = await targetNamesFor(userId, actionRows);
+
+  return {
+    outcome: toOutcomeDto(row, stats.get(id)),
+    tasks: taskRows.map((r) => toTaskDto(r, tagsByTask.get(r.id) ?? [])),
+    materials,
+    agentActions: actionRows.map((action) => ({
+      ...toAgentActionDto(action),
+      targetName: names.get(action.targetId) ?? null,
+      payloadSummary: summarizePayload(action.actionType, action.payload),
+    })),
+  };
+}
+
 /** Recompute and store the deterministic rule-layer fields for one thread. */
 export async function refreshOutcomeRuleFields(
   userId: string,
@@ -419,10 +524,40 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
   }).then((r) => r.items);
 
   const pulse = await todayPulse(userId, timezone);
+
+  // "当下" card: rule layer only for now; the agent layer may later rewrite the reason.
+  const entity = await getUserEntity(userId);
+  const habitWindowRows = await getDb()
+    .select({ start: habits.windowStart, end: habits.windowEnd })
+    .from(habits)
+    .where(and(eq(habits.userId, userId), eq(habits.active, true)));
+  const signalByOutcome = new Map(fresh.map((row) => [row.id, asSignal(row.ruleSignal)]));
+  const now = computeNow({
+    now: new Date(),
+    timezone,
+    tasks: todayTasks.map((task) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      estimateMinutes: task.estimateMinutes,
+      dueAt: task.dueAt ? new Date(task.dueAt) : null,
+      isAllDay: task.isAllDay,
+      outcomeId: task.outcomeId,
+      outcomeSignal: task.outcomeId ? (signalByOutcome.get(task.outcomeId) ?? null) : null,
+    })),
+    habitWindows: habitWindowRows.flatMap((row) =>
+      row.start !== null && row.end !== null ? [{ start: row.start, end: row.end }] : [],
+    ),
+    quietHoursStart: entity.quietHoursStart,
+    quietHoursEnd: entity.quietHoursEnd,
+  });
+
   return {
     outcomes: fresh.map((row) => toOutcomeDto(row, stats.get(row.id))),
     tasks: todayTasks,
     pulse,
+    now,
     generatedAt: new Date().toISOString(),
   };
 }

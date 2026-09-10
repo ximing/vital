@@ -1,4 +1,5 @@
 import type { Task } from '@vital/dto';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,7 @@ const task: Task = {
   outcomeId: null,
   estimateMinutes: null,
   deferCount: 0,
+  delegable: false,
   habitId: null,
   habitSeq: null,
   title: '发送周报',
@@ -39,25 +41,34 @@ const task: Task = {
 };
 
 describe('TaskDetail reminder and recurrence controls', () => {
-  it('writes semantic reminder offsets and fixed recurrence kinds', async () => {
-    const user = userEvent.setup();
-    const onPatch = vi.fn();
+  function renderDetail(next: Task, onPatch = vi.fn()) {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
     render(
       <RabRoot>
-        <TaskDetail
-          task={task}
-          subtasks={[]}
-          lists={[]}
-          tags={[]}
-          timeZone="Asia/Shanghai"
-          onPatch={onPatch}
-          onComplete={vi.fn()}
-          onDelete={vi.fn()}
-          onAddSubtask={vi.fn()}
-          onCreateTag={vi.fn()}
-        />
+        <QueryClientProvider client={qc}>
+          <TaskDetail
+            task={next}
+            subtasks={[]}
+            lists={[]}
+            tags={[]}
+            timeZone="Asia/Shanghai"
+            onPatch={onPatch}
+            onComplete={vi.fn()}
+            onDelete={vi.fn()}
+            onAddSubtask={vi.fn()}
+            onCreateTag={vi.fn()}
+          />
+        </QueryClientProvider>
       </RabRoot>,
     );
+    return onPatch;
+  }
+
+  it('writes semantic reminder offsets and fixed recurrence kinds', async () => {
+    const user = userEvent.setup();
+    const onPatch = renderDetail(task);
 
     await user.click(screen.getByRole('button', { name: t.todos.addDate }));
     expect(screen.getByRole('button', { name: t.todos.datePoint })).toBeInTheDocument();
@@ -78,23 +89,12 @@ describe('TaskDetail reminder and recurrence controls', () => {
 
   it('keeps on-time and offset reminders for all-day dated tasks', async () => {
     const user = userEvent.setup();
-    const onPatch = vi.fn();
-    render(
-      <RabRoot>
-        <TaskDetail
-          task={{ ...task, isAllDay: true, dueAt: '2026-09-07T16:00:00.000Z', startAt: '2026-09-06T16:00:00.000Z' }}
-          subtasks={[]}
-          lists={[]}
-          tags={[]}
-          timeZone="Asia/Shanghai"
-          onPatch={onPatch}
-          onComplete={vi.fn()}
-          onDelete={vi.fn()}
-          onAddSubtask={vi.fn()}
-          onCreateTag={vi.fn()}
-        />
-      </RabRoot>,
-    );
+    const onPatch = renderDetail({
+      ...task,
+      isAllDay: true,
+      dueAt: '2026-09-07T16:00:00.000Z',
+      startAt: '2026-09-06T16:00:00.000Z',
+    });
 
     await user.click(screen.getByRole('button', { name: t.todos.addDate }));
     await user.click(screen.getByRole('button', { name: t.todos.reminderNone }));

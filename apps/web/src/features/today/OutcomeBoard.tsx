@@ -1,6 +1,7 @@
 import type { Outcome } from '@vital/dto';
 import { Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
@@ -8,7 +9,6 @@ import { Icon } from '@/ui/icon';
 import { sortOutcomes } from './model';
 import { OutcomeCard } from './OutcomeCard';
 import { useOutcomeActions } from './queries';
-import { todayUi, useTodayUi } from './today-ui.service';
 
 function CreateOutcomeInput({
   autoFocus = false,
@@ -82,7 +82,7 @@ export function EmptyOutcomes() {
 }
 
 export function OutcomeBoard({ outcomes, now }: { outcomes: Outcome[]; now: Date }) {
-  const selectedId = useTodayUi((s) => s.selectedOutcomeId);
+  const navigate = useNavigate();
   const actions = useOutcomeActions();
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -98,6 +98,12 @@ export function OutcomeBoard({ outcomes, now }: { outcomes: Outcome[]; now: Date
         <h2 className="eyebrow eyebrow-rule min-w-0 flex-1">
           {t.today.board} · {outcomes.length}
         </h2>
+        <Link
+          to="/settings?tab=threads"
+          className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
+        >
+          {t.today.manageOutcomes}
+        </Link>
         <button
           type="button"
           className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
@@ -133,8 +139,7 @@ export function OutcomeBoard({ outcomes, now }: { outcomes: Outcome[]; now: Date
               key={outcome.id}
               outcome={outcome}
               now={now}
-              selected={selectedId === outcome.id}
-              onToggle={() => todayUi().toggleOutcome(outcome.id)}
+              onOpen={() => void navigate(`/today/threads/${outcome.id}`)}
               onUndo={() => run(() => actions.undo.mutateAsync(outcome.id))}
               onRetry={() => run(() => actions.refresh.mutateAsync(outcome.id))}
             />

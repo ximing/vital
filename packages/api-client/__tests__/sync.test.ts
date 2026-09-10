@@ -19,6 +19,7 @@ const task = (over: Partial<Task> & Pick<Task, 'id' | 'listId'>): Task => ({
   pinned: false,
   estimateMinutes: null,
   deferCount: 0,
+  delegable: false,
   habitId: null,
   habitSeq: null,
   dueAt: null,

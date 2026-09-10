@@ -5,8 +5,10 @@ import {
   ChartColumn,
   KeyRound,
   Palette,
+  Repeat,
   SlidersHorizontal,
   Sparkles,
+  Target,
   User,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -14,10 +16,12 @@ import { useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { AccountSection } from '@/features/settings/AccountSection';
 import { AgentActivitySection } from '@/features/settings/AgentActivitySection';
+import { HabitsSection } from '@/features/settings/HabitsSection';
 import { LlmSection } from '@/features/settings/LlmSection';
 import { MemorySection } from '@/features/settings/MemorySection';
 import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { PrefsSection } from '@/features/settings/PrefsSection';
+import { ThreadsSection } from '@/features/settings/ThreadsSection';
 import { TokensSection } from '@/features/settings/TokensSection';
 import { UsageSection } from '@/features/settings/UsageSection';
 import { ThemeToggle } from '@/shell/ThemeToggle';
@@ -30,6 +34,8 @@ const TABS: {
     | 'appearance'
     | 'notifications'
     | 'prefs'
+    | 'habits'
+    | 'threads'
     | 'llm'
     | 'tokens'
     | 'usage'
@@ -42,6 +48,8 @@ const TABS: {
   { id: 'appearance', label: t.settings.tabs.appearance, icon: Palette },
   { id: 'notifications', label: t.settings.tabs.notifications, icon: Bell },
   { id: 'prefs', label: t.settings.tabs.prefs, icon: SlidersHorizontal },
+  { id: 'habits', label: t.settings.tabs.habits, icon: Repeat },
+  { id: 'threads', label: t.settings.tabs.threads, icon: Target },
   { id: 'llm', label: t.settings.tabs.llm, icon: Sparkles },
   { id: 'tokens', label: t.settings.tabs.tokens, icon: KeyRound },
   { id: 'usage', label: t.settings.tabs.usage, icon: ChartColumn },
@@ -54,6 +62,8 @@ function isTab(value: string | null): (typeof TABS)[number]['id'] {
     value === 'appearance' ||
     value === 'notifications' ||
     value === 'prefs' ||
+    value === 'habits' ||
+    value === 'threads' ||
     value === 'llm' ||
     value === 'tokens' ||
     value === 'usage' ||
@@ -172,6 +182,16 @@ export function SettingsPage() {
           {tab === 'prefs' ? (
             <SettingsBlock title={t.settings.prefs}>
               <PrefsSection />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'habits' ? (
+            <SettingsBlock title={t.settings.habits.title} description={t.settings.habits.hint}>
+              <HabitsSection />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'threads' ? (
+            <SettingsBlock title={t.settings.threads.title} description={t.settings.threads.hint}>
+              <ThreadsSection />
             </SettingsBlock>
           ) : null}
           {tab === 'llm' ? (

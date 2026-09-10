@@ -43,6 +43,8 @@ export const tasks = pgTable(
     estimateMinutes: integer('estimate_minutes'),
     /** How many times dueAt was pushed strictly forward. */
     deferCount: integer('defer_count').notNull().default(0),
+    /** User opted this task in for agent-drafted execution plans. */
+    delegable: boolean('delegable').notNull().default(false),
     /** Habit instance linkage (spawned by the habits engine). */
     habitId: char('habit_id', { length: 36 }),
     /** 1-based sequence within the habit's day. */

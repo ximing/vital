@@ -104,6 +104,14 @@ export function NotificationsSection({ heading = true }: { heading?: boolean }) 
       <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
         <input
           type="checkbox"
+          checked={prefs.agentInsights}
+          onChange={(e) => void savePrefs({ ...prefs, agentInsights: e.target.checked })}
+        />
+        {copy.agentInsights}
+      </label>
+      <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+        <input
+          type="checkbox"
           checked={prefs.taskRemind}
           onChange={(e) => void savePrefs({ ...prefs, taskRemind: e.target.checked })}
         />

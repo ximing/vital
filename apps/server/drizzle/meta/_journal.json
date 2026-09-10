@@ -141,6 +141,27 @@
       "when": 1789606800002,
       "tag": "0019_silky_ender_wiggin",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789606800003,
+      "tag": "0020_square_lake",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1789606800004,
+      "tag": "0021_tranquil_sabra",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789606800005,
+      "tag": "0022_rich_goliath",
+      "breakpoints": true
     }
   ]
 }

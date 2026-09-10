@@ -10,6 +10,7 @@ function sample(over: Partial<Task> & Pick<Task, 'dueAt' | 'timezone'>): Task {
     outcomeId: null,
     estimateMinutes: null,
     deferCount: 0,
+    delegable: false,
     habitId: null,
     habitSeq: null,
     title: 't',

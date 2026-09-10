@@ -8,6 +8,7 @@ import { Icon } from '@/ui/icon';
 import { META_CHIP_CLASS, OutcomeField } from '@/ui/outcome-field';
 import { usePopover } from '@/ui/use-popover';
 import { DecomposeBanner } from '@/features/today/DecomposeBanner';
+import { DraftSection } from './DraftSection';
 import { NotesEditor } from './NotesEditor';
 import { addDaysYmd, inboxList, listPickerRows, todayYmd } from './model';
 import { PriorityMenu } from './priority';
@@ -23,6 +24,7 @@ export function TaskDetail({
   tags,
   outcomes = [],
   decomposeAction = null,
+  draftAction = null,
   timeZone,
   onPatch,
   onComplete,
@@ -38,8 +40,11 @@ export function TaskDetail({
   outcomes?: Outcome[];
   /** Pending task.decompose proposal for this task, if any. */
   decomposeAction?: AgentAction | null;
+  /** Pending task.draft proposal for this task, if any. */
+  draftAction?: AgentAction | null;
   timeZone: string;
-  onPatch: (input: PatchTaskInput) => void;
+  /** May return a promise; save-status indicator tracks its settlement. */
+  onPatch: (input: PatchTaskInput) => Promise<unknown> | void;
   onComplete: (task: Task) => void;
   onDelete: () => void;
   onAddSubtask: (title: string) => void;
@@ -55,6 +60,44 @@ export function TaskDetail({
   const moreRef = useRef<HTMLDivElement>(null);
   const moreMenu = usePopover(moreRef);
 
+  type SaveState = 'idle' | 'editing' | 'saving' | 'saved' | 'error';
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const pendingSaves = useRef(0);
+  const failedSaves = useRef(0);
+  const lastFailedPatch = useRef<PatchTaskInput | null>(null);
+
+  function runPatch(input: PatchTaskInput) {
+    pendingSaves.current += 1;
+    setSaveState('saving');
+    Promise.resolve(onPatch(input))
+      .then(() => {
+        pendingSaves.current -= 1;
+        if (pendingSaves.current === 0 && failedSaves.current === 0) {
+          setSavedAt(new Date());
+          setSaveState('saved');
+        }
+      })
+      .catch(() => {
+        pendingSaves.current -= 1;
+        failedSaves.current += 1;
+        lastFailedPatch.current = input;
+        setSaveState('error');
+      });
+  }
+
+  function retrySave() {
+    const failed = lastFailedPatch.current;
+    failedSaves.current = 0;
+    lastFailedPatch.current = null;
+    if (!failed) {
+      setSaveState('idle');
+      return;
+    }
+    // Notes may have been edited further after the failure — retry with current text.
+    runPatch(failed.notes !== undefined ? { ...failed, notes } : failed);
+  }
+
   useEffect(() => {
     return () => {
       if (notesTimer.current) clearTimeout(notesTimer.current);
@@ -67,22 +110,23 @@ export function TaskDetail({
 
   function saveTitle() {
     const next = title.trim();
-    if (next !== '' && next !== task.title) onPatch({ title: next });
+    if (next !== '' && next !== task.title) runPatch({ title: next });
     else setTitle(task.title);
   }
 
   function queueNotes(next: string) {
     setNotes(next);
+    if (next !== task.notes) setSaveState('editing');
     if (notesTimer.current) clearTimeout(notesTimer.current);
     notesTimer.current = setTimeout(() => {
-      if (next !== task.notes) onPatch({ notes: next });
+      if (next !== task.notes) runPatch({ notes: next });
     }, 600);
   }
 
   function toggleTag(id: string) {
     const has = task.tagIds.includes(id);
     const tagIds = has ? task.tagIds.filter((item) => item !== id) : [...task.tagIds, id];
-    onPatch({ tagIds });
+    runPatch({ tagIds });
   }
 
   async function addTag(event: FormEvent) {
@@ -91,12 +135,12 @@ export function TaskDetail({
     if (name === '') return;
     const existing = tags.find((tag) => tag.name.toLowerCase() === name.toLowerCase());
     if (existing) {
-      if (!task.tagIds.includes(existing.id)) onPatch({ tagIds: [...task.tagIds, existing.id] });
+      if (!task.tagIds.includes(existing.id)) runPatch({ tagIds: [...task.tagIds, existing.id] });
       setTagDraft('');
       return;
     }
     const created = await onCreateTag(name);
-    if (created) onPatch({ tagIds: [...task.tagIds, created.id] });
+    if (created) runPatch({ tagIds: [...task.tagIds, created.id] });
     setTagDraft('');
   }
 
@@ -119,15 +163,16 @@ export function TaskDetail({
           zone={zone}
           weekStartsOn={weekStartsOn}
           align="end"
-          onChange={(next) => onPatch(draftToPatch(next, zone))}
+          onChange={(next) => runPatch(draftToPatch(next, zone))}
         />
         <div className="ml-auto flex items-center gap-1">
+          <SaveStatus state={saveState} savedAt={savedAt} onRetry={retrySave} />
           {movable ? (
             <button
               type="button"
               aria-label={task.pinned ? t.todos.unpin : t.todos.pin}
               aria-pressed={task.pinned}
-              onClick={() => onPatch({ pinned: !task.pinned })}
+              onClick={() => runPatch({ pinned: !task.pinned })}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted ${
                 task.pinned ? 'text-accent' : 'text-muted hover:text-fg'
               }`}
@@ -135,12 +180,12 @@ export function TaskDetail({
               <Icon icon={Pin} size={15} fill={task.pinned ? 'currentColor' : 'none'} />
             </button>
           ) : null}
-          <PriorityMenu value={task.priority} onChange={(priority) => onPatch({ priority })} />
+          <PriorityMenu value={task.priority} onChange={(priority) => runPatch({ priority })} />
           {movable ? (
             <ListPicker
               value={task.listId}
               options={listOptions}
-              onChange={(listId) => onPatch({ listId })}
+              onChange={(listId) => runPatch({ listId })}
             />
           ) : null}
           <div ref={moreRef} className="relative">
@@ -163,7 +208,7 @@ export function TaskDetail({
                   role="menuitem"
                   className="flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
                   onClick={() => {
-                    onPatch(scheduleDayPatch(task, todayYmd(zone), zone));
+                    runPatch(scheduleDayPatch(task, todayYmd(zone), zone));
                     moreMenu.close();
                   }}
                 >
@@ -174,7 +219,7 @@ export function TaskDetail({
                   role="menuitem"
                   className="flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
                   onClick={() => {
-                    onPatch(scheduleDayPatch(task, addDaysYmd(todayYmd(zone), 1), zone));
+                    runPatch(scheduleDayPatch(task, addDaysYmd(todayYmd(zone), 1), zone));
                     moreMenu.close();
                   }}
                 >
@@ -186,7 +231,7 @@ export function TaskDetail({
                     role="menuitem"
                     className="flex h-8 w-full items-center rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
                     onClick={() => {
-                      onPatch({ startAt: null, dueAt: null, isAllDay: true });
+                      runPatch({ startAt: null, dueAt: null, isAllDay: true });
                       moreMenu.close();
                     }}
                   >
@@ -233,11 +278,11 @@ export function TaskDetail({
           <OutcomeField
             value={task.outcomeId}
             outcomes={outcomes}
-            onChange={(outcomeId) => onPatch({ outcomeId })}
+            onChange={(outcomeId) => runPatch({ outcomeId })}
           />
           <EstimateField
             value={task.estimateMinutes}
-            onChange={(estimateMinutes) => onPatch({ estimateMinutes })}
+            onChange={(estimateMinutes) => runPatch({ estimateMinutes })}
           />
           {tags
             .filter((tag) => task.tagIds.includes(tag.id))
@@ -268,6 +313,12 @@ export function TaskDetail({
             <DecomposeBanner task={task} action={decomposeAction} />
           </div>
         ) : null}
+
+        <DraftSection
+          task={task}
+          action={draftAction}
+          onToggleDelegable={(delegable) => runPatch({ delegable })}
+        />
 
         <div className="mt-7">
           <p className="eyebrow eyebrow-rule mb-2.5">
@@ -440,6 +491,55 @@ function EstimateField({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function SaveStatus({
+  state,
+  savedAt,
+  onRetry,
+}: {
+  state: 'idle' | 'editing' | 'saving' | 'saved' | 'error';
+  savedAt: Date | null;
+  onRetry: () => void;
+}) {
+  if (state === 'idle') return null;
+  const hm = savedAt
+    ? `${String(savedAt.getHours()).padStart(2, '0')}:${String(savedAt.getMinutes()).padStart(2, '0')}`
+    : '';
+  const text =
+    state === 'editing'
+      ? t.todos.saveEditing
+      : state === 'saving'
+        ? t.todos.saveSaving
+        : state === 'saved'
+          ? `${t.todos.saveSaved}${hm === '' ? '' : ` · ${hm}`}`
+          : `${t.todos.saveFailed} · ${t.todos.retry}`;
+  const color =
+    state === 'error' ? 'text-danger' : state === 'saved' ? 'text-done' : 'text-tertiary';
+  if (state === 'error') {
+    return (
+      <button
+        type="button"
+        data-region="save-status"
+        data-state={state}
+        onClick={onRetry}
+        title={t.todos.retry}
+        className={`shrink-0 rounded-md px-1.5 py-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted ${color}`}
+      >
+        {text}
+      </button>
+    );
+  }
+  return (
+    <span
+      data-region="save-status"
+      data-state={state}
+      aria-live="polite"
+      className={`shrink-0 px-1.5 py-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${color}`}
+    >
+      {text}
+    </span>
   );
 }
 

@@ -55,6 +55,8 @@ export interface Task {
   estimateMinutes: number | null;
   /** How many times dueAt has been pushed forward. */
   deferCount: number;
+  /** User opted this task in for agent-drafted execution plans. */
+  delegable: boolean;
   /** Set when this task is a habit instance. */
   habitId: string | null;
   /** 1-based sequence within the habit's day (count habits). */
@@ -136,6 +138,7 @@ export const patchTaskInputSchema = z
     status: z.enum(['todo', 'doing', 'canceled']).optional(),
     priority: taskPrioritySchema.optional(),
     pinned: z.boolean().optional(),
+    delegable: z.boolean().optional(),
     estimateMinutes: z.number().int().min(0).max(100000).nullable().optional(),
     dueAt: isoDateTimeSchema.nullable().optional(),
     startAt: isoDateTimeSchema.nullable().optional(),

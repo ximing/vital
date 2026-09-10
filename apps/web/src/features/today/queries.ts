@@ -3,6 +3,7 @@ import type {
   CreateOutcomeInput,
   Habit,
   Outcome,
+  OutcomeDetail,
   PatchOutcomeInput,
   TodayDashboard,
 } from '@vital/dto';
@@ -13,6 +14,7 @@ export const todayKeys = {
   all: ['today'] as const,
   dashboard: ['today', 'dashboard'] as const,
   outcomes: (status: 'open' | 'closed' = 'open') => ['today', 'outcomes', status] as const,
+  detail: (id: string) => ['today', 'thread', id] as const,
   habits: ['today', 'habits'] as const,
   decompose: (taskId: string) => ['today', 'decompose', taskId] as const,
 };
@@ -21,6 +23,15 @@ export function useTodayQuery() {
   return useQuery({
     queryKey: todayKeys.dashboard,
     queryFn: (): Promise<TodayDashboard> => client.getToday(),
+  });
+}
+
+/** Aggregated drill-down for one thread (/today/threads/:id). */
+export function useOutcomeDetailQuery(id: string) {
+  return useQuery({
+    queryKey: todayKeys.detail(id),
+    enabled: id !== '',
+    queryFn: (): Promise<OutcomeDetail> => client.getOutcomeDetail(id),
   });
 }
 

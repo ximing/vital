@@ -8,8 +8,10 @@ export const LLM_CAPABILITIES = [
   'agent.headline',
   'agent.cluster',
   'agent.decompose',
+  'agent.draft',
   'agent.reflect',
   'agent.distill',
+  'agent.notify',
   'agent.critic',
 ] as const;
 export type LlmCapability = (typeof LLM_CAPABILITIES)[number];

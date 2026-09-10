@@ -4,7 +4,7 @@ import { InboxReader, InboxWorkspace } from '@/features/inbox';
 import { OnboardingPage } from '@/features/onboarding';
 import { ReportsWorkspace } from '@/features/reports';
 import { SearchPage } from '@/features/search/SearchPage';
-import { TodayWorkspace } from '@/features/today';
+import { ThreadWorkspace, TodayWorkspace } from '@/features/today';
 import { TodosWorkspace } from '@/features/todos';
 import { ExtensionAuthPage } from '@/pages/extension-auth';
 import { LoginPage } from '@/pages/login';
@@ -58,6 +58,7 @@ export function App() {
       >
         <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
         <Route path="/today" element={<TodayWorkspace />} />
+        <Route path="/today/threads/:id" element={<ThreadWorkspace />} />
         <Route path="/todos" element={<Navigate to={TODOS_HOME_PATH} replace />} />
         <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />
         <Route path="/todos/board" element={<TodosWorkspace view="board" />} />

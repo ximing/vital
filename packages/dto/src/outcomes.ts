@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import type { AgentActionLogItem } from './agent.js';
+import type { InboxSource, InboxStatus } from './inbox.js';
 import { uuidSchema } from './lists.js';
 import type { Task } from './tasks.js';
 
@@ -65,10 +67,33 @@ export interface TodayPulse {
   todayReportId: string | null;
 }
 
+/** One recommended task inside the Now card. */
+export interface NowRecommendation {
+  taskId: string;
+  title: string;
+  estimateMinutes: number | null;
+  outcomeId: string | null;
+  dueAt: string | null;
+  /** Due on the current local day or already overdue. */
+  dueSoon: boolean;
+}
+
+/** "当下" card payload: continuous free time plus rule-based picks. */
+export interface TodayNow {
+  /** Minutes until the nearest boundary (habit window end / quiet start / day end). */
+  continuousMinutes: number;
+  /** Inside quiet hours — recommendations are suppressed. */
+  quiet: boolean;
+  recommendations: NowRecommendation[];
+  /** Rule-layer copy; the agent layer may later replace it with a headline. */
+  reason: string;
+}
+
 export interface TodayDashboard {
   outcomes: Outcome[];
   tasks: Task[];
   pulse: TodayPulse;
+  now: TodayNow;
   generatedAt: string;
 }
 
@@ -76,3 +101,24 @@ export const outcomeIdParamsSchema = z.object({
   id: uuidSchema,
 });
 export type OutcomeIdParams = z.infer<typeof outcomeIdParamsSchema>;
+
+/** Slim inbox material row attached to a thread (no heavy extract bodies). */
+export interface OutcomeMaterial {
+  id: string;
+  title: string;
+  excerpt: string | null;
+  siteName: string | null;
+  source: InboxSource;
+  status: InboxStatus;
+  capturedAt: string;
+}
+
+/** Aggregated payload for the thread drill-down page (/today/threads/:id). */
+export interface OutcomeDetail {
+  outcome: Outcome;
+  /** All non-deleted tasks of this thread; the client groups them open/done. */
+  tasks: Task[];
+  materials: OutcomeMaterial[];
+  /** Agent ledger rows touching this thread or its tasks, newest first. */
+  agentActions: AgentActionLogItem[];
+}

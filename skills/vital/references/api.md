@@ -85,6 +85,13 @@ export interface AgentActionLogItem extends AgentAction {
 ```
 
 ```ts
+export interface TaskDraftTrigger {
+  status: 'queued' | 'pending';
+  action: AgentAction | null;
+}
+```
+
+```ts
 export interface AgentUsageDaily {
   /** YYYY-MM-DD in the user's timezone. */
   date: string;
@@ -404,11 +411,59 @@ export interface TodayPulse {
 ```
 
 ```ts
+export interface NowRecommendation {
+  taskId: string;
+  title: string;
+  estimateMinutes: number | null;
+  outcomeId: string | null;
+  dueAt: string | null;
+  /** Due on the current local day or already overdue. */
+  dueSoon: boolean;
+}
+```
+
+```ts
+export interface TodayNow {
+  /** Minutes until the nearest boundary (habit window end / quiet start / day end). */
+  continuousMinutes: number;
+  /** Inside quiet hours — recommendations are suppressed. */
+  quiet: boolean;
+  recommendations: NowRecommendation[];
+  /** Rule-layer copy; the agent layer may later replace it with a headline. */
+  reason: string;
+}
+```
+
+```ts
 export interface TodayDashboard {
   outcomes: Outcome[];
   tasks: Task[];
   pulse: TodayPulse;
+  now: TodayNow;
   generatedAt: string;
+}
+```
+
+```ts
+export interface OutcomeMaterial {
+  id: string;
+  title: string;
+  excerpt: string | null;
+  siteName: string | null;
+  source: InboxSource;
+  status: InboxStatus;
+  capturedAt: string;
+}
+```
+
+```ts
+export interface OutcomeDetail {
+  outcome: Outcome;
+  /** All non-deleted tasks of this thread; the client groups them open/done. */
+  tasks: Task[];
+  materials: OutcomeMaterial[];
+  /** Agent ledger rows touching this thread or its tasks, newest first. */
+  agentActions: AgentActionLogItem[];
 }
 ```
 
@@ -698,6 +753,8 @@ export interface Task {
   estimateMinutes: number | null;
   /** How many times dueAt has been pushed forward. */
   deferCount: number;
+  /** User opted this task in for agent-drafted execution plans. */
+  delegable: boolean;
   /** Set when this task is a habit instance. */
   habitId: string | null;
   /** 1-based sequence within the habit's day (count habits). */
@@ -988,6 +1045,7 @@ Request body (`updateMeInputSchema`):
 - `notifications` (optional):
   - `taskRemind`: boolean (optional)
   - `taskDue`: boolean (optional)
+  - `agentInsights`: boolean (optional)
   - `quietHoursStart`: string pattern (optional, nullable)
   - `quietHoursEnd`: string pattern (optional, nullable)
   - `allDayNotifyTime`: string pattern (optional)
@@ -1192,6 +1250,7 @@ Request body (`patchTaskInputSchema`):
 - `status`: "todo" | "doing" | "canceled" (optional)
 - `priority`: 0 | 1 | 2 | 3 (optional)
 - `pinned`: boolean (optional)
+- `delegable`: boolean (optional)
 - `estimateMinutes`: number int min 0 max 100000 (optional, nullable)
 - `dueAt`: string iso datetime (optional, nullable)
 - `startAt`: string iso datetime (optional, nullable)
@@ -1211,6 +1270,18 @@ Complete Task
 - Auth: Bearer required
 - Client: `completeTask`
 - Response: `CompleteTaskResponse`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/tasks/:id/draft`
+
+Ask the agent to draft an execution plan for a delegable task (idempotent).
+
+- Auth: Bearer required
+- Client: `draftTask`
+- Response: `TaskDraftTrigger`
 
 Path params:
 
@@ -1929,7 +2000,7 @@ Query (`agentActionsQuerySchema`):
 
 - `targetType`: "outcome" | "task" | "habit" (optional)
 - `targetId`: uuid (optional)
-- `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "habit.create" | "habit.adjust" | "habit.nudge" (optional)
+- `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "task.draft" | "habit.create" | "habit.adjust" | "habit.nudge" (optional)
 - `feedback`: "pending" | "accepted" | "edited" | "dismissed" (optional)
 - `days`: number int min 1 (optional)
 
@@ -1971,7 +2042,7 @@ Request body (`createAgentMemorySchema`):
 
 - `kind`: "preference" | "pattern" | "correction"
 - `content`: string 1–300
-- `scope`: "all" | "headline" | "cluster" | "decompose" | "reflect" | "distill"[]
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify"[]
 
 #### `DELETE /api/v1/agent/memory/:id`
 
@@ -2002,7 +2073,7 @@ Request body (`patchAgentMemorySchema`):
 
 - `kind`: "preference" | "pattern" | "correction" (optional)
 - `content`: string 1–300 (optional)
-- `scope`: "all" | "headline" | "cluster" | "decompose" | "reflect" | "distill"[] (optional)
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify"[] (optional)
 
 #### `GET /api/v1/agent/metrics`
 
@@ -2125,6 +2196,18 @@ Close Outcome
 - Auth: Bearer required
 - Client: `closeOutcome`
 - Response: `Outcome`
+
+Path params:
+
+- `id`: uuid
+
+#### `GET /api/v1/outcomes/:id/detail`
+
+Thread drill-down: outcome + its tasks, materials and agent timeline.
+
+- Auth: Bearer required
+- Client: `getOutcomeDetail`
+- Response: `OutcomeDetail`
 
 Path params:
 

@@ -3,9 +3,11 @@ import { DateTime } from 'luxon';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { processDueAgentJobs } from '../src/agent/jobs.js';
 import { buildFastify } from '../src/app.js';
 import { getDb } from '../src/db/index.js';
-import { agentJobs } from '../src/db/schema.js';
+import { agentJobs, notificationOutbox } from '../src/db/schema.js';
+import { healTaskNotifications, processDueNotifications } from '../src/notifications/dispatch.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -504,5 +506,69 @@ describe('tasks agent triggers', () => {
       .where(and(eq(agentJobs.userId, alice.id), eq(agentJobs.jobType, 'outcome.refresh')));
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.payload).toEqual({ outcomeId: outcome.json().id });
+  });
+
+  // Regression: csi acceptance (v1.3) saw create→immediate DELETE return
+  // 500 INTERNAL_ERROR with the tx rolled back; retry 6-15s later gave 204.
+  it('delete immediately after create returns 204 and soft-deletes', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'quick delete', listId: inbox },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+    const del = await injectJson(app, {
+      method: 'DELETE',
+      url: `/api/v1/tasks/${id}`,
+      token: alice.token,
+    });
+    expect(del.statusCode).toBe(204);
+    const got = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${id}`,
+      token: alice.token,
+    });
+    expect(got.statusCode).toBe(404);
+  });
+
+  // Same flow while the worker passes run concurrently (outbox dispatch,
+  // healer, agent jobs) — the delete must not 500 on their interaction.
+  it('delete of a just-created due task concurrent with worker ticks returns 204', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const dueAt = new Date(Date.now() - 60_000).toISOString(); // already claimable
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'due now', listId: inbox, dueAt },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+    const [del] = await Promise.all([
+      injectJson(app, { method: 'DELETE', url: `/api/v1/tasks/${id}`, token: alice.token }),
+      processDueNotifications(),
+      processDueAgentJobs(),
+      healTaskNotifications(),
+    ]);
+    expect(del.statusCode).toBe(204);
+    const got = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${id}`,
+      token: alice.token,
+    });
+    expect(got.statusCode).toBe(404);
+    // Any outbox row for the deleted task must not stay live.
+    const rows = await getDb()
+      .select()
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.entityId, id));
+    for (const row of rows) {
+      expect(['cancelled', 'sent', 'failed']).toContain(row.status);
+    }
   });
 });

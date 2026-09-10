@@ -38,6 +38,7 @@ export const users = pgTable(
     convertArchiveOnComplete: boolean('convert_archive_on_complete').notNull().default(false),
     notifyTaskRemind: boolean('notify_task_remind').notNull().default(true),
     notifyTaskDue: boolean('notify_task_due').notNull().default(true),
+    notifyAgentInsights: boolean('notify_agent_insights').notNull().default(true),
     quietHoursStart: varchar('quiet_hours_start', { length: 5 }),
     quietHoursEnd: varchar('quiet_hours_end', { length: 5 }),
     allDayNotifyTime: varchar('all_day_notify_time', { length: 5 }).notNull().default('09:00'),

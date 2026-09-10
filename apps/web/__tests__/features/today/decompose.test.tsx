@@ -26,6 +26,7 @@ const task: Task = {
   outcomeId: 'outcome-1',
   estimateMinutes: 120,
   deferCount: 3,
+  delegable: false,
   habitId: null,
   habitSeq: null,
   title: '写季度总结',

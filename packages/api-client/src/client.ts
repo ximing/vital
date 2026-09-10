@@ -29,6 +29,7 @@ import type {
   LlmProviderInput,
   LlmSettingsPublic,
   Outcome,
+  OutcomeDetail,
   PatchHabitInput,
   PatchAgentMemoryInput,
   PatchOutcomeInput,
@@ -73,6 +74,7 @@ import type {
   Task,
   TaskCollection,
   TaskCounts,
+  TaskDraftTrigger,
   TodayDashboard,
   UncompleteTaskInput,
   UpdateMeInput,
@@ -141,6 +143,7 @@ export interface VitalClient {
   putLlmRouting(input: PutLlmRoutingInput): Promise<LlmSettingsPublic>;
   getToday(): Promise<TodayDashboard>;
   listOutcomes(status?: 'open' | 'closed'): Promise<Outcome[]>;
+  getOutcomeDetail(id: string): Promise<OutcomeDetail>;
   createOutcome(input: CreateOutcomeInput): Promise<Outcome>;
   patchOutcome(id: string, input: PatchOutcomeInput): Promise<Outcome>;
   closeOutcome(id: string): Promise<Outcome>;
@@ -161,6 +164,8 @@ export interface VitalClient {
   deleteAgentMemory(id: string): Promise<void>;
   getTask(id: string): Promise<Task>;
   patchTask(id: string, input: PatchTaskInput): Promise<Task>;
+  /** Ask the agent to draft an execution plan; 'pending' returns the existing draft. */
+  draftTask(id: string): Promise<TaskDraftTrigger>;
   deleteTask(id: string): Promise<void>;
   completeTask(id: string): Promise<CompleteTaskResponse>;
   uncompleteTask(id: string, input: UncompleteTaskInput): Promise<Task>;
@@ -344,6 +349,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     putLlmRouting: (input) => http.request('/api/v1/llm/routing', { method: 'PUT', body: input }),
     getToday: () => http.request('/api/v1/today'),
     listOutcomes: (status) => http.request(`/api/v1/outcomes${status ? `?status=${status}` : ''}`),
+    getOutcomeDetail: (id) => http.request(`/api/v1/outcomes/${id}/detail`),
     createOutcome: (input) => http.request('/api/v1/outcomes', { method: 'POST', body: input }),
     patchOutcome: (id, input) =>
       http.request(`/api/v1/outcomes/${id}`, { method: 'PATCH', body: input }),
@@ -388,6 +394,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     },
     getTask: (id) => http.request(`/api/v1/tasks/${id}`),
     patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),
+    draftTask: (id) =>
+      http.request(`/api/v1/tasks/${id}/draft`, { method: 'POST', body: {} }),
     deleteTask: (id) => http.request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),
     completeTask: (id) =>
       http.request(`/api/v1/tasks/${id}/complete`, { method: 'POST', body: {} }),

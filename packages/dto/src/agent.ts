@@ -6,6 +6,7 @@ export const agentActionTypeSchema = z.enum([
   'outcome.headline',
   'outcome.suggestion',
   'task.decompose',
+  'task.draft',
   'habit.create',
   'habit.adjust',
   'habit.nudge',
@@ -48,6 +49,15 @@ export const agentActionIdParamsSchema = z.object({
   id: uuidSchema,
 });
 export type AgentActionIdParams = z.infer<typeof agentActionIdParamsSchema>;
+
+/**
+ * POST /tasks/:id/draft result: 'pending' returns the existing un-decided
+ * draft (idempotent re-trigger); 'queued' means a task.draft job was (re)armed.
+ */
+export interface TaskDraftTrigger {
+  status: 'queued' | 'pending';
+  action: AgentAction | null;
+}
 
 /** Filters for listing the caller's agent actions (e.g. pending decompose for a task). */
 export const agentActionsQuerySchema = z.object({
@@ -144,8 +154,10 @@ export const agentMemoryScopeSchema = z.enum([
   'headline',
   'cluster',
   'decompose',
+  'draft',
   'reflect',
   'distill',
+  'notify',
 ]);
 export type AgentMemoryScopeValue = z.infer<typeof agentMemoryScopeSchema>;
 

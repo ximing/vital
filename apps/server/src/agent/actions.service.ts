@@ -12,7 +12,7 @@ import { AppError } from '../errors.js';
 /** Hard cap for the actions listing — the ledger is append-only and chatty. */
 const LIST_ACTIONS_LIMIT = 50;
 
-function toAgentActionDto(row: AgentActionRow): AgentAction {
+export function toAgentActionDto(row: AgentActionRow): AgentAction {
   return {
     id: row.id,
     actionType: row.actionType as AgentAction['actionType'],
@@ -30,7 +30,7 @@ function toAgentActionDto(row: AgentActionRow): AgentAction {
  * Distill the stored payload into a one-line summary per action type.
  * Returns '' when the payload has nothing readable; the client shows a placeholder.
  */
-function summarizePayload(actionType: string, payload: Record<string, unknown>): string {
+export function summarizePayload(actionType: string, payload: Record<string, unknown>): string {
   const str = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
   switch (actionType) {
     case 'outcome.create':
@@ -48,6 +48,11 @@ function summarizePayload(actionType: string, payload: Record<string, unknown>):
         .filter((title) => title !== '')
         .join('、');
     }
+    case 'task.draft': {
+      const draft = str(payload['draft']);
+      const firstLine = draft.split('\n')[0] ?? '';
+      return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+    }
     default: {
       // habit.* have no producers yet — fall back to a name-ish field, then raw JSON.
       const name = str(payload['name']) || str(payload['hint']) || str(payload['content']);
@@ -59,7 +64,7 @@ function summarizePayload(actionType: string, payload: Record<string, unknown>):
 }
 
 /** Resolve target names in bulk; missing targets (deleted / undone) simply stay absent. */
-async function targetNamesFor(
+export async function targetNamesFor(
   userId: string,
   rows: AgentActionRow[],
 ): Promise<Map<string, string>> {
@@ -138,6 +143,7 @@ export async function listAgentActions(
  * payload in the same transaction (rename outcome / override headline etc.).
  * For 'task.decompose' the web client materializes subtasks via the normal
  * task API before sending 'accepted'/'edited' — here we only bookkeep.
+ * For 'task.draft', 'accepted' appends the draft to the task notes.
  */
 export async function applyActionFeedback(
   userId: string,
@@ -154,6 +160,29 @@ export async function applyActionFeedback(
 
   const now = new Date();
   const next = await db.transaction(async (tx) => {
+    if (input.feedback === 'accepted' && row.actionType === 'task.draft') {
+      const draft =
+        typeof row.payload['draft'] === 'string' ? row.payload['draft'].trim() : '';
+      if (draft !== '') {
+        const [task] = await tx
+          .select({
+            id: tasks.id,
+            notesMd: tasks.notesMd,
+            deletedAt: tasks.deletedAt,
+          })
+          .from(tasks)
+          .where(and(eq(tasks.id, row.targetId), eq(tasks.userId, userId)))
+          .limit(1);
+        if (task && !task.deletedAt) {
+          const base = task.notesMd.trimEnd();
+          const notes = (base === '' ? draft : `${base}\n\n${draft}`).slice(0, 50_000);
+          await tx
+            .update(tasks)
+            .set({ notesMd: notes, updatedAt: now })
+            .where(eq(tasks.id, task.id));
+        }
+      }
+    }
     if (input.feedback === 'edited' && input.editedPayload) {
       const p = input.editedPayload;
       if (row.actionType === 'outcome.headline' && typeof p['headline'] === 'string') {

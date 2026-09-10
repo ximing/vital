@@ -9,6 +9,7 @@ export type Hhmm = z.infer<typeof hhmmSchema>;
 export const notificationPrefsSchema = z.object({
   taskRemind: z.boolean(),
   taskDue: z.boolean(),
+  agentInsights: z.boolean(),
   quietHoursStart: hhmmSchema.nullable(),
   quietHoursEnd: hhmmSchema.nullable(),
   allDayNotifyTime: hhmmSchema,
@@ -18,6 +19,7 @@ export type NotificationPrefs = z.infer<typeof notificationPrefsSchema>;
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   taskRemind: true,
   taskDue: true,
+  agentInsights: true,
   quietHoursStart: null,
   quietHoursEnd: null,
   allDayNotifyTime: '09:00',
@@ -27,6 +29,7 @@ export const patchNotificationPrefsSchema = z
   .object({
     taskRemind: z.boolean().optional(),
     taskDue: z.boolean().optional(),
+    agentInsights: z.boolean().optional(),
     quietHoursStart: hhmmSchema.nullable().optional(),
     quietHoursEnd: hhmmSchema.nullable().optional(),
     allDayNotifyTime: hhmmSchema.optional(),

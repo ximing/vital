@@ -29,6 +29,12 @@ export function submitHeadlineTool(capture: (args: SubmitHeadlineArgs) => void):
   };
 }
 
+export const submitNotificationSchema = Type.Object({ message: Type.String({ minLength: 1, maxLength: 200 }) });
+export type SubmitNotificationArgs = Static<typeof submitNotificationSchema>;
+export function submitNotificationTool(capture: (args: SubmitNotificationArgs) => void): AgentTool<typeof submitNotificationSchema> {
+  return { name: 'submit_notification', label: '提交主动提醒', description: '提交一句简短、自然、可行动的提醒文案。', parameters: submitNotificationSchema, execute: (_id, params) => { capture(params); return Promise.resolve({ content: [{ type: 'text', text: 'ok' }], details: null, terminate: true }); } };
+}
+
 export const proposeThreadsSchema = Type.Object({
   threads: Type.Array(
     Type.Object({
@@ -74,6 +80,25 @@ export function proposeSubtasksTool(capture: (args: ProposeSubtasksArgs) => void
     label: '提议任务拆解',
     description: '把一个反复推迟的任务拆成 2-10 个可执行的子任务。',
     parameters: proposeSubtasksSchema,
+    execute: (_toolCallId, params) => {
+      capture(params);
+      return Promise.resolve({ content: [{ type: 'text', text: 'ok' }], details: null, terminate: true });
+    },
+  };
+}
+
+export const submitDraftSchema = Type.Object({
+  /** Execution-plan draft in Chinese, markdown bullet points. */
+  draft: Type.String({ minLength: 1, maxLength: 2000 }),
+});
+export type SubmitDraftArgs = Static<typeof submitDraftSchema>;
+
+export function submitDraftTool(capture: (args: SubmitDraftArgs) => void): AgentTool<typeof submitDraftSchema> {
+  return {
+    name: 'submit_draft',
+    label: '提交执行方案',
+    description: '提交该任务的一份可执行方案草案：步骤顺序、所需材料和注意点。',
+    parameters: submitDraftSchema,
     execute: (_toolCallId, params) => {
       capture(params);
       return Promise.resolve({ content: [{ type: 'text', text: 'ok' }], details: null, terminate: true });

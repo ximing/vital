@@ -20,6 +20,7 @@ const SCOPES: AgentMemoryScopeValue[] = [
   'headline',
   'cluster',
   'decompose',
+  'draft',
   'reflect',
   'distill',
 ];

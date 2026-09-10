@@ -213,6 +213,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   );
   const decomposeAction =
     (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.decompose') ?? null;
+  const draftAction =
+    (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.draft') ?? null;
 
   const instances = (calendarQuery.data ?? []).filter((inst) => {
     if (listId.startsWith('smart:')) {
@@ -240,8 +242,9 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
         tags={tags}
         outcomes={outcomesQuery.data ?? []}
         decomposeAction={decomposeAction}
+        draftAction={draftAction}
         timeZone={timeZone}
-        onPatch={(input) => actions.patch.mutate({ id: detailTask.id, input })}
+        onPatch={(input) => actions.patch.mutateAsync({ id: detailTask.id, input })}
         onComplete={(task: Task) => void actions.complete(task)}
         onDelete={() => actions.remove.mutate(detailTask.id)}
         onAddSubtask={(name) => {

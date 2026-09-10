@@ -19,11 +19,12 @@ import {
   buildClusterPrompt,
   buildDecomposePrompt,
   buildDistillPrompt,
+  buildDraftPrompt,
   buildHeadlinePrompt,
   type DistillActionFact,
 } from './prompts.js';
 import { loadAgentMemory, runProposalPass, runWithCritic } from './harness.js';
-import { enqueueAgentJob, enqueueOutcomeRefresh } from './jobs.js';
+import { enqueueAgentJob, enqueueOutcomeRefresh, UnknownAgentJobTypeError } from './jobs.js';
 import {
   proposeSubtasksTool,
   proposeThreadsTool,
@@ -33,8 +34,13 @@ import {
   type ProposeThreadsArgs,
   type SubmitHeadlineArgs,
   type SubmitMemoriesArgs,
+  submitNotificationTool,
+  type SubmitNotificationArgs,
+  submitDraftTool,
+  type SubmitDraftArgs,
 } from './tools.js';
 import { recordUsage } from './usage.service.js';
+import { enqueueProactiveInsights } from '../notifications/insights.js';
 
 export type AgentJobResult = 'done' | 'skipped:no-llm';
 
@@ -357,6 +363,89 @@ async function processTaskDecompose(
   return 'done';
 }
 
+/**
+ * Manual trigger: draft an execution plan for a delegable task. The proposal
+ * lands in the agent_actions ledger; the web 方案卡 applies it into the task
+ * notes on accept. Idempotent — a pending draft suppresses re-generation.
+ */
+async function processTaskDraft(
+  job: AgentJobRow,
+  user: User,
+  _now: Date,
+): Promise<AgentJobResult> {
+  if (!('taskId' in job.payload)) return 'done';
+  const taskId = job.payload.taskId;
+  const db = getDb();
+  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1);
+  if (!task || task.userId !== user.id || task.deletedAt) return 'done';
+  if (task.status === 'done' || task.status === 'canceled') return 'done';
+  if (!task.delegable) return 'done';
+
+  const pending = await db
+    .select({ id: agentActions.id })
+    .from(agentActions)
+    .where(
+      and(
+        eq(agentActions.targetType, 'task'),
+        eq(agentActions.targetId, taskId),
+        eq(agentActions.actionType, 'task.draft'),
+        eq(agentActions.feedback, 'pending'),
+      ),
+    )
+    .limit(1);
+  if (pending.length > 0) return 'done';
+
+  let outcomeName: string | null = null;
+  if (task.outcomeId) {
+    const [outcome] = await db
+      .select({ name: outcomes.name })
+      .from(outcomes)
+      .where(and(eq(outcomes.id, task.outcomeId), eq(outcomes.userId, user.id)))
+      .limit(1);
+    outcomeName = outcome?.name ?? null;
+  }
+  const subtasks = await db
+    .select({ title: tasks.title })
+    .from(tasks)
+    .where(and(eq(tasks.parentId, taskId), isNull(tasks.deletedAt)));
+  const memory = await loadAgentMemory(user.id, 'draft');
+  const prompt = buildDraftPrompt({
+    taskTitle: task.title,
+    notes: task.notesMd,
+    outcomeName,
+    dueAt: iso(task.dueAt),
+    estimateMinutes: task.estimateMinutes,
+    existingSubtasks: subtasks.map((s) => s.title),
+    memory: memory.map((m) => m.content),
+  });
+
+  const result = await runWithCritic<SubmitDraftArgs>({
+    user,
+    job,
+    capability: 'agent.draft',
+    usageCapability: 'draft',
+    systemPrompt: prompt.system,
+    userPrompt: prompt.user,
+    makeTool: submitDraftTool,
+  });
+  if (!result) return 'skipped:no-llm';
+
+  const draft = result.args.draft.trim().slice(0, 2000);
+  if (draft === '') return 'done';
+
+  await db.insert(agentActions).values({
+    id: randomUUID(),
+    userId: user.id,
+    jobId: job.id,
+    actionType: 'task.draft',
+    targetType: 'task',
+    targetId: taskId,
+    payload: { draft },
+    feedback: 'pending',
+  });
+  return 'done';
+}
+
 /** Rule-only: fan out refreshes for stale threads + cluster when the pile is big. */
 async function processReflectDaily(
   job: AgentJobRow,
@@ -553,11 +642,24 @@ export async function processAgentJob(job: AgentJobRow, now: Date): Promise<Agen
       return processOutcomeCluster(job, user, now);
     case 'task.decompose':
       return processTaskDecompose(job, user, now);
+    case 'task.draft':
+      return processTaskDraft(job, user, now);
     case 'reflect.daily':
       return processReflectDaily(job, user, now);
     case 'memory.distill':
       return processMemoryDistill(job, user, now);
-    default:
+    case 'notify.scan':
+      await enqueueProactiveInsights(user, now, async (item) => {
+        const memory = await loadAgentMemory(user.id, 'notify');
+        const result = await runProposalPass<SubmitNotificationArgs>({ user, capability: 'agent.notify', systemPrompt: '你为个人任务系统写一句简短、温和、可行动的手机提醒。不得添加事实。必须调用 submit_notification。', userPrompt: `规则提醒：${item.message}\n长期偏好：${memory.map((m) => m.content).join('；')}`, makeTool: submitNotificationTool });
+        if (!result) return null;
+        await recordUsage(getDb(), { userId: user.id, jobId: job.id, capability: 'notify', model: result.model, usage: result.usage });
+        return result.args.message;
+      });
       return 'done';
+    default:
+      // Old worker meeting a newer job type (e.g. task.draft during the v1.3
+      // rollout): never swallow it as done — fail loudly so it is visible.
+      throw new UnknownAgentJobTypeError(job.jobType);
   }
 }

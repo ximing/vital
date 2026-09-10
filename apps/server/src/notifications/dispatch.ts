@@ -17,6 +17,7 @@ import { logger } from '../utils/logger.js';
 import { sendMeow } from './meow.js';
 import { syncTaskNotifications } from './outbox.js';
 import { applyQuietHours } from './quiet-hours.js';
+import { insightStillEligible } from './insights.js';
 
 const BACKOFF_MS = [30_000, 120_000, 300_000, 900_000, 3_600_000, 14_400_000, 43_200_000];
 const MAX_ATTEMPTS = 8;
@@ -30,6 +31,8 @@ function taskUrl(listId: string, taskId: string): string {
   return `${config.WEB_ORIGIN.replace(/\/$/, '')}/todos/lists/${listId}?task=${taskId}`;
 }
 
+function todayUrl(): string { return `${config.WEB_ORIGIN.replace(/\/$/, '')}/today`; }
+
 function formatWhen(payload: NotificationOutboxPayload): string {
   const iso = payload.eventType === 'task.remind' ? payload.remindAt : payload.dueAt;
   if (!iso) return '';
@@ -40,6 +43,7 @@ function formatWhen(payload: NotificationOutboxPayload): string {
 }
 
 export function renderMeowMessage(payload: NotificationOutboxPayload): { title: string; msg: string } {
+  if (payload.eventType === 'agent.insight') return { title: '系统主动提醒', msg: payload.message ?? payload.title };
   const when = formatWhen(payload);
   if (payload.eventType === 'task.remind') {
     return {
@@ -96,7 +100,7 @@ async function sendChannel(
     nickname: channel.config.nickname,
     title: copy.title,
     msg: copy.msg,
-    url: taskUrl(job.payload.listId, job.entityId),
+    url: job.eventType === 'agent.insight' ? todayUrl() : taskUrl(job.payload.listId, job.entityId),
     imgUrl: iconUrl(),
   });
   if (result.ok) return { ok: true, permanent: false };
@@ -142,6 +146,13 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
       .set({ status: 'cancelled', updatedAt: now, lastError: 'user gone' })
       .where(eq(notificationOutbox.id, job.id));
     return;
+  }
+  if (job.eventType === 'agent.insight') {
+    const kind = job.payload.insightKind;
+    if (!kind || !(await insightStillEligible(user, job.entityId, kind, now))) {
+      await getDb().update(notificationOutbox).set({ status: 'cancelled', updatedAt: now, lastError: 'insight expired or disabled' }).where(eq(notificationOutbox.id, job.id));
+      return;
+    }
   }
   const delayed = applyQuietHours(now, user.quietHoursStart, user.quietHoursEnd, user.timezone);
   if (delayed.getTime() > now.getTime() + 1_000) {

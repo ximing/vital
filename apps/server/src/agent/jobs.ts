@@ -21,6 +21,18 @@ const TRIGGER_DELAY_MS = 30_000;
 
 export type AgentDb = Pick<Database, 'insert' | 'update' | 'delete' | 'select'>;
 
+/**
+ * Thrown by processors when the switch has no case for job.jobType — i.e. an
+ * old worker picked up a job written by newer code. processOne marks these
+ * failed immediately (retrying can never fix an unknown type).
+ */
+export class UnknownAgentJobTypeError extends Error {
+  constructor(jobType: string) {
+    super(`unknown agent job type: ${jobType}`);
+    this.name = 'UnknownAgentJobTypeError';
+  }
+}
+
 export interface EnqueueAgentJobInput {
   userId: string;
   jobType: string;
@@ -142,6 +154,22 @@ export async function enqueueTaskDecompose(
   });
 }
 
+/** Manual trigger: user asked for an execution-plan draft — run it right away. */
+export async function enqueueTaskDraft(
+  db: AgentDb,
+  userId: string,
+  taskId: string,
+  now: Date,
+): Promise<void> {
+  await enqueueAgentJob(db, {
+    userId,
+    jobType: 'task.draft',
+    payload: { taskId },
+    dedupKey: `task.draft:${taskId}`,
+    scheduledAt: now,
+  });
+}
+
 export async function hasPendingDecomposeAction(db: AgentDb, taskId: string): Promise<boolean> {
   const rows = await db
     .select({ id: agentActions.id })
@@ -218,7 +246,7 @@ async function processOne(job: AgentJobRow, now: Date): Promise<void> {
   } catch (err) {
     const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
     const attempts = job.attemptCount + 1;
-    if (attempts >= MAX_ATTEMPTS) {
+    if (err instanceof UnknownAgentJobTypeError || attempts >= MAX_ATTEMPTS) {
       await db
         .update(agentJobs)
         .set({ status: 'failed', attemptCount: attempts, lastError: message, updatedAt: now })

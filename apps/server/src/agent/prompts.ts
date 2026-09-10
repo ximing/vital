@@ -124,6 +124,39 @@ export function buildDecomposePrompt(input: {
   return { system, user };
 }
 
+export function buildDraftPrompt(input: {
+  taskTitle: string;
+  notes: string;
+  outcomeName: string | null;
+  dueAt: string | null;
+  estimateMinutes: number | null;
+  existingSubtasks: string[];
+  memory: string[];
+}): PromptPair {
+  const system = [
+    '你是执行方案起草助手。用户把一个任务标记为「可交给 Agent」，为它起草一份可执行方案（draft）：先做什么、后做什么、需要准备的材料和容易卡住的点。用中文分点列出，≤500 字。',
+    '方案只是草案，用户审阅后才会写进任务备注；不要假装已经执行了任何步骤，不要编造事实。',
+    '必须调用 submit_draft 工具提交结果，不要输出其他文字。',
+    DATA_RULE,
+  ].join('');
+  const user = [
+    `任务：<data>${input.taskTitle}</data>`,
+    input.notes !== '' ? `备注：<data>${input.notes}</data>` : '',
+    input.outcomeName !== null ? `所属线程：<data>${input.outcomeName}</data>` : '',
+    input.dueAt !== null ? `截止：${input.dueAt}` : '',
+    input.estimateMinutes !== null ? `预估 ${String(input.estimateMinutes)} 分钟。` : '',
+    input.existingSubtasks.length > 0
+      ? `已有子任务（不要重复）：\n<data>\n${input.existingSubtasks.map((t) => `- ${t}`).join('\n')}\n</data>`
+      : '',
+    input.memory.length > 0
+      ? `从用户纠偏中学到的偏好（参考）：\n<data>\n${input.memory.map((m) => `- ${m}`).join('\n')}\n</data>`
+      : '',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+  return { system, user };
+}
+
 export interface ReflectDigest {
   openOutcomes: { name: string; signal: string | null; openCount: number }[];
   unassignedCount: number;

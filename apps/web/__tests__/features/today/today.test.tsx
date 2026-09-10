@@ -11,13 +11,12 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { setAuthForTest } from '@/services/auth.service';
 import { TodayWorkspace } from '../../../src/features/today/TodayWorkspace';
-import { resetTodayUi } from '../../../src/features/today/today-ui.service';
 import { resetTodosUi } from '../../../src/features/todos/todos-ui.service';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -106,6 +105,7 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     outcomeId: null,
     estimateMinutes: null,
     deferCount: 0,
+    delegable: false,
     habitId: null,
     habitSeq: null,
     notes: '',
@@ -159,6 +159,12 @@ function makeDashboard(over: Partial<TodayDashboard> = {}): TodayDashboard {
     outcomes: [],
     tasks: [],
     pulse: { inboxPending: 3, reportStreak: 4, todayReportId: null },
+    now: {
+      continuousMinutes: 120,
+      quiet: false,
+      recommendations: [],
+      reason: '今天没有待办，留一点时间给自己。',
+    },
     generatedAt: '2026-09-09T00:00:00.000Z',
     ...over,
   };
@@ -174,6 +180,7 @@ function renderToday() {
         <MemoryRouter initialEntries={['/today']}>
           <Routes>
             <Route path="/today" element={<TodayWorkspace />} />
+            <Route path="/today/threads/:id" element={<ThreadStub />} />
             <Route path="/inbox" element={<div />} />
             <Route path="/reports" element={<div />} />
             <Route path="/settings" element={<div />} />
@@ -184,9 +191,12 @@ function renderToday() {
   );
 }
 
+function ThreadStub() {
+  return <div data-testid="thread-page">thread:{useParams().id}</div>;
+}
+
 describe('today workspace', () => {
   beforeEach(() => {
-    resetTodayUi();
     resetTodosUi();
     setAuthForTest(mockUser);
     vi.mocked(client.getToday).mockResolvedValue(makeDashboard());
@@ -205,7 +215,6 @@ describe('today workspace', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
-    resetTodayUi();
     resetTodosUi();
   });
 
@@ -316,10 +325,10 @@ describe('today workspace', () => {
     renderToday();
 
     expect(await screen.findByText(t.today.emptyTitle)).toBeInTheDocument();
-    await user.type(screen.getByLabelText(t.today.newOutcome), '准备跳槽到 AI 公司');
+    await user.type(screen.getByLabelText(t.today.newOutcome), '深入研究Agent相关知识');
     await user.click(screen.getByRole('button', { name: t.today.create }));
     await waitFor(() => {
-      expect(client.createOutcome).toHaveBeenCalledWith({ name: '准备跳槽到 AI 公司' });
+      expect(client.createOutcome).toHaveBeenCalledWith({ name: '深入研究Agent相关知识' });
     });
   });
 
@@ -341,7 +350,7 @@ describe('today workspace', () => {
     });
   });
 
-  it('filters the task list when a card is clicked, and clears on second click', async () => {
+  it('navigates to the thread detail page when a card is clicked', async () => {
     const work = makeOutcome({ id: 'o-work', name: '换工作' });
     const taskA = makeTask({ id: 'task-a', title: '改简历', outcomeId: 'o-work' });
     const taskB = makeTask({ id: 'task-b', title: '回复 Alex' });
@@ -358,13 +367,8 @@ describe('today workspace', () => {
 
     await user.click(screen.getByText('换工作'));
 
-    expect(await screen.findByText(t.today.filterOnly.replace('{name}', '换工作')))
-      .toBeInTheDocument();
-    expect(screen.getByText('改简历')).toBeInTheDocument();
-    expect(screen.queryByText('回复 Alex')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: t.today.clearFilter }));
-    expect(await screen.findByText('回复 Alex')).toBeInTheDocument();
+    // Thread cards only navigate — the today task list is never filtered.
+    expect(await screen.findByTestId('thread-page')).toHaveTextContent('thread:o-work');
   });
 
   it('offers one-click habit templates when no habit is active', async () => {
@@ -427,5 +431,178 @@ describe('today workspace', () => {
     await waitFor(() => {
       expect(screen.queryByText(t.today.habitEmptyTitle)).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('now card', () => {
+  beforeEach(() => {
+    resetTodosUi();
+    setAuthForTest(mockUser);
+    vi.mocked(client.getToday).mockResolvedValue(makeDashboard());
+    vi.mocked(client.listHabits).mockResolvedValue([]);
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listOutcomes).mockResolvedValue([]);
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });
+    vi.mocked(client.listTags).mockResolvedValue({ items: [] });
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.updateOnboarding).mockResolvedValue({
+      ...mockUser,
+      onboarding: { createdTask: true },
+    });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    resetTodosUi();
+  });
+
+  async function nowCard(): Promise<HTMLElement> {
+    return (await screen.findByLabelText(t.today.now.title)) as HTMLElement;
+  }
+
+  it('renders continuous minutes, reason and recommendations, and opens the task detail on click', async () => {
+    const work = makeOutcome({ id: 'o-work', name: '换工作' });
+    const taskA = makeTask({
+      id: 'task-a',
+      title: '简历最后一轮校对',
+      outcomeId: 'o-work',
+      estimateMinutes: 40,
+    });
+    vi.mocked(client.getToday).mockResolvedValue(
+      makeDashboard({
+        outcomes: [work],
+        tasks: [taskA],
+        now: {
+          continuousMinutes: 50,
+          quiet: false,
+          reason: '接下来约 50 分钟，任选一件开始。',
+          recommendations: [
+            {
+              taskId: 'task-a',
+              title: '简历最后一轮校对',
+              estimateMinutes: 40,
+              outcomeId: 'o-work',
+              dueAt: null,
+              dueSoon: true,
+            },
+            {
+              taskId: 'task-b',
+              title: '回复内推消息',
+              estimateMinutes: null,
+              outcomeId: 'o-work',
+              dueAt: null,
+              dueSoon: false,
+            },
+          ],
+        },
+      }),
+    );
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [taskA], nextCursor: null });
+
+    const user = userEvent.setup();
+    renderToday();
+
+    const card = await nowCard();
+    expect(
+      await within(card).findByText(t.today.now.next.replace('{m}', '50')),
+    ).toBeInTheDocument();
+    expect(within(card).getByText('接下来约 50 分钟，任选一件开始。')).toBeInTheDocument();
+    const rec = within(card).getByRole('button', { name: /简历最后一轮校对/ });
+    expect(rec).toHaveTextContent('40 分钟');
+    expect(rec).toHaveTextContent('换工作');
+    expect(rec).toHaveTextContent(t.today.now.dueSoon);
+    expect(within(card).getByRole('button', { name: /回复内推消息/ })).toHaveTextContent(
+      t.today.now.noEstimate,
+    );
+
+    await user.click(rec);
+    expect(
+      await screen.findByLabelText('简历最后一轮校对', { selector: '[data-region="detail"]' }),
+    ).toBeInTheDocument();
+  });
+
+  it('rotates the recommendations when 换一个 is clicked', async () => {
+    const taskA = makeTask({ id: 'task-a', title: '甲任务' });
+    const taskB = makeTask({ id: 'task-b', title: '乙任务' });
+    vi.mocked(client.getToday).mockResolvedValue(
+      makeDashboard({
+        tasks: [taskA, taskB],
+        now: {
+          continuousMinutes: 50,
+          quiet: false,
+          reason: '接下来约 50 分钟，任选一件开始。',
+          recommendations: [
+            {
+              taskId: 'task-a',
+              title: '甲任务',
+              estimateMinutes: 40,
+              outcomeId: null,
+              dueAt: null,
+              dueSoon: false,
+            },
+            {
+              taskId: 'task-b',
+              title: '乙任务',
+              estimateMinutes: 10,
+              outcomeId: null,
+              dueAt: null,
+              dueSoon: false,
+            },
+          ],
+        },
+      }),
+    );
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [taskA, taskB], nextCursor: null });
+
+    const user = userEvent.setup();
+    renderToday();
+
+    const card = await nowCard();
+    await within(card).findByRole('button', { name: /甲任务/ });
+    const recButtons = () =>
+      within(card)
+        .getAllByRole('button')
+        .filter((b) => b.getAttribute('data-region') === 'now-recommendation');
+    expect(recButtons()[0]).toHaveTextContent('甲任务');
+    expect(recButtons()[1]).toHaveTextContent('乙任务');
+
+    await user.click(within(card).getByRole('button', { name: t.today.now.swap }));
+    expect(recButtons()[0]).toHaveTextContent('乙任务');
+    expect(recButtons()[1]).toHaveTextContent('甲任务');
+  });
+
+  it('shows the quiet-hours state without recommendations and disables 换一个', async () => {
+    vi.mocked(client.getToday).mockResolvedValue(
+      makeDashboard({
+        now: {
+          continuousMinutes: 0,
+          quiet: true,
+          recommendations: [],
+          reason: '现在是静默时段，先休息。明天 07:00 后再来看看。',
+        },
+      }),
+    );
+
+    renderToday();
+
+    const card = await nowCard();
+    expect(
+      await within(card).findByText('现在是静默时段，先休息。明天 07:00 后再来看看。'),
+    ).toBeInTheDocument();
+    expect(within(card).getByText(t.today.now.quietLabel)).toBeInTheDocument();
+    expect(within(card).queryByText(/接下来约/)).not.toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: t.today.now.swap })).toBeDisabled();
+  });
+
+  it('shows the no-tasks state without recommendations', async () => {
+    renderToday();
+
+    const card = await nowCard();
+    expect(
+      await within(card).findByText('今天没有待办，留一点时间给自己。'),
+    ).toBeInTheDocument();
+    expect(within(card).getByText(t.today.now.next.replace('{m}', '120'))).toBeInTheDocument();
+    expect(within(card).queryAllByRole('button', { name: /任务/ })).toEqual([]);
   });
 });

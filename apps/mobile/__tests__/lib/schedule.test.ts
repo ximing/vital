@@ -20,6 +20,7 @@ function sample(over: Partial<Task> = {}): Task {
     outcomeId: null,
     estimateMinutes: null,
     deferCount: 0,
+    delegable: false,
     habitId: null,
     habitSeq: null,
     title: '发送周报',

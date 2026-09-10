@@ -23,8 +23,10 @@ export const AGENT_MEMORY_SCOPES = [
   'headline',
   'cluster',
   'decompose',
+  'draft',
   'reflect',
   'distill',
+  'notify',
 ] as const;
 export type AgentMemoryScope = (typeof AGENT_MEMORY_SCOPES)[number];
 
@@ -58,7 +60,7 @@ export const agentJobs = pgTable(
     index('idx_agent_jobs_user_type').on(t.userId, t.jobType),
     check(
       'agent_jobs_type_check',
-      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'reflect.daily', 'memory.distill', 'habit.spawn')`,
+      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'memory.distill', 'habit.spawn', 'notify.scan')`,
     ),
     check(
       'agent_jobs_status_check',
@@ -90,7 +92,7 @@ export const agentActions = pgTable(
     index('idx_agent_actions_target').on(t.targetType, t.targetId, t.feedback),
     check(
       'agent_actions_type_check',
-      sql`${t.actionType} IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'habit.create', 'habit.adjust', 'habit.nudge')`,
+      sql`${t.actionType} IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'task.draft', 'habit.create', 'habit.adjust', 'habit.nudge')`,
     ),
     check(
       'agent_actions_target_type_check',
@@ -125,7 +127,7 @@ export const agentMemory = pgTable(
     check('agent_memory_kind_check', sql`${t.kind} IN ('preference', 'pattern', 'correction')`),
     check(
       'agent_memory_scope_check',
-      sql`${t.scope} <> '{}' AND ${t.scope} <@ ARRAY['all', 'headline', 'cluster', 'decompose', 'reflect', 'distill']::text[]`,
+      sql`${t.scope} <> '{}' AND ${t.scope} <@ ARRAY['all', 'headline', 'cluster', 'decompose', 'draft', 'reflect', 'distill', 'notify']::text[]`,
     ),
   ],
 );
@@ -152,7 +154,7 @@ export const agentUsage = pgTable(
     index('idx_agent_usage_user_created').on(t.userId, t.createdAt),
     check(
       'agent_usage_capability_check',
-      sql`${t.capability} IN ('parse', 'headline', 'suggestion', 'cluster', 'decompose', 'reflect', 'distill', 'critic')`,
+      sql`${t.capability} IN ('parse', 'headline', 'suggestion', 'cluster', 'decompose', 'draft', 'reflect', 'distill', 'notify', 'critic')`,
     ),
   ],
 );

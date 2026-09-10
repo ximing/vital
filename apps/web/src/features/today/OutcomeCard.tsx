@@ -11,16 +11,14 @@ const SIGNAL_CLASS: Record<OutcomeSignal, string> = {
 
 export function OutcomeCard({
   outcome,
-  selected,
   now,
-  onToggle,
+  onOpen,
   onUndo,
   onRetry,
 }: {
   outcome: Outcome;
-  selected: boolean;
   now: Date;
-  onToggle: () => void;
+  onOpen: () => void;
   onUndo: () => void;
   onRetry: () => void;
 }) {
@@ -29,7 +27,7 @@ export function OutcomeCard({
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onToggle();
+      onOpen();
     }
   }
 
@@ -37,13 +35,10 @@ export function OutcomeCard({
     <div
       role="button"
       tabIndex={0}
-      aria-pressed={selected}
       data-region="outcome-card"
-      onClick={onToggle}
+      onClick={onOpen}
       onKeyDown={onKeyDown}
-      className={`relative flex min-h-[168px] cursor-pointer flex-col rounded-xl border bg-elevated p-[18px] shadow-[var(--shadow-xs)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-accent hover:shadow-[var(--shadow)] ${
-        selected ? 'border-accent shadow-[var(--shadow-focus)]' : 'border-border'
-      }`}
+      className="relative flex min-h-[168px] cursor-pointer flex-col rounded-xl border border-border bg-elevated p-[18px] shadow-[var(--shadow-xs)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-accent hover:shadow-[var(--shadow)]"
     >
       <div className="flex items-center gap-2">
         <span className="font-display truncate text-[length:var(--text-section)] font-semibold leading-[var(--text-section-lh)]">

@@ -53,6 +53,7 @@ describe('command palette', () => {
             outcomeId: null,
             estimateMinutes: null,
             deferCount: 0,
+            delegable: false,
             habitId: null,
             habitSeq: null,
             title: '买牛奶',

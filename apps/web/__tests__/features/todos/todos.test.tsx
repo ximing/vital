@@ -117,6 +117,7 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
     outcomeId: null,
     estimateMinutes: null,
     deferCount: 0,
+    delegable: false,
     habitId: null,
     habitSeq: null,
     notes: '',
@@ -176,6 +177,12 @@ describe('todos workspace', () => {
       outcomes: [],
       tasks: [],
       pulse: { inboxPending: 0, reportStreak: 0, todayReportId: null },
+      now: {
+        continuousMinutes: 120,
+        quiet: false,
+        recommendations: [],
+        reason: '今天没有待办，留一点时间给自己。',
+      },
       generatedAt: '2026-09-06T00:00:00.000Z',
     });
     vi.mocked(client.listHabits).mockResolvedValue([]);

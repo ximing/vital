@@ -56,6 +56,7 @@ function notificationsOf(user: User): NotificationPrefs {
   return {
     taskRemind: user.notifyTaskRemind,
     taskDue: user.notifyTaskDue,
+    agentInsights: user.notifyAgentInsights,
     quietHoursStart: hhmmOrNull(user.quietHoursStart),
     quietHoursEnd: hhmmOrNull(user.quietHoursEnd),
     allDayNotifyTime: allDay.success ? allDay.data : DEFAULT_NOTIFICATION_PREFS.allDayNotifyTime,
@@ -157,6 +158,7 @@ export async function registerUser(
     convertArchiveOnComplete: false,
     notifyTaskRemind: true,
     notifyTaskDue: true,
+    notifyAgentInsights: true,
     quietHoursStart: null,
     quietHoursEnd: null,
     allDayNotifyTime: '09:00',
@@ -243,6 +245,7 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
     if (input.notifications.taskDue !== undefined) {
       patch.notifyTaskDue = input.notifications.taskDue;
     }
+    if (input.notifications.agentInsights !== undefined) patch.notifyAgentInsights = input.notifications.agentInsights;
     if (input.notifications.quietHoursStart !== undefined) patch.quietHoursStart = nextStart;
     if (input.notifications.quietHoursEnd !== undefined) patch.quietHoursEnd = nextEnd;
     if (input.notifications.allDayNotifyTime !== undefined) {

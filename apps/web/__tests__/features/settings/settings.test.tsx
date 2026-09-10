@@ -72,6 +72,14 @@ describe('NotificationsSection', () => {
     });
   });
 
+  it('lets the user opt out of proactive system reminders', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.updateMe).mockResolvedValue({ ...mockUser, notifications: { ...DEFAULT_NOTIFICATION_PREFS, agentInsights: false } });
+    render(<RabRoot><NotificationsSection /></RabRoot>);
+    await user.click(screen.getByRole('checkbox', { name: t.settings.notify.agentInsights }));
+    await waitFor(() => expect(client.updateMe).toHaveBeenCalledWith({ notifications: { ...DEFAULT_NOTIFICATION_PREFS, agentInsights: false } }));
+  });
+
   it('switches settings tabs', async () => {
     const user = userEvent.setup();
     render(

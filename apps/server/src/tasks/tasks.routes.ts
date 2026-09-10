@@ -23,6 +23,7 @@ import {
   listTasks,
   patchTask,
   reorderTasks,
+  requestTaskDraft,
   restoreTask,
   taskCounts,
   uncompleteTask,
@@ -90,6 +91,15 @@ export function registerTaskRoutes(app: FastifyInstance): void {
     const { id } = idParams.parse(req.params);
     await deleteTask(user.id, id);
     return reply.code(204).send();
+  });
+
+  /** Ask the agent to draft an execution plan for a delegable task (idempotent). */
+  app.post('/api/v1/tasks/:id/draft', { preHandler: [requireAuth] }, async (req, reply) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    const result = await requestTaskDraft(user.id, id);
+    return reply.code(result.status === 'queued' ? 202 : 200).send(result);
   });
 
   app.post('/api/v1/tasks/:id/complete', { preHandler: [requireAuth] }, async (req) => {

@@ -1,4 +1,5 @@
 import type { Task } from '@vital/dto';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,7 @@ const task: Task = {
   outcomeId: null,
   estimateMinutes: null,
   deferCount: 0,
+  delegable: false,
   habitId: null,
   habitSeq: null,
   title: '发送周报',
@@ -39,20 +41,25 @@ const task: Task = {
 };
 
 function renderDetail(next: Task, onPatch = vi.fn()) {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   render(
     <RabRoot>
-      <TaskDetail
-        task={next}
-        subtasks={[]}
-        lists={[]}
-        tags={[]}
-        timeZone="Asia/Shanghai"
-        onPatch={onPatch}
-        onComplete={vi.fn()}
-        onDelete={vi.fn()}
-        onAddSubtask={vi.fn()}
-        onCreateTag={vi.fn()}
-      />
+      <QueryClientProvider client={qc}>
+        <TaskDetail
+          task={next}
+          subtasks={[]}
+          lists={[]}
+          tags={[]}
+          timeZone="Asia/Shanghai"
+          onPatch={onPatch}
+          onComplete={vi.fn()}
+          onDelete={vi.fn()}
+          onAddSubtask={vi.fn()}
+          onCreateTag={vi.fn()}
+        />
+      </QueryClientProvider>
     </RabRoot>,
   );
   return onPatch;

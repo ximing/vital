@@ -15,6 +15,7 @@ import { getOwnedOutcomeOr404 } from './shared.js';
 import {
   closeOutcome,
   createOutcome,
+  getOutcomeDetail,
   getTodayDashboard,
   listOutcomes,
   patchOutcome,
@@ -48,6 +49,14 @@ export function registerOutcomeRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = outcomeIdParamsSchema.parse(req.params);
     return patchOutcome(user.id, id, patchOutcomeInputSchema.parse(req.body));
+  });
+
+  /** Thread drill-down: outcome + its tasks, materials and agent timeline. */
+  app.get('/api/v1/outcomes/:id/detail', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = outcomeIdParamsSchema.parse(req.params);
+    return getOutcomeDetail(user.id, id);
   });
 
   app.post('/api/v1/outcomes/:id/close', { preHandler: [requireAuth] }, async (req) => {

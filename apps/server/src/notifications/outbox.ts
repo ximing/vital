@@ -59,6 +59,7 @@ export function prefsFromUser(user: User): NotificationPrefs {
   return {
     taskRemind: user.notifyTaskRemind,
     taskDue: user.notifyTaskDue,
+    agentInsights: user.notifyAgentInsights,
     quietHoursStart: user.quietHoursStart,
     quietHoursEnd: user.quietHoursEnd,
     allDayNotifyTime: user.allDayNotifyTime || DEFAULT_NOTIFICATION_PREFS.allDayNotifyTime,
@@ -97,12 +98,14 @@ async function cancelLive(
   const cond = exceptKey
     ? and(
         eq(notificationOutbox.entityType, 'task'),
+        inArray(notificationOutbox.eventType, ['task.remind', 'task.due']),
         eq(notificationOutbox.entityId, taskId),
         inArray(notificationOutbox.status, [...LIVE]),
         ne(notificationOutbox.idempotencyKey, exceptKey),
       )
     : and(
         eq(notificationOutbox.entityType, 'task'),
+        inArray(notificationOutbox.eventType, ['task.remind', 'task.due']),
         eq(notificationOutbox.entityId, taskId),
         inArray(notificationOutbox.status, [...LIVE]),
       );

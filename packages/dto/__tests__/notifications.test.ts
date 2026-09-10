@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_NOTIFICATION_PREFS,
   createNotificationChannelInputSchema,
   hhmmSchema,
   meowNicknameSchema,
@@ -27,6 +28,11 @@ describe('meowNicknameSchema', () => {
 });
 
 describe('patchNotificationPrefsSchema', () => {
+  it('defaults proactive reminders on and accepts opting out', () => {
+    expect(DEFAULT_NOTIFICATION_PREFS.agentInsights).toBe(true);
+    expect(patchNotificationPrefsSchema.parse({ agentInsights: false })).toEqual({ agentInsights: false });
+  });
+
   it('requires both quiet hours or both null', () => {
     expect(patchNotificationPrefsSchema.parse({ taskRemind: false }).taskRemind).toBe(false);
     expect(

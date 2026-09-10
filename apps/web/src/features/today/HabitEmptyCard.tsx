@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { habitTemplateInputs } from './model';
@@ -51,6 +52,12 @@ export function HabitEmptyCard() {
             {template.name}
           </button>
         ))}
+        <Link
+          to="/settings?tab=habits"
+          className="inline-flex h-7 items-center rounded-full px-2 text-[length:var(--text-caption)] font-medium text-muted transition-colors duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+        >
+          {t.today.customHabit}
+        </Link>
       </span>
     </div>
   );

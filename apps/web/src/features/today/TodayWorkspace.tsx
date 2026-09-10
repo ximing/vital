@@ -31,11 +31,10 @@ import {
 import { UndoToast } from '@/features/todos/UndoToast';
 import { useTodosUi } from '@/features/todos/todos-ui.service';
 import { OutcomeBoard } from './OutcomeBoard';
-import { OutcomeMaterials } from './OutcomeMaterials';
+import { NowCard } from './NowCard';
 import { PulseStrip } from './PulseStrip';
 import { TodayTaskList } from './TodayTaskList';
 import { todayKeys, useHabitsQuery, usePendingDecomposeQuery, useTodayQuery } from './queries';
-import { todayUi, useTodayUi } from './today-ui.service';
 
 const TODAY_LIST_ID = 'smart:today';
 const DETAIL_COL =
@@ -71,7 +70,6 @@ export function TodayWorkspace() {
   const tasksQuery = useTasksQuery(TODAY_LIST_ID);
   const actions = useTodoActions();
 
-  const selectedOutcomeId = useTodayUi((s) => s.selectedOutcomeId);
   const selectedId = useTodosUi((s) => s.selectedId);
   const detailOpen = useTodosUi((s) => s.detailOpen);
   const completingIds = useTodosUi((s) => s.completingIds);
@@ -85,12 +83,6 @@ export function TodayWorkspace() {
   const tags = tagsQuery.data ?? [];
   const inbox = inboxList(lists);
   const inboxId = inbox?.id ?? '';
-
-  const selectedOutcome =
-    selectedOutcomeId !== null
-      ? (outcomes.find((outcome) => outcome.id === selectedOutcomeId) ?? null)
-      : null;
-  const activeOutcomeId = selectedOutcome?.id ?? null;
 
   const showId = completeUndo?.wantUndo ? completeUndo.taskId : null;
   const tasks = applyOptimisticComplete(
@@ -149,7 +141,6 @@ export function TodayWorkspace() {
     if (extras.listId) next.listId = extras.listId;
     if (extras.priority !== undefined && extras.priority !== 3) next.priority = extras.priority;
     if (extras.status) next.status = extras.status;
-    if (activeOutcomeId !== null) next.outcomeId = activeOutcomeId;
     await actions.create.mutateAsync(next);
     refreshToday();
   }
@@ -163,6 +154,8 @@ export function TodayWorkspace() {
   );
   const decomposeAction =
     (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.decompose') ?? null;
+  const draftAction =
+    (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.draft') ?? null;
 
   const visibleIds = listVisibleIds(TODAY_LIST_ID, tasks, timeZone);
 
@@ -200,6 +193,9 @@ export function TodayWorkspace() {
           </header>
 
           {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
+          {dashboard ? (
+            <NowCard now={dashboard.now} outcomes={outcomes} timeZone={timeZone} />
+          ) : null}
           {!agentReady ? <LlmSetupBanner /> : null}
 
           {error ? (
@@ -226,23 +222,6 @@ export function TodayWorkspace() {
                   </h2>
                 </div>
 
-                {selectedOutcome ? (
-                  <div className="mt-2.5 flex items-center gap-2 px-2 text-[length:var(--text-caption)] text-muted">
-                    {t.today.filterOnly.replace('{name}', selectedOutcome.name)}
-                    <button
-                      type="button"
-                      className="font-medium text-accent underline-offset-4 hover:underline"
-                      onClick={() => todayUi().setSelectedOutcome(null)}
-                    >
-                      {t.today.clearFilter}
-                    </button>
-                  </div>
-                ) : null}
-
-                {activeOutcomeId !== null ? (
-                  <OutcomeMaterials outcomeId={activeOutcomeId} />
-                ) : null}
-
                 <div className="mt-1">
                   <TodayTaskList
                     tasks={tasks}
@@ -250,7 +229,6 @@ export function TodayWorkspace() {
                     tags={tags}
                     lists={lists}
                     timeZone={timeZone}
-                    selectedOutcomeId={activeOutcomeId}
                     onComplete={(task) => void handleComplete(task)}
                     onReorder={(input) => actions.reorder.mutate(input)}
                     onPostpone={postponeOverdue}
@@ -286,13 +264,11 @@ export function TodayWorkspace() {
             tags={tags}
             outcomes={outcomes}
             decomposeAction={decomposeAction}
+            draftAction={draftAction}
             timeZone={timeZone}
-            onPatch={(input) => {
-              actions.patch.mutate(
-                { id: detailTask.id, input },
-                { onSettled: refreshToday },
-              );
-            }}
+            onPatch={(input) =>
+              actions.patch.mutateAsync({ id: detailTask.id, input }).then(refreshToday)
+            }
             onComplete={(task: Task) => void handleComplete(task)}
             onDelete={() => actions.remove.mutate(detailTask.id, { onSettled: refreshToday })}
             onAddSubtask={(name) => {

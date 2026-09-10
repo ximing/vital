@@ -58,6 +58,7 @@ export function toTaskDto(row: TaskRow, tagIds: string[]): Task {
     pinned: row.pinned,
     estimateMinutes: row.estimateMinutes,
     deferCount: row.deferCount,
+    delegable: row.delegable,
     habitId: row.habitId,
     habitSeq: row.habitSeq,
     dueAt: iso(row.dueAt),

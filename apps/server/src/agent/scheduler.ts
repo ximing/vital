@@ -32,6 +32,14 @@ export async function runAgentScheduler(now = new Date()): Promise<number> {
     const zoned = DateTime.fromJSDate(now).setZone(user.timezone);
     const day = zoned.toISODate() ?? now.toISOString().slice(0, 10);
     const week = zoned.toFormat("kkkk-'W'WW");
+    const notifySlot = zoned.startOf('minute').minus({ minutes: zoned.minute % 30 }).toFormat('yyyyLLddHHmm');
+    await enqueueAgentJobOnce(db, {
+      userId,
+      jobType: 'notify.scan',
+      payload: { date: day },
+      dedupKey: `notify.scan:${userId}:${notifySlot}`,
+      scheduledAt: now,
+    });
     await enqueueAgentJobOnce(db, {
       userId,
       jobType: 'reflect.daily',
