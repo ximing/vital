@@ -31,7 +31,10 @@ export const AGENT_MEMORY_SCOPES = [
 export type AgentMemoryScope = (typeof AGENT_MEMORY_SCOPES)[number];
 
 /** Discriminated per job_type. */
-export type AgentJobPayload = { outcomeId: string } | { taskId: string } | { date: string };
+export type AgentJobPayload = ({ outcomeId: string } | { taskId: string } | { date: string }) & {
+  scheduleGeneration?: number; scheduleFeedbackThrough?: string;
+  trigger?: string; manual?: boolean; mode?: 'incremental' | 'maintenance';
+};
 
 export const agentJobs = pgTable(
   'agent_jobs',
@@ -47,6 +50,14 @@ export const agentJobs = pgTable(
     scheduledAt: timestamp('scheduled_at', { withTimezone: true, mode: 'date' }).notNull(),
     status: varchar('status', { length: 16 }).notNull().default('pending'),
     attemptCount: integer('attempt_count').notNull().default(0),
+    generation: integer('generation').notNull().default(1),
+    claimedGeneration: integer('claimed_generation'),
+    claimedPayload: jsonb('claimed_payload').$type<AgentJobPayload>(),
+    appliedGeneration: integer('applied_generation'),
+    effectResult: jsonb('effect_result').$type<unknown>(),
+    leaseToken: char('lease_token', { length: 36 }),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true, mode: 'date' }),
+    firstAttemptAt: timestamp('first_attempt_at', { withTimezone: true, mode: 'date' }),
     nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true, mode: 'date' }),
     lastError: text('last_error'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -109,6 +120,7 @@ export const agentMemory = pgTable(
     userId: char('user_id', { length: 36 })
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull().default(1),
     kind: varchar('kind', { length: 16 }).notNull(),
     content: text('content').notNull(),
     sourceCount: integer('source_count').notNull().default(1),
@@ -141,7 +153,12 @@ export const agentExecutions = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     parentId: char('parent_id', { length: 36 }),
     jobId: char('job_id', { length: 36 }).references(() => agentJobs.id, { onDelete: 'set null' }),
+    leaseToken: char('lease_token', { length: 36 }),
+    jobGeneration: integer('job_generation'),
     capability: varchar('capability', { length: 64 }).notNull(),
+    trigger: varchar('trigger', { length: 80 }),
+    inputSummary: text('input_summary'),
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     status: varchar('status', { length: 16 }).notNull().default('running'),
     attempt: integer('attempt').notNull().default(1),
     reason: varchar('reason', { length: 80 }),
@@ -180,6 +197,8 @@ export const agentUsage = pgTable(
     reason: varchar('reason', { length: 80 }),
     finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
     durationMs: integer('duration_ms'),
+    leaseToken: char('lease_token', { length: 36 }),
+    jobGeneration: integer('job_generation'),
     capability: varchar('capability', { length: 64 }).notNull(),
     model: varchar('model', { length: 120 }).notNull(),
     promptTokens: integer('prompt_tokens'),

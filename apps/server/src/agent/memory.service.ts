@@ -6,7 +6,7 @@ import type {
   PatchAgentMemoryInput,
 } from '@vital/dto';
 import { getDb } from '../db/index.js';
-import { agentMemory, AGENT_MEMORY_SCOPES, type AgentMemoryRow } from '../db/schema.js';
+import { agentMemory, agentMemoryHistory, users, AGENT_MEMORY_SCOPES, type AgentMemoryRow } from '../db/schema.js';
 import { AppError } from '../errors.js';
 
 function toAgentMemoryDto(row: AgentMemoryRow): AgentMemoryItem {
@@ -50,7 +50,9 @@ export async function createAgentMemory(
   userId: string,
   input: CreateAgentMemoryInput,
 ): Promise<AgentMemoryItem> {
-  const [row] = await getDb()
+  const row = await getDb().transaction(async tx => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('no key update');
+    const [row] = await tx
     .insert(agentMemory)
     .values({
       id: randomUUID(),
@@ -63,6 +65,9 @@ export async function createAgentMemory(
     })
     .returning();
   if (!row) throw AppError.of(500, 'INTERNAL_ERROR');
+    await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: row.id, revision: row.version, operation: 'manual.add', before: null, after: row, sourceFeedback: [], createdAt: row.createdAt });
+    return row;
+  });
   return toAgentMemoryDto(row);
 }
 
@@ -71,26 +76,28 @@ export async function patchAgentMemory(
   id: string,
   input: PatchAgentMemoryInput,
 ): Promise<AgentMemoryItem> {
-  const [row] = await getDb().select().from(agentMemory).where(eq(agentMemory.id, id)).limit(1);
-  if (!row || row.userId !== userId) throw AppError.of(404, 'NOT_FOUND');
-  const [updated] = await getDb()
-    .update(agentMemory)
-    .set({
+  const updated = await getDb().transaction(async tx => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('no key update');
+    const [row] = await tx.select().from(agentMemory).where(and(eq(agentMemory.id, id), eq(agentMemory.userId, userId))).for('no key update');
+    if (!row) throw AppError.of(404, 'NOT_FOUND');
+    const [updated] = await tx.update(agentMemory).set({
       ...(input.kind !== undefined ? { kind: input.kind } : {}),
       ...(input.content !== undefined ? { content: input.content } : {}),
       ...(input.scope !== undefined ? { scope: sanitizeScope(input.scope) } : {}),
-      updatedAt: new Date(),
-    })
-    .where(and(eq(agentMemory.id, id), eq(agentMemory.userId, userId)))
-    .returning();
-  if (!updated) throw AppError.of(404, 'NOT_FOUND');
+      manual: true, version: row.version + 1, updatedAt: new Date(),
+    }).where(and(eq(agentMemory.id, id), eq(agentMemory.userId, userId))).returning();
+    if (!updated) throw AppError.of(404, 'NOT_FOUND');
+    await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: id, revision: updated.version, operation: 'manual.update', before: row, after: updated, sourceFeedback: [], createdAt: updated.updatedAt });
+    return updated;
+  });
   return toAgentMemoryDto(updated);
 }
 
 export async function deleteAgentMemory(userId: string, id: string): Promise<void> {
-  const deleted = await getDb()
-    .delete(agentMemory)
-    .where(and(eq(agentMemory.id, id), eq(agentMemory.userId, userId)))
-    .returning({ id: agentMemory.id });
-  if (deleted.length === 0) throw AppError.of(404, 'NOT_FOUND');
+  await getDb().transaction(async tx => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('no key update');
+    const [row] = await tx.delete(agentMemory).where(and(eq(agentMemory.id, id), eq(agentMemory.userId, userId))).returning();
+    if (!row) throw AppError.of(404, 'NOT_FOUND');
+    await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: id, revision: row.version + 1, operation: 'manual.drop', before: row, after: null, sourceFeedback: [], createdAt: new Date() });
+  });
 }

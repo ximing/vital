@@ -7,6 +7,8 @@ import type {
 } from '@vital/dto';
 import { getDb } from '../db/index.js';
 import { agentActions, habits, outcomes, tasks, type AgentActionRow } from '../db/schema.js';
+import { markAgentSchedule } from './scheduling.js';
+import { lockAgentUser } from './user-lock.js';
 import { AppError } from '../errors.js';
 
 /** Hard cap for the actions listing — the ledger is append-only and chatty. */
@@ -151,7 +153,7 @@ export async function applyActionFeedback(
   input: ActionFeedbackInput,
 ): Promise<AgentAction> {
   const db = getDb();
-  const [row] = await db.select().from(agentActions).where(eq(agentActions.id, actionId)).limit(1);
+  const [row] = await db.select().from(agentActions).where(and(eq(agentActions.id, actionId), eq(agentActions.userId, userId))).limit(1);
   if (!row || row.userId !== userId) throw AppError.of(404, 'NOT_FOUND');
   if (row.feedback !== 'pending') throw AppError.of(409, 'VALIDATION_ERROR');
   if (input.feedback === 'edited' && input.editedPayload === undefined) {
@@ -160,6 +162,7 @@ export async function applyActionFeedback(
 
   const now = new Date();
   const next = await db.transaction(async (tx) => {
+    await lockAgentUser(tx, userId);
     if (input.feedback === 'accepted' && row.actionType === 'task.draft') {
       const draft = typeof row.payload['draft'] === 'string' ? row.payload['draft'].trim() : '';
       if (draft !== '') {
@@ -212,9 +215,10 @@ export async function applyActionFeedback(
         feedbackPayload: input.editedPayload ?? null,
         feedbackAt: now,
       })
-      .where(and(eq(agentActions.id, row.id), eq(agentActions.feedback, 'pending')))
+      .where(and(eq(agentActions.id, row.id), eq(agentActions.userId, userId), eq(agentActions.feedback, 'pending')))
       .returning();
     if (!updated) throw AppError.of(409, 'VALIDATION_ERROR');
+    await markAgentSchedule(tx, userId, 'memory.distill', { now, urgent: input.feedback !== 'accepted' });
     return updated;
   });
   return toAgentActionDto(next);

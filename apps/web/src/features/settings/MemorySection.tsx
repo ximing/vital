@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
+import { AgentMaintenanceButton } from './AgentMaintenanceButton';
 
 const copy = t.settings.memory;
 
@@ -279,6 +280,7 @@ export function MemorySection() {
 
   return (
     <div className="flex flex-col gap-5" data-region="agent-memory">
+      <AgentMaintenanceButton kind="memory" />
       <div>
         {adding ? (
           <AddMemoryForm onDone={() => setAdding(false)} />

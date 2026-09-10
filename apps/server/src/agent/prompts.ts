@@ -207,8 +207,10 @@ export interface DistillExistingMemory {
 export function buildDistillPrompt(input: {
   actions: DistillActionFact[];
   existingMemory: DistillExistingMemory[];
+  mode?: 'incremental' | 'maintenance';
 }): PromptPair {
   const system = [
+    input.mode === 'maintenance' ? '这是日常维护：只整理重复或过时记忆，不得从缺失反馈推断新偏好。' : '只学习本次尚未处理的新增反馈，不得将已有记忆视作新增反馈。',
     '你是记忆治理器。基于用户对接班 Agent 提案的近期反馈（接受/修改/忽略），整理现有长期记忆并提交一组操作：',
     'update：把语义重复或表述不佳的已有条目合并/改写成一条（保留原 id）；drop：淘汰过时、无效或与近期反馈矛盾的条目；add：新增记忆（≤5 条，preference 用户偏好 / pattern 行为模式 / correction 对 Agent 的纠偏，每条 ≤60 字，要具体可执行）；keep：确认原样保留的条目 id。',
     '未被 update/drop 的条目会原样保留。add 的新记忆不要与保留下来的条目语义重复。',

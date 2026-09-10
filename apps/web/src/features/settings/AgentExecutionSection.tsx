@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { AgentMaintenanceButton } from './AgentMaintenanceButton';
 
 const copy = t.settings.activity.executions;
 const capabilities: Record<string, string> = t.settings.usage.capabilities;
 const reasons: Record<string, string> = copy.reasons;
+const triggers: Record<string, string> = { manual: '手动触发', user_request: '用户操作', event: '数据变化', scheduled: '定时检查', 'daily-maintenance': '每日记忆整理' };
 
 function reasonLabel(reason: string | null): string | null {
   return reason ? (reasons[reason] ?? reason) : null;
@@ -14,11 +16,13 @@ export function AgentExecutionSection() {
   const query = useQuery({
     queryKey: ['settings', 'agent-executions', 7],
     queryFn: () => client.listAgentExecutions(7),
+    refetchInterval: 15_000,
   });
 
   return (
     <section aria-label={copy.title}>
       <h3 className="text-[length:var(--text-meta)] font-semibold text-fg">{copy.title}</h3>
+      <div className="my-2"><AgentMaintenanceButton kind="threads" /></div>
       {query.isPending ? (
         <p className="mt-2 text-muted">…</p>
       ) : query.isError ? (
@@ -57,6 +61,7 @@ export function AgentExecutionSection() {
                   {capabilities[execution.capability] ?? execution.capability}
                 </span>
                 <span className="text-muted">{copy.statuses[execution.status]}</span>
+                {execution.trigger && <span className="text-tertiary">{triggers[execution.trigger] ?? execution.trigger}</span>}
                 <span className="text-[length:var(--text-caption)] text-tertiary">
                   {copy.attempt} {execution.attempt}
                 </span>
@@ -69,6 +74,7 @@ export function AgentExecutionSection() {
               <p className="mt-1 break-words text-[length:var(--text-meta)] text-muted">
                 {execution.resultSummary || reasonLabel(execution.reason) || copy.noResult}
               </p>
+              {execution.inputSummary && <p className="mt-1 text-[length:var(--text-caption)] text-tertiary">{execution.inputSummary}</p>}
               {execution.reason && execution.resultSummary && (
                 <p className="mt-1 break-words text-[length:var(--text-caption)] text-tertiary">
                   {reasonLabel(execution.reason)}

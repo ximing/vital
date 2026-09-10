@@ -1,10 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { selectInsightCandidates } from '../../src/notifications/insights.js';
+import { enqueueProactiveInsights, selectInsightCandidates } from '../../src/notifications/insights.js';
+import { getUserEntity } from '../../src/auth/auth.service.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
 import { agentJobs, notificationOutbox, outcomes } from '../../src/db/schema.js';
 import { enqueueAgentJob, processDueAgentJobs } from '../../src/agent/jobs.js';
-import { processDueNotifications } from '../../src/notifications/dispatch.js';
+import { processDueNotifications, recoverStuckSending } from '../../src/notifications/dispatch.js';
 import { setMeowTransport } from '../../src/notifications/meow.js';
 import { resetDb } from '../helpers/db.js';
 import { registerUser } from '../helpers/session.js';
@@ -15,8 +16,12 @@ import type { FastifyInstance } from 'fastify';
 const now = new Date('2026-09-10T13:00:00.000Z');
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildFastify(); });
-beforeEach(resetDb);
-afterEach(() => { setMeowTransport(null); });
+beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(now);
+  await resetDb();
+});
+afterEach(() => { setMeowTransport(null); vi.useRealTimers(); });
 afterAll(async () => app.close());
 
 describe('proactive notification rules', () => {
@@ -38,6 +43,28 @@ describe('proactive notification rules', () => {
 });
 
 describe('notify.scan flow', () => {
+  it('reserves the daily intent before rewriting, including concurrent scans', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, { method: 'POST', url: '/api/v1/outcomes', token: alice.token, payload: { name: '去旅行' } });
+    await getDb().update(outcomes).set({ ruleSignal: 'alert', lastActivityAt: new Date('2026-09-01') }).where(eq(outcomes.id, created.json().id as string));
+    const user = await getUserEntity(alice.id);
+    const rewrite = vi.fn(async () => {
+      const rows = await getDb().select().from(notificationOutbox);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.status).toBe('preparing');
+      return '去看看下一步';
+    });
+    await Promise.all([enqueueProactiveInsights(user, now, rewrite), enqueueProactiveInsights(user, now, rewrite)]);
+    await enqueueProactiveInsights(user, now, rewrite);
+    expect(rewrite).toHaveBeenCalledTimes(1);
+    expect((await getDb().select().from(notificationOutbox))[0]).toMatchObject({ status: 'pending', payload: { message: '去看看下一步' } });
+    // Crash during preparation: a fresh dispatcher can use the durable fallback.
+    await getDb().update(notificationOutbox).set({ status: 'preparing', updatedAt: new Date(Date.now() - 3600_000) });
+    expect(await recoverStuckSending()).toBe(1);
+    expect((await getDb().select().from(notificationOutbox))[0]?.status).toBe('pending');
+    await enqueueProactiveInsights(user, now, rewrite);
+    expect(rewrite).toHaveBeenCalledTimes(1);
+  });
   it('creates one daily insight and dispatches it through MeoW to today', async () => {
     const alice = await registerUser(app);
     await injectJson(app, { method: 'POST', url: '/api/v1/notification-channels', token: alice.token, payload: { type: 'meow', config: { nickname: 'Ada' } } });

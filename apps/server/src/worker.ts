@@ -1,4 +1,4 @@
-import { processDueAgentJobs, recoverStuckAgentJobs } from './agent/jobs.js';
+import { drainAgentJobs, processDueAgentJobs, recoverStuckAgentJobs } from './agent/jobs.js';
 import { runAgentScheduler } from './agent/scheduler.js';
 import { config } from './config.js';
 import { pool } from './db/index.js';
@@ -6,6 +6,15 @@ import { healTaskNotifications, processDueNotifications } from './notifications/
 import { logger } from './utils/logger.js';
 
 let stopping = false;
+const inFlight = new Set<Promise<void>>();
+const running = new Set<() => Promise<void>>();
+function track(fn: () => Promise<void>): void {
+  if (stopping || running.has(fn)) return;
+  running.add(fn);
+  const task = fn();
+  inFlight.add(task);
+  void task.finally(() => { inFlight.delete(task); running.delete(fn); });
+}
 
 async function tick(): Promise<void> {
   if (stopping) return;
@@ -50,15 +59,15 @@ async function schedule(): Promise<void> {
 }
 
 const poll = setInterval(() => {
-  void tick();
+  track(tick);
 }, config.WORKER_POLL_MS);
 
 const healTimer = setInterval(() => {
-  void heal();
+  track(heal);
 }, config.WORKER_HEAL_INTERVAL_MS);
 
 const schedulerTimer = setInterval(() => {
-  void schedule();
+  track(schedule);
 }, config.AGENT_SCHEDULER_INTERVAL_MS);
 
 logger.info('worker started', {
@@ -67,9 +76,9 @@ logger.info('worker started', {
   agentSchedulerMs: config.AGENT_SCHEDULER_INTERVAL_MS,
   agentEnabled: config.AGENT_ENABLED,
 });
-void tick();
-void heal();
-void schedule();
+track(tick);
+track(heal);
+track(schedule);
 
 function shutdown(sig: string): void {
   if (stopping) return;
@@ -78,7 +87,11 @@ function shutdown(sig: string): void {
   clearInterval(poll);
   clearInterval(healTimer);
   clearInterval(schedulerTimer);
-  void pool.end().then(
+  void (async () => {
+    await drainAgentJobs();
+    await Promise.allSettled([...inFlight]);
+    await pool.end();
+  })().then(
     () => process.exit(0),
     (err: unknown) => {
       logger.error('worker shutdown failed', err);

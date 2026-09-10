@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb, type Database } from '../db/index.js';
 import {
@@ -10,13 +10,14 @@ import {
   type AgentJobRow,
 } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
-import { recoverStuckExecutions } from './executions.service.js';
+import { recoverStuckExecutions, telemetryErrorCode } from './executions.service.js';
+import { DeferredAgentJobError, LostAgentJobLeaseError, heartbeatAgentJob, isRetryableAgentJobError, ownsAgentJob, runWithAgentJob } from './job-runtime.js';
 
 export const BACKOFF_MS = [
   30_000, 120_000, 600_000, 1_800_000, 7_200_000, 21_600_000, 43_200_000,
 ] as const;
 export const MAX_ATTEMPTS = 8;
-const STUCK_MS = 5 * 60_000;
+
 /** Task-mutation triggers fire 30s out so mutation bursts collapse into one run. */
 const TRIGGER_DELAY_MS = 30_000;
 
@@ -71,14 +72,19 @@ export async function enqueueAgentJob(
     })
     .onConflictDoUpdate({
       target: agentJobs.dedupKey,
+      setWhere: sql`${agentJobs.userId} = ${input.userId} AND ${agentJobs.jobType} = ${input.jobType}`,
       set: {
+        generation: sql`${agentJobs.generation} + 1`,
         payload: input.payload,
         scheduledAt: input.scheduledAt,
         nextAttemptAt: null,
         lastError: null,
         updatedAt: now,
         status: sql`CASE WHEN ${agentJobs.status} IN ('pending', 'running') THEN ${agentJobs.status} ELSE 'pending' END`,
-        attemptCount: sql`CASE WHEN ${agentJobs.status} IN ('pending', 'running') THEN ${agentJobs.attemptCount} ELSE 0 END`,
+        attemptCount: sql`CASE WHEN ${agentJobs.status} = 'running' THEN ${agentJobs.attemptCount} ELSE 0 END`,
+        firstAttemptAt: sql`CASE WHEN ${agentJobs.status} = 'running' THEN ${agentJobs.firstAttemptAt} ELSE NULL END`,
+        claimedGeneration: sql`CASE WHEN ${agentJobs.status} = 'running' THEN ${agentJobs.claimedGeneration} ELSE NULL END`,
+        claimedPayload: sql`CASE WHEN ${agentJobs.status} = 'running' THEN ${agentJobs.claimedPayload} ELSE NULL END`,
       },
     })
     .returning({ id: agentJobs.id });
@@ -122,12 +128,12 @@ export async function enqueueOutcomeRefresh(
   userId: string,
   outcomeId: string,
   now: Date,
-  opts: { delayMs?: number } = {},
+  opts: { delayMs?: number; manual?: boolean } = {},
 ): Promise<void> {
   const id = await enqueueAgentJob(db, {
     userId,
     jobType: 'outcome.refresh',
-    payload: { outcomeId },
+    payload: { outcomeId, ...(opts.manual ? { manual: true, trigger: 'manual' } : { trigger: 'event' }) },
     dedupKey: `outcome.refresh:${outcomeId}`,
     scheduledAt: new Date(now.getTime() + (opts.delayMs ?? TRIGGER_DELAY_MS)),
   });
@@ -149,7 +155,7 @@ export async function enqueueTaskDecompose(
   await enqueueAgentJob(db, {
     userId,
     jobType: 'task.decompose',
-    payload: { taskId },
+    payload: { taskId, trigger: 'event' },
     dedupKey: `task.decompose:${taskId}`,
     scheduledAt: new Date(now.getTime() + TRIGGER_DELAY_MS),
   });
@@ -165,18 +171,19 @@ export async function enqueueTaskDraft(
   await enqueueAgentJob(db, {
     userId,
     jobType: 'task.draft',
-    payload: { taskId },
+    payload: { taskId, manual: true, trigger: 'manual' },
     dedupKey: `task.draft:${taskId}`,
     scheduledAt: now,
   });
 }
 
-export async function hasPendingDecomposeAction(db: AgentDb, taskId: string): Promise<boolean> {
+export async function hasPendingDecomposeAction(db: AgentDb, taskId: string, userId: string): Promise<boolean> {
   const rows = await db
     .select({ id: agentActions.id })
     .from(agentActions)
     .where(
       and(
+        eq(agentActions.userId, userId),
         eq(agentActions.targetType, 'task'),
         eq(agentActions.targetId, taskId),
         eq(agentActions.actionType, 'task.decompose'),
@@ -188,108 +195,144 @@ export async function hasPendingDecomposeAction(db: AgentDb, taskId: string): Pr
 }
 
 export async function claimDueJobs(now: Date, limit: number): Promise<AgentJobRow[]> {
-  const result = await getDb().execute(sql`
-    UPDATE agent_jobs AS j
-    SET status = 'running', updated_at = ${now}
-    FROM (
-      SELECT id FROM agent_jobs
-      WHERE status = 'pending'
-        AND scheduled_at <= ${now}
-        AND (next_attempt_at IS NULL OR next_attempt_at <= ${now})
-      ORDER BY scheduled_at ASC
-      LIMIT ${limit}
-      FOR UPDATE SKIP LOCKED
-    ) AS picked
-    WHERE j.id = picked.id
-    RETURNING j.id
-  `);
-  const ids = (result.rows as Array<{ id: string }>).map((r) => r.id);
-  if (ids.length === 0) return [];
-  return getDb().select().from(agentJobs).where(inArray(agentJobs.id, ids));
+  if (limit <= 0) return [];
+  return getDb().transaction(async (tx) => {
+    // A short transaction lock closes the NOT EXISTS race between independent workers.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(721419, 1)`);
+    const [running] = await tx.select({ n: sql<number>`count(*)::int` }).from(agentJobs).where(eq(agentJobs.status, 'running'));
+    limit = Math.min(limit, Math.max(0, config.AGENT_CONCURRENCY - (running?.n ?? 0)));
+    const claimed: AgentJobRow[] = [];
+    for (let i = 0; i < limit; i++) {
+      const result = await tx.execute(sql`
+        SELECT j.id FROM agent_jobs j
+        WHERE j.status = 'pending' AND j.scheduled_at <= ${now}
+          AND (j.next_attempt_at IS NULL OR j.next_attempt_at <= ${now})
+          AND NOT EXISTS (SELECT 1 FROM agent_jobs busy WHERE busy.user_id = j.user_id
+            AND busy.job_type = j.job_type AND busy.status = 'running')
+        ORDER BY j.scheduled_at, j.id LIMIT 1 FOR UPDATE OF j SKIP LOCKED
+      `);
+      const id = (result.rows[0] as { id: string } | undefined)?.id;
+      if (!id) break;
+      const [row] = await tx.update(agentJobs).set({
+        status: 'running', leaseToken: randomUUID(),
+        leaseExpiresAt: new Date(now.getTime() + config.AGENT_LEASE_MS),
+        claimedGeneration: sql`COALESCE(${agentJobs.claimedGeneration}, ${agentJobs.generation})`,
+        claimedPayload: sql`COALESCE(${agentJobs.claimedPayload}, ${agentJobs.payload})`,
+        firstAttemptAt: sql`COALESCE(${agentJobs.firstAttemptAt}, ${now})`, updatedAt: now,
+      }).where(eq(agentJobs.id, id)).returning();
+      if (row) claimed.push({ ...row, payload: row.claimedPayload ?? row.payload });
+    }
+    return claimed;
+  });
 }
 
-/** Re-arm jobs stuck in 'running' (worker crash mid-processing). */
+/** Reconcile only telemetry owned by the expired lease, never healthy long requests. */
 export async function recoverStuckAgentJobs(now = new Date()): Promise<number> {
-  const cutoff = new Date(now.getTime() - STUCK_MS);
-  await recoverStuckExecutions(cutoff);
-  const rows = await getDb()
-    .update(agentJobs)
-    .set({ status: 'pending', updatedAt: now })
-    .where(and(eq(agentJobs.status, 'running'), lt(agentJobs.updatedAt, cutoff)))
-    .returning({ id: agentJobs.id });
-  return rows.length;
+  const recovered = await getDb().transaction(async (tx) => {
+    const expired = await tx.execute(sql`SELECT id, lease_token FROM agent_jobs
+      WHERE status = 'running' AND (lease_expires_at <= ${now} OR lease_expires_at IS NULL)
+      FOR UPDATE SKIP LOCKED`);
+    for (const row of expired.rows as Array<{ id: string; lease_token: string | null }>) {
+      await tx.execute(sql`UPDATE agent_executions e SET
+        status = CASE WHEN e.parent_id IS NULL AND EXISTS (SELECT 1 FROM agent_jobs j WHERE j.id = e.job_id AND j.applied_generation = e.job_generation) THEN 'succeeded' ELSE 'failed' END,
+        reason = CASE WHEN e.parent_id IS NULL AND EXISTS (SELECT 1 FROM agent_jobs j WHERE j.id = e.job_id AND j.applied_generation = e.job_generation) THEN 'RECOVERED_COMMITTED' ELSE 'WORKER_INTERRUPTED' END,
+        finished_at = ${now}, duration_ms = LEAST(2147483647, GREATEST(0, EXTRACT(EPOCH FROM (${now}::timestamptz - created_at)) * 1000))::int
+        WHERE job_id = ${row.id} AND status = 'running' AND lease_token IS NOT DISTINCT FROM ${row.lease_token}`);
+      await tx.execute(sql`UPDATE agent_usage SET status = 'failed', reason = 'WORKER_INTERRUPTED_USAGE_UNKNOWN',
+        finished_at = ${now}, duration_ms = LEAST(2147483647, GREATEST(0, EXTRACT(EPOCH FROM (${now}::timestamptz - created_at)) * 1000))::int
+        WHERE job_id = ${row.id} AND status = 'running' AND lease_token IS NOT DISTINCT FROM ${row.lease_token}`);
+      await tx.update(agentJobs).set({ status: 'pending', leaseToken: null, leaseExpiresAt: null, updatedAt: now })
+        .where(eq(agentJobs.id, row.id));
+    }
+    return expired.rows.length;
+  });
+  await recoverStuckExecutions(new Date(now.getTime() - config.AGENT_LEASE_MS));
+  return recovered;
 }
 
-async function markOutcomeFailed(job: AgentJobRow): Promise<void> {
-  if (job.jobType !== 'outcome.refresh') return;
-  if (!('outcomeId' in job.payload)) return;
-  await getDb()
-    .update(outcomes)
-    .set({ agentState: 'failed' })
-    .where(and(eq(outcomes.id, job.payload.outcomeId), eq(outcomes.userId, job.userId)));
+export async function finalizeAgentJob(job: AgentJobRow, result: string, now = new Date()): Promise<void> {
+  await getDb().update(agentJobs).set({
+    status: sql`CASE WHEN ${agentJobs.generation} > ${job.claimedGeneration} THEN 'pending' ELSE 'done' END`,
+    attemptCount: sql`CASE WHEN ${agentJobs.generation} > ${job.claimedGeneration} THEN 0 ELSE ${job.attemptCount + 1} END`,
+    firstAttemptAt: null, nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null,
+    claimedGeneration: null, claimedPayload: null, lastError: result === 'done' ? null : result, updatedAt: now,
+  }).where(ownsAgentJob(job));
 }
 
 async function processOne(job: AgentJobRow, now: Date): Promise<void> {
-  const db = getDb();
+  const startedAt = Date.now();
+  const completedAt = () => new Date(now.getTime() + Date.now() - startedAt);
+  let heartbeatBusy = false;
+  const heartbeat = setInterval(() => {
+    if (heartbeatBusy) return;
+    heartbeatBusy = true;
+    void heartbeatAgentJob(job).catch((err: unknown) => { logger.error('agent.heartbeat.failed', err); })
+      .finally(() => { heartbeatBusy = false; });
+  }, Math.min(config.AGENT_HEARTBEAT_MS, config.AGENT_LEASE_MS / 3));
   try {
-    // Dynamic import: keeps jobs.ts a leaf for tasks.service (no static cycle
-    // through processors → outcomes.service → tasks.service).
     const { processAgentJob } = await import('./processors.js');
-    const result = await processAgentJob(job, now);
-    await db
-      .update(agentJobs)
-      .set({
-        status: 'done',
-        attemptCount: job.attemptCount + 1,
-        lastError: result === 'done' ? null : result,
-        updatedAt: now,
-      })
-      .where(eq(agentJobs.id, job.id));
+    const result = job.appliedGeneration === job.claimedGeneration
+      ? 'done' : await runWithAgentJob(job, () => processAgentJob(job, now));
+    await finalizeAgentJob(job, result, completedAt());
   } catch (err) {
-    const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
-    const attempts = job.attemptCount + 1;
-    if (err instanceof UnknownAgentJobTypeError || attempts >= MAX_ATTEMPTS) {
-      await db
-        .update(agentJobs)
-        .set({ status: 'failed', attemptCount: attempts, lastError: message, updatedAt: now })
-        .where(eq(agentJobs.id, job.id));
-      await markOutcomeFailed(job);
-      return;
-    }
-    const wait = BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)] ?? 30_000;
-    await db
-      .update(agentJobs)
-      .set({
-        status: 'pending',
-        attemptCount: attempts,
-        nextAttemptAt: new Date(now.getTime() + wait),
-        lastError: message,
-        updatedAt: now,
-      })
-      .where(eq(agentJobs.id, job.id));
+    if (err instanceof LostAgentJobLeaseError) return;
+    now = completedAt();
+    const deferred = err instanceof DeferredAgentJobError;
+    const attempts = job.attemptCount + (deferred ? 0 : 1);
+    const exhausted = attempts >= config.AGENT_MAX_ATTEMPTS ||
+      (job.firstAttemptAt !== null && now.getTime() - job.firstAttemptAt.getTime() >= config.AGENT_RETRY_MAX_AGE_MS);
+    const terminal = !deferred && (exhausted || !isRetryableAgentJobError(err));
+    const message = telemetryErrorCode(err);
+    const wait = BACKOFF_MS[Math.min(Math.max(attempts - 1, 0), BACKOFF_MS.length - 1)] ?? 30_000;
+    await getDb().transaction(async (tx) => {
+      const [owned] = await tx.select().from(agentJobs).where(ownsAgentJob(job)).for('update');
+      if (!owned) return;
+      const newer = owned.generation > (job.claimedGeneration ?? job.generation);
+      const superseded = newer && (terminal || ('manual' in owned.payload && owned.payload.manual));
+      await tx.update(agentJobs).set({
+        status: terminal && !newer ? 'failed' : 'pending',
+        attemptCount: superseded ? 0 : attempts,
+        nextAttemptAt: superseded ? null : deferred ? err.nextAttemptAt : terminal ? null : new Date(now.getTime() + wait),
+        claimedGeneration: terminal || superseded ? null : job.claimedGeneration,
+        claimedPayload: terminal || superseded ? null : job.claimedPayload,
+        firstAttemptAt: terminal || superseded ? null : job.firstAttemptAt,
+        leaseToken: null, leaseExpiresAt: null, lastError: message, updatedAt: now,
+      }).where(eq(agentJobs.id, job.id));
+      if (terminal && !newer && job.jobType === 'outcome.refresh' && 'outcomeId' in job.payload) {
+        await tx.update(outcomes).set({ agentState: 'failed' })
+          .where(and(eq(outcomes.id, job.payload.outcomeId), eq(outcomes.userId, job.userId)));
+      }
+    });
+  } finally { clearInterval(heartbeat); }
+}
+
+let stopping = false;
+let polling = false;
+const active = new Set<Promise<void>>();
+export async function drainAgentJobs(): Promise<void> {
+  stopping = true;
+  while (polling || active.size > 0) {
+    if (active.size) await Promise.allSettled([...active]);
+    else await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
 
 export async function processDueAgentJobs(now = new Date()): Promise<number> {
-  if (!config.AGENT_ENABLED) return 0;
-  const claimed = await claimDueJobs(now, config.WORKER_CLAIM_LIMIT);
-  for (const job of claimed) {
-    try {
-      await processOne(job, now);
-    } catch (err) {
-      // processOne already handles job-level errors; this guards its own crashes.
-      logger.error('agent.job.crash', err);
-      await getDb()
-        .update(agentJobs)
-        .set({
-          status: 'pending',
-          attemptCount: job.attemptCount + 1,
-          nextAttemptAt: new Date(now.getTime() + 30_000),
-          lastError: 'process crash',
-          updatedAt: now,
-        })
-        .where(eq(agentJobs.id, job.id));
-    }
-  }
-  return claimed.length;
+  if (!config.AGENT_ENABLED || stopping || polling) return 0;
+  polling = true;
+  try {
+    const capacity = Math.max(0, config.AGENT_CONCURRENCY - active.size);
+    const claimed = await claimDueJobs(now, Math.min(capacity, config.WORKER_CLAIM_LIMIT));
+    const started = claimed.map((job) => {
+      const task = processOne(job, now).catch((err: unknown) => {
+        // Do not write an unfenced fallback: the durable lease handles a crash here.
+        logger.error('agent.job.crash', err);
+      });
+      active.add(task);
+      void task.finally(() => active.delete(task));
+      return task;
+    });
+    await Promise.all(started);
+    return claimed.length;
+  } finally { polling = false; }
 }

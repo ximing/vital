@@ -213,6 +213,8 @@ export interface AgentExecution {
   parentId: string | null;
   jobId: string | null;
   capability: string;
+  trigger?: string | null;
+  inputSummary?: string | null;
   status: 'running' | 'succeeded' | 'failed' | 'skipped';
   attempt: number;
   reason: string | null;

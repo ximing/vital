@@ -106,7 +106,13 @@ export interface AgentUsageDaily {
 ```ts
 export interface AgentUsageSummary {
   days: number;
+  /** Historical rows plus new model requests; use modelRequests for actual request count. */
   totalRuns: number;
+  modelRequests?: number;
+  failedRequests?: number;
+  unknownUsageRequests?: number;
+  unknownCostRequests?: number;
+  legacyRuns?: number;
   totalPromptTokens: number;
   totalCompletionTokens: number;
   totalCostMicros: number;
@@ -161,6 +167,26 @@ export interface AgentMemoryItem {
   manual: boolean;
   createdAt: string;
   updatedAt: string;
+}
+```
+
+```ts
+export interface AgentExecution {
+  id: string;
+  parentId: string | null;
+  jobId: string | null;
+  capability: string;
+  trigger?: string | null;
+  inputSummary?: string | null;
+  status: 'running' | 'succeeded' | 'failed' | 'skipped';
+  attempt: number;
+  reason: string | null;
+  targetType: string | null;
+  targetId: string | null;
+  resultSummary: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
 }
 ```
 
@@ -2020,6 +2046,14 @@ Request body (`actionFeedbackInputSchema`):
 
 - `feedback`: "accepted" | "dismissed" | "edited"
 - `editedPayload`: object (optional)
+
+#### `GET /api/v1/agent/executions`
+
+- Auth: Bearer required
+
+Query (`agentUsageQuerySchema`):
+
+- `days`: number int min 1
 
 #### `GET /api/v1/agent/memory`
 

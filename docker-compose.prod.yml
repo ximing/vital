@@ -57,6 +57,7 @@ services:
 
   worker:
     <<: *app
+    stop_grace_period: 5m
     image: ghcr.io/ximing/vital-server:${VITAL_IMAGE_TAG:-stable}
     container_name: vital-worker
     command: ['node', 'dist/worker.js']

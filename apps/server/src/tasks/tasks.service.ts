@@ -62,6 +62,7 @@ import {
   enqueueTaskDraft,
   hasPendingDecomposeAction,
 } from '../agent/jobs.js';
+import { markAgentSchedule } from '../agent/scheduling.js';
 import { executionResult, skipExecution, withExecution } from '../agent/executions.service.js';
 import { toAgentActionDto } from '../agent/actions.service.js';
 import { spawnNextOnComplete } from '../habits/habits.service.js';
@@ -421,6 +422,7 @@ export async function createTask(userId: string, input: CreateTaskInput): Promis
     updatedAt: now,
   };
   await getDb().transaction(async (tx) => {
+    await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     await tx.insert(tasks).values(row);
     if (input.tagIds !== undefined) await replaceTags(row.id, input.tagIds, tx);
     await syncTaskNotifications(
@@ -632,6 +634,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
 
   const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {
+    await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     await tx.update(tasks).set(patch).where(eq(tasks.id, task.id));
     if (input.listId !== undefined && input.listId !== task.listId && !task.parentId) {
       await tx
@@ -667,7 +670,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     if (
       deferred &&
       needsDecomposition(task.deferCount + 1) &&
-      !(await hasPendingDecomposeAction(tx, task.id))
+      !(await hasPendingDecomposeAction(tx, task.id, userId))
     ) {
       await enqueueTaskDecompose(tx, userId, task.id, now);
     }
@@ -709,6 +712,7 @@ export async function deleteTask(userId: string, id: string): Promise<void> {
   const user = await getUserEntity(userId);
   const now = new Date();
   await getDb().transaction(async (tx) => {
+    await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     if (task.parentId) {
       await tx.update(tasks).set({ deletedAt: now, updatedAt: now }).where(eq(tasks.id, task.id));
       await syncTaskNotifications({ ...task, deletedAt: now }, user, now, tx);
@@ -736,6 +740,7 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
   const user = await getUserEntity(userId);
   const now = new Date();
   await getDb().transaction(async (tx) => {
+    await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     if (task.parentId) {
       await tx.update(tasks).set({ deletedAt: null, updatedAt: now }).where(eq(tasks.id, task.id));
       await syncTaskNotifications({ ...task, deletedAt: null }, user, now, tx);
@@ -817,6 +822,7 @@ export async function completeTask(userId: string, id: string): Promise<Complete
 
   try {
     await getDb().transaction(async (tx) => {
+      await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
       await tx.insert(taskCompletions).values({
         id: completionId,
         taskId: task.id,
@@ -908,6 +914,7 @@ export async function uncompleteTask(
 
   const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {
+    await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     await tx.delete(taskCompletions).where(eq(taskCompletions.id, completion.id));
     await tx
       .update(tasks)
@@ -956,6 +963,7 @@ export async function reorderTasks(userId: string, input: ReorderTasksInput): Pr
   }
   const now = new Date();
   await getDb().transaction(async (tx) => {
+    await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
     for (let i = 0; i < input.orderedIds.length; i += 1) {
       const id = input.orderedIds[i];
       if (id === undefined) continue;

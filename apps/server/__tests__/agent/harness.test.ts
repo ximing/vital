@@ -10,10 +10,10 @@ import {
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { enqueueOutcomeRefresh, processDueAgentJobs } from '../../src/agent/jobs.js';
+import { enqueueAgentJob, enqueueOutcomeRefresh, processDueAgentJobs } from '../../src/agent/jobs.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
-import { agentActions, agentJobs, agentMemory, agentUsage, outcomes } from '../../src/db/schema.js';
+import { agentActions, agentJobs, agentMemory, agentUsage, outcomes, tasks } from '../../src/db/schema.js';
 import { setPiResolveOverride } from '../../src/llm/pi.js';
 import { refreshOutcomeRuleFields } from '../../src/outcomes/outcomes.service.js';
 import { resetDb } from '../helpers/db.js';
@@ -21,6 +21,44 @@ import { injectJson } from '../helpers/http.js';
 import { inboxId, registerUser } from '../helpers/session.js';
 
 let app: FastifyInstance;
+
+async function unassignedTasks(token: string): Promise<string[]> {
+  const listId = await inboxId(app, token);
+  const ids: string[] = [];
+  for (let i = 0; i < 4; i++) {
+    const res = await injectJson(app, { method: 'POST', url: '/api/v1/tasks', token, payload: { listId, title: `private task ${i}` } });
+    expect(res.statusCode).toBe(201);
+    ids.push(res.json().id as string);
+  }
+  return ids;
+}
+
+it('cluster ignores foreign IDs and revalidates eligibility changed while the model runs', async () => {
+  const alice = await setupFauxUser('alice');
+  const bob = await registerUser(app, 'bob');
+  const own = await unassignedTasks(alice.token);
+  const foreign = await unassignedTasks(bob.token);
+  const faux = installFaux();
+  faux.setResponses([async (context) => {
+    expect(JSON.stringify(context)).not.toContain(foreign[0]);
+    await getDb().update(tasks).set({ status: 'done' }).where(eq(tasks.id, own[0]!));
+    await getDb().update(tasks).set({ deletedAt: new Date() }).where(eq(tasks.id, own[1]!));
+    return fauxAssistantMessage(fauxToolCall('propose_threads', { threads: [
+      { name: 'stale proposal', headline: '', taskIds: [own[0], own[1]] },
+      { name: 'valid proposal', headline: '', taskIds: [own[2], own[3], foreign[0], foreign[1]] },
+    ] }));
+  }]);
+  await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'outcome.cluster', dedupKey: `cluster:${alice.id}`, payload: { date: 'today' }, scheduledAt: new Date() });
+  expect(await processDueAgentJobs()).toBe(1);
+  const created = await getDb().select().from(outcomes).where(eq(outcomes.userId, alice.id));
+  expect(created).toHaveLength(1);
+  expect(created[0]?.name).toBe('valid proposal');
+  const other = await getDb().select().from(tasks).where(eq(tasks.userId, bob.id));
+  expect(other.every(task => task.outcomeId === null)).toBe(true);
+  const actions = await getDb().select().from(agentActions).where(eq(agentActions.userId, alice.id));
+  expect(actions).toHaveLength(1);
+  expect(new Set(actions[0]?.payload['taskIds'] as string[])).toEqual(new Set([own[2], own[3]]));
+});
 
 beforeAll(async () => {
   app = await buildFastify();
@@ -189,15 +227,16 @@ describe('agent harness: outcome.refresh', () => {
     let refreshJob = jobRows.find((j) => j.jobType === 'outcome.refresh')!;
     expect(refreshJob.status).toBe('pending');
     expect(refreshJob.attemptCount).toBe(1);
-    expect(refreshJob.lastError).toContain('provider 5xx');
-    expect(refreshJob.nextAttemptAt!.getTime()).toBe(t0.getTime() + 30_000);
+    expect(refreshJob.lastError).toBe('LLM_UNAVAILABLE');
+    expect(refreshJob.nextAttemptAt!.getTime()).toBeGreaterThanOrEqual(t0.getTime() + 30_000);
+    expect(refreshJob.nextAttemptAt!.getTime()).toBeLessThan(t0.getTime() + 40_000);
 
     faux.setResponses([
       fauxAssistantMessage(
         fauxToolCall('submit_headline', { headline: '恢复了', suggestion: '' }),
       ),
     ]);
-    await processDueAgentJobs(new Date(t0.getTime() + 31_000));
+    await processDueAgentJobs(new Date(refreshJob.nextAttemptAt!.getTime() + 1_000));
 
     jobRows = await getDb().select().from(agentJobs).where(eq(agentJobs.userId, alice.id));
     refreshJob = jobRows.find((j) => j.jobType === 'outcome.refresh')!;

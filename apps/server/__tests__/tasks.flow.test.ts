@@ -474,7 +474,7 @@ describe('tasks agent triggers', () => {
 
     let jobs = await decomposeJobs();
     expect(jobs).toHaveLength(1);
-    expect(jobs[0]!.payload).toEqual({ taskId });
+    expect(jobs[0]!.payload).toMatchObject({ taskId });
     expect(jobs[0]!.status).toBe('pending');
 
     // A 4th defer while the proposal is pending must not enqueue a duplicate.
@@ -505,7 +505,7 @@ describe('tasks agent triggers', () => {
       .from(agentJobs)
       .where(and(eq(agentJobs.userId, alice.id), eq(agentJobs.jobType, 'outcome.refresh')));
     expect(jobs).toHaveLength(1);
-    expect(jobs[0]!.payload).toEqual({ outcomeId: outcome.json().id });
+    expect(jobs[0]!.payload).toMatchObject({ outcomeId: outcome.json().id });
   });
 
   // Regression: csi acceptance (v1.3) saw create→immediate DELETE return

@@ -2,7 +2,8 @@ import { DateTime } from 'luxon';
 import { randomUUID } from 'node:crypto';
 import { and, eq, gte, inArray, isNull, like, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
-import { habits, notificationOutbox, outcomes, reports, taskCompletions, tasks, type User } from '../db/schema.js';
+import { agentJobs, habits, notificationOutbox, outcomes, reports, taskCompletions, tasks, type User } from '../db/schema.js';
+import { currentAgentJob, LostAgentJobLeaseError, ownsAgentJob } from '../agent/job-runtime.js';
 
 export type InsightKind = 'outcome.stale' | 'task.decompose' | 'habit.window' | 'review.missing';
 export interface InsightCandidate { kind: InsightKind; targetType: 'outcome' | 'task' | 'habit'; targetId: string; title: string; message: string }
@@ -61,8 +62,27 @@ export async function enqueueProactiveInsights(user: User, now = new Date(), rew
   const candidates = selectInsightCandidates(await factsFor(user, now));
   let inserted = 0;
   for (const item of candidates) {
-    const message = (await rewrite?.(item))?.trim().slice(0, 500) || item.message;
-    const rows = await getDb().insert(notificationOutbox).values({ id: randomUUID(), userId: user.id, eventType: 'agent.insight', entityType: item.targetType, entityId: item.targetId, occurrenceAt: now, idempotencyKey: `insight:${item.kind}:${item.targetId}:${day}`, scheduledAt: now, payload: { title: item.title, listId: '', listName: '', dueAt: null, remindAt: null, isAllDay: false, timezone: user.timezone, eventType: 'agent.insight', insightKind: item.kind, message }, createdAt: now, updatedAt: now }).onConflictDoNothing().returning({ id: notificationOutbox.id });
+    // Reserve before model work. The persisted rule message is also the crash
+    // fallback: the dispatcher recovers abandoned preparation without another
+    // paid rewrite or relying on the candidate still appearing in a later scan.
+    const payload = { title: item.title, listId: '', listName: '', dueAt: null, remindAt: null, isAllDay: false, timezone: user.timezone, eventType: 'agent.insight' as const, insightKind: item.kind, message: item.message };
+    const job = currentAgentJob();
+    if (job && job.userId !== user.id) throw new Error('notification job user mismatch');
+    const rows = await getDb().transaction(async (tx) => {
+      if (job) {
+        const [owned] = await tx.select({ id: agentJobs.id }).from(agentJobs).where(ownsAgentJob(job)).for('share');
+        if (!owned) throw new LostAgentJobLeaseError();
+      }
+      return tx.insert(notificationOutbox).values({ id: randomUUID(), userId: user.id, eventType: 'agent.insight', entityType: item.targetType, entityId: item.targetId, occurrenceAt: now, idempotencyKey: `insight:${user.id}:${item.kind}:${item.targetId}:${day}`, scheduledAt: now, status: 'preparing', payload, createdAt: now, updatedAt: new Date() }).onConflictDoNothing().returning({ id: notificationOutbox.id });
+    });
+    if (!rows[0]) continue;
+    try {
+      payload.message = (await rewrite?.(item))?.trim().slice(0, 500) || item.message;
+    } finally {
+      await getDb().update(notificationOutbox).set({ payload, status: 'pending', updatedAt: new Date() })
+        .where(and(eq(notificationOutbox.id, rows[0].id), eq(notificationOutbox.userId, user.id), eq(notificationOutbox.status, 'preparing'),
+          job ? sql`EXISTS (SELECT 1 FROM ${agentJobs} WHERE ${ownsAgentJob(job)})` : undefined));
+    }
     inserted += rows.length;
   }
   return inserted;

@@ -33,6 +33,8 @@ function fakeJob(userId: string, jobType: string): AgentJobRow {
     scheduledAt: now,
     status: 'running',
     attemptCount: 0,
+    generation: 1, claimedGeneration: 1, claimedPayload: { taskId: userId },
+    appliedGeneration: null, effectResult: null, leaseToken: null, leaseExpiresAt: null, firstAttemptAt: null,
     nextAttemptAt: null,
     lastError: null,
     createdAt: now,
@@ -63,7 +65,7 @@ describe('unknown agent jobType', () => {
     await processDueAgentJobs(new Date(Date.now() + 5_000));
     const [row] = await getDb().select().from(agentJobs).where(eq(agentJobs.id, id!));
     expect(row!.status).toBe('failed');
-    expect(row!.lastError).toContain('habit.spawn');
+    expect(row!.lastError).toBe('UNKNOWN_JOB_TYPE');
     expect(row!.attemptCount).toBe(1);
     expect(row!.nextAttemptAt).toBeNull();
   });

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion -- test row assertions */
 import { createModels, fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai';
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -8,13 +9,15 @@ import {
   MAX_ATTEMPTS,
   claimDueJobs,
   enqueueAgentJob,
+  finalizeAgentJob,
   enqueueOutcomeRefresh,
   processDueAgentJobs,
   recoverStuckAgentJobs,
 } from '../../src/agent/jobs.js';
+import { heartbeatAgentJob, LostAgentJobLeaseError, withAgentJobEffects } from '../../src/agent/job-runtime.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
-import { agentJobs, outcomes } from '../../src/db/schema.js';
+import { agentExecutions, agentJobs, agentUsage, outcomes } from '../../src/db/schema.js';
 import { setPiResolveOverride } from '../../src/llm/pi.js';
 import { resetDb } from '../helpers/db.js';
 import { injectJson } from '../helpers/http.js';
@@ -173,11 +176,12 @@ describe('agent jobs queue', () => {
       expect(rows).toHaveLength(1);
       const job = rows[0]!;
       expect(job.attemptCount).toBe(i);
-      expect(job.lastError).toContain('provider 5xx');
+      expect(job.lastError).toBe('LLM_UNAVAILABLE');
       if (i < MAX_ATTEMPTS) {
         expect(job.status).toBe('pending');
         const wait = BACKOFF_MS[Math.min(i - 1, BACKOFF_MS.length - 1)]!;
-        expect(job.nextAttemptAt!.getTime()).toBe(now.getTime() + wait);
+        expect(job.nextAttemptAt!.getTime()).toBeGreaterThanOrEqual(now.getTime() + wait);
+        expect(job.nextAttemptAt!.getTime()).toBeLessThan(now.getTime() + wait + 10_000);
         cursor = now.getTime() + wait + 1_000;
       } else {
         expect(job.status).toBe('failed');
@@ -188,7 +192,7 @@ describe('agent jobs queue', () => {
     expect(outcome!.agentState).toBe('failed');
   });
 
-  it('recoverStuckAgentJobs re-arms running jobs older than 5 minutes', async () => {
+  it('recoverStuckAgentJobs re-arms only expired running leases', async () => {
     const alice = await registerUser(app);
     await enqueueAgentJob(getDb(), {
       userId: alice.id,
@@ -206,10 +210,125 @@ describe('agent jobs queue', () => {
     // Age it past the stuck threshold.
     await getDb()
       .update(agentJobs)
-      .set({ updatedAt: new Date(now.getTime() - 10 * 60_000) })
+      .set({ leaseExpiresAt: new Date(now.getTime() - 1) })
       .where(eq(agentJobs.id, claimed[0]!.id));
     expect(await recoverStuckAgentJobs(now)).toBe(1);
     const rows = await jobByKey('reflect.daily:stuck:2026-09-09');
     expect(rows[0]!.status).toBe('pending');
   });
+});
+
+it('preserves a running generation when a new event arrives', async () => {
+  const alice = await registerUser(app);
+  const input = { userId: alice.id, jobType: 'reflect.daily', payload: { date: '2026-09-09' }, dedupKey: 'generation', scheduledAt: new Date(0) };
+  await enqueueAgentJob(getDb(), input);
+  const [claimed] = await claimDueJobs(new Date(), 1);
+  await enqueueAgentJob(getDb(), { ...input, payload: { date: '2026-09-10' } });
+  const [row] = await jobByKey('generation');
+  expect(row!.generation).toBe(claimed!.generation + 1);
+  expect(row!.claimedGeneration).toBe(claimed!.generation);
+  expect(row!.leaseToken).toBe(claimed!.leaseToken);
+  expect(row!.status).toBe('running');
+});
+
+it('serializes the same user and job type across concurrent claims', async () => {
+  const alice = await registerUser(app);
+  for (const key of ['one', 'two']) await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'reflect.daily', payload: { date: key }, dedupKey: key, scheduledAt: new Date(0) });
+  const claims = await Promise.all([claimDueJobs(new Date(), 1), claimDueJobs(new Date(), 1)]);
+  expect(claims.flat()).toHaveLength(1);
+  expect(claims.flat()[0]!.leaseToken).toBeTruthy();
+});
+
+it('replays committed effects after a worker crash without writing them twice', async () => {
+  const alice = await registerUser(app);
+  const outcomeId = await createOutcome(alice.token);
+  await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'outcome.refresh', payload: { outcomeId }, dedupKey: 'effects', scheduledAt: new Date(0) });
+  const [old] = await claimDueJobs(new Date(), 1);
+  const applied = await withAgentJobEffects(old!, async (tx) => {
+    await tx.update(outcomes).set({ agentHeadline: 'first commit' }).where(eq(outcomes.id, outcomeId));
+    return { changed: 1 };
+  });
+  expect(applied).toEqual({ changed: 1 });
+  await getDb().update(agentJobs).set({ leaseExpiresAt: new Date(0) }).where(eq(agentJobs.id, old!.id));
+  expect(await recoverStuckAgentJobs()).toBe(1);
+  const [replacement] = await claimDueJobs(new Date(), 1);
+  expect(replacement!.leaseToken).not.toBe(old!.leaseToken);
+  const replay = await withAgentJobEffects(replacement!, async (tx) => {
+    await tx.update(outcomes).set({ agentHeadline: 'duplicated write' }).where(eq(outcomes.id, outcomeId));
+    return { changed: 2 };
+  });
+  expect(replay).toEqual({ changed: 1 });
+  await expect(withAgentJobEffects(old!, () => Promise.resolve('stale'))).rejects.toBeInstanceOf(LostAgentJobLeaseError);
+  await finalizeAgentJob(old!, 'done');
+  const [running] = await jobByKey('effects');
+  expect(running!.status).toBe('running');
+  expect(running!.leaseToken).toBe(replacement!.leaseToken);
+  const [outcome] = await getDb().select().from(outcomes).where(eq(outcomes.id, outcomeId));
+  expect(outcome!.agentHeadline).toBe('first commit');
+});
+
+it('finishes the claimed generation and retains newer payload through restart recovery', async () => {
+  const alice = await registerUser(app);
+  const input = { userId: alice.id, jobType: 'reflect.daily', payload: { date: 'old' }, dedupKey: 'restart', scheduledAt: new Date(0) };
+  await enqueueAgentJob(getDb(), input);
+  const [old] = await claimDueJobs(new Date(), 1);
+  await enqueueAgentJob(getDb(), { ...input, payload: { date: 'new' } });
+  await getDb().update(agentJobs).set({ leaseExpiresAt: new Date(0) }).where(eq(agentJobs.id, old!.id));
+  await recoverStuckAgentJobs();
+  const [recovered] = await claimDueJobs(new Date(), 1);
+  expect(recovered!.payload).toEqual({ date: 'old' });
+  expect(recovered!.claimedGeneration).toBe(1);
+  await withAgentJobEffects(recovered!, () => Promise.resolve('done'));
+  await finalizeAgentJob(recovered!, 'done');
+  const [pending] = await jobByKey('restart');
+  expect(pending!.status).toBe('pending');
+  const [next] = await claimDueJobs(new Date(), 1);
+  expect(next!.payload).toEqual({ date: 'new' });
+  expect(next!.claimedGeneration).toBe(2);
+});
+
+it('heartbeat protects a long-running job and an expired owner cannot renew', async () => {
+  const alice = await registerUser(app);
+  await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'reflect.daily', payload: { date: 'today' }, dedupKey: 'heartbeat', scheduledAt: new Date(0) });
+  const [job] = await claimDueJobs(new Date(), 1);
+  const heartbeatAt = new Date(job!.leaseExpiresAt!.getTime() - 1000);
+  expect(await heartbeatAgentJob(job!, heartbeatAt)).toBe(true);
+  expect(await recoverStuckAgentJobs(new Date(job!.leaseExpiresAt!.getTime() + 1))).toBe(0);
+  await getDb().update(agentJobs).set({ leaseExpiresAt: new Date(0) }).where(eq(agentJobs.id, job!.id));
+  expect(await heartbeatAgentJob(job!)).toBe(false);
+});
+
+it('recovers only execution and usage rows belonging to an expired lease', async () => {
+  const alice = await registerUser(app);
+  await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'reflect.daily', payload: { date: 'today' }, dedupKey: 'orphan', scheduledAt: new Date(0) });
+  const [job] = await claimDueJobs(new Date(), 1);
+  const expiredExecution = randomUUID();
+  const healthyExecution = randomUUID();
+  await getDb().insert(agentExecutions).values([
+    { id: expiredExecution, userId: alice.id, jobId: job!.id, leaseToken: job!.leaseToken, capability: 'reflect', createdAt: new Date(Date.now() - 600_000) },
+    { id: healthyExecution, userId: alice.id, capability: 'parse', createdAt: new Date(Date.now() - 600_000) },
+  ]);
+  const usageId = randomUUID();
+  await getDb().insert(agentUsage).values({ id: usageId, userId: alice.id, jobId: job!.id, leaseToken: job!.leaseToken, executionId: expiredExecution, capability: 'reflect', model: 'unknown', status: 'running' });
+  expect(await recoverStuckAgentJobs()).toBe(0);
+  await getDb().update(agentJobs).set({ leaseExpiresAt: new Date(0) }).where(eq(agentJobs.id, job!.id));
+  expect(await recoverStuckAgentJobs()).toBe(1);
+  const [expired] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.id, expiredExecution));
+  const [healthy] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.id, healthyExecution));
+  const [usage] = await getDb().select().from(agentUsage).where(eq(agentUsage.id, usageId));
+  expect(expired!.reason).toBe('WORKER_INTERRUPTED');
+  expect(healthy!.status).toBe('running');
+  expect(usage!.reason).toBe('WORKER_INTERRUPTED_USAGE_UNKNOWN');
+  expect(usage!.costMicros).toBeNull();
+});
+
+it('does not allow another user to overwrite an existing dedup key', async () => {
+  const alice = await registerUser(app);
+  const bob = await registerUser(app);
+  const input = { userId: alice.id, jobType: 'reflect.daily', payload: { date: 'alice' }, dedupKey: 'owned', scheduledAt: new Date(0) };
+  await enqueueAgentJob(getDb(), input);
+  expect(await enqueueAgentJob(getDb(), { ...input, userId: bob.id, payload: { date: 'bob' } })).toBeNull();
+  const [row] = await jobByKey('owned');
+  expect(row!.userId).toBe(alice.id);
+  expect(row!.payload).toEqual({ date: 'alice' });
 });

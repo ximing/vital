@@ -74,6 +74,7 @@ services:
 
   worker:
     <<: *app
+    stop_grace_period: 5m
     image: ghcr.io/ximing/vital-server:${VITAL_IMAGE_TAG:-stable}
     depends_on:
       migrate:

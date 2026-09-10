@@ -183,6 +183,13 @@
       "when": 1789606800008,
       "tag": "0025_lively_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789606800009,
+      "tag": "0026_chilly_korg",
+      "breakpoints": true
     }
   ]
 }

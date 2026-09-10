@@ -1,12 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, gte, inArray, lt } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import type { AgentExecution } from '@vital/dto';
 import { getDb } from '../db/index.js';
 import { agentExecutions, agentActions } from '../db/schema.js';
 import { summarizePayload } from './actions.service.js';
 import { AppError } from '../errors.js';
 import { logger } from '../utils/logger.js';
+import { currentAgentJob, DeferredAgentJobError, LostAgentJobLeaseError } from './job-runtime.js';
 
 interface ExecutionContext {
   id: string;
@@ -14,7 +15,7 @@ interface ExecutionContext {
   jobId: string | null;
   attempt: number;
   skipped: string | null;
-  result: { targetType?: string; targetId?: string; resultSummary?: string };
+  result: { targetType?: string; targetId?: string; resultSummary?: string; inputSummary?: string };
 }
 const storage = new AsyncLocalStorage<ExecutionContext>();
 
@@ -24,6 +25,9 @@ export function executionContext(): ExecutionContext | undefined {
 
 /** Persist only a stable code. Provider messages can contain URLs, credentials or prompt data. */
 export function telemetryErrorCode(error: unknown): string {
+  if (error instanceof Error && error.name === 'UnknownAgentJobTypeError') return 'UNKNOWN_JOB_TYPE';
+  if (error instanceof DeferredAgentJobError) return error.reason;
+  if (error instanceof LostAgentJobLeaseError) return 'LEASE_LOST';
   if (error instanceof AppError && /^[A-Z_]{1,80}$/.test(error.code)) return error.code;
   if (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name)) return 'LLM_TIMEOUT';
   return 'EXECUTION_FAILED';
@@ -52,7 +56,9 @@ export async function withExecution<T>(
   work: () => Promise<T>,
 ): Promise<T> {
   const parent = storage.getStore();
+  const job = currentAgentJob();
   if (parent && parent.userId !== input.userId) throw new Error('execution user mismatch');
+  if (job && job.userId !== input.userId) throw new Error('execution job user mismatch');
   const id = randomUUID();
   const startedAt = new Date();
   const context: ExecutionContext = {
@@ -69,9 +75,22 @@ export async function withExecution<T>(
   await getDb().insert(agentExecutions).values({
     id, userId: input.userId, parentId: parent?.id ?? null,
     jobId: context.jobId, capability: input.capability, attempt: context.attempt,
+    leaseToken: job?.leaseToken ?? null, jobGeneration: job?.claimedGeneration ?? null,
+    trigger: job && 'trigger' in job.payload ? job.payload.trigger : job ? 'scheduled' : 'user_request',
+    heartbeatAt: startedAt,
     ...context.result, createdAt: startedAt,
   });
   return storage.run(context, async () => {
+    let heartbeatBusy = false;
+    const heartbeat = setInterval(() => {
+      if (heartbeatBusy) return;
+      heartbeatBusy = true;
+      void getDb().update(agentExecutions).set({ heartbeatAt: new Date() })
+        .where(and(eq(agentExecutions.id, id), eq(agentExecutions.status, 'running')))
+        .catch((error: unknown) => { logger.error('agent.execution.heartbeat_failed', error); })
+        .finally(() => { heartbeatBusy = false; });
+    }, 30_000);
+    heartbeat.unref();
     let status: AgentExecution['status'] = 'succeeded';
     let reason: string | null = null;
     try {
@@ -82,16 +101,17 @@ export async function withExecution<T>(
       }
       return result;
     } catch (error) {
-      status = 'failed';
+      status = error instanceof DeferredAgentJobError ? 'skipped' : 'failed';
       reason = telemetryErrorCode(error);
       throw error;
     } finally {
+      clearInterval(heartbeat);
       const finishedAt = new Date();
       try {
         await getDb().update(agentExecutions).set({
           status, reason, ...context.result, finishedAt,
           durationMs: finishedAt.getTime() - startedAt.getTime(),
-        }).where(eq(agentExecutions.id, id));
+        }).where(and(eq(agentExecutions.id, id), eq(agentExecutions.status, 'running')));
       } catch (error) {
         // Telemetry must never turn a committed business operation into a retry.
         logger.error('agent.execution.finalize_failed', error);
@@ -119,8 +139,18 @@ export async function listExecutions(userId: string, days: number): Promise<Agen
 
 /** Mark executions abandoned with their worker job so restarts don't leave them running forever. */
 export async function recoverStuckExecutions(cutoff: Date): Promise<number> {
-  const rows = await getDb().update(agentExecutions).set({
-    status: 'failed', reason: 'PROCESS_INTERRUPTED', finishedAt: new Date(),
-  }).where(and(eq(agentExecutions.status, 'running'), lt(agentExecutions.createdAt, cutoff))).returning({ id: agentExecutions.id });
-  return rows.length;
+  const now = new Date();
+  return getDb().transaction(async (tx) => {
+    const rows = await tx.execute(sql`UPDATE agent_executions e SET
+      status = 'failed', reason = 'PROCESS_INTERRUPTED', finished_at = ${now},
+      duration_ms = LEAST(2147483647, GREATEST(0, EXTRACT(EPOCH FROM (${now}::timestamptz - e.created_at)) * 1000))::int
+      WHERE e.status = 'running' AND e.heartbeat_at < ${cutoff}
+      AND NOT EXISTS (SELECT 1 FROM agent_jobs j WHERE j.id = e.job_id AND j.status = 'running'
+        AND j.lease_token = e.lease_token AND j.lease_expires_at > ${now}) RETURNING e.id`);
+    await tx.execute(sql`UPDATE agent_usage u SET status = 'failed', reason = 'PROCESS_INTERRUPTED_USAGE_UNKNOWN',
+      finished_at = ${now}, duration_ms = LEAST(2147483647, GREATEST(0, EXTRACT(EPOCH FROM (${now}::timestamptz - u.created_at)) * 1000))::int
+      WHERE u.status = 'running' AND u.created_at < ${cutoff}
+      AND EXISTS (SELECT 1 FROM agent_executions e WHERE e.id = u.execution_id AND e.status <> 'running')`);
+    return rows.rows.length;
+  });
 }

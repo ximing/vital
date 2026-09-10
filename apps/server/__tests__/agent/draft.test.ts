@@ -225,7 +225,7 @@ describe('POST /api/v1/tasks/:id/draft', () => {
       .where(eq(agentJobs.dedupKey, `task.draft:${taskId}`));
     expect(jobs).toHaveLength(1);
     expect(jobs[0]!.jobType).toBe('task.draft');
-    expect(jobs[0]!.payload).toEqual({ taskId });
+    expect(jobs[0]!.payload).toMatchObject({ taskId });
   });
 });
 

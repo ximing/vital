@@ -157,6 +157,8 @@ export interface VitalClient {
   deleteHabit(id: string): Promise<void>;
   getAgentUsage(days?: number): Promise<AgentUsageSummary>;
   listAgentExecutions(days?: number): Promise<AgentExecution[]>;
+  organizeAgentTasks(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
+  distillAgentMemory(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
   getAgentMetrics(days?: number): Promise<AgentMetricsResponse>;
   listAgentActions(query?: AgentActionsQuery): Promise<AgentActionLogItem[]>;
   sendAgentActionFeedback(id: string, input: ActionFeedbackInput): Promise<AgentAction>;
@@ -372,6 +374,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     },
     listAgentExecutions: (days) =>
       http.request(`/api/v1/agent/executions${days ? `?days=${String(days)}` : ''}`),
+    organizeAgentTasks: () => http.request('/api/v1/agent/cluster', { method: 'POST' }),
+    distillAgentMemory: () => http.request('/api/v1/agent/memory/distill', { method: 'POST' }),
     getAgentUsage: (days) =>
       http.request(`/api/v1/agent/usage${days ? `?days=${String(days)}` : ''}`),
     getAgentMetrics: (days) =>

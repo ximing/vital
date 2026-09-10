@@ -19,7 +19,7 @@ import {
 import { buildDistillPrompt } from '../../src/agent/prompts.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
-import { agentActions, agentJobs, agentMemory } from '../../src/db/schema.js';
+import { agentActions, agentJobs, agentMemory, agentMemoryHistory } from '../../src/db/schema.js';
 import { setPiResolveOverride } from '../../src/llm/pi.js';
 import { resetDb } from '../helpers/db.js';
 import { injectJson } from '../helpers/http.js';
@@ -111,6 +111,7 @@ async function seedFeedback(userId: string, n = 3): Promise<void> {
       targetId: randomUUID(),
       payload: { headline: '提案' },
       feedback: i === 0 ? 'accepted' : i === 1 ? 'edited' : 'dismissed',
+      feedbackAt: new Date(),
       createdAt: new Date(),
     });
   }
@@ -136,6 +137,18 @@ async function runDistill(userId: string): Promise<void> {
 }
 
 describe('memory distill governance', () => {
+  it('learns from feedback time even when the proposal is older than thirty days and consumes unchanged feedback once', async () => {
+    const alice = await setupFauxUser('alice');
+    const faux = installFaux();
+    await seedFeedback(alice.id);
+    await getDb().update(agentActions).set({ createdAt: new Date('2020-01-01') }).where(eq(agentActions.userId, alice.id));
+    faux.setResponses([fauxAssistantMessage(fauxToolCall('submit_memories', { keep: [], update: [], add: [{ kind: 'preference', content: '最近反馈', scope: ['all'] }], drop: [] }))]);
+    await runDistill(alice.id);
+    expect(await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id))).toHaveLength(1);
+    await runDistill(alice.id);
+    expect(await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id))).toHaveLength(1);
+  });
+
   it('applies the operation stream: update rewrites, drop evicts, add appends; manual and foreign rows are untouchable', async () => {
     const alice = await setupFauxUser('alice');
     const bob = await registerUser(app, 'bob');
@@ -363,6 +376,9 @@ describe('agent memory CRUD (settings memory tab)', () => {
     const remaining = await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id));
     expect(remaining).toHaveLength(1);
     expect(remaining[0]!.id).toBe(row.id);
+    const history = await getDb().select().from(agentMemoryHistory).where(eq(agentMemoryHistory.userId, alice.id));
+    expect(history.map(h => h.operation).sort()).toEqual(['manual.add', 'manual.drop', 'manual.update']);
+    expect(remaining[0]!.version).toBe(2);
   });
 
   it('rejects empty patches and enforces ownership (404 across users)', async () => {

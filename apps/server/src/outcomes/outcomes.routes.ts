@@ -90,7 +90,7 @@ export function registerOutcomeRoutes(app: FastifyInstance): void {
       if (!user) throw AppError.of(401, 'INVALID_TOKEN');
       const { id } = outcomeIdParamsSchema.parse(req.params);
       await getOwnedOutcomeOr404(user.id, id);
-      await enqueueOutcomeRefresh(getDb(), user.id, id, new Date(), { delayMs: 0 });
+      await enqueueOutcomeRefresh(getDb(), user.id, id, new Date(), { delayMs: 0, manual: true });
       return reply.code(202).send({ ok: true });
     },
   );

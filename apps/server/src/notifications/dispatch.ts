@@ -62,7 +62,7 @@ export async function recoverStuckSending(now = new Date()): Promise<number> {
   const rows = await getDb()
     .update(notificationOutbox)
     .set({ status: 'pending', updatedAt: now })
-    .where(and(eq(notificationOutbox.status, 'sending'), lt(notificationOutbox.updatedAt, cutoff)))
+    .where(and(inArray(notificationOutbox.status, ['sending', 'preparing']), lt(notificationOutbox.updatedAt, cutoff)))
     .returning({ id: notificationOutbox.id });
   return rows.length;
 }

@@ -8,6 +8,8 @@ import { agentMemory, type AgentJobRow, type AgentMemoryScope, type User } from 
 import { modelOptions, resolveModelFor, type LlmRunUsage } from '../llm/pi.js';
 import { streamModel } from '../llm/model-transport.js';
 import { skipExecution, withExecution } from './executions.service.js';
+import { AppError } from '../errors.js';
+import { modelResponseError } from '../llm/model-errors.js';
 
 /** Hard cap for one agent run; abort lands as stopReason 'aborted' → backoff. */
 const RUN_TIMEOUT_MS = 120_000;
@@ -75,14 +77,22 @@ export async function runProposalPass<T>(input: {
     box.value = args;
   });
   const pendingCalls: Promise<void>[] = [];
+  const transportFailure: { error?: Error } = {};
   const agent = new Agent({
     streamFn: async (model, context, options) => {
-      const tracked = await streamModel({
+      try {
+        const tracked = await streamModel({
         userId: input.user.id, capability: input.capability,
         models: resolved.models, model, provider: resolved.stored.id,
       }, context, { ...options, ...modelOptions(model, resolved.route.parameters) });
       pendingCalls.push(tracked.finished);
       return tracked.stream;
+      } catch (error) {
+        // The SDK can convert a stream-factory exception into an assistant
+        // error message. Preserve typed deferral/lease errors for the queue.
+        transportFailure.error = error instanceof Error ? error : new Error('Model transport failed', { cause: error });
+        throw error;
+      }
     },
     getApiKey: () => resolved.apiKey,
     initialState: {
@@ -103,12 +113,14 @@ export async function runProposalPass<T>(input: {
     await Promise.all(pendingCalls);
   }
 
+  if (transportFailure.error !== undefined) throw transportFailure.error;
+
   const assistant = agent.state.messages.filter(
     (m): m is AssistantMessage => m.role === 'assistant',
   );
   const failed = assistant.find((m) => m.stopReason === 'error' || m.stopReason === 'aborted');
-  if (failed) throw new Error(failed.errorMessage ?? `llm ${failed.stopReason}`);
-  if (box.value === null) throw new Error('agent did not submit a proposal');
+  if (failed) throw modelResponseError(failed.stopReason, failed.errorMessage);
+  if (box.value === null) throw new AppError(502, 'LLM_INVALID_PROPOSAL', 'agent did not submit a proposal');
 
   const usage: LlmRunUsage = assistant.reduce<LlmRunUsage>(
     (acc, m) => ({

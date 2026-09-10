@@ -3,12 +3,15 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from '@earendil-works/pi-ai';
 import { eq } from 'drizzle-orm';
+import { DateTime } from 'luxon';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../../src/app.js';
 import { getUserEntity } from '../../src/auth/auth.service.js';
 import { getDb } from '../../src/db/index.js';
-import { agentExecutions, agentUsage } from '../../src/db/schema.js';
+import { agentExecutions, agentJobs, agentModelBudgets, agentUsage } from '../../src/db/schema.js';
+import { enqueueOutcomeRefresh, processDueAgentJobs } from '../../src/agent/jobs.js';
+import { config } from '../../src/config.js';
 import { completeText, setPiResolveOverride } from '../../src/llm/pi.js';
 import { runProposalPass } from '../../src/agent/harness.js';
 import { submitHeadlineTool } from '../../src/agent/tools.js';
@@ -53,6 +56,29 @@ function installFaux() {
 }
 
 describe('automatic model and execution telemetry', () => {
+  it('defers an exhausted background budget durably without calling a model, and lets an explicit manual request proceed', async () => {
+    const alice = await configuredUser();
+    const faux = installFaux();
+    faux.setResponses([fauxAssistantMessage(fauxToolCall('submit_headline', { headline: 'manual result', suggestion: '' }))]);
+    const day = DateTime.now().setZone(alice.user.timezone).toISODate();
+    if (!day) throw new Error('invalid day');
+    await getDb().insert(agentModelBudgets).values({ userId: alice.id, day, requests: config.AGENT_DAILY_MODEL_CALL_LIMIT });
+    const response = await injectJson(app, { method: 'POST', url: '/api/v1/outcomes', token: alice.token, payload: { name: 'budget test' } });
+    const outcomeId = response.json().id as string;
+    await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
+    expect(await processDueAgentJobs()).toBe(1);
+    expect(faux.state.callCount).toBe(0);
+    const [deferred] = await getDb().select().from(agentJobs).where(eq(agentJobs.userId, alice.id));
+    expect(deferred).toMatchObject({ status: 'pending', lastError: 'DAILY_MODEL_BUDGET', attemptCount: 0 });
+    expect(deferred?.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
+    const executions = await getDb().select().from(agentExecutions).where(eq(agentExecutions.userId, alice.id));
+    expect(executions.every(e => e.status === 'skipped' && e.reason === 'DAILY_MODEL_BUDGET')).toBe(true);
+    expect(await getDb().select().from(agentUsage)).toHaveLength(0);
+    await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0, manual: true });
+    expect(await processDueAgentJobs()).toBe(1);
+    expect(faux.state.callCount).toBe(1);
+    expect((await getDb().select().from(agentJobs).where(eq(agentJobs.userId, alice.id)))[0]?.status).toBe('done');
+  });
   it('persists running records before a request and finalizes with unknown usage after failure', async () => {
     const alice = await configuredUser();
     const faux = installFaux();

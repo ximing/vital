@@ -283,7 +283,7 @@ export async function completeText(
       apiKey: resolved.apiKey,
       signal: AbortSignal.timeout(input.timeoutMs ?? COMPLETE_TIMEOUT_MS),
     });
-    if (res.stopReason === 'error') throw AppError.of(502, 'LLM_UNAVAILABLE');
+    if (res.stopReason === 'error') throw modelResponseError(res.stopReason, res.errorMessage);
     if (res.stopReason === 'aborted') throw AppError.of(504, 'LLM_TIMEOUT');
     const text = contentText(res.content).trim();
     if (!text) throw AppError.of(502, 'LLM_UNAVAILABLE');
@@ -354,3 +354,4 @@ export async function testProviderModel(
     mapLlmError(err);
   }
 }
+import { modelResponseError } from './model-errors.js';
