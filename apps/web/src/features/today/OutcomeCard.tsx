@@ -38,7 +38,7 @@ export function OutcomeCard({
       data-region="outcome-card"
       onClick={onOpen}
       onKeyDown={onKeyDown}
-      className="relative flex min-h-[168px] cursor-pointer flex-col rounded-xl border border-border bg-elevated p-[18px] shadow-[var(--shadow-xs)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-accent hover:shadow-[var(--shadow)]"
+      className="relative flex min-h-[150px] cursor-pointer flex-col rounded-[18px] border border-border bg-surface p-[18px] shadow-[var(--shadow-xs)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-accent hover:shadow-[var(--shadow)]"
     >
       <div className="flex items-center gap-2">
         <span className="font-display truncate text-[length:var(--text-section)] font-semibold leading-[var(--text-section-lh)]">

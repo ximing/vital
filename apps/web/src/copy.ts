@@ -138,10 +138,21 @@ export const t = {
       next: '接下来约 {m} 分钟',
       quietLabel: '静默时段',
       swap: '换一个',
+      suggestTitle: '建议开始',
       estimate: '{m} 分钟',
       noEstimate: '未估时',
       dueSoon: '今天到期',
     },
+    agentStatus: {
+      running: 'Agent 执行中 {n}',
+      attention: '{n} 项失败 · 去看看',
+    },
+    agentProposals: {
+      title: 'Agent 提议',
+      all: '全部系统行为 →',
+    },
+    overdueBanner: '{n} 件逾期',
+    postponeAll: '一键顺延到今天',
   },
   thread: {
     back: '‹ 今天',

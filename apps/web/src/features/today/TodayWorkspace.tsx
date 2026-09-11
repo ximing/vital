@@ -15,6 +15,7 @@ import {
   formatHm,
   fromDatetimeLocal,
   inboxList,
+  isOverdue,
   listVisibleIds,
   todayYmd,
   zonedLocalMidnightIso,
@@ -33,6 +34,8 @@ import { useTodosUi } from '@/features/todos/todos-ui.service';
 import { OutcomeBoard } from './OutcomeBoard';
 import { NowCard } from './NowCard';
 import { PulseStrip } from './PulseStrip';
+import { AgentProposalsCard } from './AgentProposalsCard';
+import { TodaySectionHead } from './SectionHead';
 import { TodayTaskList } from './TodayTaskList';
 import { todayKeys, useHabitsQuery, usePendingDecomposeQuery, useTodayQuery } from './queries';
 
@@ -173,6 +176,16 @@ export function TodayWorkspace() {
   const error = todayQuery.error ?? tasksQuery.error ?? listsQuery.error;
   const openCount = tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled')
     .length;
+  const overdueTasks = tasks.filter((task) => isOverdue(task, timeZone));
+  const dateLabel = new Intl.DateTimeFormat('zh-CN', {
+    month: 'long',
+    day: 'numeric',
+    timeZone,
+  }).format(new Date());
+  const weekdayLabel = new Intl.DateTimeFormat('zh-CN', {
+    weekday: 'short',
+    timeZone,
+  }).format(new Date());
 
   return (
     <div className="flex h-full min-h-0 bg-canvas">
@@ -182,17 +195,18 @@ export function TodayWorkspace() {
         className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
       >
         <div className="mx-auto w-full max-w-[880px] px-6 pb-16 md:px-8">
-          <header className="flex items-baseline justify-between gap-3 px-2 pb-2 pt-6">
-            <h1 className="font-display text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
-              {t.today.title}
-            </h1>
-            <span className="shrink-0 font-mono text-[length:var(--text-caption)] uppercase tracking-wide text-tertiary">
-              {todayYmd(timeZone)} ·{' '}
-              {new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone }).format(new Date())}
-            </span>
+          <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 px-1 pb-2 pt-6">
+            <div className="flex items-baseline gap-3">
+              <h1 className="font-display text-[30px] font-bold leading-[38px]">
+                {t.today.title}
+              </h1>
+              <span className="text-[length:var(--text-meta)] tabular-nums text-tertiary">
+                {dateLabel} · {weekdayLabel}
+              </span>
+            </div>
+            {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
           </header>
 
-          {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
           {dashboard ? (
             <NowCard now={dashboard.now} outcomes={outcomes} timeZone={timeZone} />
           ) : null}
@@ -216,13 +230,28 @@ export function TodayWorkspace() {
               <OutcomeBoard outcomes={outcomes} now={now} />
 
               <section aria-label={t.today.tasksSection}>
-                <div className="mt-7 flex items-center gap-3 px-2">
-                  <h2 className="eyebrow eyebrow-rule min-w-0 flex-1">
-                    {t.today.tasksSection} · {openCount}
-                  </h2>
-                </div>
+                <TodaySectionHead title={t.today.tasksSection} count={openCount} />
 
-                <div className="mt-1">
+                {overdueTasks.length > 0 ? (
+                  <div
+                    data-region="overdue-banner"
+                    className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[14px] border border-due bg-[var(--amber-100)] px-4 py-2.5"
+                  >
+                    <span className="font-bold text-due">!</span>
+                    <p className="min-w-0 flex-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg">
+                      <b className="tabular-nums">{t.today.overdueBanner.replace('{n}', String(overdueTasks.length))}</b>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => postponeOverdue(overdueTasks)}
+                      className="inline-flex h-7 shrink-0 items-center rounded-full border border-due px-3 text-[length:var(--text-caption)] font-semibold text-due transition-[color,background-color] duration-[var(--ease-out)] hover:bg-due hover:text-on-accent"
+                    >
+                      {t.today.postponeAll}
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="rounded-[18px] border border-border bg-surface px-2 py-1 shadow-[var(--shadow-xs)]">
                   <TodayTaskList
                     tasks={tasks}
                     habits={habits}
@@ -233,22 +262,24 @@ export function TodayWorkspace() {
                     onReorder={(input) => actions.reorder.mutate(input)}
                     onPostpone={postponeOverdue}
                   />
-                </div>
 
-                <div className="mt-3">
-                  <QuickAdd
-                    variant="bar"
-                    onSubmit={handleCreate}
-                    disabled={!inboxId}
-                    listName={t.lists.today}
-                    lists={lists}
-                    defaultListId={inboxId}
-                    zone={timeZone}
-                    weekStartsOn={weekStartsOn}
-                    intent={intent}
-                  />
+                  <div className="mt-1 px-1 pb-1">
+                    <QuickAdd
+                      variant="bar"
+                      onSubmit={handleCreate}
+                      disabled={!inboxId}
+                      listName={t.lists.today}
+                      lists={lists}
+                      defaultListId={inboxId}
+                      zone={timeZone}
+                      weekStartsOn={weekStartsOn}
+                      intent={intent}
+                    />
+                  </div>
                 </div>
               </section>
+
+              <AgentProposalsCard />
             </>
           )}
         </div>

@@ -4,9 +4,9 @@ import { t } from '@/copy';
 import { useTodosUi } from '@/features/todos/todos-ui.service';
 
 /**
- * "当下" card: continuous free time plus 1–2 rule-based picks, right below the
- * pulse strip. Recommendations are candidates, not a sequence; 换一个 rotates
- * them locally.
+ * "当下" card: left — current time, continuous free time and the rule reason;
+ * right — 1–2 rule-based picks. Recommendations are candidates, not a
+ * sequence; 换一个 rotates them locally.
  */
 export function NowCard({
   now,
@@ -51,61 +51,58 @@ export function NowCard({
     <section
       data-region="now-card"
       aria-label={t.today.now.title}
-      className="mt-4 rounded-xl border border-border border-l-2 border-l-accent bg-elevated px-5 py-4 shadow-[var(--shadow-xs)]"
+      className="mt-4 flex flex-col gap-4 rounded-[18px] border border-border border-l-[3px] border-l-accent bg-surface px-6 py-5 shadow-[var(--shadow-xs)] sm:flex-row sm:gap-6"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <span className="shrink-0 font-display text-[length:var(--text-section)] font-semibold leading-[var(--text-section-lh)]">
-            {t.today.now.title}
-          </span>
-          <span className="font-display text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)]">
-            {timeLabel}
-          </span>
-        </div>
-        <button
-          type="button"
-          disabled={recs.length < 2}
-          onClick={() => setOffset((value) => value + 1)}
-          className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[length:var(--text-meta)] text-muted transition-colors hover:bg-surface-muted hover:text-fg disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted"
-        >
-          {t.today.now.swap}
-        </button>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-tertiary">
+          {t.today.now.title}
+        </p>
+        <p className="mt-0.5 font-display text-[34px] font-bold leading-10 tabular-nums">
+          {timeLabel}
+        </p>
+        <p className="mt-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          {now.quiet
+            ? t.today.now.quietLabel
+            : t.today.now.next.replace('{m}', String(now.continuousMinutes))}
+        </p>
+        <p className="mt-2.5 text-[length:var(--text-meta)] leading-[19px] text-muted">
+          {now.reason}
+        </p>
       </div>
 
-      <p className="mt-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-        {now.quiet
-          ? t.today.now.quietLabel
-          : t.today.now.next.replace('{m}', String(now.continuousMinutes))}
-      </p>
-
-      <p className="mt-2 text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
-        {now.reason}
-      </p>
-
-      {shown.length > 0 ? (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {shown.map((rec) => (
-            <button
-              key={rec.taskId}
-              type="button"
-              data-region="now-recommendation"
-              onClick={() => openDetail(rec.taskId)}
-              className="rounded-lg border border-border bg-surface px-3.5 py-3 text-left transition-colors hover:bg-surface-muted"
-            >
-              <span className="block font-medium text-fg">{rec.title}</span>
-              <span className="mt-1 block text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-                {meta(rec)}
-                {rec.dueSoon ? (
-                  <>
-                    {'　'}
-                    <span className="text-due">{t.today.now.dueSoon}</span>
-                  </>
-                ) : null}
-              </span>
-            </button>
-          ))}
+      <div className="flex min-w-0 flex-1 flex-col gap-2 border-t border-border pt-3 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
+        <div className="flex items-center gap-2">
+          <span className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-tertiary">
+            {t.today.now.suggestTitle}
+          </span>
+          <button
+            type="button"
+            disabled={recs.length < 2}
+            onClick={() => setOffset((value) => value + 1)}
+            className="inline-flex h-6 shrink-0 items-center rounded-full border border-border px-2.5 text-[11px] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted"
+          >
+            {t.today.now.swap}
+          </button>
         </div>
-      ) : null}
+
+        {shown.map((rec) => (
+          <button
+            key={rec.taskId}
+            type="button"
+            data-region="now-recommendation"
+            onClick={() => openDetail(rec.taskId)}
+            className="flex flex-col gap-0.5 rounded-xl border border-border bg-elevated px-3.5 py-2.5 text-left transition-[border-color,box-shadow] duration-[var(--ease-out)] hover:border-accent hover:shadow-[var(--shadow-xs)]"
+          >
+            <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-semibold text-fg">
+              {rec.title}
+            </span>
+            <span className="flex flex-wrap gap-x-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              <span>{meta(rec)}</span>
+              {rec.dueSoon ? <span className="font-semibold text-due">{t.today.now.dueSoon}</span> : null}
+            </span>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }

@@ -34,6 +34,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       listHabits: vi.fn(),
       createHabit: vi.fn(),
       listAgentActions: vi.fn(),
+      listAgentExecutions: vi.fn(),
       listInbox: vi.fn(),
       listLists: vi.fn(),
       listTags: vi.fn(),
@@ -202,6 +203,7 @@ describe('today workspace', () => {
     vi.mocked(client.getToday).mockResolvedValue(makeDashboard());
     vi.mocked(client.listHabits).mockResolvedValue([]);
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listOutcomes).mockResolvedValue([]);
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });
@@ -441,6 +443,7 @@ describe('now card', () => {
     vi.mocked(client.getToday).mockResolvedValue(makeDashboard());
     vi.mocked(client.listHabits).mockResolvedValue([]);
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listOutcomes).mockResolvedValue([]);
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });

@@ -126,7 +126,7 @@ function CapabilityCosts({ data }: { data: AgentMetricsResponse | undefined }) {
   );
 }
 
-function actionLabel(actionType: string): string {
+export function actionLabel(actionType: string): string {
   return ACTION_LABELS[actionType] ?? actionType;
 }
 
@@ -142,7 +142,7 @@ function localDay(iso: string): string {
   return new Date(iso).toLocaleDateString('en-CA');
 }
 
-function timeLabel(iso: string): string {
+export function timeLabel(iso: string): string {
   return new Date(iso).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -173,7 +173,7 @@ function groupByDay(items: AgentActionLogItem[]): DayGroup[] {
   return groups;
 }
 
-function detailText(item: AgentActionLogItem): string {
+export function detailText(item: AgentActionLogItem): string {
   const summary = item.payloadSummary.trim();
   if (item.targetName !== null) {
     return summary === '' ? item.targetName : `${item.targetName}：${summary}`;

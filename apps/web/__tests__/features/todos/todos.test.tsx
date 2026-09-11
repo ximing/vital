@@ -46,6 +46,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       getToday: vi.fn(),
       listHabits: vi.fn(),
       listAgentActions: vi.fn(),
+      listAgentExecutions: vi.fn(),
       listInbox: vi.fn(),
       createOutcome: vi.fn(),
       patchOutcome: vi.fn(),
@@ -187,6 +188,7 @@ describe('todos workspace', () => {
     });
     vi.mocked(client.listHabits).mockResolvedValue([]);
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.calendar).mockResolvedValue({ instances: [] });

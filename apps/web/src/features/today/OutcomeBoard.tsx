@@ -9,6 +9,7 @@ import { Icon } from '@/ui/icon';
 import { sortOutcomes } from './model';
 import { OutcomeCard } from './OutcomeCard';
 import { useOutcomeActions } from './queries';
+import { TODAY_HEAD_LINK, TodaySectionHead } from './SectionHead';
 
 function CreateOutcomeInput({
   autoFocus = false,
@@ -94,26 +95,20 @@ export function OutcomeBoard({ outcomes, now }: { outcomes: Outcome[]; now: Date
 
   return (
     <section aria-label={t.today.board}>
-      <div className="mt-7 flex items-center gap-3 px-2">
-        <h2 className="eyebrow eyebrow-rule min-w-0 flex-1">
-          {t.today.board} · {outcomes.length}
-        </h2>
-        <Link
-          to="/threads"
-          className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
-        >
+      <TodaySectionHead title={t.today.board} count={outcomes.length}>
+        <Link to="/threads" className={TODAY_HEAD_LINK}>
           {t.today.manageOutcomes}
         </Link>
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
+          className={TODAY_HEAD_LINK}
           onClick={() => setCreating((open) => !open)}
           aria-expanded={creating}
         >
           <Icon icon={Plus} size={13} />
           {t.today.newOutcome}
         </button>
-      </div>
+      </TodaySectionHead>
 
       {actionError ? (
         <div className="mt-2 px-2">
@@ -132,7 +127,7 @@ export function OutcomeBoard({ outcomes, now }: { outcomes: Outcome[]; now: Date
       ) : (
         <div
           data-region="outcome-board"
-          className="mt-3.5 grid grid-cols-[repeat(auto-fill,minmax(258px,1fr))] gap-3.5"
+          className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(258px,1fr))] gap-3"
         >
           {sortOutcomes(outcomes).map((outcome) => (
             <OutcomeCard
