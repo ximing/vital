@@ -14,6 +14,11 @@ describe('app section', () => {
     expect(sectionOf('/reports', '')).toBe('reflect');
     expect(sectionOf('/reports/id', 'type=weekly')).toBe('reflect');
     expect(sectionOf('/search', '')).toBe('search');
+    expect(sectionOf('/habits', '')).toBe('habits');
+    expect(sectionOf('/threads', '')).toBe('threads');
+    expect(sectionOf('/activity', '')).toBe('activity');
+    expect(sectionOf('/memory', '')).toBe('memory');
+    expect(sectionOf('/usage', '')).toBe('usage');
     expect(sectionOf('/settings', '')).toBe('settings');
   });
 

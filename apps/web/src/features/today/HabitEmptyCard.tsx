@@ -53,7 +53,7 @@ export function HabitEmptyCard() {
           </button>
         ))}
         <Link
-          to="/settings?tab=habits"
+          to="/habits"
           className="inline-flex h-7 items-center rounded-full px-2 text-[length:var(--text-caption)] font-medium text-muted transition-colors duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
         >
           {t.today.customHabit}

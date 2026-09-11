@@ -10,7 +10,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { SettingsPage } from '../../../src/pages/settings';
+import { HabitsPage } from '../../../src/pages/ai';
 import { setAuthForTest } from '@/services/auth.service';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -94,7 +94,7 @@ function renderAt(path: string) {
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[path]}>
           <Routes>
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/habits" element={<HabitsPage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -104,7 +104,7 @@ function renderAt(path: string) {
 
 const copy = t.settings.habits;
 
-describe('settings habits tab', () => {
+describe('habits page', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
     vi.mocked(client.listHabits).mockResolvedValue(items);
@@ -114,11 +114,8 @@ describe('settings habits tab', () => {
   });
 
   it('renders rows with kind/window/progress chips, agent badge and inactive state', async () => {
-    renderAt('/settings?tab=habits');
-    expect(screen.getByRole('tab', { name: t.settings.tabs.habits })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    renderAt('/habits');
+    expect(screen.getByRole('heading', { name: copy.title })).toBeInTheDocument();
     await waitFor(() => {
       expect(document.querySelectorAll('[data-habit-row]')).toHaveLength(3);
     });
@@ -134,7 +131,7 @@ describe('settings habits tab', () => {
   });
 
   it('creates a count habit through the add form', async () => {
-    renderAt('/settings?tab=habits');
+    renderAt('/habits');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-habit-row]')).toHaveLength(3);
     });
@@ -152,7 +149,7 @@ describe('settings habits tab', () => {
   });
 
   it('toggles active through the switch', async () => {
-    renderAt('/settings?tab=habits');
+    renderAt('/habits');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-habit-row]')).toHaveLength(3);
     });
@@ -165,7 +162,7 @@ describe('settings habits tab', () => {
   });
 
   it('edits a habit inline', async () => {
-    renderAt('/settings?tab=habits');
+    renderAt('/habits');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-habit-row]')).toHaveLength(3);
     });
@@ -187,7 +184,7 @@ describe('settings habits tab', () => {
   });
 
   it('deletes only after the confirm step', async () => {
-    renderAt('/settings?tab=habits');
+    renderAt('/habits');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-habit-row]')).toHaveLength(3);
     });

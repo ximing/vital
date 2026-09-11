@@ -99,7 +99,7 @@ export function OutcomeBoard({ outcomes, now }: { outcomes: Outcome[]; now: Date
           {t.today.board} · {outcomes.length}
         </h2>
         <Link
-          to="/settings?tab=threads"
+          to="/threads"
           className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
         >
           {t.today.manageOutcomes}

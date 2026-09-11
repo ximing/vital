@@ -1,46 +1,18 @@
-import {
-  Activity,
-  Bell,
-  Brain,
-  ChartColumn,
-  KeyRound,
-  Palette,
-  Repeat,
-  SlidersHorizontal,
-  Sparkles,
-  Target,
-  User,
-} from 'lucide-react';
+import { Bell, KeyRound, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useSearchParams } from 'react-router';
+import { Navigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { AccountSection } from '@/features/settings/AccountSection';
-import { AgentActivitySection } from '@/features/settings/AgentActivitySection';
-import { HabitsSection } from '@/features/settings/HabitsSection';
 import { LlmSection } from '@/features/settings/LlmSection';
-import { MemorySection } from '@/features/settings/MemorySection';
 import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { PrefsSection } from '@/features/settings/PrefsSection';
-import { ThreadsSection } from '@/features/settings/ThreadsSection';
 import { TokensSection } from '@/features/settings/TokensSection';
-import { UsageSection } from '@/features/settings/UsageSection';
 import { ThemeToggle } from '@/shell/ThemeToggle';
 import { Icon, type LucideIcon } from '@/ui/icon';
 import { SelectField } from '@/ui/select-field';
 
 const TABS: {
-  id:
-    | 'account'
-    | 'appearance'
-    | 'notifications'
-    | 'prefs'
-    | 'habits'
-    | 'threads'
-    | 'llm'
-    | 'tokens'
-    | 'usage'
-    | 'activity'
-    | 'memory';
+  id: 'account' | 'appearance' | 'notifications' | 'prefs' | 'llm' | 'tokens';
   label: string;
   icon: LucideIcon;
 }[] = [
@@ -48,27 +20,26 @@ const TABS: {
   { id: 'appearance', label: t.settings.tabs.appearance, icon: Palette },
   { id: 'notifications', label: t.settings.tabs.notifications, icon: Bell },
   { id: 'prefs', label: t.settings.tabs.prefs, icon: SlidersHorizontal },
-  { id: 'habits', label: t.settings.tabs.habits, icon: Repeat },
-  { id: 'threads', label: t.settings.tabs.threads, icon: Target },
   { id: 'llm', label: t.settings.tabs.llm, icon: Sparkles },
   { id: 'tokens', label: t.settings.tabs.tokens, icon: KeyRound },
-  { id: 'usage', label: t.settings.tabs.usage, icon: ChartColumn },
-  { id: 'activity', label: t.settings.tabs.activity, icon: Activity },
-  { id: 'memory', label: t.settings.tabs.memory, icon: Brain },
 ];
+
+// AI FIRST：习惯/线程/系统行为/记忆/用量已提升为一级页面，旧设置链接重定向过去。
+const MOVED_TABS: Record<string, string> = {
+  habits: '/habits',
+  threads: '/threads',
+  activity: '/activity',
+  memory: '/memory',
+  usage: '/usage',
+};
 
 function isTab(value: string | null): (typeof TABS)[number]['id'] {
   if (
     value === 'appearance' ||
     value === 'notifications' ||
     value === 'prefs' ||
-    value === 'habits' ||
-    value === 'threads' ||
     value === 'llm' ||
-    value === 'tokens' ||
-    value === 'usage' ||
-    value === 'activity' ||
-    value === 'memory'
+    value === 'tokens'
   ) {
     return value;
   }
@@ -101,6 +72,8 @@ export function SettingsBlock({
 
 export function SettingsPage() {
   const [search, setSearch] = useSearchParams();
+  const moved = MOVED_TABS[search.get('tab') ?? ''];
+  if (moved) return <Navigate to={moved} replace />;
   const tab = isTab(search.get('tab'));
 
   return (
@@ -184,16 +157,6 @@ export function SettingsPage() {
               <PrefsSection />
             </SettingsBlock>
           ) : null}
-          {tab === 'habits' ? (
-            <SettingsBlock title={t.settings.habits.title} description={t.settings.habits.hint}>
-              <HabitsSection />
-            </SettingsBlock>
-          ) : null}
-          {tab === 'threads' ? (
-            <SettingsBlock title={t.settings.threads.title} description={t.settings.threads.hint}>
-              <ThreadsSection />
-            </SettingsBlock>
-          ) : null}
           {tab === 'llm' ? (
             <SettingsBlock title={t.settings.llm.title} description={t.settings.llm.hint}>
               <LlmSection />
@@ -202,21 +165,6 @@ export function SettingsPage() {
           {tab === 'tokens' ? (
             <SettingsBlock title={t.settings.tokens.title} description={t.settings.tokens.hint}>
               <TokensSection />
-            </SettingsBlock>
-          ) : null}
-          {tab === 'usage' ? (
-            <SettingsBlock title={t.settings.usage.title} description={t.settings.usage.hint}>
-              <UsageSection />
-            </SettingsBlock>
-          ) : null}
-          {tab === 'activity' ? (
-            <SettingsBlock title={t.settings.activity.title} description={t.settings.activity.hint}>
-              <AgentActivitySection />
-            </SettingsBlock>
-          ) : null}
-          {tab === 'memory' ? (
-            <SettingsBlock title={t.settings.memory.title} description={t.settings.memory.hint}>
-              <MemorySection />
             </SettingsBlock>
           ) : null}
         </div>

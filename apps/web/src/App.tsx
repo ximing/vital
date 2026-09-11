@@ -7,6 +7,7 @@ import { SearchPage } from '@/features/search/SearchPage';
 import { ThreadWorkspace, TodayWorkspace } from '@/features/today';
 import { TodosWorkspace } from '@/features/todos';
 import { ExtensionAuthPage } from '@/pages/extension-auth';
+import { ActivityPage, HabitsPage, MemoryPage, ThreadsPage, UsagePage } from '@/pages/ai';
 import { LoginPage } from '@/pages/login';
 import { NotFoundPage } from '@/pages/empty';
 import { RegisterPage } from '@/pages/register';
@@ -69,6 +70,11 @@ export function App() {
         <Route path="/reports/:id" element={<ReportsWorkspace />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/library" element={<Navigate to="/search" replace />} />
+        <Route path="/habits" element={<HabitsPage />} />
+        <Route path="/threads" element={<ThreadsPage />} />
+        <Route path="/activity" element={<ActivityPage />} />
+        <Route path="/memory" element={<MemoryPage />} />
+        <Route path="/usage" element={<UsagePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -51,7 +51,7 @@ export function TodayTaskList({
               : ''}
           </p>
           <Link
-            to="/settings?tab=habits"
+            to="/habits"
             className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
           >
             {t.today.manageHabits}

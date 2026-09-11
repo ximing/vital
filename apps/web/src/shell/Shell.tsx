@@ -1,5 +1,17 @@
 import type { LucideIcon } from 'lucide-react';
-import { BookOpen, Calendar, CheckSquare, Search, Settings, Sun } from 'lucide-react';
+import {
+  Activity,
+  BookOpen,
+  Brain,
+  Calendar,
+  ChartColumn,
+  CheckSquare,
+  Repeat,
+  Search,
+  Settings,
+  Sun,
+  Target,
+} from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { HOME_PATH, TODOS_HOME_PATH, t } from '@/copy';
 import { ActivationChecklist } from '@/features/onboarding';
@@ -18,7 +30,14 @@ const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[]
   { id: 'today', to: HOME_PATH, icon: Sun, label: t.rail.today },
   { id: 'todos', to: TODOS_HOME_PATH, icon: CheckSquare, label: t.rail.todos },
   { id: 'capture', to: '/inbox', icon: BookOpen, label: t.rail.capture },
+  { id: 'habits', to: '/habits', icon: Repeat, label: t.rail.habits },
+  { id: 'threads', to: '/threads', icon: Target, label: t.rail.threads },
   { id: 'reflect', to: '/reports', icon: Calendar, label: t.rail.reflect },
+];
+
+const AI_NAV: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
+  { id: 'activity', to: '/activity', icon: Activity, label: t.rail.activity },
+  { id: 'memory', to: '/memory', icon: Brain, label: t.rail.memory },
 ];
 
 function railItemClass(active: boolean): string {
@@ -78,12 +97,34 @@ export function Shell() {
           >
             <Icon icon={Search} className="shrink-0" />
           </button>
+          {AI_NAV.map((item) => {
+            const active = section === item.id;
+            return (
+              <NavLink
+                key={item.id}
+                to={item.to}
+                title={item.label}
+                aria-label={item.label}
+                className={railItemClass(active)}
+              >
+                <Icon icon={item.icon} className="shrink-0" />
+              </NavLink>
+            );
+          })}
         </nav>
 
         <div
           data-region="rail-account"
           className="mt-auto flex shrink-0 flex-col gap-1 border-t border-border pb-2 pt-1"
         >
+          <NavLink
+            to="/usage"
+            title={t.rail.usage}
+            aria-label={t.rail.usage}
+            className={railItemClass(section === 'usage')}
+          >
+            <Icon icon={ChartColumn} className="shrink-0" />
+          </NavLink>
           <ThemeSwitch variant="rail" />
           <NavLink
             to="/settings"

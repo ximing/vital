@@ -11,7 +11,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { SettingsPage } from '../../../src/pages/settings';
+import { ActivityPage } from '../../../src/pages/ai';
 import { RabRoot } from '../../helpers/rab-root';
 
 vi.mock('@/api/client', async (importOriginal) => {
@@ -40,7 +40,7 @@ function renderAt(path: string) {
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[path]}>
           <Routes>
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/activity" element={<ActivityPage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -149,7 +149,7 @@ const baseItems: AgentActionLogItem[] = [
   }),
 ];
 
-describe('settings activity tab', () => {
+describe('activity page', () => {
   beforeEach(() => {
     vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listAgentActions).mockResolvedValue(baseItems);
@@ -160,12 +160,9 @@ describe('settings activity tab', () => {
     vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: [] });
   });
 
-  it('renders the tab, groups by day, labels capabilities and results', async () => {
-    renderAt('/settings?tab=activity');
-    expect(screen.getByRole('tab', { name: t.settings.tabs.activity })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+  it('renders the page, groups by day, labels capabilities and results', async () => {
+    renderAt('/activity');
+    expect(screen.getByRole('heading', { name: t.settings.activity.title })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(client.listAgentActions).toHaveBeenCalledWith({ days: 7 });
@@ -209,7 +206,7 @@ describe('settings activity tab', () => {
       return items.find((it) => it.id === id) as unknown as AgentAction;
     });
 
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     await waitFor(() => {
       expect(screen.getByText(t.settings.activity.accept)).toBeInTheDocument();
     });
@@ -234,7 +231,7 @@ describe('settings activity tab', () => {
     vi.mocked(client.getAgentMetrics).mockResolvedValue(
       metrics({ proposed: 0, adopted: 0, dismissed: 0, adoptionRate: 0, prevAdoptionRate: 0 }),
     );
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     await waitFor(() => {
       expect(screen.getByText(t.settings.activity.empty)).toBeInTheDocument();
     });
@@ -242,7 +239,7 @@ describe('settings activity tab', () => {
   });
 
   it('renders the adoption summary bar with an up trend vs the previous window', async () => {
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     await waitFor(() => {
       expect(client.getAgentMetrics).toHaveBeenCalledWith(30);
     });
@@ -261,7 +258,7 @@ describe('settings activity tab', () => {
     vi.mocked(client.getAgentMetrics).mockResolvedValue(
       metrics({ adoptionRate: 0.4, prevAdoptionRate: 0.65 }),
     );
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     const bar = await waitFor(() => {
       const el = document.querySelector('[data-region="adoption-summary"]');
       expect(el).not.toBeNull();
@@ -275,7 +272,7 @@ describe('settings activity tab', () => {
     vi.mocked(client.getAgentMetrics).mockResolvedValue(
       metrics({ adoptionRate: 0.5, prevAdoptionRate: 0.505 }),
     );
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     const bar = await waitFor(() => {
       const el = document.querySelector('[data-region="adoption-summary"]');
       expect(el).not.toBeNull();
@@ -290,7 +287,7 @@ describe('settings activity tab', () => {
     vi.mocked(client.getAgentMetrics).mockResolvedValue(
       metrics({ proposed: 0, adopted: 0, dismissed: 0, adoptionRate: 0, prevAdoptionRate: 0 }),
     );
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     const bar = await waitFor(() => {
       const el = document.querySelector('[data-region="adoption-summary"]');
       expect(el).not.toBeNull();
@@ -341,7 +338,7 @@ describe('execution telemetry', () => {
         durationMs: 0,
       },
     ]);
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     expect(await screen.findByText('模型请求超时')).toBeInTheDocument();
     expect(screen.getByText('没有需要更新的内容')).toBeInTheDocument();
     expect(screen.getByText('记忆蒸馏')).toBeInTheDocument();
@@ -355,14 +352,14 @@ describe('execution telemetry', () => {
 
   it('distinguishes execution load errors from an empty history', async () => {
     vi.mocked(client.listAgentExecutions).mockRejectedValue(new Error('offline'));
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     expect(await screen.findByRole('alert')).toHaveTextContent('执行记录加载失败');
     expect(screen.queryByText('近 7 天没有执行记录。')).not.toBeInTheDocument();
   });
 
   it('shows a successful empty execution history', async () => {
     vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     expect(await screen.findByText('近 7 天没有执行记录。')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
@@ -379,7 +376,7 @@ describe('per-capability effective cost', () => {
     vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: [] });
     vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics({ perCapability }));
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
 
     const region = await waitFor(() => {
       const el = document.querySelector('[data-region="capability-costs"]');
@@ -404,7 +401,7 @@ describe('per-capability effective cost', () => {
     vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: [] });
     vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics());
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     await waitFor(() => {
       expect(client.getAgentMetrics).toHaveBeenCalled();
     });
@@ -446,7 +443,7 @@ describe('schedule visibility', () => {
 
   it('renders one row per capability with status, pending count and localized times', async () => {
     vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: scheduleFixture() });
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
 
     const distill = await waitFor(() => {
       const el = document.querySelector('[data-schedule-row="memory.distill"]');
@@ -467,7 +464,7 @@ describe('schedule visibility', () => {
 
   it('run-now dispatches through the existing trigger endpoints per capability', async () => {
     vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: scheduleFixture() });
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
 
     const distill = await waitFor(() => {
       const el = document.querySelector('[data-schedule-row="memory.distill"]');
@@ -493,7 +490,7 @@ describe('schedule visibility', () => {
       calls += 1;
       return { items: calls === 1 ? items : items.map((i) => ({ ...i, status: 'idle', pendingCount: 0 })) };
     });
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
 
     const distill = await waitFor(() => {
       const el = document.querySelector('[data-schedule-row="memory.distill"]');
@@ -513,7 +510,7 @@ describe('schedule visibility', () => {
 
   it('shows an error state without rows when the schedule query fails', async () => {
     vi.mocked(client.listAgentSchedule).mockRejectedValue(new Error('offline'));
-    renderAt('/settings?tab=activity');
+    renderAt('/activity');
     expect(await screen.findByText(t.settings.activity.schedule.error)).toBeInTheDocument();
     expect(document.querySelector('[data-schedule-row]')).toBeNull();
   });

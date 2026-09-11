@@ -10,7 +10,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { SettingsPage } from '../../../src/pages/settings';
+import { ThreadsPage } from '../../../src/pages/ai';
 import { setAuthForTest } from '@/services/auth.service';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -81,7 +81,7 @@ function renderAt(path: string) {
       <QueryClientProvider client={qc}>
         <MemoryRouter initialEntries={[path]}>
           <Routes>
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/threads" element={<ThreadsPage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -91,7 +91,7 @@ function renderAt(path: string) {
 
 const copy = t.settings.threads;
 
-describe('settings threads tab', () => {
+describe('threads page', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
     vi.mocked(client.listOutcomes).mockImplementation((status) =>
@@ -103,11 +103,8 @@ describe('settings threads tab', () => {
   });
 
   it('renders open and closed groups with stats and agent badge', async () => {
-    renderAt('/settings?tab=threads');
-    expect(screen.getByRole('tab', { name: t.settings.tabs.threads })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    renderAt('/threads');
+    expect(screen.getByRole('heading', { name: copy.title })).toBeInTheDocument();
     await waitFor(() => {
       expect(document.querySelectorAll('[data-outcome-row]')).toHaveLength(3);
     });
@@ -120,7 +117,7 @@ describe('settings threads tab', () => {
   });
 
   it('renames an open thread inline', async () => {
-    renderAt('/settings?tab=threads');
+    renderAt('/threads');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-outcome-row]')).toHaveLength(3);
     });
@@ -137,7 +134,7 @@ describe('settings threads tab', () => {
   });
 
   it('closes an open thread and reopens a closed one', async () => {
-    renderAt('/settings?tab=threads');
+    renderAt('/threads');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-outcome-row]')).toHaveLength(3);
     });

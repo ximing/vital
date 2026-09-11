@@ -88,7 +88,7 @@ describe('primary rail', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('puts today first, then todos, capture, reflect, and a palette search button', () => {
+  it('puts today first, then todos, capture, habits, threads, reflect, and a palette search button', () => {
     renderShell();
     const rail = screen.getByLabelText('主导航');
     const nav = within(rail).getByRole('navigation');
@@ -97,7 +97,11 @@ describe('primary rail', () => {
       HOME_PATH,
       TODOS_HOME_PATH,
       '/inbox',
+      '/habits',
+      '/threads',
       '/reports',
+      '/activity',
+      '/memory',
     ]);
     // 搜索入口是打开命令面板的按钮，不再跳转独立页。
     expect(within(nav).getByRole('button', { name: t.nav.search })).toBeInTheDocument();
@@ -111,15 +115,16 @@ describe('primary rail', () => {
     expect(await screen.findByRole('dialog', { name: t.nav.palette })).toBeInTheDocument();
   });
 
-  it('groups theme, settings, and avatar at the bottom of the rail', () => {
+  it('groups usage, theme, settings, and avatar at the bottom of the rail', () => {
     renderShell();
     const group = document.querySelector('[data-region="rail-account"]');
     expect(group).not.toBeNull();
     expect(group).toHaveClass('gap-1');
     const kids = [...(group as HTMLElement).children];
-    expect(kids[0]).toHaveAttribute('aria-label', t.theme.switch);
-    expect(kids[1]).toHaveAttribute('href', '/settings');
-    const avatar = kids[2]?.querySelector('[aria-haspopup="menu"]');
+    expect(kids[0]).toHaveAttribute('href', '/usage');
+    expect(kids[1]).toHaveAttribute('aria-label', t.theme.switch);
+    expect(kids[2]).toHaveAttribute('href', '/settings');
+    const avatar = kids[3]?.querySelector('[aria-haspopup="menu"]');
     expect(avatar).not.toBeNull();
     expect(avatar).toHaveClass('w-full', 'justify-center');
   });

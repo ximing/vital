@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { SettingsPage } from '../../../src/pages/settings';
+import { UsagePage } from '../../../src/pages/ai';
 import { RabRoot } from '../../helpers/rab-root';
 
 vi.mock('@/api/client', async (importOriginal) => {
@@ -28,6 +29,7 @@ function renderAt(path: string) {
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/usage" element={<UsagePage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -69,7 +71,7 @@ const summary: AgentUsageSummary = {
   ],
 };
 
-describe('settings usage tab', () => {
+describe('usage page', () => {
   beforeEach(() => {
     vi.mocked(client.getAgentUsage).mockResolvedValue(summary);
   });
@@ -80,18 +82,11 @@ describe('settings usage tab', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByRole('tab', { name: t.settings.tabs.usage })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
   });
 
   it('renders the day × capability table with totals', async () => {
-    renderAt('/settings?tab=usage');
-    expect(screen.getByRole('tab', { name: t.settings.tabs.usage })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+    renderAt('/usage');
+    expect(screen.getByRole('heading', { name: t.settings.usage.title })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText(t.settings.usage.capabilities.headline)).toBeInTheDocument();
@@ -131,7 +126,7 @@ describe('settings usage tab', () => {
       totalCostMicros: 0,
       items: [],
     });
-    renderAt('/settings?tab=usage');
+    renderAt('/usage');
     await waitFor(() => {
       expect(screen.getByText(t.settings.usage.empty)).toBeInTheDocument();
     });
@@ -153,7 +148,7 @@ describe('request telemetry', () => {
       totalCostMicros: 0,
       items: [],
     });
-    renderAt('/settings?tab=usage');
+    renderAt('/usage');
     expect(await screen.findByText('模型请求')).toBeInTheDocument();
     expect(screen.getByText('模型请求').parentElement).toHaveTextContent('2');
     expect(screen.getByText('失败请求').parentElement).toHaveTextContent('2');
@@ -171,7 +166,7 @@ describe('request telemetry', () => {
       unknownCostRequests: 1,
       legacyRuns: 0,
     });
-    renderAt('/settings?tab=usage');
+    renderAt('/usage');
     expect(await screen.findByText('成本未知请求')).toBeInTheDocument();
     expect(screen.getByText('成本未知请求').parentElement).toHaveTextContent('1');
     expect(screen.getByText(/成本合计不完整/)).toBeInTheDocument();
@@ -179,7 +174,7 @@ describe('request telemetry', () => {
 
   it('reports a loading error instead of claiming there was no usage', async () => {
     vi.mocked(client.getAgentUsage).mockRejectedValue(new Error('offline'));
-    renderAt('/settings?tab=usage');
+    renderAt('/usage');
     expect(await screen.findByRole('alert')).toHaveTextContent('用量加载失败');
     expect(screen.queryByText(t.settings.usage.empty)).not.toBeInTheDocument();
   });

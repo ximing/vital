@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { SettingsPage } from '../../../src/pages/settings';
+import { MemoryPage } from '../../../src/pages/ai';
 import { setAuthForTest } from '@/services/auth.service';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -53,6 +54,7 @@ function renderAt(path: string) {
         <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/memory" element={<MemoryPage />} />
           </Routes>
         </MemoryRouter>
       </QueryClientProvider>
@@ -86,7 +88,7 @@ const items: AgentMemoryItem[] = [
   mem({ id: 'm4', kind: 'correction', content: '不要用「冲刺」' }),
 ];
 
-describe('settings memory tab', () => {
+describe('memory page', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
     vi.mocked(client.listAgentMemory).mockResolvedValue(items);
@@ -101,18 +103,11 @@ describe('settings memory tab', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByRole('tab', { name: t.settings.tabs.memory })).toHaveAttribute(
-      'aria-selected',
-      'false',
-    );
   });
 
-  it('renders the tab and groups items by kind with scope, manual badge and source count', async () => {
-    renderAt('/settings?tab=memory');
-    expect(screen.getByRole('tab', { name: t.settings.tabs.memory })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
+  it('renders the page and groups items by kind with scope, manual badge and source count', async () => {
+    renderAt('/memory');
+    expect(screen.getByRole('heading', { name: t.settings.memory.title })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(client.listAgentMemory).toHaveBeenCalled();
@@ -153,7 +148,7 @@ describe('settings memory tab', () => {
   });
 
   it('creates a manual memory through the add form', async () => {
-    renderAt('/settings?tab=memory');
+    renderAt('/memory');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-memory-row]')).toHaveLength(4);
     });
@@ -180,7 +175,7 @@ describe('settings memory tab', () => {
   });
 
   it('patches content and scope through the inline editor', async () => {
-    renderAt('/settings?tab=memory');
+    renderAt('/memory');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-memory-row]')).toHaveLength(4);
     });
@@ -205,7 +200,7 @@ describe('settings memory tab', () => {
   });
 
   it('deletes a memory row', async () => {
-    renderAt('/settings?tab=memory');
+    renderAt('/memory');
     await waitFor(() => {
       expect(document.querySelectorAll('[data-memory-row]')).toHaveLength(4);
     });
@@ -221,7 +216,7 @@ describe('settings memory tab', () => {
 
   it('shows a friendly empty state', async () => {
     vi.mocked(client.listAgentMemory).mockResolvedValue([]);
-    renderAt('/settings?tab=memory');
+    renderAt('/memory');
     await waitFor(() => {
       expect(screen.getByText(t.settings.memory.empty)).toBeInTheDocument();
     });
