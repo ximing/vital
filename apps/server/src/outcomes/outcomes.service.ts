@@ -13,6 +13,7 @@ import type {
   TodayDashboard,
   TodayPulse,
 } from '@vital/dto';
+import { recordOutcomeRename } from '../agent/edit-events.service.js';
 import { getDb } from '../db/index.js';
 import {
   agentActions,
@@ -201,6 +202,8 @@ export async function patchOutcome(
     })
     .where(eq(outcomes.id, id))
     .returning();
+  const stats = await statsForOutcomes(userId, [id]);
+  if (!next) throw AppError.of(404, 'NOT_FOUND');
   if (renamed) {
     // A rename is a correction signal: pending agent proposals on this thread were off.
     await getDb()
@@ -214,9 +217,9 @@ export async function patchOutcome(
           eq(agentActions.feedback, 'pending'),
         ),
       );
+    // ...and it feeds memory.distill through the edit event stream.
+    await recordOutcomeRename(getDb(), userId, id, row.name, next.name);
   }
-  const stats = await statsForOutcomes(userId, [id]);
-  if (!next) throw AppError.of(404, 'NOT_FOUND');
   trackIndexJob(indexOutcome(next), 'indexOutcome');
   return toOutcomeDto(next, stats.get(id));
 }

@@ -321,6 +321,10 @@ describe('GET /api/v1/agent/actions?days (activity log)', () => {
       token: alice.token,
     });
     expect(res.json()[0].feedback).toBe('accepted');
-    expect(res.json()[0].feedbackPayload).toBeNull();
+    // Accepted decompose proposals are materialized server-side; the payload
+    // records the created subtask ids for the undo endpoint.
+    const payload = res.json()[0].feedbackPayload;
+    expect(Array.isArray(payload.materialized.taskIds)).toBe(true);
+    expect(payload.materialized.taskIds).toHaveLength(1);
   });
 });

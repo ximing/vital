@@ -16,7 +16,14 @@ export type AgentActionType = z.infer<typeof agentActionTypeSchema>;
 export const agentTargetTypeSchema = z.enum(['outcome', 'task', 'habit']);
 export type AgentTargetType = z.infer<typeof agentTargetTypeSchema>;
 
-export const agentFeedbackSchema = z.enum(['pending', 'accepted', 'edited', 'dismissed']);
+export const agentFeedbackSchema = z.enum([
+  'pending',
+  'accepted',
+  'edited',
+  'dismissed',
+  /** Terminal state after a successful undo of a materialized acceptance. */
+  'undone',
+]);
 export type AgentFeedback = z.infer<typeof agentFeedbackSchema>;
 
 export interface AgentAction {
@@ -113,7 +120,9 @@ export type AgentUsageQuery = z.infer<typeof agentUsageQuerySchema>;
 /**
  * Daily adoption metrics for agent actions — the evidence that self-improvement
  * is actually happening. `proposed` counts every action (pending included);
- * `adopted` = feedback 'accepted' or 'edited'; `dismissed` = feedback 'dismissed'.
+ * `adopted` = feedback 'accepted' or 'edited'; `dismissed` = feedback 'dismissed';
+ * `undone` = accepted then undone via the undo endpoint (a strong correction
+ * signal: it never counts as adopted).
  */
 export interface AgentAdoptionDaily {
   /** YYYY-MM-DD in the user's timezone. */
@@ -121,6 +130,7 @@ export interface AgentAdoptionDaily {
   proposed: number;
   adopted: number;
   dismissed: number;
+  undone: number;
   /**
    * adopted / (adopted + dismissed) — the share of *decided* actions that were
    * adopted. Pending actions are excluded from the denominator (they have no
@@ -133,6 +143,7 @@ export interface AgentMetricsSummary {
   proposed: number;
   adopted: number;
   dismissed: number;
+  undone: number;
   /** Same formula as the daily rows, totaled over the window. */
   adoptionRate: number;
   /** adoptionRate of the preceding window of the same length, for trend arrows. */

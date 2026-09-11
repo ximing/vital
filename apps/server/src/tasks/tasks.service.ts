@@ -29,13 +29,13 @@ import {
   isNull,
   lt,
   lte,
-  max,
   or,
   sql,
   type SQL,
 } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { getUserEntity } from '../auth/auth.service.js';
+import { recordTaskEdit } from '../agent/edit-events.service.js';
 import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
 import {
@@ -55,6 +55,7 @@ import {
   listLists,
   SORT_GAP,
 } from '../lists/lists.service.js';
+import { nextSortOrder } from './sort-order.js';
 import { llmPublicOf } from '../llm/settings.service.js';
 import {
   enqueueOutcomeRefresh,
@@ -192,18 +193,6 @@ function snapExisting(d: Date | null, allDay: boolean, zone: string): Date | nul
 function shiftBy(d: Date | null, deltaMs: number): Date | null {
   if (d === null) return null;
   return new Date(d.getTime() + deltaMs);
-}
-
-async function nextSortOrder(listId: string, parentId: string | null): Promise<number> {
-  const cond =
-    parentId === null
-      ? and(eq(tasks.listId, listId), isNull(tasks.parentId))
-      : and(eq(tasks.listId, listId), eq(tasks.parentId, parentId));
-  const [agg] = await getDb()
-    .select({ m: max(tasks.sortOrder) })
-    .from(tasks)
-    .where(cond);
-  return (agg?.m ?? 0) + SORT_GAP;
 }
 
 function localDateSql(col: Column, tz: string): SQL {
@@ -657,6 +646,29 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {
     await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
+    // User edit events feed memory.distill; agent writes bypass this call.
+    await recordTaskEdit(
+      tx,
+      userId,
+      task.id,
+      {
+        title: task.title,
+        dueAt: task.dueAt,
+        priority: task.priority,
+        estimateMinutes: task.estimateMinutes,
+        outcomeId: task.outcomeId,
+      },
+      {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        // The computed instant also moves on isAllDay/timezone snaps — still a due change.
+        dueAt,
+        ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+        ...(patch.estimateMinutes !== undefined
+          ? { estimateMinutes: patch.estimateMinutes }
+          : {}),
+        ...(patch.outcomeId !== undefined ? { outcomeId: patch.outcomeId } : {}),
+      },
+    );
     await tx.update(tasks).set(patch).where(eq(tasks.id, task.id));
     if (input.listId !== undefined && input.listId !== task.listId && !task.parentId) {
       await tx

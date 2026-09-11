@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import type {
   ActionFeedbackInput,
@@ -5,10 +6,22 @@ import type {
   AgentActionLogItem,
   AgentActionsQuery,
 } from '@vital/dto';
+import { getUserEntity } from '../auth/auth.service.js';
 import { getDb } from '../db/index.js';
-import { agentActions, habits, outcomes, tasks, type AgentActionRow } from '../db/schema.js';
+import {
+  agentActions,
+  habits,
+  outcomes,
+  tasks,
+  type AgentActionRow,
+  type TaskRow,
+} from '../db/schema.js';
+import { enqueueOutcomeRefresh } from './jobs.js';
 import { markAgentSchedule } from './scheduling.js';
 import { lockAgentUser } from './user-lock.js';
+import { syncTaskNotifications } from '../notifications/outbox.js';
+import { indexTask, removeTaskIndex, trackTaskIndexJob } from '../retrieval/tasks.js';
+import { nextSortOrder } from '../tasks/sort-order.js';
 import { AppError } from '../errors.js';
 
 /** Hard cap for the actions listing — the ledger is append-only and chatty. */
@@ -140,12 +153,31 @@ export async function listAgentActions(
   }));
 }
 
+/** Defensive parse of a decompose payload — the ledger stores free-form jsonb. */
+function parseDecomposeSubtasks(payload: Record<string, unknown>): { title: string; estimateMinutes: number | null }[] {
+  const raw = payload['subtasks'];
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item): { title: string; estimateMinutes: number | null }[] => {
+    if (typeof item !== 'object' || item === null) return [];
+    const record = item as Record<string, unknown>;
+    if (typeof record['title'] !== 'string' || record['title'].trim() === '') return [];
+    const estimate = record['estimateMinutes'];
+    return [
+      {
+        title: record['title'].trim().slice(0, 500),
+        estimateMinutes: typeof estimate === 'number' && estimate > 0 ? estimate : null,
+      },
+    ];
+  });
+}
+
 /**
  * Record user feedback on a proposal. 'edited' additionally applies the edited
  * payload in the same transaction (rename outcome / override headline etc.).
- * For 'task.decompose' the web client materializes subtasks via the normal
- * task API before sending 'accepted'/'edited' — here we only bookkeep.
- * For 'task.draft', 'accepted' appends the draft to the task notes.
+ * For 'task.decompose', 'accepted' materializes the proposed subtasks inside
+ * the same transaction and records their ids in feedbackPayload.materialized
+ * (the undo endpoint compensates with a soft delete). For 'task.draft',
+ * 'accepted' appends the draft to the task notes.
  */
 export async function applyActionFeedback(
   userId: string,
@@ -161,8 +193,71 @@ export async function applyActionFeedback(
   }
 
   const now = new Date();
+  const materialized: TaskRow[] = [];
   const next = await db.transaction(async (tx) => {
     await lockAgentUser(tx, userId);
+    if (input.feedback === 'accepted' && row.actionType === 'task.decompose') {
+      const subtasks = parseDecomposeSubtasks(row.payload);
+      if (subtasks.length > 0) {
+        const [parent] = await tx
+          .select()
+          .from(tasks)
+          .where(and(eq(tasks.id, row.targetId), eq(tasks.userId, userId)))
+          .limit(1);
+        if (!parent || parent.deletedAt) {
+          // Without a parent there is nothing to attach the subtasks to — the
+          // transaction aborts and the proposal stays pending.
+          throw AppError.of(409, 'VALIDATION_ERROR', { reason: 'parent task no longer exists' });
+        }
+        const user = await getUserEntity(userId);
+        for (const subtask of subtasks) {
+          const [created] = await tx
+            .insert(tasks)
+            .values({
+              id: randomUUID(),
+              userId,
+              listId: parent.listId,
+              parentId: parent.id,
+              outcomeId: parent.outcomeId,
+              estimateMinutes: subtask.estimateMinutes,
+              title: subtask.title,
+              notesMd: '',
+              status: 'todo',
+              priority: 3,
+              pinned: false,
+              isAllDay: false,
+              timezone: parent.timezone,
+              sortOrder: await nextSortOrder(parent.listId, parent.id, tx),
+              createdAt: now,
+              updatedAt: now,
+            })
+            .returning();
+          if (created) {
+            materialized.push(created);
+            await syncTaskNotifications(
+              {
+                id: created.id,
+                userId: created.userId,
+                listId: created.listId,
+                title: created.title,
+                status: created.status,
+                dueAt: created.dueAt ?? null,
+                reminderMode: created.reminderMode ?? null,
+                reminderOffsetMinutes: created.reminderOffsetMinutes ?? null,
+                reminderAt: created.reminderAt ?? null,
+                isAllDay: created.isAllDay,
+                timezone: created.timezone,
+                deletedAt: created.deletedAt ?? null,
+              },
+              user,
+              now,
+              tx,
+            );
+          }
+        }
+        if (parent.outcomeId) await enqueueOutcomeRefresh(tx, userId, parent.outcomeId, now);
+      }
+    }
     if (input.feedback === 'accepted' && row.actionType === 'task.draft') {
       const draft = typeof row.payload['draft'] === 'string' ? row.payload['draft'].trim() : '';
       if (draft !== '') {
@@ -208,11 +303,15 @@ export async function applyActionFeedback(
           .where(and(eq(outcomes.id, row.targetId), eq(outcomes.userId, userId)));
       }
     }
+    const feedbackPayload =
+      input.feedback === 'accepted' && row.actionType === 'task.decompose' && materialized.length > 0
+        ? { materialized: { taskIds: materialized.map((t) => t.id) } }
+        : (input.editedPayload ?? null);
     const [updated] = await tx
       .update(agentActions)
       .set({
         feedback: input.feedback,
-        feedbackPayload: input.editedPayload ?? null,
+        feedbackPayload,
         feedbackAt: now,
       })
       .where(and(eq(agentActions.id, row.id), eq(agentActions.userId, userId), eq(agentActions.feedback, 'pending')))
@@ -221,5 +320,95 @@ export async function applyActionFeedback(
     await markAgentSchedule(tx, userId, 'memory.distill', { now, urgent: input.feedback !== 'accepted' });
     return updated;
   });
+  // Fire-and-forget retrieval indexing, mirroring createTask.
+  if (materialized.length > 0) {
+    trackTaskIndexJob(
+      (async () => {
+        for (const row of materialized) {
+          await indexTask(row).catch((err: unknown) => {
+            console.error('[retrieval] decompose indexTask failed', err);
+          });
+        }
+      })(),
+    );
+  }
+  return toAgentActionDto(next);
+}
+
+/** Task ids recorded by an accepted, materialized decompose proposal, if any. */
+function materializedTaskIdsOf(row: AgentActionRow): string[] | null {
+  const materialized = row.feedbackPayload?.['materialized'];
+  if (materialized === null || typeof materialized !== 'object') return null;
+  const taskIds = (materialized as Record<string, unknown>)['taskIds'];
+  if (!Array.isArray(taskIds) || taskIds.length === 0) return null;
+  if (!taskIds.every((id): id is string => typeof id === 'string')) return null;
+  return taskIds;
+}
+
+/**
+ * Compensate a materialized acceptance: soft-delete every materialized subtask
+ * and settle the action as 'undone' (a terminal state and a strong correction
+ * signal for memory.distill). The materialized record is kept for audit.
+ */
+export async function undoAgentAction(userId: string, actionId: string): Promise<AgentAction> {
+  const db = getDb();
+  const [row] = await db
+    .select()
+    .from(agentActions)
+    .where(and(eq(agentActions.id, actionId), eq(agentActions.userId, userId)))
+    .limit(1);
+  if (!row || row.userId !== userId) throw AppError.of(404, 'NOT_FOUND');
+  if (row.feedback !== 'accepted') throw AppError.of(409, 'VALIDATION_ERROR');
+  const taskIds = materializedTaskIdsOf(row);
+  if (taskIds === null) throw AppError.of(409, 'VALIDATION_ERROR');
+
+  const now = new Date();
+  const next = await db.transaction(async (tx) => {
+    await lockAgentUser(tx, userId);
+    const children = await tx
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.userId, userId), inArray(tasks.id, taskIds)));
+    if (children.length !== taskIds.length) {
+      throw AppError.of(409, 'VALIDATION_ERROR', { reason: 'some materialized subtasks no longer exist' });
+    }
+    for (const child of children) {
+      if (child.deletedAt) {
+        throw AppError.of(409, 'VALIDATION_ERROR', { reason: `subtask "${child.title}" was already deleted` });
+      }
+      if (child.status === 'done') {
+        throw AppError.of(409, 'VALIDATION_ERROR', { reason: `subtask "${child.title}" was already completed` });
+      }
+    }
+    const user = await getUserEntity(userId);
+    await tx
+      .update(tasks)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(and(eq(tasks.userId, userId), inArray(tasks.id, taskIds)));
+    for (const child of children) {
+      await syncTaskNotifications({ ...child, deletedAt: now }, user, now, tx);
+    }
+    const outcomeIds = new Set(children.map((c) => c.outcomeId).filter((id): id is string => id !== null));
+    for (const outcomeId of outcomeIds) {
+      await enqueueOutcomeRefresh(tx, userId, outcomeId, now);
+    }
+    const [updated] = await tx
+      .update(agentActions)
+      .set({ feedback: 'undone', feedbackAt: now })
+      .where(and(eq(agentActions.id, row.id), eq(agentActions.userId, userId), eq(agentActions.feedback, 'accepted')))
+      .returning();
+    if (!updated) throw AppError.of(409, 'VALIDATION_ERROR');
+    await markAgentSchedule(tx, userId, 'memory.distill', { now, urgent: true });
+    return updated;
+  });
+  trackTaskIndexJob(
+    (async () => {
+      for (const id of taskIds) {
+        await removeTaskIndex(id).catch((err: unknown) => {
+          console.error('[retrieval] undo removeTaskIndex failed', err);
+        });
+      }
+    })(),
+  );
   return toAgentActionDto(next);
 }

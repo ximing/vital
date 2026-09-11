@@ -1,6 +1,7 @@
 import { finishAgentSchedule } from './scheduling.js';
 import { RetryableAgentJobError, withAgentJobEffects } from './job-runtime.js';
 import { agentMemoryFeedback, agentMemoryHistory, agentMemoryMaintenance } from '../db/schema/agent-memory-history.js';
+import { agentEditEvents, agentEditFeedback } from '../db/schema/agent-edit-events.js';
 import { recordAgentAction } from './action-ledger.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
@@ -28,6 +29,7 @@ import {
   buildDraftPrompt,
   buildHeadlinePrompt,
   type DistillActionFact,
+  type DistillEditFact,
   type SimilarTaskExample,
 } from './prompts.js';
 import { loadAgentMemory, runProposalPass, runWithCritic } from './harness.js';
@@ -644,15 +646,22 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
   // Feedback time, never proposal creation time. The immutable version also
   // catches a later edit to a previously processed feedback row.
   const candidates = maintenance ? [] : await db.select().from(agentActions).where(and(
-    eq(agentActions.userId, user.id), inArray(agentActions.feedback, ['accepted', 'edited', 'dismissed']),
+    eq(agentActions.userId, user.id), inArray(agentActions.feedback, ['accepted', 'edited', 'dismissed', 'undone']),
     sql`${agentActions.feedbackAt} is not null`,
     ...('scheduleFeedbackThrough' in job.payload && job.payload.scheduleFeedbackThrough ? [sql`${agentActions.feedbackAt} <= ${new Date(job.payload.scheduleFeedbackThrough)}`] : []),
     sql`not exists (select 1 from ${agentMemoryFeedback} p where p.user_id = ${agentActions.userId} and p.action_id = ${agentActions.id} and p.feedback_at = ${agentActions.feedbackAt} and p.version = md5(${agentActions.feedback} || ':' || coalesce(${agentActions.feedbackPayload}::text, 'null') || ':' || ${agentActions.feedbackAt}::text))`,
   )).orderBy(asc(agentActions.feedbackAt), asc(agentActions.id)).limit(50);
-  if (!maintenance && candidates.length === 0) { skipExecution('UNCHANGED_INPUT'); await finishUnchangedSchedule(job, user.id, 'memory.distill', now); return 'done'; }
+  // User edit events distill alongside feedback; rows are immutable so plain
+  // event-id consumption markers suffice (no md5 version).
+  const editCandidates = maintenance ? [] : await db.select().from(agentEditEvents).where(and(
+    eq(agentEditEvents.userId, user.id),
+    sql`not exists (select 1 from ${agentEditFeedback} f where f.user_id = ${agentEditEvents.userId} and f.event_id = ${agentEditEvents.id})`,
+  )).orderBy(asc(agentEditEvents.createdAt), asc(agentEditEvents.id)).limit(50);
+  if (!maintenance && candidates.length === 0 && editCandidates.length === 0) { skipExecution('UNCHANGED_INPUT'); await finishUnchangedSchedule(job, user.id, 'memory.distill', now); return 'done'; }
   const recent = candidates;
-  executionResult({ inputSummary: `仅当前用户：${String(recent.length)} 条新反馈，${String(existing.length)} 条记忆` });
+  executionResult({ inputSummary: `仅当前用户：${String(recent.length)} 条新反馈，${String(editCandidates.length)} 条用户编辑，${String(existing.length)} 条记忆` });
   const facts: DistillActionFact[] = recent.map(a => ({ actionType: a.actionType, feedback: a.feedback, summary: JSON.stringify(a.payload).slice(0, 200), editedSummary: a.feedbackPayload ? JSON.stringify(a.feedbackPayload).slice(0, 200) : null }));
+  const editFacts: DistillEditFact[] = editCandidates.map(e => ({ entityType: e.entityType, fields: e.fields }));
   // Semantic dedup hint: near-duplicate existing memories are annotated in the
   // prompt so the model prefers update-merges over new adds. Best-effort — any
   // retrieval failure (or missing Qdrant) leaves the prompt as before.
@@ -669,7 +678,7 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
     const fresh = similarPairs.filter(([a, b]) => existingIds.has(a) && existingIds.has(b));
     if (fresh.length > 0) similarPairsHint = fresh;
   }
-  const prompt = buildDistillPrompt({ actions: facts, existingMemory: existing, mode: maintenance ? 'maintenance' : 'incremental', ...(similarPairsHint ? { similarPairs: similarPairsHint } : {}) });
+  const prompt = buildDistillPrompt({ actions: facts, existingMemory: existing, edits: editFacts, mode: maintenance ? 'maintenance' : 'incremental', ...(similarPairsHint ? { similarPairs: similarPairsHint } : {}) });
   const result = await runProposalPass<SubmitMemoriesArgs>({ user, capability: 'agent.distill', systemPrompt: prompt.system, userPrompt: prompt.user, makeTool: submitMemoriesTool });
   if (!result) return 'skipped:no-llm';
   const updates = (result.args.update ?? []).map(u => ({ id: u.id, content: u.content.trim(), scope: sanitizeScope(u.scope) })).filter(u => u.content !== '');
@@ -693,6 +702,10 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
       const inserted = await tx.insert(agentMemoryFeedback).values({ userId: user.id, actionId: fresh.id, feedbackAt: fresh.feedbackAt, version: fresh.version, jobId: job.id, processedAt: now }).onConflictDoNothing().returning();
       if (!inserted.length) throw new RetryableAgentJobError('Feedback already processed by another distill');
       sources.push({ actionId: fresh.id, feedbackAt: fresh.feedbackAt.toISOString(), version: fresh.version });
+    }
+    for (const e of editCandidates) {
+      const consumed = await tx.insert(agentEditFeedback).values({ userId: user.id, eventId: e.id, jobId: job.id, processedAt: now }).onConflictDoNothing().returning();
+      if (!consumed.length) throw new RetryableAgentJobError('Edit event already processed by another distill');
     }
     const counts = { added: 0, updated: 0, deleted: 0 };
     const history = async (operation: string, before: typeof agentMemory.$inferSelect | null, after: typeof agentMemory.$inferSelect | null) => {

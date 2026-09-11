@@ -116,8 +116,7 @@ describe('DecomposeBanner', () => {
     expect(screen.queryByText(t.today.decomposeHint)).not.toBeInTheDocument();
   });
 
-  it('accept materializes subtasks as children inheriting outcomeId, then records feedback', async () => {
-    vi.mocked(client.createTask).mockResolvedValue(task);
+  it('accept sends exactly one feedback request — the server materializes the subtasks', async () => {
     vi.mocked(client.sendAgentActionFeedback).mockResolvedValue({
       ...action,
       feedback: 'accepted',
@@ -128,24 +127,13 @@ describe('DecomposeBanner', () => {
     await user.click(screen.getByRole('button', { name: t.today.decomposeAccept }));
 
     await waitFor(() => {
+      expect(client.sendAgentActionFeedback).toHaveBeenCalledTimes(1);
       expect(client.sendAgentActionFeedback).toHaveBeenCalledWith('action-1', {
         feedback: 'accepted',
       });
     });
-    expect(client.createTask).toHaveBeenCalledTimes(3);
-    expect(client.createTask).toHaveBeenNthCalledWith(1, {
-      title: '列大纲',
-      listId: 'list-1',
-      parentId: 'task-1',
-      outcomeId: 'outcome-1',
-      estimateMinutes: 15,
-    });
-    expect(client.createTask).toHaveBeenNthCalledWith(3, {
-      title: '写初稿',
-      listId: 'list-1',
-      parentId: 'task-1',
-      outcomeId: 'outcome-1',
-    });
+    // Materialization moved to the server: the client creates nothing itself.
+    expect(client.createTask).not.toHaveBeenCalled();
   });
 
   it('dismiss only records feedback and creates nothing', async () => {

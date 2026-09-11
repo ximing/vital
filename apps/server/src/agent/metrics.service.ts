@@ -44,6 +44,7 @@ async function windowDaily(
       proposed: sql<number>`count(*)::int`,
       adopted: sql<number>`(count(*) filter (where ${scoped.feedback} in ('accepted', 'edited')))::int`,
       dismissed: sql<number>`(count(*) filter (where ${scoped.feedback} = 'dismissed'))::int`,
+      undone: sql<number>`(count(*) filter (where ${scoped.feedback} = 'undone'))::int`,
     })
     .from(scoped)
     .groupBy(scoped.date)
@@ -54,6 +55,7 @@ async function windowDaily(
     proposed: row.proposed,
     adopted: row.adopted,
     dismissed: row.dismissed,
+    undone: row.undone,
     adoptionRate: adoptionRate(row.adopted, row.dismissed),
   }));
 }
@@ -79,8 +81,10 @@ export async function agentAdoptionDaily(
     windowDaily(userId, timezone, prevSince, since),
   ]);
 
-  const sum = (rows: AgentAdoptionDaily[], key: 'proposed' | 'adopted' | 'dismissed') =>
-    rows.reduce((acc, row) => acc + row[key], 0);
+  const sum = (
+    rows: AgentAdoptionDaily[],
+    key: 'proposed' | 'adopted' | 'dismissed' | 'undone',
+  ) => rows.reduce((acc, row) => acc + row[key], 0);
 
   const proposed = sum(daily, 'proposed');
   const adopted = sum(daily, 'adopted');
@@ -91,6 +95,7 @@ export async function agentAdoptionDaily(
       proposed,
       adopted,
       dismissed,
+      undone: sum(daily, 'undone'),
       adoptionRate: adoptionRate(adopted, dismissed),
       prevAdoptionRate: adoptionRate(sum(prev, 'adopted'), sum(prev, 'dismissed')),
     },

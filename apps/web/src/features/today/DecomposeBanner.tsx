@@ -12,9 +12,9 @@ import { todayKeys } from './queries';
 
 /**
  * TaskDetail banner for a pending task.decompose proposal: the agent suggests
- * splitting a repeatedly-deferred task. Accept keeps the original task as the
- * parent and materializes the suggestions through the normal task create API
- * (inheriting outcomeId), then records 'accepted'; dismiss records 'dismissed'.
+ * splitting a repeatedly-deferred task. Accept records 'accepted' — the server
+ * materializes the subtasks transactionally (inheriting listId/outcomeId) in
+ * the same request; dismiss records 'dismissed'.
  */
 export function DecomposeBanner({ task, action }: { task: Task; action: AgentAction }) {
   const qc = useQueryClient();
@@ -32,17 +32,6 @@ export function DecomposeBanner({ task, action }: { task: Task; action: AgentAct
   async function accept() {
     setBusy('accept');
     try {
-      for (const subtask of subtasks) {
-        await client.createTask({
-          title: subtask.title,
-          listId: task.listId,
-          parentId: task.id,
-          ...(task.outcomeId ? { outcomeId: task.outcomeId } : {}),
-          ...(subtask.estimateMinutes !== null
-            ? { estimateMinutes: subtask.estimateMinutes }
-            : {}),
-        });
-      }
       await settle('accepted');
       await qc.invalidateQueries({ queryKey: todoKeys.all });
       await qc.invalidateQueries({ queryKey: todayKeys.all });

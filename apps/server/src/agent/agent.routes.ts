@@ -12,7 +12,7 @@ import {
 import { getUserEntity } from '../auth/auth.service.js';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
-import { applyActionFeedback, listAgentActions } from './actions.service.js';
+import { applyActionFeedback, listAgentActions, undoAgentAction } from './actions.service.js';
 import { agentAdoptionDaily } from './metrics.service.js';
 import {
   createAgentMemory,
@@ -64,6 +64,13 @@ export function registerAgentRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = agentActionIdParamsSchema.parse(req.params);
     return applyActionFeedback(user.id, id, actionFeedbackInputSchema.parse(req.body));
+  });
+
+  app.post('/api/v1/agent/actions/:id/undo', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = agentActionIdParamsSchema.parse(req.params);
+    return undoAgentAction(user.id, id);
   });
 
   app.get('/api/v1/agent/memory', { preHandler: [requireAuth] }, async (req) => {

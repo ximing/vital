@@ -23,6 +23,7 @@ export const copy = {
     finishedLater: '后来完成',
     deleted: '已删除',
     emptyCaptured: '这一期没有新的稍后读。',
+    habitProgress: '习惯进展',
     emptyRecent: '这一期还没有完成。去做一件，回来就会出现。',
     streakCompleted: '连续完成 {n} 天',
     openPeriod: '打开这一期',

@@ -108,7 +108,7 @@ export const agentActions = pgTable(
     check('agent_actions_target_type_check', sql`${t.targetType} IN ('outcome', 'task', 'habit')`),
     check(
       'agent_actions_feedback_check',
-      sql`${t.feedback} IN ('pending', 'accepted', 'edited', 'dismissed')`,
+      sql`${t.feedback} IN ('pending', 'accepted', 'edited', 'dismissed', 'undone')`,
     ),
   ],
 );

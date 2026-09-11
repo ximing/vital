@@ -163,6 +163,8 @@ export interface VitalClient {
   getAgentMetrics(days?: number): Promise<AgentMetricsResponse>;
   listAgentActions(query?: AgentActionsQuery): Promise<AgentActionLogItem[]>;
   sendAgentActionFeedback(id: string, input: ActionFeedbackInput): Promise<AgentAction>;
+  /** Compensate a materialized acceptance: soft-deletes the created subtasks. */
+  undoAgentAction(id: string): Promise<AgentAction>;
   listAgentMemory(): Promise<AgentMemoryItem[]>;
   createAgentMemory(input: CreateAgentMemoryInput): Promise<AgentMemoryItem>;
   patchAgentMemory(id: string, input: PatchAgentMemoryInput): Promise<AgentMemoryItem>;
@@ -395,6 +397,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       }),
     sendAgentActionFeedback: (id, input) =>
       http.request(`/api/v1/agent/actions/${id}/feedback`, { method: 'POST', body: input }),
+    undoAgentAction: (id) =>
+      http.request(`/api/v1/agent/actions/${id}/undo`, { method: 'POST' }),
     listAgentMemory: () => http.request('/api/v1/agent/memory'),
     createAgentMemory: (input) =>
       http.request('/api/v1/agent/memory', { method: 'POST', body: input }),

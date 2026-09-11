@@ -127,6 +127,7 @@ export interface AgentAdoptionDaily {
   proposed: number;
   adopted: number;
   dismissed: number;
+  undone: number;
   /**
    * adopted / (adopted + dismissed) — the share of *decided* actions that were
    * adopted. Pending actions are excluded from the denominator (they have no
@@ -141,6 +142,7 @@ export interface AgentMetricsSummary {
   proposed: number;
   adopted: number;
   dismissed: number;
+  undone: number;
   /** Same formula as the daily rows, totaled over the window. */
   adoptionRate: number;
   /** adoptionRate of the preceding window of the same length, for trend arrows. */
@@ -689,6 +691,15 @@ export interface ReportReviewInbox {
 ```
 
 ```ts
+export interface ReviewHabitProgress {
+  habitId: string;
+  title: string;
+  done: number;
+  target: number | null;
+}
+```
+
+```ts
 export interface ReportReview {
   reportId: string;
   type: ReportType;
@@ -697,6 +708,7 @@ export interface ReportReview {
   completed: ReportReviewTask[];
   carried: ReportCarriedTask[];
   captured: ReportReviewInbox[];
+  habitProgress: ReviewHabitProgress[];
 }
 ```
 
@@ -2075,7 +2087,7 @@ Query (`agentActionsQuerySchema`):
 - `targetType`: "outcome" | "task" | "habit" (optional)
 - `targetId`: uuid (optional)
 - `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "task.draft" | "habit.create" | "habit.adjust" | "habit.nudge" (optional)
-- `feedback`: "pending" | "accepted" | "edited" | "dismissed" (optional)
+- `feedback`: "pending" | "accepted" | "edited" | "dismissed" | "undone" (optional)
 - `days`: number int min 1 (optional)
 
 #### `POST /api/v1/agent/actions/:id/feedback`
@@ -2094,6 +2106,18 @@ Request body (`actionFeedbackInputSchema`):
 
 - `feedback`: "accepted" | "dismissed" | "edited"
 - `editedPayload`: object (optional)
+
+#### `POST /api/v1/agent/actions/:id/undo`
+
+Undo Agent Action
+
+- Auth: Bearer required
+- Client: `undoAgentAction`
+- Response: `AgentAction`
+
+Path params:
+
+- `id`: uuid
 
 #### `GET /api/v1/agent/executions`
 

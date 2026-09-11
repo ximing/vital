@@ -153,6 +153,7 @@ function makeReview(over: Partial<ReportReview> = {}): ReportReview {
       },
     ],
     captured: [],
+    habitProgress: [],
     ...over,
   };
 }

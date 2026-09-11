@@ -10,12 +10,14 @@ import {
   type ReportReviewInbox,
   type ReportReviewTask,
   type ReportType,
+  type ReviewHabitProgress,
+  type TaskPriority,
   type TaskStatus,
 } from '@vital/dto';
 import { and, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { getDb } from '../db/index.js';
-import { inboxItems, lists, reports, taskCompletions, tasks } from '../db/schema.js';
+import { habits, inboxItems, lists, reports, taskCompletions, tasks } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { asPriority, carriedWithLiveState, computeCarriedTasks, isCarried } from './carry.js';
 import { currentPeriod, localDate, periodInstants, previousPeriodStart } from './period.js';
@@ -156,6 +158,7 @@ export async function getReportOverview(
       title: tasks.title,
       priority: tasks.priority,
       listId: tasks.listId,
+      habitId: tasks.habitId,
     })
     .from(taskCompletions)
     .innerJoin(tasks, eq(tasks.id, taskCompletions.taskId))
@@ -185,7 +188,7 @@ export async function getReportOverview(
     );
 
   const completedByDay = new Map<string, number>();
-  const recentDone: ReportRecentDone[] = [];
+  const periodItems: Array<{ title: string; completedAt: string; taskId: string; priority: number; habitId: string | null }> = [];
   const byPriority = { 0: 0, 1: 0, 2: 0, 3: 0 };
   const listCounts = new Map<string, number>();
   let completed = 0;
@@ -198,17 +201,56 @@ export async function getReportOverview(
       const p = asPriority(row.priority);
       byPriority[p] += 1;
       listCounts.set(row.listId, (listCounts.get(row.listId) ?? 0) + 1);
-      if (recentDone.length < 5) {
-        recentDone.push({
-          taskId: row.taskId,
-          title: row.title,
-          completedAt: iso(row.completedAt),
-          priority: p,
-        });
-      }
+      periodItems.push({
+        taskId: row.taskId,
+        title: row.title,
+        completedAt: iso(row.completedAt),
+        priority: p,
+        habitId: row.habitId ?? null,
+      });
     }
     if (ymd >= previous.start && ymd < previous.end) prevCompleted += 1;
   }
+  // Group habit completions for recentDone — "喝水 ×3" instead of 3 separate entries.
+  const recentDoneMap = new Map<string, { taskId: string; title: string; completedAt: string; priority: number; count: number; habitId: string | null }>();
+  for (const item of periodItems) {
+    const key = item.habitId ?? item.taskId;
+    const existing = recentDoneMap.get(key);
+    if (existing) {
+      existing.count += 1;
+      if (item.completedAt > existing.completedAt) existing.completedAt = item.completedAt;
+    } else {
+      recentDoneMap.set(key, { ...item, count: 1, habitId: item.habitId });
+    }
+  }
+  // Load habit targets to filter out incomplete count habits from recentDone.
+  const overviewHabitIds = new Set<string>();
+  for (const entry of recentDoneMap.values()) {
+    if (entry.habitId) overviewHabitIds.add(entry.habitId);
+  }
+  const habitTargets = new Map<string, number | null>();
+  if (overviewHabitIds.size > 0) {
+    const habitRows = await getDb()
+      .select({ id: habits.id, targetCount: habits.targetCount })
+      .from(habits)
+      .where(inArray(habits.id, [...overviewHabitIds]));
+    for (const h of habitRows) habitTargets.set(h.id, h.targetCount);
+  }
+  const recentDone: ReportRecentDone[] = [...recentDoneMap.values()]
+    .filter((entry) => {
+      if (!entry.habitId) return true; // non-habit → keep
+      const target = habitTargets.get(entry.habitId);
+      // daily (null) or deleted (undefined) → keep; count → only if reached
+      return target === null || target === undefined || entry.count >= target;
+    })
+    .sort((a, b) => b.completedAt.localeCompare(a.completedAt))
+    .slice(0, 5)
+    .map((item) => ({
+      taskId: item.taskId,
+      title: item.count > 1 ? `${item.title} ×${String(item.count)}` : item.title,
+      completedAt: item.completedAt,
+      priority: item.priority as TaskPriority,
+    }));
 
   const wroteDaily = new Set<string>();
   const wroteByTypeStart = new Set<string>();
@@ -334,6 +376,7 @@ export async function getReportReview(userId: string, id: string): Promise<Repor
       status: tasks.status,
       dueAt: tasks.dueAt,
       listId: tasks.listId,
+      habitId: tasks.habitId,
     })
     .from(taskCompletions)
     .innerJoin(tasks, eq(tasks.id, taskCompletions.taskId))
@@ -346,16 +389,76 @@ export async function getReportReview(userId: string, id: string): Promise<Repor
     )
     .orderBy(desc(taskCompletions.completedAt), desc(taskCompletions.id));
 
-  const completed: ReportReviewTask[] = completionRows.map((item) => ({
-    taskId: item.taskId,
-    title: item.title,
-    priority: asPriority(item.priority),
-    status: asStatus(item.status),
-    dueAt: item.dueAt ? iso(item.dueAt) : null,
-    completedAt: iso(item.completedAt),
-    completionId: item.completionId,
-    listId: item.listId,
-  }));
+  // Group habit completions — "喝水 3/8" instead of 3 separate entries.
+  const habitGroups = new Map<string, typeof completionRows[number][]>();
+  const nonHabitItems: ReportReviewTask[] = [];
+  for (const item of completionRows) {
+    if (item.habitId) {
+      const group = habitGroups.get(item.habitId) ?? [];
+      group.push(item);
+      habitGroups.set(item.habitId, group);
+    } else {
+      nonHabitItems.push({
+        taskId: item.taskId,
+        title: item.title,
+        priority: asPriority(item.priority),
+        status: asStatus(item.status),
+        dueAt: item.dueAt ? iso(item.dueAt) : null,
+        completedAt: iso(item.completedAt),
+        completionId: item.completionId,
+        listId: item.listId,
+      });
+    }
+  }
+
+  const habitInfoMap = new Map<string, { name: string; targetCount: number | null }>();
+  if (habitGroups.size > 0) {
+    const habitRows = await getDb()
+      .select({ id: habits.id, name: habits.name, targetCount: habits.targetCount })
+      .from(habits)
+      .where(inArray(habits.id, [...habitGroups.keys()]));
+    for (const h of habitRows) habitInfoMap.set(h.id, h);
+  }
+
+  const habitItems: ReportReviewTask[] = [];
+  const habitProgress: ReviewHabitProgress[] = [];
+  for (const [habitId, rows] of habitGroups) {
+    if (rows.length === 0) continue;
+    const first = rows[0];
+    if (!first) continue;
+    const info = habitInfoMap.get(habitId);
+    const title = info?.name ?? first.title;
+    const count = rows.length;
+    const target = info?.targetCount;
+    // Count habit not fully completed → show in habitProgress instead.
+    if (target !== null && target !== undefined && count < target) {
+      habitProgress.push({ habitId, title, done: count, target });
+      continue;
+    }
+    const displayTitle = target !== null && target !== undefined
+      ? `${title} ${String(count)}/${String(target)}`
+      : count > 1
+        ? `${title} ×${String(count)}`
+        : title;
+    habitItems.push({
+      taskId: habitId,
+      title: displayTitle,
+      priority: asPriority(first.priority),
+      status: 'done',
+      dueAt: null,
+      completedAt: iso(first.completedAt),
+      completionId: null,
+      listId: first.listId,
+    });
+  }
+
+  const completed: ReportReviewTask[] = [...habitItems, ...nonHabitItems]
+    .sort((a, b) => {
+      if (!a.completedAt && !b.completedAt) return 0;
+      if (!a.completedAt) return 1;
+      if (!b.completedAt) return -1;
+      return b.completedAt.localeCompare(a.completedAt);
+    });
 
   // Ended period: the frozen list, overlaid with each task's live state — a
   // task completed after the freeze stays, annotated with when. Current
@@ -398,5 +501,6 @@ export async function getReportReview(userId: string, id: string): Promise<Repor
     completed,
     carried,
     captured,
+    habitProgress,
   };
 }

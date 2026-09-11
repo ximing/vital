@@ -228,6 +228,12 @@ export interface DistillActionFact {
   editedSummary: string | null;
 }
 
+/** One user edit event: per-field before/after summaries on a task or outcome. */
+export interface DistillEditFact {
+  entityType: string;
+  fields: { field: string; before: unknown; after: unknown }[];
+}
+
 export interface DistillExistingMemory {
   id: string;
   kind: string;
@@ -236,9 +242,37 @@ export interface DistillExistingMemory {
   scope: string[];
 }
 
+const EDIT_FIELD_LABELS: Record<string, string> = {
+  title: '标题',
+  dueAt: '截止时间',
+  priority: '优先级',
+  estimateMinutes: '估时',
+  outcomeId: '所属线程',
+  name: '名称',
+};
+
+function renderEditValue(value: unknown): string {
+  if (value === null) return '无';
+  if (typeof value === 'string') return `"${value}"`;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+}
+
+function renderEditFact(edit: DistillEditFact): string {
+  const changes = edit.fields
+    .map(
+      (f) =>
+        `${EDIT_FIELD_LABELS[f.field] ?? f.field} ${renderEditValue(f.before)} → ${renderEditValue(f.after)}`,
+    )
+    .join('；');
+  return `- [edit/${edit.entityType}] ${changes}`;
+}
+
 export function buildDistillPrompt(input: {
   actions: DistillActionFact[];
   existingMemory: DistillExistingMemory[];
+  /** Unconsumed user edit events — direct corrections outside agent proposals. */
+  edits?: DistillEditFact[];
   mode?: 'incremental' | 'maintenance';
   /** Semantically near-duplicate existing memory id pairs, from vector search. */
   similarPairs?: [string, string][];
@@ -246,6 +280,7 @@ export function buildDistillPrompt(input: {
   const system = [
     input.mode === 'maintenance' ? '这是日常维护：只整理重复或过时记忆，不得从缺失反馈推断新偏好。' : '只学习本次尚未处理的新增反馈，不得将已有记忆视作新增反馈。',
     '你是记忆治理器。基于用户对接班 Agent 提案的近期反馈（接受/修改/忽略），整理现有长期记忆并提交一组操作：',
+    '用户对任务/线程的直接修改（改标题、改截止、挪线程等）是最真实的纠偏信号，与提案反馈同等重要，优先从中提炼偏好与纠正。',
     'update：把语义重复或表述不佳的已有条目合并/改写成一条（保留原 id）；drop：淘汰过时、无效或与近期反馈矛盾的条目；add：新增记忆（≤5 条，preference 用户偏好 / pattern 行为模式 / correction 对 Agent 的纠偏，每条 ≤60 字，要具体可执行）；keep：确认原样保留的条目 id。',
     '未被 update/drop 的条目会原样保留。add 的新记忆不要与保留下来的条目语义重复。',
     '标注「用户手写」的条目是用户亲自维护的，最高优先级，不得 update 或 drop，只能保留。',
@@ -259,6 +294,7 @@ export function buildDistillPrompt(input: {
         `- [${a.actionType}/${a.feedback}] ${a.summary}${a.editedSummary ? `；用户改为：${a.editedSummary}` : ''}`,
     )
     .join('\n');
+  const edits = (input.edits ?? []).map(renderEditFact).join('\n');
   const existing =
     input.existingMemory.length === 0
       ? '（无）'
@@ -270,6 +306,9 @@ export function buildDistillPrompt(input: {
           .join('\n');
   const user = [
     `近期反馈：\n<data>\n${actions}\n</data>`,
+    edits !== ''
+      ? `用户直接编辑（未经过提案，自主修改）：\n<data>\n${edits}\n</data>`
+      : '',
     `已有记忆：\n<data>\n${existing}\n</data>`,
     input.similarPairs && input.similarPairs.length > 0
       ? `以下已有记忆两两语义高度相似，如内容重复请优先用 update 合并为一条而不是 add 新条目：${input.similarPairs.map(([a, b]) => `id=${a} ⇔ id=${b}`).join('；')}`

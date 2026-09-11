@@ -251,7 +251,7 @@ describe('thread workspace', () => {
             targetType: 'task',
             targetId: 't-open',
             targetName: '简历最后一轮校对',
-            feedback: 'pending',
+            feedback: 'undone',
             payloadSummary: '校对、回复内推',
             createdAt: '2026-09-10T01:20:00.000Z',
           }),
@@ -276,7 +276,7 @@ describe('thread workspace', () => {
     // Agent timeline: labels per feedback.
     expect(screen.getByText(t.thread.agentLog)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(t.thread.feedback.edited))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(t.thread.feedback.pending))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(t.thread.feedback.undone))).toBeInTheDocument();
     expect(screen.getByText('校对、回复内推')).toBeInTheDocument();
   });
 

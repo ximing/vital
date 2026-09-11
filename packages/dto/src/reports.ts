@@ -202,6 +202,13 @@ export interface ReportReviewInbox {
   capturedAt: string;
 }
 
+export interface ReviewHabitProgress {
+  habitId: string;
+  title: string;
+  done: number;
+  target: number | null;
+}
+
 export interface ReportReview {
   reportId: string;
   type: ReportType;
@@ -210,4 +217,5 @@ export interface ReportReview {
   completed: ReportReviewTask[];
   carried: ReportCarriedTask[];
   captured: ReportReviewInbox[];
+  habitProgress: ReviewHabitProgress[];
 }

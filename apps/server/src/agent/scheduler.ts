@@ -2,7 +2,7 @@ import { and, asc, eq, gt, isNotNull, max, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
-import { agentActions, agentMemory, agentMemoryMaintenance, agentScheduling, tasks, users } from '../db/schema.js';
+import { agentActions, agentEditEvents, agentMemory, agentMemoryMaintenance, agentScheduling, tasks, users } from '../db/schema.js';
 import { spawnDailyHabits } from '../habits/habits.service.js';
 import { enqueueAgentJobOnce } from './jobs.js';
 import { dispatchAgentSchedule, markAgentSchedule, scheduleDeadline } from './scheduling.js';
@@ -31,19 +31,30 @@ export async function runAgentScheduler(now = new Date()): Promise<number> {
         if (activity?.latest && (!cluster?.observedAt || +activity.latest > +cluster.observedAt)) {
           await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
         }
-        const feedback = await tx.select({ count: sql<number>`count(*)::int`, first: sql<Date | null>`min(${agentActions.feedbackAt})`, latest: sql<Date | null>`max(${agentActions.feedbackAt})`, urgent: sql<boolean>`coalesce(bool_or(${agentActions.feedback} IN ('edited', 'dismissed')), false)` }).from(agentActions).where(and(
+        const feedback = await tx.select({ count: sql<number>`count(*)::int`, first: sql<Date | null>`min(${agentActions.feedbackAt})`, latest: sql<Date | null>`max(${agentActions.feedbackAt})`, urgent: sql<boolean>`coalesce(bool_or(${agentActions.feedback} IN ('edited', 'dismissed', 'undone')), false)` }).from(agentActions).where(and(
           eq(agentActions.userId, userId), isNotNull(agentActions.feedbackAt),
           sql`${agentActions.feedback} <> 'pending'`,
           sql`NOT EXISTS (SELECT 1 FROM agent_memory_feedback f WHERE f.user_id = ${userId} AND f.action_id = ${agentActions.id} AND f.feedback_at = ${agentActions.feedbackAt} AND f.version = md5(${agentActions.feedback} || ':' || coalesce(${agentActions.feedbackPayload}::text, 'null') || ':' || ${agentActions.feedbackAt}::text))`,
         ));
+        // Unconsumed user edit events distill alongside action feedback — they are
+        // the strongest correction signals the system gets.
+        const edits = await tx.select({ count: sql<number>`count(*)::int`, first: sql<Date | null>`min(${agentEditEvents.createdAt})`, latest: sql<Date | null>`max(${agentEditEvents.createdAt})` }).from(agentEditEvents).where(and(
+          eq(agentEditEvents.userId, userId),
+          sql`NOT EXISTS (SELECT 1 FROM agent_edit_feedback f WHERE f.user_id = ${userId} AND f.event_id = ${agentEditEvents.id})`,
+        ));
         const pending = feedback[0];
+        const pendingEdits = edits[0];
         const memory = states.find(s => s.capability === 'memory.distill');
         // Aggregate timestamps from raw SQL can be strings with the pg driver.
-        const first = pending?.first ? new Date(pending.first) : null;
-        const latest = pending?.latest ? new Date(pending.latest) : null;
-        if (pending && pending.count > 0 && latest && (!memory || memory.generation === memory.processedGeneration || !memory.observedAt || +latest > +memory.observedAt)) {
-          await markAgentSchedule(tx, userId, 'memory.distill', { now, urgent: pending.urgent });
-          await tx.update(agentScheduling).set({ pendingCount: pending.count, pendingSince: first, urgent: pending.urgent, dueAt: scheduleDeadline('memory.distill', latest, first, pending.count, pending.urgent, memory?.cooldownUntil ?? null), observedAt: now }).where(and(eq(agentScheduling.userId, userId), eq(agentScheduling.capability, 'memory.distill')));
+        const timestamps = [pending?.first, pending?.latest, pendingEdits?.first, pendingEdits?.latest]
+          .flatMap((d) => (d === null || d === undefined ? [] : [+new Date(d)]));
+        const first = timestamps.length > 0 ? new Date(Math.min(...timestamps)) : null;
+        const latest = timestamps.length > 0 ? new Date(Math.max(...timestamps)) : null;
+        const totalCount = (pending?.count ?? 0) + (pendingEdits?.count ?? 0);
+        const urgent = (pending?.urgent ?? false) || (pendingEdits?.count ?? 0) > 0;
+        if (totalCount > 0 && latest && (!memory || memory.generation === memory.processedGeneration || !memory.observedAt || +latest > +memory.observedAt)) {
+          await markAgentSchedule(tx, userId, 'memory.distill', { now, urgent });
+          await tx.update(agentScheduling).set({ pendingCount: totalCount, pendingSince: first, urgent, dueAt: scheduleDeadline('memory.distill', latest, first, totalCount, urgent, memory?.cooldownUntil ?? null), observedAt: now }).where(and(eq(agentScheduling.userId, userId), eq(agentScheduling.capability, 'memory.distill')));
         }
       });
       await dispatchAgentSchedule(userId, 'outcome.cluster', now);

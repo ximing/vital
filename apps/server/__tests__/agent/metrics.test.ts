@@ -36,7 +36,7 @@ function atShanghai(daysAgo: number, hour = 12): Date {
 
 async function seedAction(
   userId: string,
-  feedback: 'pending' | 'accepted' | 'edited' | 'dismissed',
+  feedback: 'pending' | 'accepted' | 'edited' | 'dismissed' | 'undone',
   createdAt: Date,
 ): Promise<string> {
   const id = randomUUID();
@@ -102,9 +102,30 @@ describe('agent adoption metrics', () => {
       proposed: 7,
       adopted: 3,
       dismissed: 2,
+      undone: 0,
       adoptionRate: 0.6,
       prevAdoptionRate: 0.5,
     });
+  });
+
+  it('undone actions leave adopted and land in their own bucket', async () => {
+    const alice = await registerUser(app, 'alice');
+    // Today: 1 accepted, 1 undone, 1 dismissed.
+    await seedAction(alice.id, 'accepted', atShanghai(0));
+    await seedAction(alice.id, 'undone', atShanghai(0));
+    await seedAction(alice.id, 'dismissed', atShanghai(0));
+
+    const result = await agentAdoptionDaily(alice.id, 30, TZ);
+    const today = result.daily[0];
+    expect(today).toMatchObject({
+      proposed: 3,
+      // undone counts as proposed but neither adopted nor dismissed.
+      adopted: 1,
+      dismissed: 1,
+      undone: 1,
+      adoptionRate: 0.5,
+    });
+    expect(result.summary).toMatchObject({ adopted: 1, dismissed: 1, undone: 1 });
   });
 
   it('returns zeros when the user has no actions', async () => {
@@ -115,6 +136,7 @@ describe('agent adoption metrics', () => {
       proposed: 0,
       adopted: 0,
       dismissed: 0,
+      undone: 0,
       adoptionRate: 0,
       prevAdoptionRate: 0,
     });
@@ -137,6 +159,7 @@ describe('agent adoption metrics', () => {
       proposed: 2,
       adopted: 1,
       dismissed: 1,
+      undone: 0,
       adoptionRate: 0.5,
       prevAdoptionRate: 0,
     });
