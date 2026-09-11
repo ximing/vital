@@ -560,12 +560,20 @@ export const t = {
       inactive: '已停用',
       agentBadge: 'Agent 创建',
       enableAria: '启用或停用',
+      stats: {
+        unit: '个',
+        total: '习惯总数',
+        active: '启用中',
+        todayDone: '今日已完成',
+      },
     },
     threads: {
       title: '线程',
       hint: '线程是你正在推进的目标。关闭的线程从今天看板隐藏，任务和材料保留，可随时重开。',
       openGroup: '进行中',
       closedGroup: '已关闭',
+      closedHint: '任务和材料保留，可随时重开',
+      newAtToday: '回到今天看板新建',
       rename: '重命名',
       nameAria: '线程名称',
       save: '保存',
@@ -579,7 +587,11 @@ export const t = {
       closedAt: '关闭于 {date}',
       empty: '还没有线程。在今天看板顶部建一个。',
       closedEmpty: '没有已关闭的线程。',
-      newHint: '新建线程仍在今天看板顶部进行；这里负责管理已有线程。',
+      stats: {
+        openUnit: '个',
+        doneUnit: '件',
+        doneLabel: '近 7 天完成',
+      },
     },
     llm: {
       title: '大模型',

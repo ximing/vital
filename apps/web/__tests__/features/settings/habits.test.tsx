@@ -139,7 +139,12 @@ describe('habits page', () => {
     fireEvent.click(screen.getByText(`+ ${copy.add}`));
     const form = document.querySelector<HTMLElement>('[data-region="habit-add"]')!;
     fireEvent.change(screen.getByLabelText(copy.name), { target: { value: '冥想' } });
-    fireEvent.change(screen.getByLabelText(copy.kind), { target: { value: 'count' } });
+    // Kind is a segmented chip group now, not a select.
+    fireEvent.click(
+      [...form.querySelectorAll('button[type="button"]')].find(
+        (b) => b.textContent === copy.kindCount,
+      )!,
+    );
     fireEvent.change(screen.getByLabelText(copy.target), { target: { value: '5' } });
     fireEvent.submit(form);
 

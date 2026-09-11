@@ -5,8 +5,19 @@ import { client } from '@/api/client';
 import { t } from '@/copy';
 import { useHabitsQuery, todayKeys } from '@/features/today/queries';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
+import { ACTIVITY_CARD } from './ActivitySectionHead';
 
 const copy = t.settings.habits;
+
+const BTN_GHOST_SM =
+  'inline-flex h-[26px] items-center rounded-full px-2.5 text-[length:var(--text-caption)] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-60';
+const BTN_PRIMARY_SM =
+  'inline-flex h-[26px] items-center rounded-full bg-accent px-3 text-[length:var(--text-caption)] font-semibold text-on-accent transition-[color,background-color] duration-[var(--ease-out)] hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60';
+
+const STAT_NUM =
+  'font-display text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] tabular-nums';
+const STAT_LBL =
+  'mt-0.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted';
 
 interface HabitDraft {
   name: string;
@@ -65,27 +76,79 @@ function draftToPatch(draft: HabitDraft): PatchHabitInput | null {
   return patch;
 }
 
-function habitMeta(habit: Habit): string[] {
-  const chips = [
-    habit.kind === 'count'
-      ? copy.countChip.replace('{n}', String(habit.targetCount ?? 0))
-      : copy.dailyChip,
+/** Today progress for the ring and the hot chip: daily counts as done once todayDone > 0. */
+function todayOf(habit: Habit): { done: number; total: number } {
+  const total = Math.max(habit.todayTotal, 1);
+  return { done: Math.min(habit.todayDone, total), total };
+}
+
+/** Chips under the name; the today chip turns hot once there is progress. */
+function habitChips(habit: Habit): { text: string; hot: boolean }[] {
+  const chips: { text: string; hot: boolean }[] = [
+    {
+      text:
+        habit.kind === 'count'
+          ? copy.countChip.replace('{n}', String(habit.targetCount ?? 0))
+          : copy.dailyChip,
+      hot: false,
+    },
   ];
-  if (habit.windowStart && habit.windowEnd) chips.push(`${habit.windowStart}–${habit.windowEnd}`);
+  if (habit.windowStart && habit.windowEnd) {
+    chips.push({ text: `${habit.windowStart}–${habit.windowEnd}`, hot: false });
+  }
   if (habit.active) {
-    chips.push(
-      habit.kind === 'count'
-        ? copy.todayProgress
-            .replace('{done}', String(habit.todayDone))
-            .replace('{total}', String(habit.todayTotal))
-        : habit.todayDone > 0
-          ? copy.todayDone
-          : copy.todayProgress
-              .replace('{done}', String(habit.todayDone))
-              .replace('{total}', String(Math.max(habit.todayTotal, 1))),
-    );
+    const { done, total } = todayOf(habit);
+    if (habit.kind === 'count') {
+      chips.push({
+        text: copy.todayProgress.replace('{done}', String(done)).replace('{total}', String(total)),
+        hot: done > 0,
+      });
+    } else {
+      chips.push({
+        text:
+          habit.todayDone > 0
+            ? copy.todayDone
+            : copy.todayProgress.replace('{done}', String(done)).replace('{total}', String(total)),
+        hot: habit.todayDone > 0,
+      });
+    }
   }
   return chips;
+}
+
+const RING_C = 2 * Math.PI * 17;
+
+/** 40px progress ring: fills with today's completion, full + ✓ when done. */
+function HabitRing({ habit }: { habit: Habit }) {
+  const { done, total } = todayOf(habit);
+  const active = habit.active;
+  const progress = active ? done / total : 0;
+  const complete = active && done >= total;
+  return (
+    <span className="relative h-10 w-10 shrink-0" aria-hidden="true">
+      <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90">
+        <circle cx="20" cy="20" r="17" fill="none" strokeWidth="3.5" className="stroke-surface-muted" />
+        <circle
+          cx="20"
+          cy="20"
+          r="17"
+          fill="none"
+          strokeWidth="3.5"
+          strokeLinecap="round"
+          strokeDasharray={RING_C}
+          strokeDashoffset={RING_C * (1 - progress)}
+          className={complete ? 'stroke-done' : 'stroke-accent'}
+        />
+      </svg>
+      <span
+        className={`absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums ${
+          complete ? 'text-done' : 'text-muted'
+        }`}
+      >
+        {complete ? '✓' : active ? `${done}/${total}` : '0'}
+      </span>
+    </span>
+  );
 }
 
 function ActiveSwitch({
@@ -118,7 +181,8 @@ function ActiveSwitch({
   );
 }
 
-function HabitFields({
+/** Kind selector: segmented chips when editable (add form), readonly chip when editing. */
+function KindField({
   draft,
   onChange,
   kindEditable,
@@ -127,67 +191,91 @@ function HabitFields({
   onChange: (next: HabitDraft) => void;
   kindEditable: boolean;
 }) {
-  return (
-    <>
-      <input
-        aria-label={copy.name}
-        placeholder={copy.namePlaceholder}
-        maxLength={120}
-        value={draft.name}
-        onChange={(event) => onChange({ ...draft, name: event.target.value })}
-        className={`${FIELD_CONTROL_CLASS} h-9 min-w-36 flex-1`}
-      />
-      {kindEditable ? (
-        <select
-          aria-label={copy.kind}
-          value={draft.kind}
-          onChange={(event) => {
-            const kind = event.target.value as HabitKind;
-            onChange({ ...draft, kind, targetCount: kind === 'count' ? draft.targetCount || '8' : '' });
-          }}
-          className={`${FIELD_CONTROL_CLASS} h-9 w-auto py-0 pr-8`}
-        >
-          <option value="daily">{copy.kindDaily}</option>
-          <option value="count">{copy.kindCount}</option>
-        </select>
-      ) : (
-        <span className="inline-flex h-9 items-center rounded-md bg-surface-muted px-2.5 text-[length:var(--text-caption)] text-muted">
-          {draft.kind === 'count' ? copy.kindCount : copy.kindDaily}
-        </span>
-      )}
-      {draft.kind === 'count' ? (
-        <span className="flex items-center gap-1.5">
-          <input
-            aria-label={copy.target}
-            inputMode="numeric"
-            maxLength={2}
-            value={draft.targetCount}
-            onChange={(event) =>
-              onChange({ ...draft, targetCount: event.target.value.replaceAll(/[^0-9]/g, '') })
-            }
-            className={`${FIELD_CONTROL_CLASS} h-9 w-14 px-2 text-center font-mono`}
-          />
-          <span className="text-[length:var(--text-caption)] text-tertiary">{copy.perDay}</span>
-        </span>
-      ) : null}
-      <span className="flex items-center gap-1.5" aria-label={copy.window}>
-        <input
-          type="time"
-          aria-label={copy.window}
-          value={draft.windowStart}
-          onChange={(event) => onChange({ ...draft, windowStart: event.target.value })}
-          className={`${FIELD_CONTROL_CLASS} h-9 w-auto px-2 font-mono`}
-        />
-        <span className="text-[length:var(--text-caption)] text-tertiary">–</span>
-        <input
-          type="time"
-          aria-label={copy.window}
-          value={draft.windowEnd}
-          onChange={(event) => onChange({ ...draft, windowEnd: event.target.value })}
-          className={`${FIELD_CONTROL_CLASS} h-9 w-auto px-2 font-mono`}
-        />
+  if (!kindEditable) {
+    return (
+      <span className="inline-flex h-7 items-center rounded-full bg-elevated px-2.5 text-[length:var(--text-caption)] text-muted">
+        {draft.kind === 'count' ? copy.kindCount : copy.kindDaily}
       </span>
-    </>
+    );
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1.5" role="group" aria-label={copy.kind}>
+      <span className="mr-1 text-[length:var(--text-caption)] text-muted">{copy.kind}</span>
+      {(['daily', 'count'] as const).map((kind) => {
+        const active = draft.kind === kind;
+        return (
+          <button
+            key={kind}
+            type="button"
+            aria-pressed={active}
+            onClick={() =>
+              onChange({ ...draft, kind, targetCount: kind === 'count' ? draft.targetCount || '8' : '' })
+            }
+            className={`h-7 rounded-full border px-3 text-[length:var(--text-caption)] font-medium transition-[color,background-color,border-color] duration-[var(--ease-out)] ${
+              active
+                ? 'border-accent bg-accent-subtle font-semibold text-accent'
+                : 'border-border text-muted hover:bg-surface-muted hover:text-fg'
+            }`}
+          >
+            {kind === 'count' ? copy.kindCount : copy.kindDaily}
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+function TargetField({
+  draft,
+  onChange,
+}: {
+  draft: HabitDraft;
+  onChange: (next: HabitDraft) => void;
+}) {
+  if (draft.kind !== 'count') return null;
+  return (
+    <span className="flex items-center gap-1.5">
+      <input
+        aria-label={copy.target}
+        inputMode="numeric"
+        maxLength={2}
+        value={draft.targetCount}
+        onChange={(event) =>
+          onChange({ ...draft, targetCount: event.target.value.replaceAll(/[^0-9]/g, '') })
+        }
+        className={`${FIELD_CONTROL_CLASS} h-9 w-14 px-2 text-center font-mono`}
+      />
+      <span className="text-[length:var(--text-caption)] text-tertiary">{copy.perDay}</span>
+    </span>
+  );
+}
+
+function WindowField({
+  draft,
+  onChange,
+}: {
+  draft: HabitDraft;
+  onChange: (next: HabitDraft) => void;
+}) {
+  return (
+    <span className="flex flex-wrap items-center gap-1.5" aria-label={copy.window}>
+      <span className="mr-1 text-[length:var(--text-caption)] text-muted">{copy.window}</span>
+      <input
+        type="time"
+        aria-label={copy.window}
+        value={draft.windowStart}
+        onChange={(event) => onChange({ ...draft, windowStart: event.target.value })}
+        className={`${FIELD_CONTROL_CLASS} h-9 w-auto px-2 font-mono`}
+      />
+      <span className="text-[length:var(--text-caption)] text-tertiary">–</span>
+      <input
+        type="time"
+        aria-label={copy.window}
+        value={draft.windowEnd}
+        onChange={(event) => onChange({ ...draft, windowEnd: event.target.value })}
+        className={`${FIELD_CONTROL_CLASS} h-9 w-auto px-2 font-mono`}
+      />
+    </span>
   );
 }
 
@@ -213,23 +301,33 @@ function AddHabitForm({ onDone }: { onDone: () => void }) {
     <form
       data-region="habit-add"
       onSubmit={submit}
-      className="flex flex-wrap items-center gap-2 rounded-[14px] border border-dashed border-border bg-elevated px-3 py-2.5"
+      className={`${ACTIVITY_CARD} flex flex-col gap-3 px-5 py-4`}
     >
-      <HabitFields draft={draft} onChange={setDraft} kindEditable />
-      <button
-        type="submit"
-        disabled={create.isPending || draftToInput(draft) === null}
-        className="h-9 shrink-0 rounded-md bg-accent px-4 text-[length:var(--text-meta)] font-medium text-on-accent transition-colors duration-[var(--ease-out)] hover:bg-accent-hover disabled:opacity-50"
-      >
-        {copy.submit}
-      </button>
-      <button
-        type="button"
-        onClick={onDone}
-        className="h-9 shrink-0 rounded-md px-3 text-[length:var(--text-meta)] text-muted transition-colors duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
-      >
-        {copy.cancel}
-      </button>
+      <input
+        aria-label={copy.name}
+        placeholder={copy.namePlaceholder}
+        maxLength={120}
+        value={draft.name}
+        onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+        className={`${FIELD_CONTROL_CLASS} h-9 w-full`}
+      />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <KindField draft={draft} onChange={setDraft} kindEditable />
+        <TargetField draft={draft} onChange={setDraft} />
+      </div>
+      <WindowField draft={draft} onChange={setDraft} />
+      <span className="flex gap-2">
+        <button
+          type="submit"
+          disabled={create.isPending || draftToInput(draft) === null}
+          className={BTN_PRIMARY_SM}
+        >
+          {copy.submit}
+        </button>
+        <button type="button" onClick={onDone} className={BTN_GHOST_SM}>
+          {copy.cancel}
+        </button>
+      </span>
     </form>
   );
 }
@@ -255,33 +353,47 @@ function HabitRow({ habit }: { habit: Habit }) {
 
   if (editing) {
     return (
-      <li data-habit-row={habit.id} className="border-b border-border py-2.5 last:border-b-0">
+      <li data-habit-row={habit.id} className="px-3 py-2">
         <form
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-col gap-3 rounded-xl bg-surface-muted px-4 py-3.5"
           onSubmit={(event) => {
             event.preventDefault();
             const input = draftToPatch(draft);
             if (input) patch.mutate(input);
           }}
         >
-          <HabitFields draft={draft} onChange={setDraft} kindEditable={false} />
-          <button
-            type="submit"
-            disabled={patch.isPending || draftToPatch(draft) === null}
-            className="h-8 shrink-0 rounded-md bg-accent-subtle px-3 text-[length:var(--text-caption)] font-medium text-fg transition-colors duration-[var(--ease-out)] hover:bg-surface-muted disabled:opacity-50"
-          >
-            {copy.save}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(draftFromHabit(habit));
-              setEditing(false);
-            }}
-            className="h-8 shrink-0 rounded-md px-2.5 text-[length:var(--text-caption)] text-muted transition-colors duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
-          >
-            {copy.cancel}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              aria-label={copy.name}
+              placeholder={copy.namePlaceholder}
+              maxLength={120}
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              className={`${FIELD_CONTROL_CLASS} h-9 min-w-36 flex-1 bg-elevated`}
+            />
+            <KindField draft={draft} onChange={setDraft} kindEditable={false} />
+            <TargetField draft={draft} onChange={setDraft} />
+          </div>
+          <WindowField draft={draft} onChange={setDraft} />
+          <span className="flex gap-2">
+            <button
+              type="submit"
+              disabled={patch.isPending || draftToPatch(draft) === null}
+              className={BTN_PRIMARY_SM}
+            >
+              {copy.save}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(draftFromHabit(habit));
+                setEditing(false);
+              }}
+              className={BTN_GHOST_SM}
+            >
+              {copy.cancel}
+            </button>
+          </span>
         </form>
       </li>
     );
@@ -291,41 +403,40 @@ function HabitRow({ habit }: { habit: Habit }) {
     <li
       data-habit-row={habit.id}
       data-habit-active={habit.active ? 'true' : 'false'}
-      className={`flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border py-2.5 last:border-b-0 ${
+      className={`flex flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border px-5 py-3.5 last:border-b-0 ${
         habit.active ? '' : 'opacity-50'
       }`}
     >
+      <HabitRing habit={habit} />
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 text-[length:var(--text-body)] font-medium text-fg">
+        <span className="flex items-center gap-2 text-[length:var(--text-body)] font-semibold text-fg">
           <span className="truncate">{habit.name}</span>
           {habit.createdBy === 'agent' ? (
-            <span className="shrink-0 rounded-full bg-accent-subtle px-2 py-0.5 text-[11px] font-medium text-fg">
+            <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-accent-subtle px-2 text-[11px] font-semibold text-accent">
               {copy.agentBadge}
             </span>
           ) : null}
           {!habit.active ? (
-            <span className="shrink-0 text-[length:var(--text-caption)] font-normal text-tertiary">
+            <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-surface-muted px-2 text-[11px] text-tertiary">
               {copy.inactive}
             </span>
           ) : null}
         </span>
-        <span className="mt-1 flex flex-wrap gap-1.5">
-          {habitMeta(habit).map((chip) => (
+        <span className="mt-1.5 flex flex-wrap gap-1.5">
+          {habitChips(habit).map((chip) => (
             <span
-              key={chip}
-              className="rounded-full bg-surface-muted px-2 py-0.5 font-mono text-[11px] text-tertiary"
+              key={chip.text}
+              className={`inline-flex h-5 items-center rounded-full px-2 font-mono text-[11px] tabular-nums ${
+                chip.hot ? 'bg-accent-subtle font-semibold text-accent' : 'bg-surface-muted text-muted'
+              }`}
             >
-              {chip}
+              {chip.text}
             </span>
           ))}
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
-        >
+        <button type="button" onClick={() => setEditing(true)} className={BTN_GHOST_SM}>
           {copy.edit}
         </button>
         <ActiveSwitch
@@ -339,15 +450,11 @@ function HabitRow({ habit }: { habit: Habit }) {
               type="button"
               disabled={remove.isPending}
               onClick={() => remove.mutate()}
-              className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium text-danger transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted disabled:opacity-60"
+              className={`${BTN_GHOST_SM} text-danger hover:text-danger`}
             >
               {copy.confirmDelete}
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
-            >
+            <button type="button" onClick={() => setConfirming(false)} className={BTN_GHOST_SM}>
               {copy.cancel}
             </button>
           </>
@@ -355,7 +462,7 @@ function HabitRow({ habit }: { habit: Habit }) {
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-danger"
+            className={`${BTN_GHOST_SM} hover:text-danger`}
           >
             {copy.del}
           </button>
@@ -365,9 +472,14 @@ function HabitRow({ habit }: { habit: Habit }) {
   );
 }
 
-export function HabitsSection() {
+export function HabitsSection({
+  adding,
+  onDoneAdding,
+}: {
+  adding: boolean;
+  onDoneAdding: () => void;
+}) {
   const query = useHabitsQuery();
-  const [adding, setAdding] = useState(false);
 
   if (query.isPending) {
     return (
@@ -376,33 +488,56 @@ export function HabitsSection() {
   }
 
   const habits = query.data ?? [];
+  const active = habits.filter((habit) => habit.active);
+  const todayDone = active.reduce((sum, habit) => sum + todayOf(habit).done, 0);
+  const todayTotal = active.reduce((sum, habit) => sum + todayOf(habit).total, 0);
 
   return (
-    <div className="flex flex-col gap-5" data-region="habits-manage">
-      <div>
-        {adding ? (
-          <AddHabitForm onDone={() => setAdding(false)} />
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-3 text-[length:var(--text-meta)] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
-          >
-            + {copy.add}
-          </button>
-        )}
+    <div className="flex flex-col gap-7" data-region="habits-manage">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className={`${ACTIVITY_CARD} px-5 py-4`}>
+          <p className={STAT_NUM}>
+            {habits.length}
+            <span className="ml-1 text-[length:var(--text-meta)] font-medium text-tertiary">
+              {copy.stats.unit}
+            </span>
+          </p>
+          <p className={STAT_LBL}>{copy.stats.total}</p>
+        </div>
+        <div className={`${ACTIVITY_CARD} px-5 py-4`}>
+          <p className={STAT_NUM}>
+            {active.length}
+            <span className="ml-1 text-[length:var(--text-meta)] font-medium text-tertiary">
+              {copy.stats.unit}
+            </span>
+          </p>
+          <p className={STAT_LBL}>{copy.stats.active}</p>
+        </div>
+        <div className={`${ACTIVITY_CARD} px-5 py-4`}>
+          <p className={STAT_NUM}>
+            {todayDone}
+            <span className="ml-1 text-[length:var(--text-meta)] font-medium text-tertiary">
+              / {todayTotal}
+            </span>
+          </p>
+          <p className={STAT_LBL}>{copy.stats.todayDone}</p>
+        </div>
       </div>
+
+      {adding ? <AddHabitForm onDone={onDoneAdding} /> : null}
 
       {habits.length === 0 ? (
         <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
           {copy.empty}
         </p>
       ) : (
-        <ul className="flex flex-col">
-          {habits.map((habit) => (
-            <HabitRow key={habit.id} habit={habit} />
-          ))}
-        </ul>
+        <div className={ACTIVITY_CARD}>
+          <ul className="flex flex-col">
+            {habits.map((habit) => (
+              <HabitRow key={habit.id} habit={habit} />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

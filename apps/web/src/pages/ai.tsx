@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { t } from '@/copy';
+import { Link } from 'react-router';
+import { HOME_PATH, t } from '@/copy';
 import { AgentActivitySection } from '@/features/settings/AgentActivitySection';
 import { AgentMaintenanceButton } from '@/features/settings/AgentMaintenanceButton';
 import { HabitsSection } from '@/features/settings/HabitsSection';
@@ -22,18 +23,66 @@ function AICanvas({ title, hint, children }: { title: string; hint?: string; chi
 }
 
 export function HabitsPage() {
+  const [adding, setAdding] = useState(false);
   return (
-    <AICanvas title={t.settings.habits.title} hint={t.settings.habits.hint}>
-      <HabitsSection />
-    </AICanvas>
+    <div className="h-full min-h-0 w-full overflow-y-auto px-4 py-6 sm:p-8 lg:px-12">
+      <div className="mx-auto w-full max-w-4xl">
+        <div className="flex flex-wrap items-start gap-4">
+          <div>
+            <h1 className="font-display text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
+              {t.settings.habits.title}
+            </h1>
+            <p className="mt-1 max-w-xl text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+              {t.settings.habits.hint}
+            </p>
+          </div>
+          <div className="ml-auto shrink-0 pt-1">
+            {adding ? null : (
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="inline-flex h-[30px] items-center rounded-full bg-accent px-3.5 text-[length:var(--text-meta)] font-semibold text-on-accent transition-[color,background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
+              >
+                + {t.settings.habits.add}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="mt-6">
+          <HabitsSection adding={adding} onDoneAdding={() => setAdding(false)} />
+        </div>
+      </div>
+    </div>
   );
 }
 
 export function ThreadsPage() {
   return (
-    <AICanvas title={t.settings.threads.title} hint={t.settings.threads.hint}>
-      <ThreadsSection />
-    </AICanvas>
+    <div className="h-full min-h-0 w-full overflow-y-auto px-4 py-6 sm:p-8 lg:px-12">
+      <div className="mx-auto w-full max-w-4xl">
+        <div className="flex flex-wrap items-start gap-4">
+          <div>
+            <h1 className="font-display text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
+              {t.settings.threads.title}
+            </h1>
+            <p className="mt-1 max-w-xl text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+              {t.settings.threads.hint}
+            </p>
+          </div>
+          <div className="ml-auto shrink-0 pt-1">
+            <Link
+              to={HOME_PATH}
+              className="inline-flex h-[30px] items-center rounded-full border border-border px-3.5 text-[length:var(--text-meta)] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+            >
+              {t.settings.threads.newAtToday}
+            </Link>
+          </div>
+        </div>
+        <div className="mt-6">
+          <ThreadsSection />
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -109,8 +109,11 @@ describe('threads page', () => {
       expect(document.querySelectorAll('[data-outcome-row]')).toHaveLength(3);
     });
 
-    expect(screen.getByText(`${copy.openGroup} · 2`)).toBeInTheDocument();
-    expect(screen.getByText(`${copy.closedGroup} · 1`)).toBeInTheDocument();
+    // 组头：标题 + 数量（「进行中」同时出现在概览 stat 里，按 section 断言）。
+    const openSection = document.querySelector(`section[aria-label="${copy.openGroup}"]`)!;
+    expect(openSection.textContent).toContain(`2 ${copy.stats.openUnit}`);
+    const closedSection = document.querySelector(`section[aria-label="${copy.closedGroup}"]`)!;
+    expect(closedSection.textContent).toContain(`1 ${copy.stats.openUnit}`);
     expect(screen.getByText(copy.agentBadge)).toBeInTheDocument();
     expect(screen.getAllByText(copy.openTasks.replace('{n}', '2')).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(copy.closedAt.replace('{date}', '2026-09-05'))).toBeInTheDocument();
