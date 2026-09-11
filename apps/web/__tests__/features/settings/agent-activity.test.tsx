@@ -249,8 +249,10 @@ describe('activity page', () => {
       return el!;
     });
     expect(bar).toHaveAttribute('data-trend', 'up');
-    expect(bar.textContent).toContain('近 30 天提议 12 条');
-    expect(bar.textContent).toContain('采纳率 70%');
+    expect(bar.textContent).toContain(t.settings.activity.overview.proposedLabel);
+    expect(bar.textContent).toContain('12');
+    expect(bar.textContent).toContain(t.settings.activity.overview.adoptionLabel);
+    expect(bar.textContent).toContain('70%');
     expect(bar.textContent).toContain('↑ 20.0pp');
   });
 

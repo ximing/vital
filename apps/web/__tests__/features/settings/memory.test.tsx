@@ -122,7 +122,8 @@ describe('memory page', () => {
       const group = document.querySelector(`[data-memory-group="${kind}"]`);
       expect(group).not.toBeNull();
       const expected = items.filter((item) => item.kind === kind).length;
-      expect(group!.textContent).toContain(`${copy.kinds[kind]} · ${expected}`);
+      expect(group!.textContent).toContain(copy.kinds[kind]);
+      expect(group!.textContent).toContain(String(expected));
     }
 
     // Contents are painted.
@@ -156,12 +157,13 @@ describe('memory page', () => {
     fireEvent.click(screen.getByText(`+ ${t.settings.memory.add}`));
 
     const copy = t.settings.memory;
-    fireEvent.change(screen.getByLabelText(copy.kind), { target: { value: 'correction' } });
+    const form = document.querySelector<HTMLElement>('[data-region="memory-add"]')!;
+    // Kind is a segmented chip group now, not a select.
+    fireEvent.click(within(form).getByRole('button', { name: copy.kinds.correction }));
     fireEvent.change(screen.getByLabelText(copy.content), {
       target: { value: '手写的新记忆' },
     });
     // Narrow the scope from 全部 to 线程聚类 (the list rows show the same label, so scope to the form).
-    const form = document.querySelector<HTMLElement>('[data-region="memory-add"]')!;
     fireEvent.click(within(form).getByText(copy.scopes.cluster));
 
     fireEvent.click(screen.getByText(copy.submit));

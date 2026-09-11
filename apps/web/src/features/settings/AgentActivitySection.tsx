@@ -1,5 +1,6 @@
 import { AgentExecutionSection } from './AgentExecutionSection';
 import { AgentScheduleSection } from './AgentScheduleSection';
+import { ACTIVITY_CARD, ActivitySectionHead } from './ActivitySectionHead';
 import { formatCost } from './UsageSection';
 import type { ReactNode } from 'react';
 import type { AgentActionLogItem, AgentMetricsResponse } from '@vital/dto';
@@ -22,8 +23,13 @@ function trendOf(summary: AgentMetricsResponse['summary']): {
   return { dir, label: `${dir === 'up' ? '↑' : '↓'} ${Math.abs(diffPp).toFixed(1)}pp` };
 }
 
-/** Lightweight one-line evidence bar: proposals, adoption rate, trend vs the previous window. */
-function AdoptionSummary({ data }: { data: AgentMetricsResponse | undefined }) {
+const STAT_NUM =
+  'font-display text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] tabular-nums';
+const STAT_LBL =
+  'mt-0.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted';
+
+/** Overview strip: proposals, adoption rate with trend, and total backend cost in the window. */
+function Overview({ data }: { data: AgentMetricsResponse | undefined }) {
   if (!data) return null;
   const { summary } = data;
 
@@ -40,58 +46,73 @@ function AdoptionSummary({ data }: { data: AgentMetricsResponse | undefined }) {
   }
 
   const trend = trendOf(summary);
+  const totalCostMicros = summary.perCapability.reduce((sum, row) => sum + row.costMicros, 0);
   return (
-    <p
-      data-region="adoption-summary"
-      data-trend={trend.dir}
-      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border pb-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted"
-    >
-      <span>
-        {copy.metrics.window}
-        {copy.metrics.proposed}{' '}
-        <span className="font-medium tabular-nums text-fg">{summary.proposed}</span>{' '}
-        {copy.metrics.proposedUnit}
-      </span>
-      <span aria-hidden="true">·</span>
-      <span>
-        {copy.metrics.adoptionRate}{' '}
-        <span className="font-medium tabular-nums text-fg">
-          {Math.round(summary.adoptionRate * 100)}%
-        </span>
-      </span>
-      <span aria-hidden="true">·</span>
-      <span
-        data-trend-label={trend.dir}
-        className={trend.dir === 'up' ? 'font-medium text-fg' : undefined}
-      >
-        {trend.label}
-      </span>
-    </p>
+    <div>
+      <div data-region="adoption-summary" data-trend={trend.dir} className="grid gap-3 sm:grid-cols-3">
+        <div className={`${ACTIVITY_CARD} px-5 py-4`}>
+          <p className={STAT_NUM}>
+            {summary.proposed}
+            <span className="ml-1 text-[length:var(--text-meta)] font-medium text-tertiary">
+              {copy.metrics.proposedUnit}
+            </span>
+          </p>
+          <p className={STAT_LBL}>{copy.overview.proposedLabel}</p>
+        </div>
+        <div className={`${ACTIVITY_CARD} px-5 py-4`}>
+          <p className={STAT_NUM}>
+            {Math.round(summary.adoptionRate * 100)}%{' '}
+            <span
+              data-trend-label={trend.dir}
+              className={`text-[length:var(--text-meta)] font-semibold ${
+                trend.dir === 'up'
+                  ? 'text-done'
+                  : trend.dir === 'down'
+                    ? 'text-overdue'
+                    : 'text-tertiary'
+              }`}
+            >
+              {trend.label}
+            </span>
+          </p>
+          <p className={STAT_LBL}>{copy.overview.adoptionLabel}</p>
+        </div>
+        <div className={`${ACTIVITY_CARD} px-5 py-4`}>
+          <p className={STAT_NUM}>{formatCost(totalCostMicros)}</p>
+          <p className={STAT_LBL}>{copy.overview.costLabel}</p>
+        </div>
+      </div>
+      <CapabilityCosts data={data} />
+    </div>
   );
 }
 
 const ACTION_LABELS: Record<string, string> = copy.actions;
 const capabilityLabels: Record<string, string> = t.settings.usage.capabilities;
 
-/**
- * Per-capability effective cost under the adoption bar: what each capability
- * spent in the window, and the amortized cost of each of its adopted proposals.
- */
+/** Per-capability effective cost chips: spend in the window + amortized cost per adopted proposal. */
 function CapabilityCosts({ data }: { data: AgentMetricsResponse | undefined }) {
   const rows = data?.summary.perCapability ?? [];
   if (rows.length === 0) return null;
   return (
-    <ul data-region="capability-costs" className="flex flex-col border-b border-border pb-3">
+    <ul data-region="capability-costs" className="mt-3 flex flex-wrap gap-2">
       {rows.map((row) => (
         <li
           key={row.capability}
           data-cost-capability={row.capability}
-          className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted"
+          className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-full border border-border bg-surface px-3 py-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted"
         >
-          <span className="font-medium text-fg">{capabilityLabels[row.capability] ?? row.capability}</span>
-          <span className="tabular-nums">{copy.costs.adopted.replace('{n}', String(row.adopted))}</span>
+          <span className="font-medium text-fg">
+            {capabilityLabels[row.capability] ?? row.capability}
+          </span>
           <span aria-hidden="true">·</span>
-          <span className="tabular-nums">{copy.costs.cost.replace('{cost}', formatCost(row.costMicros, 4))}</span>
+          <span className="tabular-nums">
+            {copy.costs.adopted.replace('{n}', String(row.adopted))}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">
+            {copy.costs.cost.replace('{cost}', formatCost(row.costMicros, 4))}
+          </span>
           <span aria-hidden="true">·</span>
           {/* Amortized: one run may produce several proposals — cost is divided across adopted ones. */}
           <span className="tabular-nums">
@@ -160,6 +181,121 @@ function detailText(item: AgentActionLogItem): string {
   return summary === '' ? copy.deletedTarget : summary;
 }
 
+/** Actionable proposals awaiting the user's call, lifted out of the timeline. */
+function PendingProposals({
+  items,
+  busy,
+  onSettle,
+}: {
+  items: AgentActionLogItem[];
+  busy: boolean;
+  onSettle: (id: string, feedback: 'accepted' | 'dismissed') => void;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <section data-region="agent-activity" aria-label={copy.pending.title}>
+      <ActivitySectionHead
+        title={copy.pending.title}
+        hint={copy.pending.count.replace('{n}', String(items.length))}
+      />
+      <div className={ACTIVITY_CARD}>
+        {items.map((item) => (
+          <div
+            key={item.id}
+            data-activity-row={item.id}
+            data-activity-feedback={item.feedback}
+            className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border px-5 py-3.5 last:border-b-0"
+          >
+            <span className="inline-flex h-[22px] shrink-0 items-center rounded-full bg-accent-subtle px-2.5 text-[11px] font-semibold text-accent">
+              {actionLabel(item.actionType)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-medium text-fg">
+                {detailText(item)}
+              </p>
+              <p className="font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
+                {timeLabel(item.createdAt)}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSettle(item.id, 'accepted')}
+              className="inline-flex h-7 items-center rounded-full bg-accent px-3.5 text-[length:var(--text-caption)] font-semibold text-on-accent transition-[color,background-color] duration-[var(--ease-out)] hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {copy.accept}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onSettle(item.id, 'dismissed')}
+              className="inline-flex h-7 items-center rounded-full px-3 text-[length:var(--text-caption)] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {copy.dismiss}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Settled proposals grouped by day — the read-only record of what the agent produced. */
+function ProposalHistory({ groups, today }: { groups: DayGroup[]; today: string }) {
+  if (groups.length === 0) return null;
+  return (
+    <section data-region="agent-activity" aria-label={copy.history.title}>
+      <ActivitySectionHead title={copy.history.title} hint={copy.history.hint} />
+      <div className={`${ACTIVITY_CARD} px-5 pb-1.5`}>
+        {groups.map((group) => (
+          <div key={group.day}>
+            <p
+              data-activity-day={group.day}
+              className="pt-3 text-[11px] font-semibold uppercase tracking-wider text-tertiary"
+            >
+              {dayLabel(group.day, today)}
+            </p>
+            <ul className="flex flex-col">
+              {group.items.map((item) => {
+                const positive = item.feedback === 'accepted' || item.feedback === 'edited';
+                return (
+                  <li
+                    key={item.id}
+                    data-activity-row={item.id}
+                    data-activity-feedback={item.feedback}
+                    className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border py-2.5 last:border-b-0"
+                  >
+                    <span className="font-mono text-[length:var(--text-caption)] tabular-nums text-tertiary">
+                      {timeLabel(item.createdAt)}
+                    </span>
+                    <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-medium text-fg">
+                      {actionLabel(item.actionType)}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+                      {detailText(item)}
+                    </span>
+                    <span
+                      className={`inline-flex shrink-0 items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${
+                        positive ? 'text-muted' : 'text-tertiary'
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`h-[5px] w-[5px] rounded-full ${positive ? 'bg-done' : 'bg-tertiary'}`}
+                      />
+                      {resultLabel(item)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function AgentActivitySection() {
   const qc = useQueryClient();
   const query = useQuery({
@@ -179,101 +315,47 @@ export function AgentActivitySection() {
     },
   });
 
-  let body: ReactNode;
+  let pendingNode: ReactNode = null;
+  let historyNode: ReactNode = null;
+  let stateNode: ReactNode = null;
   if (query.isPending) {
-    body = (
+    stateNode = (
       <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">…</p>
     );
   } else if (query.isError) {
-    body = (
+    stateNode = (
       <p role="alert" className="text-[length:var(--text-meta)] text-muted">
         {copy.error}
       </p>
     );
   } else if (!query.data || query.data.length === 0) {
-    body = (
+    stateNode = (
       <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {copy.empty}
       </p>
     );
   } else {
     const today = new Date().toLocaleDateString('en-CA');
-    const groups = groupByDay(query.data);
-
-    body = (
-      <div className="flex flex-col gap-5" data-region="agent-activity">
-        {groups.map((group) => (
-          <div key={group.day}>
-            <p
-              data-activity-day={group.day}
-              className="text-[11px] font-semibold uppercase tracking-wider text-tertiary"
-            >
-              {dayLabel(group.day, today)}
-            </p>
-            <ul className="mt-1 flex flex-col">
-              {group.items.map((item) => (
-                <li
-                  key={item.id}
-                  data-activity-row={item.id}
-                  data-activity-feedback={item.feedback}
-                  className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-border py-2.5 last:border-b-0"
-                >
-                  <span className="font-mono text-[length:var(--text-caption)] tabular-nums text-tertiary">
-                    {timeLabel(item.createdAt)}
-                  </span>
-                  <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-medium text-fg">
-                    {actionLabel(item.actionType)}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-                    {detailText(item)}
-                  </span>
-                  {item.feedback === 'pending' ? (
-                    <span className="flex gap-1.5">
-                      <button
-                        type="button"
-                        disabled={settle.isPending}
-                        onClick={() => settle.mutate({ id: item.id, feedback: 'accepted' })}
-                        className="inline-flex h-6 items-center rounded-full bg-accent-subtle px-2.5 text-[11px] font-medium text-fg transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {copy.accept}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={settle.isPending}
-                        onClick={() => settle.mutate({ id: item.id, feedback: 'dismissed' })}
-                        className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {copy.dismiss}
-                      </button>
-                    </span>
-                  ) : (
-                    <span
-                      className={`shrink-0 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${
-                        item.feedback === 'accepted' || item.feedback === 'edited'
-                          ? 'text-muted'
-                          : 'text-tertiary'
-                      }`}
-                    >
-                      {resultLabel(item)}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+    const pending = query.data.filter((item) => item.feedback === 'pending');
+    const settled = query.data.filter((item) => item.feedback !== 'pending');
+    pendingNode = (
+      <PendingProposals
+        items={pending}
+        busy={settle.isPending}
+        onSettle={(id, feedback) => settle.mutate({ id, feedback })}
+      />
     );
+    historyNode = <ProposalHistory groups={groupByDay(settled)} today={today} />;
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <AgentExecutionSection />
+    <div className="flex flex-col gap-7">
+      <Overview data={metricsQuery.data} />
+      {stateNode}
+      {pendingNode}
       <AgentScheduleSection />
-      <h3 className="text-[length:var(--text-meta)] font-semibold text-fg">{copy.proposals}</h3>
-      <AdoptionSummary data={metricsQuery.data} />
-      <CapabilityCosts data={metricsQuery.data} />
-      {body}
+      <AgentExecutionSection />
+      {historyNode}
     </div>
   );
 }

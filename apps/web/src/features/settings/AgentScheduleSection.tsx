@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AgentScheduleItem } from '@vital/dto';
+import type { AgentScheduleItem, AgentScheduleStatus } from '@vital/dto';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { ACTIVITY_CARD, ActivitySectionHead } from './ActivitySectionHead';
 
 const copy = t.settings.activity.schedule;
 const capabilityLabels: Record<string, string> = t.settings.usage.capabilities;
@@ -15,6 +16,14 @@ function timeLabel(iso: string): string {
     hour12: false,
   });
 }
+
+/** Pill tone per scheduling status — dot inherits the text color via currentColor. */
+const PILL_CLASS: Record<AgentScheduleStatus, string> = {
+  idle: 'bg-surface-muted text-tertiary',
+  waiting: 'bg-accent-subtle text-accent',
+  due: 'bg-surface-muted text-due',
+  cooldown: 'bg-surface-muted text-doing',
+};
 
 /** What the capability is currently waiting for, next to the pending count. */
 function waitDetail(item: AgentScheduleItem): string | null {
@@ -47,17 +56,16 @@ function ScheduleRow({ item }: { item: AgentScheduleItem }) {
     <li
       data-schedule-row={item.capability}
       data-schedule-status={item.status}
-      className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border py-2.5 last:border-b-0"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border px-5 py-3 last:border-b-0"
     >
-      <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-medium text-fg">
+      <span className="min-w-[72px] text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-semibold text-fg">
         {capabilityLabels[item.capability] ?? item.capability}
       </span>
       <span
         data-schedule-badge={item.status}
-        className={`inline-flex h-5 items-center rounded-full px-2 text-[11px] font-medium ${
-          item.status === 'idle' ? 'bg-surface-muted text-muted' : 'bg-accent-subtle text-fg'
-        }`}
+        className={`inline-flex h-5 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-semibold ${PILL_CLASS[item.status]}`}
       >
+        <span aria-hidden="true" className="h-[5px] w-[5px] rounded-full bg-current" />
         {copy.statuses[item.status]}
       </span>
       {item.pendingCount > 0 && (
@@ -79,7 +87,7 @@ function ScheduleRow({ item }: { item: AgentScheduleItem }) {
           data-schedule-action="run-now"
           disabled={busy}
           onClick={() => runNow.mutate()}
-          className="inline-flex h-6 items-center rounded-full bg-accent-subtle px-2.5 text-[11px] font-medium text-fg transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex h-6 items-center rounded-full border border-border px-2.5 text-[11px] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg disabled:cursor-not-allowed disabled:opacity-60"
         >
           {copy.runNow}
         </button>
@@ -117,10 +125,7 @@ export function AgentScheduleSection() {
 
   return (
     <section aria-label={copy.title}>
-      <h3 className="text-[length:var(--text-meta)] font-semibold text-fg">{copy.title}</h3>
-      <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
-        {copy.hint}
-      </p>
+      <ActivitySectionHead title={copy.title} hint={copy.hint} />
       {query.isPending ? (
         <p className="mt-2 text-[length:var(--text-meta)] text-muted">…</p>
       ) : query.isError ? (
@@ -128,11 +133,13 @@ export function AgentScheduleSection() {
           {copy.error}
         </p>
       ) : (
-        <ul className="mt-1" data-region="agent-schedule">
-          {query.data.items.map((item) => (
-            <ScheduleRow key={item.capability} item={item} />
-          ))}
-        </ul>
+        <div className={ACTIVITY_CARD}>
+          <ul data-region="agent-schedule">
+            {query.data.items.map((item) => (
+              <ScheduleRow key={item.capability} item={item} />
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );

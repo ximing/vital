@@ -731,10 +731,23 @@ export const t = {
       title: '系统行为',
       hint: '近 7 天的执行记录与产出提议。执行记录包含失败、跳过及没有提议的后台工作。',
       empty: '近 7 天没有产出提议。',
-      proposals: '产出与提议',
       error: '提议加载失败，请稍后重试。',
+      overview: {
+        proposedLabel: '近 30 天提议',
+        adoptionLabel: '采纳率 · 对比上一周期',
+        costLabel: '近 30 天后台成本',
+      },
+      pending: {
+        title: '待处理提议',
+        count: '{n} 条',
+      },
+      history: {
+        title: '提议历史',
+        hint: '近 7 天已处理的提议',
+      },
       executions: {
         title: '执行记录',
+        hint: '近 7 天 · 含失败、跳过及没有提议的后台工作',
         empty: '近 7 天没有执行记录。',
         error: '执行记录加载失败，请稍后重试。',
         noResult: '未产生结果摘要',
@@ -771,15 +784,11 @@ export const t = {
       accept: '采纳',
       dismiss: '忽略',
       metrics: {
-        window: '近 30 天',
-        proposed: '提议',
         proposedUnit: '条',
-        adoptionRate: '采纳率',
         flat: '持平',
         empty: '暂无数据',
       },
       costs: {
-        title: '每能力有效成本',
         adopted: '已采纳 {n} 条',
         cost: '成本 {cost}',
         perAdopted: '每条已采纳 {cost}',
@@ -834,6 +843,17 @@ export const t = {
       save: '保存',
       manualBadge: '手写',
       sourceCount: '来源',
+      stats: {
+        unit: '条',
+        total: '记忆总数',
+        manual: '手写 · 优先级最高',
+        distilled: '从你的反馈里蒸馏',
+      },
+      kindHints: {
+        preference: '你喜欢怎么做',
+        pattern: 'Agent 观察到的习惯',
+        correction: '你明确说过不要这样做',
+      },
       kinds: {
         preference: '偏好',
         pattern: '模式',
