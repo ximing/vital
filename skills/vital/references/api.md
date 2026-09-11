@@ -138,6 +138,19 @@ export interface AgentAdoptionDaily {
 ```
 
 ```ts
+export interface AgentCapabilityCost {
+  /** Usage capability key as written to agent_usage.capability ('headline', 'cluster', 'decompose', 'draft'). */
+  capability: string;
+  /** Total cost of that capability's model runs in the current window (micro-USD). */
+  costMicros: number;
+  /** Adopted proposals attributed via the map; 0 when everything was dismissed/undone/pending. */
+  adopted: number;
+  /** costMicros / adopted; null when adopted = 0 — nothing to amortize over. */
+  costPerAdoptedMicros: number | null;
+}
+```
+
+```ts
 export interface AgentMetricsSummary {
   proposed: number;
   adopted: number;
@@ -147,6 +160,12 @@ export interface AgentMetricsSummary {
   adoptionRate: number;
   /** adoptionRate of the preceding window of the same length, for trend arrows. */
   prevAdoptionRate: number;
+  /**
+   * Current-window cost per capability. Deliberately NO prev-window trend here
+   * (unlike prevAdoptionRate): cost comparisons across windows are not part of
+   * the contract — do not build trend UI on top of this.
+   */
+  perCapability: AgentCapabilityCost[];
 }
 ```
 
@@ -154,6 +173,30 @@ export interface AgentMetricsSummary {
 export interface AgentMetricsResponse {
   daily: AgentAdoptionDaily[];
   summary: AgentMetricsSummary;
+}
+```
+
+```ts
+export interface AgentScheduleItem {
+  capability: AgentScheduleCapability;
+  generation: number;
+  processedGeneration: number;
+  pendingCount: number;
+  urgent: boolean;
+  pendingSince: string | null;
+  dueAt: string | null;
+  cooldownUntil: string | null;
+  lastSucceededAt: string | null;
+  observedAt: string | null;
+  updatedAt: string;
+  status: AgentScheduleStatus;
+}
+```
+
+```ts
+export interface AgentScheduleResponse {
+  /** One row per scheduled capability; capabilities without state come back as synthesized idle rows. */
+  items: AgentScheduleItem[];
 }
 ```
 
@@ -2188,6 +2231,26 @@ Request body (`patchAgentMemorySchema`):
 Query (`agentMetricsQuerySchema`):
 
 - `days`: number int min 1
+
+#### `GET /api/v1/agent/schedule`
+
+List Agent Schedule
+
+- Auth: Bearer required
+- Client: `listAgentSchedule`
+- Response: `AgentScheduleResponse`
+
+#### `POST /api/v1/agent/schedule/:capability/cancel`
+
+Cancel Agent Schedule
+
+- Auth: Bearer required
+- Client: `cancelAgentSchedule`
+- Response: `AgentScheduleItem`
+
+Path params:
+
+- `capability`: uuid
 
 #### `GET /api/v1/agent/usage`
 

@@ -24,3 +24,6 @@ apps/mobile/android/
 apps/mobile/ios/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
+
+# Eval runner output — only baseline.json is committed
+apps/server/scripts/eval/__snapshots__/latest.json

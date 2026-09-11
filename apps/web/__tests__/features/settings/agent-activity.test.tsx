@@ -1,4 +1,10 @@
-import type { AgentAction, AgentActionLogItem, AgentMetricsResponse } from '@vital/dto';
+import type {
+  AgentAction,
+  AgentActionLogItem,
+  AgentCapabilityCost,
+  AgentMetricsResponse,
+  AgentScheduleItem,
+} from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -17,6 +23,10 @@ vi.mock('@/api/client', async (importOriginal) => {
       listAgentActions: vi.fn(),
       sendAgentActionFeedback: vi.fn(),
       getAgentMetrics: vi.fn(),
+      listAgentSchedule: vi.fn(),
+      cancelAgentSchedule: vi.fn(),
+      organizeAgentTasks: vi.fn(),
+      distillAgentMemory: vi.fn(),
     },
   };
 });
@@ -76,8 +86,28 @@ function metrics(summary: Partial<AgentMetricsResponse['summary']> = {}): AgentM
       undone: 2,
       adoptionRate: 0.7,
       prevAdoptionRate: 0.5,
+      perCapability: [],
       ...summary,
     },
+  };
+}
+
+function scheduleItem(
+  input: Partial<AgentScheduleItem> & { capability: AgentScheduleItem['capability'] },
+): AgentScheduleItem {
+  return {
+    generation: 0,
+    processedGeneration: 0,
+    pendingCount: 0,
+    urgent: false,
+    pendingSince: null,
+    dueAt: null,
+    cooldownUntil: null,
+    lastSucceededAt: null,
+    observedAt: null,
+    updatedAt: todayIso,
+    status: 'idle',
+    ...input,
   };
 }
 
@@ -127,6 +157,7 @@ describe('settings activity tab', () => {
       baseItems[0]! as unknown as AgentAction,
     );
     vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics());
+    vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: [] });
   });
 
   it('renders the tab, groups by day, labels capabilities and results', async () => {
@@ -274,6 +305,7 @@ describe('execution telemetry', () => {
   beforeEach(() => {
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
     vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics());
+    vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: [] });
   });
 
   it('shows failed and skipped executions without proposals and preserves reasons', async () => {
@@ -335,3 +367,160 @@ describe('execution telemetry', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+describe('per-capability effective cost', () => {
+  const perCapability: AgentCapabilityCost[] = [
+    { capability: 'headline', costMicros: 600, adopted: 2, costPerAdoptedMicros: 300 },
+    { capability: 'draft', costMicros: 100, adopted: 0, costPerAdoptedMicros: null },
+  ];
+
+  it('renders cost rows with the amortized per-adopted figure next to the adoption bar', async () => {
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
+    vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: [] });
+    vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics({ perCapability }));
+    renderAt('/settings?tab=activity');
+
+    const region = await waitFor(() => {
+      const el = document.querySelector('[data-region="capability-costs"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    const headline = region.querySelector('[data-cost-capability="headline"]')!;
+    expect(headline.textContent).toContain('看板状态');
+    expect(headline.textContent).toContain('已采纳 2 条');
+    expect(headline.textContent).toContain('成本 $0.0006');
+    expect(headline.textContent).toContain('每条已采纳 $0.0003');
+
+    // adopted = 0 → nothing to amortize over; the dash keeps the column aligned.
+    const draft = region.querySelector('[data-cost-capability="draft"]')!;
+    expect(draft.textContent).toContain('方案起草');
+    expect(draft.textContent).toContain('—');
+    expect(draft.textContent).not.toContain('每条已采纳 $');
+  });
+
+  it('renders no cost rows when the window has no capability activity', async () => {
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
+    vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: [] });
+    vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics());
+    renderAt('/settings?tab=activity');
+    await waitFor(() => {
+      expect(client.getAgentMetrics).toHaveBeenCalled();
+    });
+    expect(document.querySelector('[data-region="capability-costs"]')).toBeNull();
+  });
+});
+
+describe('schedule visibility', () => {
+  beforeEach(() => {
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
+    vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics());
+    vi.mocked(client.organizeAgentTasks).mockResolvedValue({ status: 'queued', jobId: 'j1' });
+    vi.mocked(client.distillAgentMemory).mockResolvedValue({ status: 'queued', jobId: 'j2' });
+    vi.mocked(client.cancelAgentSchedule).mockResolvedValue(scheduleItem({ capability: 'memory.distill' }));
+  });
+
+  function scheduleFixture(): AgentScheduleItem[] {
+    return [
+      scheduleItem({
+        capability: 'memory.distill',
+        status: 'waiting',
+        generation: 3,
+        processedGeneration: 1,
+        pendingCount: 2,
+        urgent: true,
+        pendingSince: todayIso,
+        dueAt: new Date(Date.now() + 3600_000).toISOString(),
+        cooldownUntil: null,
+        lastSucceededAt: yesterdayIso,
+      }),
+      scheduleItem({
+        capability: 'outcome.cluster',
+        status: 'idle',
+        lastSucceededAt: yesterdayIso,
+      }),
+    ];
+  }
+
+  it('renders one row per capability with status, pending count and localized times', async () => {
+    vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: scheduleFixture() });
+    renderAt('/settings?tab=activity');
+
+    const distill = await waitFor(() => {
+      const el = document.querySelector('[data-schedule-row="memory.distill"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(distill).toHaveAttribute('data-schedule-status', 'waiting');
+    expect(distill.textContent).toContain('记忆蒸馏');
+    expect(distill.textContent).toContain(t.settings.activity.schedule.statuses.waiting);
+    expect(distill.textContent).toContain('待处理 2');
+    expect(distill.textContent).toContain('预计');
+
+    const cluster = document.querySelector('[data-schedule-row="outcome.cluster"]')!;
+    expect(cluster).toHaveAttribute('data-schedule-status', 'idle');
+    expect(cluster.textContent).toContain('线程聚类');
+    expect(cluster.textContent).toContain(t.settings.activity.schedule.statuses.idle);
+  });
+
+  it('run-now dispatches through the existing trigger endpoints per capability', async () => {
+    vi.mocked(client.listAgentSchedule).mockResolvedValue({ items: scheduleFixture() });
+    renderAt('/settings?tab=activity');
+
+    const distill = await waitFor(() => {
+      const el = document.querySelector('[data-schedule-row="memory.distill"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    fireEvent.click(withinRow(distill, t.settings.activity.schedule.runNow));
+    await waitFor(() => {
+      expect(client.distillAgentMemory).toHaveBeenCalledTimes(1);
+    });
+
+    const cluster = document.querySelector('[data-schedule-row="outcome.cluster"]')!;
+    fireEvent.click(withinRow(cluster, t.settings.activity.schedule.runNow));
+    await waitFor(() => {
+      expect(client.organizeAgentTasks).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('cancel calls the cancel endpoint and refreshes the view', async () => {
+    let calls = 0;
+    const items = scheduleFixture();
+    vi.mocked(client.listAgentSchedule).mockImplementation(async () => {
+      calls += 1;
+      return { items: calls === 1 ? items : items.map((i) => ({ ...i, status: 'idle', pendingCount: 0 })) };
+    });
+    renderAt('/settings?tab=activity');
+
+    const distill = await waitFor(() => {
+      const el = document.querySelector('[data-schedule-row="memory.distill"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    fireEvent.click(withinRow(distill, t.settings.activity.schedule.cancel));
+    await waitFor(() => {
+      expect(client.cancelAgentSchedule).toHaveBeenCalledWith('memory.distill');
+    });
+    await waitFor(() => {
+      expect(calls).toBeGreaterThanOrEqual(2);
+    });
+    const refreshed = document.querySelector('[data-schedule-row="memory.distill"]')!;
+    expect(refreshed).toHaveAttribute('data-schedule-status', 'idle');
+  });
+
+  it('shows an error state without rows when the schedule query fails', async () => {
+    vi.mocked(client.listAgentSchedule).mockRejectedValue(new Error('offline'));
+    renderAt('/settings?tab=activity');
+    expect(await screen.findByText(t.settings.activity.schedule.error)).toBeInTheDocument();
+    expect(document.querySelector('[data-schedule-row]')).toBeNull();
+  });
+});
+
+function withinRow(row: Element, label: string): HTMLElement {
+  const button = [...row.querySelectorAll('button')].find((b) => b.textContent === label);
+  if (!button) throw new Error(`button ${label} not found in row`);
+  return button;
+}

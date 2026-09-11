@@ -11,7 +11,8 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-function formatCost(micros: number, digits = 3): string {
+/** micro-USD → "$0.000123" (digits default 3); shared with the capability cost rows. */
+export function formatCost(micros: number, digits = 3): string {
   return `$${(micros / 1_000_000).toFixed(digits)}`;
 }
 

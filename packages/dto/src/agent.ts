@@ -139,6 +139,25 @@ export interface AgentAdoptionDaily {
   adoptionRate: number;
 }
 
+/**
+ * Amortized effective cost of one proposal-producing capability over the metrics
+ * window. `costMicros` is the capability's agent_usage total; `adopted` counts the
+ * actions attributed to it via the capability↔actionType map (accepted + edited;
+ * undone never counts). A single run may emit several actions (headline →
+ * headline + suggestion), so `costPerAdoptedMicros` divides the run cost across
+ * the adopted proposals — the cost of *each adopted suggestion*, not each run.
+ */
+export interface AgentCapabilityCost {
+  /** Usage capability key as written to agent_usage.capability ('headline', 'cluster', 'decompose', 'draft'). */
+  capability: string;
+  /** Total cost of that capability's model runs in the current window (micro-USD). */
+  costMicros: number;
+  /** Adopted proposals attributed via the map; 0 when everything was dismissed/undone/pending. */
+  adopted: number;
+  /** costMicros / adopted; null when adopted = 0 — nothing to amortize over. */
+  costPerAdoptedMicros: number | null;
+}
+
 export interface AgentMetricsSummary {
   proposed: number;
   adopted: number;
@@ -148,6 +167,12 @@ export interface AgentMetricsSummary {
   adoptionRate: number;
   /** adoptionRate of the preceding window of the same length, for trend arrows. */
   prevAdoptionRate: number;
+  /**
+   * Current-window cost per capability. Deliberately NO prev-window trend here
+   * (unlike prevAdoptionRate): cost comparisons across windows are not part of
+   * the contract — do not build trend UI on top of this.
+   */
+  perCapability: AgentCapabilityCost[];
 }
 
 export interface AgentMetricsResponse {
@@ -164,6 +189,40 @@ export const agentMetricsQuerySchema = z.object({
     .transform((value) => Math.min(value, 90)),
 });
 export type AgentMetricsQuery = z.infer<typeof agentMetricsQuerySchema>;
+
+/** Server-derived scheduling state — pure timestamp comparison, timezone-independent. */
+export const agentScheduleStatusSchema = z.enum(['idle', 'waiting', 'due', 'cooldown']);
+export type AgentScheduleStatus = z.infer<typeof agentScheduleStatusSchema>;
+
+/** Capabilities with a persistent scheduling row. */
+export const AGENT_SCHEDULE_CAPABILITIES = ['outcome.cluster', 'memory.distill'] as const;
+export type AgentScheduleCapability = (typeof AGENT_SCHEDULE_CAPABILITIES)[number];
+
+/**
+ * One capability's scheduling state, as shown in the settings schedule view.
+ * All timestamps are ISO strings; `status` is derived server-side in the locked
+ * order idle → waiting → due → cooldown (e.g. a due row with an active cooldown
+ * reports 'due' — it is waiting for the worker scan, not the cooldown).
+ */
+export interface AgentScheduleItem {
+  capability: AgentScheduleCapability;
+  generation: number;
+  processedGeneration: number;
+  pendingCount: number;
+  urgent: boolean;
+  pendingSince: string | null;
+  dueAt: string | null;
+  cooldownUntil: string | null;
+  lastSucceededAt: string | null;
+  observedAt: string | null;
+  updatedAt: string;
+  status: AgentScheduleStatus;
+}
+
+export interface AgentScheduleResponse {
+  /** One row per scheduled capability; capabilities without state come back as synthesized idle rows. */
+  items: AgentScheduleItem[];
+}
 
 /** Injection filter: capabilities a memory row may be injected into ('all' = every capability). */
 export const agentMemoryScopeSchema = z.enum([

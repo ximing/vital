@@ -21,7 +21,7 @@ import {
   patchAgentMemory,
 } from './memory.service.js';
 import { listExecutions } from './executions.service.js';
-import { dispatchAgentSchedule } from './scheduling.js';
+import { SCHEDULED_CAPABILITIES, cancelAgentSchedule, dispatchAgentSchedule, listAgentSchedule } from './scheduling.js';
 import { dailyUsage } from './usage.service.js';
 import { limitLlm } from '../plugins/rate-limit.js';
 
@@ -57,6 +57,22 @@ export function registerAgentRoutes(app: FastifyInstance): void {
     const { days } = agentMetricsQuerySchema.parse(req.query);
     const entity = await getUserEntity(user.id);
     return agentAdoptionDaily(user.id, days, entity.timezone);
+  });
+
+  app.get('/api/v1/agent/schedule', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    return listAgentSchedule(user.id);
+  });
+
+  app.post('/api/v1/agent/schedule/:capability/cancel', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { capability } = req.params as { capability: string };
+    if (!SCHEDULED_CAPABILITIES.includes(capability as (typeof SCHEDULED_CAPABILITIES)[number])) {
+      throw AppError.of(404, 'NOT_FOUND');
+    }
+    return cancelAgentSchedule(user.id, capability as (typeof SCHEDULED_CAPABILITIES)[number]);
   });
 
   app.post('/api/v1/agent/actions/:id/feedback', { preHandler: [requireAuth] }, async (req) => {

@@ -1,4 +1,6 @@
 import { AgentExecutionSection } from './AgentExecutionSection';
+import { AgentScheduleSection } from './AgentScheduleSection';
+import { formatCost } from './UsageSection';
 import type { ReactNode } from 'react';
 import type { AgentActionLogItem, AgentMetricsResponse } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -69,6 +71,39 @@ function AdoptionSummary({ data }: { data: AgentMetricsResponse | undefined }) {
 }
 
 const ACTION_LABELS: Record<string, string> = copy.actions;
+const capabilityLabels: Record<string, string> = t.settings.usage.capabilities;
+
+/**
+ * Per-capability effective cost under the adoption bar: what each capability
+ * spent in the window, and the amortized cost of each of its adopted proposals.
+ */
+function CapabilityCosts({ data }: { data: AgentMetricsResponse | undefined }) {
+  const rows = data?.summary.perCapability ?? [];
+  if (rows.length === 0) return null;
+  return (
+    <ul data-region="capability-costs" className="flex flex-col border-b border-border pb-3">
+      {rows.map((row) => (
+        <li
+          key={row.capability}
+          data-cost-capability={row.capability}
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted"
+        >
+          <span className="font-medium text-fg">{capabilityLabels[row.capability] ?? row.capability}</span>
+          <span className="tabular-nums">{copy.costs.adopted.replace('{n}', String(row.adopted))}</span>
+          <span aria-hidden="true">·</span>
+          <span className="tabular-nums">{copy.costs.cost.replace('{cost}', formatCost(row.costMicros, 4))}</span>
+          <span aria-hidden="true">·</span>
+          {/* Amortized: one run may produce several proposals — cost is divided across adopted ones. */}
+          <span className="tabular-nums">
+            {row.costPerAdoptedMicros === null
+              ? copy.costs.noAdopted
+              : copy.costs.perAdopted.replace('{cost}', formatCost(row.costPerAdoptedMicros, 4))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function actionLabel(actionType: string): string {
   return ACTION_LABELS[actionType] ?? actionType;
@@ -234,8 +269,10 @@ export function AgentActivitySection() {
   return (
     <div className="flex flex-col gap-5">
       <AgentExecutionSection />
+      <AgentScheduleSection />
       <h3 className="text-[length:var(--text-meta)] font-semibold text-fg">{copy.proposals}</h3>
       <AdoptionSummary data={metricsQuery.data} />
+      <CapabilityCosts data={metricsQuery.data} />
       {body}
     </div>
   );

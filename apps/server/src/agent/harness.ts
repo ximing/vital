@@ -188,7 +188,6 @@ export async function runWithCritic<T>(input: {
   user: User;
   job: AgentJobRow;
   capability: LlmCapability;
-  usageCapability: string;
   systemPrompt: string;
   userPrompt: string;
   makeTool: (capture: (args: T) => void) => AgentTool;

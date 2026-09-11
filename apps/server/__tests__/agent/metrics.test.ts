@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { agentAdoptionDaily } from '../../src/agent/metrics.service.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
+import { agentUsage } from '../../src/db/schema.js';
 import { agentActions } from '../../src/db/schema.js';
 import { resetDb } from '../helpers/db.js';
 import { injectJson } from '../helpers/http.js';
@@ -38,6 +39,7 @@ async function seedAction(
   userId: string,
   feedback: 'pending' | 'accepted' | 'edited' | 'dismissed' | 'undone',
   createdAt: Date,
+  actionType: 'task.decompose' | 'outcome.headline' | 'outcome.suggestion' | 'outcome.create' | 'task.draft' = 'task.decompose',
 ): Promise<string> {
   const id = randomUUID();
   await getDb()
@@ -45,14 +47,32 @@ async function seedAction(
     .values({
       id,
       userId,
-      actionType: 'task.decompose',
-      targetType: 'task',
+      actionType,
+      targetType: actionType.startsWith('outcome') ? 'outcome' : 'task',
       targetId: randomUUID(),
       payload: { subtasks: [{ title: '第一步', estimateMinutes: 15 }] },
       feedback,
       createdAt,
     });
   return id;
+}
+
+async function seedUsage(
+  userId: string,
+  capability: string,
+  costMicros: number | null,
+  createdAt: Date,
+): Promise<void> {
+  await getDb().insert(agentUsage).values({
+    id: randomUUID(),
+    userId,
+    capability,
+    model: 'faux-1',
+    promptTokens: 100,
+    completionTokens: 50,
+    costMicros,
+    createdAt,
+  });
 }
 
 describe('agent adoption metrics', () => {
@@ -105,6 +125,10 @@ describe('agent adoption metrics', () => {
       undone: 0,
       adoptionRate: 0.6,
       prevAdoptionRate: 0.5,
+      // All seeded actions are task.decompose → a single row, no usage cost recorded.
+      perCapability: [
+        { capability: 'decompose', costMicros: 0, adopted: 3, costPerAdoptedMicros: 0 },
+      ],
     });
   });
 
@@ -139,6 +163,7 @@ describe('agent adoption metrics', () => {
       undone: 0,
       adoptionRate: 0,
       prevAdoptionRate: 0,
+      perCapability: [],
     });
   });
 
@@ -162,6 +187,9 @@ describe('agent adoption metrics', () => {
       undone: 0,
       adoptionRate: 0.5,
       prevAdoptionRate: 0,
+      perCapability: [
+        { capability: 'decompose', costMicros: 0, adopted: 1, costPerAdoptedMicros: 0 },
+      ],
     });
 
     const defaults = await injectJson(app, {
@@ -184,5 +212,77 @@ describe('agent adoption metrics', () => {
       url: '/api/v1/agent/metrics',
     });
     expect(anonymous.statusCode).toBe(401);
+  });
+});
+
+describe('per-capability effective cost', () => {
+  it('amortizes one headline run cost over its two adopted proposals', async () => {
+    const alice = await registerUser(app, 'alice');
+    // One headline run: 600 micros of usage, two actions (headline + suggestion), both adopted.
+    await seedUsage(alice.id, 'headline', 600, atShanghai(0));
+    await seedAction(alice.id, 'accepted', atShanghai(0), 'outcome.headline');
+    await seedAction(alice.id, 'edited', atShanghai(0), 'outcome.suggestion');
+
+    const result = await agentAdoptionDaily(alice.id, 30, TZ);
+    expect(result.summary.perCapability).toEqual([
+      { capability: 'headline', costMicros: 600, adopted: 2, costPerAdoptedMicros: 300 },
+    ]);
+  });
+
+  it('returns null costPerAdopted when the capability has no adoptions in the window', async () => {
+    const alice = await registerUser(app, 'alice');
+    await seedUsage(alice.id, 'cluster', 900, atShanghai(0));
+    await seedAction(alice.id, 'dismissed', atShanghai(0), 'outcome.create');
+
+    const result = await agentAdoptionDaily(alice.id, 30, TZ);
+    expect(result.summary.perCapability).toEqual([
+      { capability: 'cluster', costMicros: 900, adopted: 0, costPerAdoptedMicros: null },
+    ]);
+  });
+
+  it('undone actions never count as adopted', async () => {
+    const alice = await registerUser(app, 'alice');
+    await seedUsage(alice.id, 'decompose', 300, atShanghai(0));
+    await seedAction(alice.id, 'undone', atShanghai(0), 'task.decompose');
+
+    const result = await agentAdoptionDaily(alice.id, 30, TZ);
+    expect(result.summary.perCapability).toEqual([
+      { capability: 'decompose', costMicros: 300, adopted: 0, costPerAdoptedMicros: null },
+    ]);
+  });
+
+  it('sums cost across runs (including null-cost rows) and isolates users', async () => {
+    const alice = await registerUser(app, 'alice');
+    const bob = await registerUser(app, 'bob');
+    await seedUsage(alice.id, 'draft', 100, atShanghai(0));
+    await seedUsage(alice.id, 'draft', null, atShanghai(1)); // unknown price: coalesces to 0
+    await seedUsage(bob.id, 'draft', 999_999, atShanghai(0));
+    await seedAction(alice.id, 'accepted', atShanghai(0), 'task.draft');
+
+    const result = await agentAdoptionDaily(alice.id, 30, TZ);
+    expect(result.summary.perCapability).toEqual([
+      { capability: 'draft', costMicros: 100, adopted: 1, costPerAdoptedMicros: 100 },
+    ]);
+  });
+
+  it('shares the daily window: rows outside the window never count', async () => {
+    const alice = await registerUser(app, 'alice');
+    await seedUsage(alice.id, 'headline', 600, atShanghai(35)); // outside days=30
+    await seedAction(alice.id, 'accepted', atShanghai(35), 'outcome.headline');
+    await seedUsage(alice.id, 'cluster', 200, atShanghai(0)); // inside
+
+    const result = await agentAdoptionDaily(alice.id, 30, TZ);
+    expect(result.summary.perCapability).toEqual([
+      { capability: 'cluster', costMicros: 200, adopted: 0, costPerAdoptedMicros: null },
+    ]);
+  });
+
+  it('ignores capabilities without a proposal mapping (critic, distill, parse)', async () => {
+    const alice = await registerUser(app, 'alice');
+    await seedUsage(alice.id, 'critic', 150, atShanghai(0));
+    await seedUsage(alice.id, 'distill', 150, atShanghai(0));
+
+    const result = await agentAdoptionDaily(alice.id, 30, TZ);
+    expect(result.summary.perCapability).toEqual([]);
   });
 });

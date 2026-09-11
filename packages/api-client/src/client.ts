@@ -4,6 +4,9 @@ import type {
   AgentActionLogItem,
   AgentActionsQuery,
   AgentMemoryItem,
+  AgentScheduleCapability,
+  AgentScheduleItem,
+  AgentScheduleResponse,
   AgentUsageSummary,
   AgentExecution,
   AgentMetricsResponse,
@@ -161,6 +164,10 @@ export interface VitalClient {
   organizeAgentTasks(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
   distillAgentMemory(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
   getAgentMetrics(days?: number): Promise<AgentMetricsResponse>;
+  /** Read-only scheduling state per capability (settings schedule view). */
+  listAgentSchedule(): Promise<AgentScheduleResponse>;
+  /** Cancel the accumulated pending observations of a capability (not disabling it). */
+  cancelAgentSchedule(capability: AgentScheduleCapability): Promise<AgentScheduleItem>;
   listAgentActions(query?: AgentActionsQuery): Promise<AgentActionLogItem[]>;
   sendAgentActionFeedback(id: string, input: ActionFeedbackInput): Promise<AgentAction>;
   /** Compensate a materialized acceptance: soft-deletes the created subtasks. */
@@ -385,6 +392,9 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       http.request(`/api/v1/agent/usage${days ? `?days=${String(days)}` : ''}`),
     getAgentMetrics: (days) =>
       http.request(`/api/v1/agent/metrics${days ? `?days=${String(days)}` : ''}`),
+    listAgentSchedule: () => http.request('/api/v1/agent/schedule'),
+    cancelAgentSchedule: (capability) =>
+      http.request(`/api/v1/agent/schedule/${capability}/cancel`, { method: 'POST' }),
     listAgentActions: (query) =>
       http.request('/api/v1/agent/actions', {
         query: {

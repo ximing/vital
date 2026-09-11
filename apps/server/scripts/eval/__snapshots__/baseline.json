@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "windowDays": 30,
+  "timezone": "Asia/Shanghai",
+  "summary": {
+    "proposed": 8,
+    "adopted": 4,
+    "dismissed": 2,
+    "undone": 1,
+    "adoptionRate": 0.6666666666666666
+  },
+  "perCapability": [
+    {
+      "capability": "headline",
+      "costMicros": 600,
+      "adopted": 2,
+      "costPerAdoptedMicros": 300
+    },
+    {
+      "capability": "cluster",
+      "costMicros": 900,
+      "adopted": 1,
+      "costPerAdoptedMicros": 900
+    },
+    {
+      "capability": "decompose",
+      "costMicros": 300,
+      "adopted": 1,
+      "costPerAdoptedMicros": 300
+    },
+    {
+      "capability": "draft",
+      "costMicros": 100,
+      "adopted": 0,
+      "costPerAdoptedMicros": null
+    }
+  ],
+  "daily": [
+    {
+      "dayOffset": 4,
+      "proposed": 1,
+      "adopted": 0,
+      "dismissed": 1,
+      "undone": 0,
+      "adoptionRate": 0
+    },
+    {
+      "dayOffset": 3,
+      "proposed": 1,
+      "adopted": 0,
+      "dismissed": 0,
+      "undone": 0,
+      "adoptionRate": 0
+    },
+    {
+      "dayOffset": 2,
+      "proposed": 2,
+      "adopted": 1,
+      "dismissed": 0,
+      "undone": 1,
+      "adoptionRate": 1
+    },
+    {
+      "dayOffset": 1,
+      "proposed": 2,
+      "adopted": 1,
+      "dismissed": 1,
+      "undone": 0,
+      "adoptionRate": 0.5
+    },
+    {
+      "dayOffset": 0,
+      "proposed": 2,
+      "adopted": 2,
+      "dismissed": 0,
+      "undone": 0,
+      "adoptionRate": 1
+    }
+  ]
+}
