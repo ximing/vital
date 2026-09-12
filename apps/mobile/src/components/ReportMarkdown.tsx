@@ -76,11 +76,11 @@ const createStyles = (t: Theme) =>
       flexWrap: 'wrap',
       alignItems: 'center',
       gap: t.space[1],
-      minHeight: t.type.body.lineHeight,
+      minHeight: 24.5,
     },
     body: {
       fontSize: t.type.body.fontSize,
-      lineHeight: t.type.body.lineHeight,
+      lineHeight: 24.5,
       color: t.fgPrimary,
     },
     h1: {

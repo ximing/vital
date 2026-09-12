@@ -1,37 +1,28 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
-import { Bell, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react-native';
-import {
-  DEFAULT_NOTIFICATION_PREFS,
-  IMAGE_MIME_TYPES,
-  llmReady,
-  type NotificationChannel,
-} from '@vital/dto';
+import { bindServices, observer, useService } from '@rabjs/react';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ONBOARDING_CHECKLIST_KEYS } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { useAuth } from '../../auth/AuthProvider';
+import { Activity, Brain, Flame, MessagesSquare } from 'lucide-react-native';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
-import { SelectField } from '../../components/SelectField';
+import { NavRow } from '../../components/NavRow';
+import { PageHeader } from '../../components/PageHeader';
+import { PickerOption, PickerSheet } from '../../components/PickerSheet';
+import { SectionHead } from '../../components/SectionHead';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import { TimeField } from '../../components/TimeField';
-import { client } from '../../lib/api';
+import { useFocusReload } from '../../hooks/use-focus-reload';
 import { copy } from '../../lib/copy';
-import { humanError } from '../../lib/errors';
-import { toast } from '../../components/toast';
+import { checklistHref, markOnboarding, showChecklist } from '../../lib/onboarding';
 import { useTheme } from '../../theme/use-theme';
-import { Icon } from '../../ui/icon';
-
-const TABS = [
-  { id: 'account', label: copy.settings.tabs.account, icon: User },
-  { id: 'appearance', label: copy.settings.tabs.appearance, icon: Palette },
-  { id: 'notifications', label: copy.settings.tabs.notifications, icon: Bell },
-  { id: 'prefs', label: copy.settings.tabs.prefs, icon: SlidersHorizontal },
-  { id: 'llm', label: copy.settings.tabs.llm, icon: Sparkles },
-] as const;
-
-type TabId = (typeof TABS)[number]['id'];
+import { rnShadow } from '../../ui/card';
+import type { LucideIcon } from '../../ui/icon';
+import { LlmSection } from './LlmSection';
+import { SettingsService } from './settings.service';
 
 const ZONES = [
   'Asia/Shanghai',
@@ -44,511 +35,397 @@ const ZONES = [
   'America/Los_Angeles',
 ];
 
-export function SettingsHome() {
+/**
+ * spec §g 我的/设置：PageHeader「我的」+ 内容卡分节（账户/外观/AI/通知/偏好/LLM）。
+ * 卡片 = bgElevated + radius.lg + rnShadow + padding 16；NavRow 卡为 padding 0 浮卡。
+ * 移动端输入一律 muted 底无描边（Field/TimeField 已是该样式）。
+ */
+const SettingsHomeContent = observer(function SettingsHomeContent() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  const auth = useAuth();
-  const [tab, setTab] = useState<TabId>('account');
-  const [displayName, setDisplayName] = useState(auth.user?.displayName ?? '');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [avatarFailed, setAvatarFailed] = useState(false);
-  const [channels, setChannels] = useState<NotificationChannel[]>([]);
-  const [nickname, setNickname] = useState('');
-  const [enabled, setEnabled] = useState(true);
-  const customProvider = auth.user?.llm.providers.find((p) => p.providerId === 'custom');
-  const [llmApiBase, setLlmApiBase] = useState(customProvider?.baseUrl ?? '');
-  const [llmModel, setLlmModel] = useState(
-    auth.user?.llm.routing.default?.model ?? customProvider?.models[0] ?? '',
-  );
-  const [llmApiKey, setLlmApiKey] = useState('');
-  const llmDirty =
-    llmApiBase.trim() !== (customProvider?.baseUrl ?? '') ||
-    llmModel.trim() !==
-      (auth.user?.llm.routing.default?.model ?? customProvider?.models[0] ?? '') ||
-    llmApiKey.trim() !== '';
+  const s = useService(SettingsService);
+  const auth = s.auth;
+  const user = auth.user;
+  useFocusReload(useCallback(() => s.load(), [s]));
 
-  const prefs = auth.user?.notifications ?? DEFAULT_NOTIFICATION_PREFS;
-  const meow = channels.find((c) => c.type === 'meow');
-  const zones =
-    auth.user && !ZONES.includes(auth.user.timezone) ? [auth.user.timezone, ...ZONES] : ZONES;
-  const initial = (auth.user?.displayName ?? '?').slice(0, 1);
+  const prefs = s.prefs;
+  const meow = s.meow;
+  const zones = user && !ZONES.includes(user.timezone) ? [user.timezone, ...ZONES] : ZONES;
+  const initial = (user?.displayName ?? '?').slice(0, 1);
+  const checklist = showChecklist(user?.onboarding);
+  const profileDirty =
+    s.displayName.trim() !== '' && s.displayName.trim() !== (user?.displayName ?? '');
+  const weekStartsOn = user?.weekStartsOn ?? 1;
+  const timezone = user?.timezone ?? 'UTC';
+  const displayName = s.displayName;
+  const nickname = s.nickname;
+  const enabled = s.enabled;
+  const todayExecs = s.todayExecs;
+  const busy = s.busy;
+  const avatarFailed = s.avatarFailed;
+  const error = s.error;
+  const prefPicker = s.prefPicker;
 
-  const loadChannels = useCallback(async () => {
-    try {
-      const res = await client.listNotificationChannels();
-      setChannels(res.items);
-      const hit = res.items.find((c) => c.type === 'meow');
-      if (hit) {
-        setNickname(hit.config.nickname);
-        setEnabled(hit.enabled);
-      }
-    } catch (err) {
-      setError(humanError(err));
-    }
-  }, []);
-
-  async function saveProfile(): Promise<void> {
-    const next = displayName.trim();
-    if (next === '') return;
-    setBusy(true);
-    try {
-      const user = await client.updateMe({ displayName: next });
-      auth.refreshUser(user);
-      toast(copy.toast.saved);
-    } catch (err) {
-      toast(humanError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function patchPrefs(input: {
-    timezone?: string;
-    weekStartsOn?: 0 | 1;
-    notifications?: typeof prefs;
-    avatarAttachmentId?: string;
-  }): Promise<void> {
-    try {
-      const user = await client.updateMe(input);
-      auth.refreshUser(user);
-    } catch (err) {
-      toast(humanError(err));
-    }
-  }
-
-  async function pickAvatar(): Promise<void> {
-    if (!auth.user) return;
-    try {
-      const ImagePicker = await import('expo-image-picker');
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-      });
-      if (result.canceled) return;
-      const asset = result.assets[0];
-      if (!asset) return;
-      const mime = asset.mimeType ?? 'image/jpeg';
-      if (!(IMAGE_MIME_TYPES as readonly string[]).includes(mime)) return;
-      const { File } = await import('expo-file-system');
-      const size = asset.fileSize ?? new File(asset.uri).size;
-      if (!size) return;
-      setBusy(true);
-      const uploaded = await client.upload({ file: new File(asset.uri), mime, size });
-      await client.bindUpload(uploaded.id, { ownerType: 'user', ownerId: auth.user.id });
-      setAvatarFailed(false);
-      auth.refreshUser(await client.updateMe({ avatarAttachmentId: uploaded.id }));
-    } catch (err) {
-      toast(humanError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveChannel(): Promise<void> {
-    setBusy(true);
-    try {
-      if (meow) {
-        const updated = await client.patchNotificationChannel(meow.id, {
-          enabled,
-          config: { nickname },
-        });
-        setChannels((list) => list.map((c) => (c.id === updated.id ? updated : c)));
-      } else {
-        const created = await client.createNotificationChannel({
-          type: 'meow',
-          enabled,
-          config: { nickname },
-        });
-        setChannels((list) => [...list, created]);
-      }
-      toast(copy.toast.saved);
-    } catch (err) {
-      toast(humanError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveLlm(): Promise<void> {
-    setBusy(true);
-    try {
-      const nextBase = llmApiBase.trim();
-      const nextModel = llmModel.trim();
-      const existing = auth.user?.llm.providers.find((p) => p.providerId === 'custom');
-      let settings = existing
-        ? await client.patchLlmProvider(existing.id, {
-            baseUrl: nextBase,
-            models: [nextModel],
-            ...(llmApiKey.trim() === '' ? {} : { apiKey: llmApiKey.trim() }),
-          })
-        : await client.addLlmProvider({
-            providerId: 'custom',
-            label: '自定义端点',
-            baseUrl: nextBase,
-            apiKey: llmApiKey.trim(),
-            models: [nextModel],
-          });
-      const provider = settings.providers.find((p) => p.providerId === 'custom');
-      if (provider) {
-        settings = await client.putLlmRouting({
-          routing: { ...settings.routing, default: { providerId: provider.id, model: nextModel } },
-        });
-      }
-      if (auth.user) auth.refreshUser({ ...auth.user, llm: settings });
-      setLlmApiKey('');
-      toast(copy.toast.saved);
-    } catch (err) {
-      toast(humanError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const aiItems: { icon: LucideIcon; label: string; href: string; value?: string }[] = [
+    { icon: Flame, label: copy.me.habits, href: '/habits' },
+    { icon: MessagesSquare, label: copy.me.threads, href: '/threads' },
+    {
+      icon: Activity,
+      label: copy.me.agentActivity,
+      href: '/activity',
+      value:
+        todayExecs === null
+          ? undefined
+          : copy.me.activityToday.replace('{n}', String(todayExecs)),
+    },
+    { icon: Brain, label: copy.me.memory, href: '/memory' },
+  ];
 
   return (
-    <View style={styles.flex}>
-      <Stack.Screen options={{ title: copy.settings.title }} />
-      <View style={styles.intro}>
-        <Text style={styles.kicker}>{copy.empty.settings}</Text>
-      </View>
-      <View style={styles.tabs} accessibilityRole="tablist">
-        {TABS.map((item) => {
-          const active = tab === item.id;
-          return (
-            <Pressable
-              key={item.id}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => {
-                setTab(item.id);
-                if (item.id === 'notifications') void loadChannels();
-              }}
-              style={[styles.tab, active && styles.tabActive]}
-            >
-              <Icon icon={item.icon} size={16} color={active ? t.fgPrimary : t.fgMuted} />
-              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{item.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <SafeAreaView style={styles.flex} edges={['top']}>
+      <PageHeader title={copy.nav.me} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {error ? <Banner tone="error">{error}</Banner> : null}
-        {tab === 'account' ? (
-          <View style={styles.block}>
-            <View style={styles.identity}>
-              <View style={styles.avatar}>
-                {auth.user?.avatarUrl && !avatarFailed ? (
-                  <Image
-                    source={{ uri: auth.user.avatarUrl }}
-                    accessibilityLabel={copy.settings.avatarAlt}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
-                    onError={() => setAvatarFailed(true)}
-                  />
-                ) : (
-                  <Text style={styles.avatarInitial}>{initial}</Text>
-                )}
-              </View>
-              <View style={styles.identityCopy}>
-                <Text style={styles.displayName} numberOfLines={1}>
-                  {auth.user?.displayName || copy.settings.tabs.account}
-                </Text>
-                {auth.user ? (
-                  <Text style={styles.hint} numberOfLines={1}>
-                    {auth.user.email}
-                  </Text>
-                ) : null}
-                <View style={styles.identityActions}>
-                  <Button variant="secondary" loading={busy} onPress={() => void pickAvatar()}>
-                    {copy.settings.changeAvatar}
-                  </Button>
-                  <Button variant="quiet" onPress={() => void auth.logout()}>
-                    {copy.auth.logout}
-                  </Button>
-                </View>
-              </View>
+        {error ? (
+          <View style={styles.bannerWrap}>
+            <Banner tone="error">{error}</Banner>
+          </View>
+        ) : null}
+
+        {checklist ? (
+          <>
+            <SectionHead title={copy.checklist.title} first />
+            <View style={[styles.card, styles.cardFlush]}>
+              {ONBOARDING_CHECKLIST_KEYS.map((key, index) => {
+                const done = auth.user?.onboarding[key] === true;
+                return (
+                  <View key={key}>
+                    {index > 0 ? <View style={styles.hairline} /> : null}
+                    <Pressable
+                      accessibilityRole="button"
+                      style={({ pressed }) => [styles.checkRow, pressed && styles.rowPressed]}
+                      onPress={() => {
+                        if (key === 'openedWeekly') {
+                          void markOnboarding(auth.user, auth.refreshUser, { openedWeekly: true });
+                        }
+                        router.push(checklistHref(key));
+                      }}
+                    >
+                      <Text style={[styles.checkMark, done && styles.checkMarkDone]}>
+                        {done ? '✓' : '○'}
+                      </Text>
+                      <Text style={[styles.checkTitle, done && styles.done]}>
+                        {copy.checklist.items[key]}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
-            <Field
-              label={copy.settings.displayName}
-              value={displayName}
-              onChangeText={setDisplayName}
-              autoCapitalize="words"
-            />
-            <Button loading={busy} onPress={() => void saveProfile()}>
+            <Button
+              variant="quiet"
+              size="sm"
+              onPress={() => void markOnboarding(auth.user, auth.refreshUser, { dismissed: true })}
+            >
+              {copy.checklist.dismiss}
+            </Button>
+          </>
+        ) : null}
+
+        <SectionHead title={copy.settings.tabs.account} first={!checklist} />
+        <View style={styles.card}>
+          <View style={styles.identity}>
+            <View style={styles.avatar}>
+              {auth.user?.avatarUrl && !avatarFailed ? (
+                <Image
+                  source={{ uri: auth.user.avatarUrl }}
+                  accessibilityLabel={copy.settings.avatarAlt}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode="cover"
+                  onError={() => s.setAvatarFailed(true)}
+                />
+              ) : (
+                <Text style={styles.avatarInitial}>{initial}</Text>
+              )}
+            </View>
+            <View style={styles.identityCopy}>
+              <Text style={styles.displayName} numberOfLines={1}>
+                {auth.user?.displayName || copy.settings.tabs.account}
+              </Text>
+              {auth.user ? (
+                <Text style={styles.hint} numberOfLines={1}>
+                  {auth.user.email}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.identityActions}>
+            <Button variant="ghost" size="sm" loading={busy} onPress={() => void s.pickAvatar()}>
+              {copy.settings.changeAvatar}
+            </Button>
+            {/* 危险文字钮：Button 无 danger 文本变体（只有描边），按 §g 在本地实现 */}
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={t.space[2]}
+              onPress={() => void auth.logout()}
+              style={({ pressed }) => [styles.logoutBtn, pressed && styles.pressedSoft]}
+            >
+              <Text style={styles.logoutLabel}>{copy.auth.logout}</Text>
+            </Pressable>
+          </View>
+          <Field
+            label={copy.settings.displayName}
+            value={displayName}
+            onChangeText={(value) => s.setDisplayName(value)}
+            autoCapitalize="words"
+          />
+          <View style={styles.rowEnd}>
+            <Button
+              size="sm"
+              loading={busy}
+              disabled={!profileDirty}
+              onPress={() => void s.saveProfile()}
+            >
               {copy.settings.saveProfile}
             </Button>
           </View>
-        ) : null}
-        {tab === 'appearance' ? (
-          <View style={styles.block}>
-            <Text style={styles.hint}>{copy.theme.hint}</Text>
-            <ThemeToggle />
-          </View>
-        ) : null}
-        {tab === 'notifications' ? (
-          <View style={styles.block}>
-            <Text style={styles.hint}>{copy.settings.notify.hint}</Text>
+        </View>
+
+        <SectionHead title={copy.settings.tabs.appearance} />
+        <View style={styles.card}>
+          <Text style={styles.hint}>{copy.theme.hint}</Text>
+          <ThemeToggle />
+        </View>
+
+        <SectionHead title={copy.me.ai} />
+        <View style={[styles.card, styles.cardFlush]}>
+          {aiItems.map((item, index) => (
+            <NavRow
+              key={item.href}
+              icon={item.icon}
+              label={item.label}
+              value={item.value}
+              divider={index > 0}
+              onPress={() => router.push(item.href)}
+            />
+          ))}
+        </View>
+
+        <SectionHead title={copy.settings.tabs.notifications} />
+        <View style={styles.card}>
+          <Text style={styles.hint}>{copy.settings.notify.hint}</Text>
+          <View>
             <View style={styles.switchRow}>
-              <Text style={styles.rowTitle}>{copy.settings.notify.taskRemind}</Text>
+              <Text style={styles.rowLabel}>{copy.settings.notify.taskRemind}</Text>
               <Switch
                 value={prefs.taskRemind}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
                 onValueChange={(v) =>
-                  void patchPrefs({ notifications: { ...prefs, taskRemind: v } })
+                  void s.patchPrefs({ notifications: { ...prefs, taskRemind: v } })
                 }
               />
             </View>
+            <View style={styles.hairline} />
             <View style={styles.switchRow}>
-              <Text style={styles.rowTitle}>{copy.settings.notify.taskDue}</Text>
+              <Text style={styles.rowLabel}>{copy.settings.notify.taskDue}</Text>
               <Switch
                 value={prefs.taskDue}
-                onValueChange={(v) => void patchPrefs({ notifications: { ...prefs, taskDue: v } })}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
+                onValueChange={(v) => void s.patchPrefs({ notifications: { ...prefs, taskDue: v } })}
               />
             </View>
-            <TimeField
-              label={copy.settings.notify.allDayTime}
-              value={prefs.allDayNotifyTime}
-              onChange={(value) => {
-                if (value === '') return;
-                void patchPrefs({ notifications: { ...prefs, allDayNotifyTime: value } });
-              }}
+          </View>
+          <TimeField
+            label={copy.settings.notify.allDayTime}
+            value={prefs.allDayNotifyTime}
+            onChange={(value) => {
+              if (value === '') return;
+              void s.patchPrefs({ notifications: { ...prefs, allDayNotifyTime: value } });
+            }}
+          />
+          <TimeField
+            label={copy.settings.notify.quietStart}
+            value={prefs.quietHoursStart ?? ''}
+            clearable
+            onChange={(start) => {
+              const nextStart = start === '' ? null : start;
+              const end = nextStart === null ? null : (prefs.quietHoursEnd ?? '08:00');
+              void s.patchPrefs({
+                notifications: { ...prefs, quietHoursStart: nextStart, quietHoursEnd: end },
+              });
+            }}
+          />
+          <TimeField
+            label={copy.settings.notify.quietEnd}
+            value={prefs.quietHoursEnd ?? ''}
+            disabled={prefs.quietHoursStart === null}
+            clearable
+            onChange={(end) => {
+              const nextEnd = end === '' ? null : end;
+              const start = nextEnd === null ? null : prefs.quietHoursStart;
+              void s.patchPrefs({
+                notifications: { ...prefs, quietHoursStart: start, quietHoursEnd: nextEnd },
+              });
+            }}
+          />
+          <Text style={styles.subHead}>{copy.settings.notify.nickname}</Text>
+          <Field
+            label={copy.settings.notify.nickname}
+            value={nickname}
+            onChangeText={(value) => s.setNickname(value)}
+            autoCapitalize="none"
+          />
+          <View style={styles.switchRow}>
+            <Text style={styles.rowLabel}>{copy.settings.notify.enabled}</Text>
+            <Switch
+              value={enabled}
+              trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+              ios_backgroundColor={t.bgSurfaceMuted}
+              onValueChange={(value) => s.setEnabled(value)}
             />
-            <TimeField
-              label={copy.settings.notify.quietStart}
-              value={prefs.quietHoursStart ?? ''}
-              clearable
-              onChange={(start) => {
-                const nextStart = start === '' ? null : start;
-                const end = nextStart === null ? null : (prefs.quietHoursEnd ?? '08:00');
-                void patchPrefs({
-                  notifications: { ...prefs, quietHoursStart: nextStart, quietHoursEnd: end },
-                });
-              }}
-            />
-            <TimeField
-              label={copy.settings.notify.quietEnd}
-              value={prefs.quietHoursEnd ?? ''}
-              disabled={prefs.quietHoursStart === null}
-              clearable
-              onChange={(end) => {
-                const nextEnd = end === '' ? null : end;
-                const start = nextEnd === null ? null : prefs.quietHoursStart;
-                void patchPrefs({
-                  notifications: { ...prefs, quietHoursStart: start, quietHoursEnd: nextEnd },
-                });
-              }}
-            />
-            <Text style={styles.section}>{copy.settings.notify.nickname}</Text>
-            <Field
-              label={copy.settings.notify.nickname}
-              value={nickname}
-              onChangeText={setNickname}
-              autoCapitalize="none"
-            />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowTitle}>{copy.settings.notify.enabled}</Text>
-              <Switch value={enabled} onValueChange={setEnabled} />
-            </View>
+          </View>
+          <View style={styles.btnRow}>
             <Button
+              size="sm"
               loading={busy}
               disabled={nickname.trim() === ''}
-              onPress={() => void saveChannel()}
+              onPress={() => void s.saveChannel()}
             >
               {copy.settings.notify.saveChannel}
             </Button>
             <Button
               variant="secondary"
+              size="sm"
               disabled={!meow}
-              onPress={() =>
-                void client
-                  .testNotificationChannel(meow!.id)
-                  .then(() => toast(copy.settings.notify.testOk))
-                  .catch((err) => toast(humanError(err)))
-              }
+              onPress={() => void s.testChannel()}
             >
               {copy.settings.notify.test}
             </Button>
           </View>
-        ) : null}
-        {tab === 'prefs' ? (
-          <View style={styles.block}>
-            <SelectField
-              label={copy.settings.timezone}
-              value={auth.user?.timezone ?? 'UTC'}
-              options={zones.map((zone) => ({ value: zone, label: zone }))}
-              onChange={(timezone) => void patchPrefs({ timezone })}
-            />
-            <Text style={styles.section}>{copy.settings.weekStartsOn}</Text>
-            <View style={styles.chipRow}>
-              {(
-                [
-                  [0, copy.settings.weekSun],
-                  [1, copy.settings.weekMon],
-                ] as const
-              ).map(([value, label]) => {
-                const active = (auth.user?.weekStartsOn ?? 1) === value;
-                return (
-                  <Pressable
-                    key={value}
-                    style={[styles.chip, active && styles.chipActive]}
-                    onPress={() => void patchPrefs({ weekStartsOn: value })}
-                  >
-                    <Text style={[styles.chipLabel, active && styles.active]}>{label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-        ) : null}
-        {tab === 'llm' ? (
-          <View style={styles.block}>
-            <Text style={styles.hint}>{copy.settings.llm.hint}</Text>
-            <Field
-              label={copy.settings.llm.apiBase}
-              value={llmApiBase}
-              onChangeText={setLlmApiBase}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={copy.settings.llm.apiBaseHint}
-            />
-            <Field
-              label={copy.settings.llm.model}
-              value={llmModel}
-              onChangeText={setLlmModel}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder={copy.settings.llm.modelHint}
-            />
-            <Field
-              label={copy.settings.llm.apiKey}
-              value={llmApiKey}
-              onChangeText={setLlmApiKey}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-              placeholder={
-                customProvider?.apiKeySet ? copy.settings.llm.apiKeySet : copy.settings.llm.apiKey
-              }
-            />
-            {llmDirty ? <Text style={styles.hint}>{copy.settings.llm.saveBeforeTest}</Text> : null}
-            <Button loading={busy} onPress={() => void saveLlm()}>
-              {copy.settings.llm.save}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!customProvider || !llmReady(auth.user?.llm) || llmDirty || busy}
-              onPress={() =>
-                void client
-                  .testLlmProvider(customProvider!.id, llmModel.trim())
-                  .then(() => toast(copy.settings.llm.testOk))
-                  .catch((err) => toast(humanError(err)))
-              }
-            >
-              {copy.settings.llm.test}
-            </Button>
-            {customProvider?.apiKeySet ? (
-              <Button
-                variant="quiet"
-                disabled={busy}
-                onPress={() =>
-                  void client
-                    .removeLlmProvider(customProvider.id)
-                    .then((settings) => {
-                      if (auth.user) auth.refreshUser({ ...auth.user, llm: settings });
-                      setLlmApiKey('');
-                      toast(copy.toast.saved);
-                    })
-                    .catch((err) => toast(humanError(err)))
-                }
-              >
-                {copy.settings.llm.clearKey}
-              </Button>
-            ) : null}
-          </View>
-        ) : null}
+        </View>
+
+        <SectionHead title={copy.settings.tabs.prefs} />
+        <View style={[styles.card, styles.cardFlush]}>
+          <NavRow
+            label={copy.settings.timezone}
+            value={timezone}
+            onPress={() => s.openPrefPicker('timezone')}
+          />
+          <NavRow
+            label={copy.settings.weekStartsOn}
+            value={weekStartsOn === 1 ? copy.settings.weekMon : copy.settings.weekSun}
+            divider
+            onPress={() => s.openPrefPicker('week')}
+          />
+        </View>
+
+        <SectionHead title={copy.settings.tabs.llm} />
+        <LlmSection />
       </ScrollView>
-    </View>
+
+      <PickerSheet
+        visible={prefPicker === 'timezone'}
+        title={copy.settings.timezone}
+        onClose={() => s.closePrefPicker()}
+      >
+        {zones.map((zone) => (
+          <PickerOption
+            key={zone}
+            label={zone}
+            selected={zone === timezone}
+            onPress={() => {
+              s.closePrefPicker();
+              void s.patchPrefs({ timezone: zone });
+            }}
+          />
+        ))}
+      </PickerSheet>
+      <PickerSheet
+        visible={prefPicker === 'week'}
+        title={copy.settings.weekStartsOn}
+        onClose={() => s.closePrefPicker()}
+      >
+        <PickerOption
+          label={copy.settings.weekSun}
+          selected={weekStartsOn === 0}
+          onPress={() => {
+            s.closePrefPicker();
+            void s.patchPrefs({ weekStartsOn: 0 });
+          }}
+        />
+        <PickerOption
+          label={copy.settings.weekMon}
+          selected={weekStartsOn === 1}
+          onPress={() => {
+            s.closePrefPicker();
+            void s.patchPrefs({ weekStartsOn: 1 });
+          }}
+        />
+      </PickerSheet>
+    </SafeAreaView>
   );
-}
+});
+
+export const SettingsHome = bindServices(SettingsHomeContent, [SettingsService]);
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bgCanvas },
-    intro: { paddingHorizontal: t.space[4], paddingTop: t.space[3] },
-    kicker: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
-    tabs: {
-      flexDirection: 'row',
-      marginHorizontal: t.space[4],
-      marginTop: t.space[3],
-      gap: t.space[1],
-    },
-    tab: {
-      flex: 1,
-      minHeight: t.hit,
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: t.space[1],
-      borderRadius: t.radius.md,
-      paddingVertical: t.space[1],
-    },
-    tabActive: { backgroundColor: t.bgAccentSubtle },
-    tabLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted },
-    tabLabelActive: { color: t.fgPrimary, fontWeight: '600' },
-    scroll: { padding: t.space[4], gap: t.space[3], paddingBottom: t.space[10] },
-    block: {
-      backgroundColor: t.bgSurface,
+    scroll: { paddingHorizontal: t.space[4], paddingBottom: t.space[6] },
+    bannerWrap: { marginTop: t.space[2], marginBottom: t.space[2] },
+    card: {
       borderRadius: t.radius.lg,
+      backgroundColor: t.bgElevated,
       padding: t.space[4],
       gap: t.space[3],
+      ...rnShadow(t),
     },
-    identity: { flexDirection: 'row', alignItems: 'center', gap: t.space[4] },
+    cardFlush: { padding: 0, gap: 0, overflow: 'hidden' },
+    hairline: { height: StyleSheet.hairlineWidth, backgroundColor: t.borderSubtle },
+    checkRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space[3],
+      minHeight: t.space[12],
+      paddingHorizontal: t.space[4],
+    },
+    rowPressed: { backgroundColor: t.bgSurfaceMuted },
+    checkMark: { width: t.space[5], fontSize: 15, color: t.textTertiary },
+    checkMarkDone: { color: t.statusDone },
+    checkTitle: { flex: 1, fontSize: 15, color: t.fgPrimary },
+    done: { color: t.fgMuted, textDecorationLine: 'line-through' },
+    identity: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     avatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       overflow: 'hidden',
       backgroundColor: t.bgAccentSubtle,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    avatarInitial: { fontSize: t.type.title.fontSize, fontWeight: '600', color: t.accentDeep },
-    identityCopy: { flex: 1, minWidth: 0, gap: t.space[1] },
-    displayName: { fontSize: t.type.title.fontSize, fontWeight: '600', color: t.fgPrimary },
-    identityActions: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: t.space[2],
-      marginTop: t.space[1],
-    },
+    avatarInitial: { fontSize: 20, fontWeight: '700', color: t.accentPrimary },
+    identityCopy: { flex: 1, minWidth: 0, gap: 2 },
+    displayName: { fontSize: 17, lineHeight: 24, fontWeight: '600', color: t.fgPrimary },
+    identityActions: { flexDirection: 'row', alignItems: 'center', gap: t.space[2] },
+    logoutBtn: { height: 32, justifyContent: 'center', paddingHorizontal: t.space[3] },
+    logoutLabel: { fontSize: t.type.meta.fontSize, fontWeight: '500', color: t.danger },
+    pressedSoft: { opacity: 0.7 },
+    rowEnd: { flexDirection: 'row', justifyContent: 'flex-end' },
     hint: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
-    section: {
+    subHead: {
       fontSize: t.type.meta.fontSize,
       fontWeight: '600',
       color: t.fgMuted,
-      marginTop: t.space[2],
+      marginTop: t.space[1],
     },
-    rowTitle: {
-      fontSize: t.type.body.fontSize,
-      color: t.fgPrimary,
-      flex: 1,
-      paddingRight: t.space[3],
-    },
-    active: { color: t.fgPrimary, fontWeight: '600' },
     switchRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      minHeight: t.hit,
+      gap: t.space[3],
+      minHeight: t.space[12],
     },
-    chipRow: { flexDirection: 'row', gap: t.space[2] },
-    chip: {
-      minHeight: t.hit,
-      paddingHorizontal: t.space[4],
-      borderRadius: t.radius.md,
-      backgroundColor: t.bgSurfaceMuted,
-      justifyContent: 'center',
-    },
-    chipActive: { backgroundColor: t.bgAccentSubtle },
-    chipLabel: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
+    rowLabel: { flex: 1, fontSize: 15, color: t.fgPrimary },
+    btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
   });

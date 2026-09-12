@@ -1,0 +1,114 @@
+<!-- 设计稿 · 任务浮层 TaskSheet（半屏档） · 390×844 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital Mobile · 任务浮层</title>
+<style>
+  :root{
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-deep:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --dim:#555E56; --faint:#98A098; --line:#E2E6E0;
+    --done:#2F9E63; --doing:#3D6FD1; --soon:#B4761E; --overdue:#CE4A45;
+    --scrim:rgb(27 33 29/32%);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    background:var(--canvas);color:var(--ink);position:relative;-webkit-font-smoothing:antialiased}
+  .num{font-variant-numeric:tabular-nums}
+  .status{height:54px;padding:18px 28px 0;display:flex;justify-content:space-between;align-items:flex-start;position:relative;z-index:3}
+  .status .time{font-size:15px;font-weight:600}
+  .status .icons{display:flex;gap:6px;align-items:center}
+  .pagehead{height:52px;padding:0 8px;display:flex;align-items:center;gap:2px}
+  .pagehead .title{flex:1;font-size:26px;font-weight:700;padding-left:8px}
+  .iconbtn{width:40px;height:40px;display:grid;place-items:center;border-radius:20px;color:var(--ink)}
+  .eyebrow{display:flex;align-items:center;gap:8px;margin:12px 20px 6px;padding:0 4px}
+  .eyebrow .lab{font-size:11px;font-weight:600;letter-spacing:1px;color:var(--faint)}
+  .eyebrow .cnt{font-size:11px;color:var(--faint)}
+  .eyebrow .rule{flex:1;height:1px;background:var(--line)}
+  .row{display:flex;gap:12px;padding:12px 16px 12px 20px;align-items:flex-start}
+  .check{width:24px;height:24px;border-radius:12px;border:1.5px solid var(--faint);flex:none;margin-top:1px}
+  .row .name{font-size:16px;line-height:22px;font-weight:500}
+  .row .meta{display:flex;gap:8px;margin-top:4px;font-size:12px;color:var(--faint)}
+  .row .meta .d{color:var(--doing);font-weight:500}
+  /* scrim over list */
+  .scrim{position:absolute;inset:0;background:var(--scrim);z-index:4}
+  /* sheet */
+  .sheet{position:absolute;left:0;right:0;bottom:0;height:62%;background:var(--elevated);
+    border-radius:20px 20px 0 0;z-index:5;display:flex;flex-direction:column;
+    box-shadow:0 -8px 32px rgb(20 34 24/12%)}
+  .sheet-head{display:flex;align-items:center;gap:6px;padding:10px 12px 6px;min-height:52px}
+  .listchip{display:flex;align-items:center;gap:4px;height:32px;padding:0 12px;border-radius:16px;
+    background:var(--muted);font-size:13px;font-weight:600;color:var(--ink)}
+  .listchip svg{color:var(--dim)}
+  .prio{display:flex;align-items:center;gap:2px;padding:2px;border-radius:10px;background:var(--muted);margin-left:auto}
+  .prio span{width:30px;height:30px;display:grid;place-items:center;border-radius:8px;opacity:.38}
+  .prio span.on{opacity:1;background:var(--elevated);box-shadow:0 1px 2px rgb(20 34 24/10%)}
+  .sheet-body{flex:1;padding:2px 20px 0;min-height:0}
+  .due-row{display:flex;align-items:center;gap:12px;min-height:40px;margin-top:2px}
+  .due-row .when{font-size:14px;font-weight:600;color:var(--doing)}
+  .task-title{font-size:22px;line-height:30px;font-weight:700;margin:10px 0 8px}
+  .desc{font-size:14px;line-height:21px;color:var(--dim)}
+  .tags{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .tag{height:28px;padding:0 12px;border-radius:14px;background:var(--accent-subtle);color:var(--accent);
+    font-size:12px;font-weight:600;display:grid;place-items:center}
+  .tag.add{background:transparent;border:1px dashed var(--faint);color:var(--faint);font-weight:500}
+  .toolbar{flex:none;height:64px;border-top:1px solid var(--line);display:flex;align-items:center;gap:4px;padding:0 12px 8px}
+  .tool{display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;border-radius:10px;color:var(--dim);font-size:13px;font-weight:500}
+</style>
+</head>
+<body>
+  <div class="status" style="z-index:6">
+    <span class="time num">9:41</span>
+    <span class="icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><path d="M23 4v4c1-.3 1.6-1 1.6-2S24 4.3 23 4z" fill="currentColor" opacity=".4"/></svg>
+    </span>
+  </div>
+  <div class="pagehead">
+    <span class="iconbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></span>
+    <span class="title">今天</span>
+    <span class="iconbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
+    <span class="iconbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></span>
+  </div>
+  <div class="eyebrow"><span class="lab">今天</span><span class="cnt num">4</span><span class="rule"></span></div>
+  <div class="row"><span class="check"></span><div style="min-width:0"><div class="name">锻炼</div><div class="meta"><span class="d">今天</span><span>收集箱</span></div></div></div>
+  <div class="row"><span class="check"></span><div style="min-width:0"><div class="name">宜家购物</div><div class="meta"><span class="d">今天</span><span>收集箱</span></div></div></div>
+
+  <div class="scrim"></div>
+
+  <section class="sheet">
+    <header class="sheet-head">
+      <span class="listchip">收集箱
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </span>
+      <span class="prio" role="radiogroup" aria-label="优先级">
+        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="var(--overdue)" stroke="var(--overdue)" stroke-width="1.6"><path d="M5 21V4c4-2 7 2 11 0v9c-4 2-7-2-11 0"/></svg></span>
+        <span class="on"><svg width="16" height="16" viewBox="0 0 24 24" fill="var(--soon)" stroke="var(--soon)" stroke-width="1.6"><path d="M5 21V4c4-2 7 2 11 0v9c-4 2-7-2-11 0"/></svg></span>
+        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--doing)" stroke-width="1.8"><path d="M5 21V4c4-2 7 2 11 0v9c-4 2-7-2-11 0"/></svg></span>
+        <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.8"><path d="M5 21V4c4-2 7 2 11 0v9c-4 2-7-2-11 0"/></svg></span>
+      </span>
+      <span class="iconbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></span>
+    </header>
+    <div class="sheet-body">
+      <div class="due-row">
+        <span class="check"></span>
+        <span class="when num">今天 9月12日 · 周六</span>
+      </div>
+      <div class="task-title">完成最新博客文章的去 SaaS 化</div>
+      <div class="desc">把评论系统和统计脚本换掉，文章正文不动。先列依赖清单，再逐个替换，最后验证构建。</div>
+      <div class="tags">
+        <span class="tag">博客</span><span class="tag">技术债</span><span class="tag add">+ 标签</span>
+      </div>
+    </div>
+    <footer class="toolbar">
+      <span class="tool"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4L11 3.8A2 2 0 009.6 3.2H5a2 2 0 00-2 2v4.6c0 .5.2 1 .6 1.4l9.6 9.6a2 2 0 002.8 0l4.6-4.6a2 2 0 000-2.8z"/><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none"/></svg>标签</span>
+      <span class="tool"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 5.5l1.2 1.2L7.5 4.5M4 11.5l1.2 1.2 2.3-2.2M4 17.5l1.2 1.2 2.3-2.2"/></svg>子任务</span>
+      <span class="tool"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 20a2 2 0 01-3.4 0"/></svg>提醒</span>
+      <span class="tool"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M8 3v4M16 3v4M3.5 10h17M12 13v4M10 15h4"/></svg>排期</span>
+    </footer>
+  </section>
+</body>
+</html>

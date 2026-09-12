@@ -8,7 +8,8 @@ function extraApiUrl(extra: unknown): string | undefined {
   return typeof extra.apiUrl === 'string' ? extra.apiUrl : undefined;
 }
 
-export const apiUrl = extraApiUrl(Constants.expoConfig?.extra) ?? 'http://localhost:3010';
+export const apiUrl =
+  process.env.EXPO_PUBLIC_API_URL ?? extraApiUrl(Constants.expoConfig?.extra) ?? 'http://localhost:3010';
 
 export const client: VitalClient = createVitalClient({
   baseUrl: apiUrl,

@@ -1,20 +1,20 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, router } from 'expo-router';
+import { bindServices, observer, useService } from '@rabjs/react';
 import type { SearchHit } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Banner } from '../../components/Banner';
-import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { Field } from '../../components/Field';
 import { Screen } from '../../components/Screen';
-import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
-import { humanError } from '../../lib/errors';
 import { useTheme } from '../../theme/use-theme';
+import { useOpenTask } from '../../components/TaskSheetHost';
+import { SearchService } from './search.service';
 
 function hrefOf(hit: SearchHit): string {
-  if (hit.type === 'task') return `/todos/task/${hit.task.id}`;
+  if (hit.type === 'task') return `task:${hit.task.id}`;
   if (hit.type === 'inbox') return `/inbox/${hit.inbox.id}`;
   return `/reports/${hit.report.id}`;
 }
@@ -31,74 +31,71 @@ function kindOf(hit: SearchHit): string {
   return copy.nav.reports;
 }
 
-export function SearchHome() {
+const SearchHomeContent = observer(function SearchHomeContent() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  const [q, setQ] = useState('');
-  const [items, setItems] = useState<SearchHit[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function run(): Promise<void> {
-    const trimmed = q.trim();
-    if (trimmed === '') {
-      setItems(null);
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await client.search({ q: trimmed, limit: 20 });
-      setItems(res.items);
-      setError(null);
-    } catch (err) {
-      setError(humanError(err));
-      setItems([]);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const openTask = useOpenTask();
+  const s = useService(SearchService);
+  useEffect(() => () => s.stop(), [s]);
 
   return (
-    <Screen scroll>
+    <Screen>
       <Stack.Screen options={{ title: copy.nav.search }} />
-      <Field
-        label={copy.fields.search}
-        value={q}
-        onChangeText={setQ}
-        onSubmitEditing={() => void run()}
-        returnKeyType="search"
-        placeholder={copy.empty.search}
-      />
-      <Button loading={busy} onPress={() => void run()}>
-        {copy.nav.search}
-      </Button>
-      {error ? <Banner tone="error">{error}</Banner> : null}
-      {items === null ? (
-        <EmptyState title={copy.empty.search} />
-      ) : items.length === 0 ? (
-        <EmptyState title={copy.empty.searchNone} />
-      ) : (
-        items.map((hit) => (
-          <Pressable
-            key={hrefOf(hit)}
-            style={styles.row}
-            onPress={() => router.push(hrefOf(hit))}
-            accessibilityRole="button"
-            accessibilityLabel={titleOf(hit)}
-          >
-            <View>
-              <Text style={styles.title}>{titleOf(hit)}</Text>
-              <Text style={styles.kind}>{kindOf(hit)}</Text>
-            </View>
-          </Pressable>
-        ))
-      )}
+      <View style={styles.body}>
+        <Field
+          value={s.q}
+          onChangeText={(q) => s.setQuery(q)}
+          returnKeyType="search"
+          placeholder={copy.empty.search}
+          accessibilityLabel={copy.nav.search}
+        />
+        {s.busy ? <ActivityIndicator color={t.accentPrimary} /> : null}
+        {s.error ? <Banner tone="error">{s.error}</Banner> : null}
+        <ScrollView
+          style={styles.results}
+          contentContainerStyle={styles.resultsContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {s.items === null ? (
+            <EmptyState title={copy.empty.search} />
+          ) : s.items.length === 0 ? (
+            <EmptyState title={copy.empty.searchNone} />
+          ) : (
+            s.items.map((hit) => (
+              <Pressable
+                key={hrefOf(hit)}
+                style={styles.row}
+                onPress={() => {
+                  if (hit.type === 'task') openTask(hit.task.id);
+                  else router.push(hrefOf(hit));
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={titleOf(hit)}
+              >
+                <View>
+                  <Text style={styles.title}>{titleOf(hit)}</Text>
+                  <Text style={styles.kind}>{kindOf(hit)}</Text>
+                </View>
+              </Pressable>
+            ))
+          )}
+        </ScrollView>
+      </View>
     </Screen>
   );
-}
+});
+
+export const SearchHome = bindServices(SearchHomeContent, [SearchService]);
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
+    body: {
+      flex: 1,
+      paddingHorizontal: theme.space[4],
+      paddingTop: theme.space[2],
+    },
+    results: { flex: 1, marginTop: theme.space[2] },
+    resultsContent: { paddingBottom: theme.space[6], gap: theme.space[1] },
     row: {
       minHeight: theme.hit,
       justifyContent: 'center',

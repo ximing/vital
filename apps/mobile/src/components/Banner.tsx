@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Theme } from '@vital/tokens';
 import { useTheme } from '../theme/use-theme';
+import { withAlpha } from '../ui/color';
 import { Button } from './Button';
 
 export function Banner({
@@ -53,7 +54,11 @@ const createStyles = (t: Theme) =>
       paddingHorizontal: t.space[3],
       paddingVertical: t.space[3],
     },
-    error: { backgroundColor: t.bgAccentSubtle },
+    error: {
+      backgroundColor: withAlpha(t.danger, '14'),
+      borderWidth: 1,
+      borderColor: withAlpha(t.danger, '40'),
+    },
     info: { backgroundColor: t.bgSurfaceMuted },
     message: { flex: 1, minWidth: 0, fontSize: t.type.meta.fontSize, color: t.fgPrimary },
     messageError: { color: t.danger },

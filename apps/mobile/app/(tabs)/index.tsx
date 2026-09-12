@@ -1,5 +1,5 @@
-import { TodayScreen } from '../../src/features/todos/TodayScreen';
+import { TodayWorkspace } from '../../src/features/today/TodayWorkspace';
 
 export default function TodayTab() {
-  return <TodayScreen />;
+  return <TodayWorkspace />;
 }

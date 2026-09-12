@@ -47,7 +47,7 @@ const config: ExpoConfig = {
   splash: {
     image: './assets/splash-icon.png',
     resizeMode: 'contain',
-    backgroundColor: '#FFFBF5',
+    backgroundColor: '#F3F5F2',
   },
   ios: { bundleIdentifier: 'plus.aimo.vital', supportsTablet: true },
   android: {
@@ -55,7 +55,7 @@ const config: ExpoConfig = {
     versionCode,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#FFFBF5',
+      backgroundColor: '#F3F5F2',
     },
   },
   plugins: [

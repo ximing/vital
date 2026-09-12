@@ -1,17 +1,22 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
+import { Plus } from 'lucide-react-native';
 import { llmReady, type CreateTaskInput, type Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { useAuth } from '../../auth/AuthProvider';
+import { useAuth } from '../../services/auth.service';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
 import { markOnboarding } from '../../lib/onboarding';
 import { useTheme } from '../../theme/use-theme';
-import { Button } from '../../components/Button';
-import { Field } from '../../components/Field';
+import { Icon } from '../../ui/icon';
+import { rnShadow } from '../../ui/card';
 import { toast } from '../../components/toast';
 
+/**
+ * spec §2a 新建输入条：h48 白底 pill + 1px borderSubtle + rnShadow，左侧 plus 图标，
+ * placeholder「添加任务」，returnKey 提交。贴 tab bar 上沿（由父级布局位置决定）。
+ */
 export function NewTaskBar({
   listId,
   extra,
@@ -54,31 +59,47 @@ export function NewTaskBar({
   }
 
   return (
-    <View style={styles.row}>
-      <View style={styles.field}>
-        <Field
-          placeholder={copy.actions.create}
+    <View style={styles.wrap}>
+      <View style={styles.pill}>
+        <Icon icon={Plus} size={20} color={t.textTertiary} />
+        <TextInput
+          style={styles.input}
+          placeholder={copy.todos.addTaskPlaceholder}
+          placeholderTextColor={t.textTertiary}
           value={title}
           onChangeText={setTitle}
+          editable={!busy}
           onSubmitEditing={() => void submit()}
           returnKeyType="done"
+          autoCapitalize="none"
         />
       </View>
-      <Button loading={busy} onPress={() => void submit()}>
-        {copy.actions.add}
-      </Button>
     </View>
   );
 }
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
-    row: {
+    wrap: {
+      paddingHorizontal: t.space[4],
+      paddingBottom: t.space[3],
+    },
+    pill: {
+      height: t.space[12],
       flexDirection: 'row',
-      alignItems: 'flex-end',
+      alignItems: 'center',
       gap: t.space[2],
       paddingHorizontal: t.space[4],
-      paddingBottom: t.space[2],
+      borderRadius: t.radius.pill,
+      borderWidth: 1,
+      borderColor: t.borderSubtle,
+      backgroundColor: t.bgElevated,
+      ...rnShadow(t),
     },
-    field: { flex: 1 },
+    input: {
+      flex: 1,
+      minWidth: 0,
+      fontSize: t.type.body.fontSize,
+      color: t.fgPrimary,
+    },
   });

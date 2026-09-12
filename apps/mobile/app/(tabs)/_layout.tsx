@@ -1,4 +1,4 @@
-import { BookOpen, Calendar, Library, Sun } from 'lucide-react-native';
+import { BookOpen, Calendar, CheckSquare, Sun, User } from 'lucide-react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RequireAuth } from '../../src/components/RequireAuth';
@@ -37,6 +37,15 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="todos"
+          options={{
+            title: copy.nav.todos,
+            tabBarIcon: ({ focused, color }) => (
+              <Icon icon={CheckSquare} color={focused ? t.accentPrimary : color} size={22} />
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="inbox"
           options={{
             title: copy.nav.inbox,
@@ -55,11 +64,11 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="library"
+          name="me"
           options={{
-            title: copy.nav.library,
+            title: copy.nav.me,
             tabBarIcon: ({ focused, color }) => (
-              <Icon icon={Library} color={focused ? t.accentPrimary : color} size={22} />
+              <Icon icon={User} color={focused ? t.accentPrimary : color} size={22} />
             ),
           }}
         />

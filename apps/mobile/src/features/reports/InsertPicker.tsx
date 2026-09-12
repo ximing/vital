@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { renderToken, type EntityKind } from '@vital/markdown';
 import type { Theme } from '@vital/tokens';
-import { useAuth } from '../../auth/AuthProvider';
+import { useAuth } from '../../services/auth.service';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { markOnboarding } from '../../lib/onboarding';

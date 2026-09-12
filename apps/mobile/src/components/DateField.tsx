@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import type { Theme } from '@vital/tokens';
@@ -17,6 +17,7 @@ export function DateField({
   zone,
   weekStartsOn = 1,
   onChange,
+  trigger,
 }: {
   label: string;
   value: string;
@@ -24,6 +25,7 @@ export function DateField({
   zone: string;
   weekStartsOn?: 0 | 1;
   onChange: (next: string) => void;
+  trigger?: ReactNode;
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
@@ -56,35 +58,50 @@ export function DateField({
     }
   }
 
+  function openPicker(): void {
+    setMonthCursor((selectedYmd || today).slice(0, 7) + '-01');
+    setOpen(true);
+  }
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.row}>
+      {trigger ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={label}
           accessibilityState={{ expanded: open }}
-          onPress={() => {
-            setMonthCursor((selectedYmd || today).slice(0, 7) + '-01');
-            setOpen(true);
-          }}
-          style={styles.trigger}
+          onPress={openPicker}
         >
-          <Text style={[styles.value, selectedYmd === '' && styles.placeholder]} numberOfLines={1}>
-            {summary}
-          </Text>
+          {trigger}
         </Pressable>
-        {selectedYmd !== '' ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={copy.todos.clearDate}
-            onPress={() => onChange('')}
-            style={styles.clear}
-          >
-            <Text style={styles.clearLabel}>×</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      ) : (
+        <>
+          <Text style={styles.label}>{label}</Text>
+          <View style={styles.row}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={{ expanded: open }}
+              onPress={openPicker}
+              style={styles.trigger}
+            >
+              <Text style={[styles.value, selectedYmd === '' && styles.placeholder]} numberOfLines={1}>
+                {summary}
+              </Text>
+            </Pressable>
+            {selectedYmd !== '' ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={copy.todos.clearDate}
+                onPress={() => onChange('')}
+                style={styles.clear}
+              >
+                <Text style={styles.clearLabel}>×</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </>
+      )}
       <PickerSheet visible={open} title={label} onClose={() => setOpen(false)}>
         <View style={styles.monthNav}>
           <Pressable

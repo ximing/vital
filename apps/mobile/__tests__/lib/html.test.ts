@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { htmlToText, looksLikeMarkdown } from '../../src/lib/html';
+import { decodeEntities, htmlToText, looksLikeMarkdown } from '../../src/lib/html';
+
+describe('decodeEntities', () => {
+  it('decodes hexadecimal numeric references', () => {
+    expect(decodeEntities('买菜&#x20;清单')).toBe('买菜 清单');
+  });
+
+  it('decodes decimal numeric references', () => {
+    expect(decodeEntities('a&#32;b&#39;c')).toBe("a b'c");
+  });
+
+  it('decodes a mix of named and numeric references', () => {
+    expect(decodeEntities('A&amp;B&#x20;&lt;x&gt;')).toBe('A&B <x>');
+  });
+
+  it('leaves invalid or out-of-range references untouched', () => {
+    expect(decodeEntities('&#x110000; &#0; &unknown;')).toBe('&#x110000; &#0; &unknown;');
+  });
+});
 
 describe('htmlToText', () => {
   it('strips tags and keeps list/paragraph breaks', () => {
@@ -9,6 +27,10 @@ describe('htmlToText', () => {
 
   it('decodes common entities', () => {
     expect(htmlToText('A&amp;B &lt;x&gt;')).toBe('A&B <x>');
+  });
+
+  it('decodes numeric character references', () => {
+    expect(htmlToText('<p>一&#x20;二&#32;三</p>')).toBe('一 二 三');
   });
 });
 

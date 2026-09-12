@@ -1,44 +1,27 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
+import { bindServices, observer, useService } from '@rabjs/react';
 import { Stack, useRouter } from 'expo-router';
-import { loginInputSchema } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { useAuth } from '../../auth/AuthProvider';
 import { Button } from '../../components/Button';
 import { ErrorText } from '../../components/ErrorText';
 import { Field } from '../../components/Field';
 import { Screen } from '../../components/Screen';
 import { copy } from '../../lib/copy';
 import { needsOnboarding } from '../../lib/onboarding';
-import { humanError } from '../../lib/errors';
 import { useTheme } from '../../theme/use-theme';
+import { LoginService } from './login.service';
 
-export function LoginPage() {
+const LoginPageContent = observer(function LoginPageContent() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  const auth = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const s = useService(LoginService);
 
   async function onSubmit(): Promise<void> {
-    const parsed = loginInputSchema.safeParse({ email, password });
-    if (!parsed.success) {
-      setError(copy.auth.invalidLogin);
-      return;
-    }
-    setError(null);
-    setBusy(true);
-    try {
-      const user = await auth.login(parsed.data);
-      router.replace(needsOnboarding(user) ? '/onboarding' : '/');
-    } catch (err) {
-      setError(humanError(err));
-    } finally {
-      setBusy(false);
-    }
+    const user = await s.submit();
+    if (!user) return;
+    router.replace(needsOnboarding(user) ? '/onboarding' : '/');
   }
 
   return (
@@ -48,20 +31,20 @@ export function LoginPage() {
       <Text style={styles.tagline}>{copy.brand.tagline}</Text>
       <Field
         label={copy.auth.email}
-        value={email}
-        onChangeText={setEmail}
+        value={s.email}
+        onChangeText={(email) => s.setEmail(email)}
         keyboardType="email-address"
         autoComplete="email"
       />
       <Field
         label={copy.auth.password}
-        value={password}
-        onChangeText={setPassword}
+        value={s.password}
+        onChangeText={(password) => s.setPassword(password)}
         secureTextEntry
         autoComplete="password"
       />
-      <ErrorText message={error} />
-      <Button fullWidth loading={busy} loadingText={copy.auth.loggingIn} onPress={() => void onSubmit()}>
+      <ErrorText message={s.error} />
+      <Button fullWidth loading={s.busy} loadingText={copy.auth.loggingIn} onPress={() => void onSubmit()}>
         {copy.auth.login}
       </Button>
       <Button variant="quiet" style={styles.link} onPress={() => router.push('/register')}>
@@ -69,7 +52,9 @@ export function LoginPage() {
       </Button>
     </Screen>
   );
-}
+});
+
+export const LoginPage = bindServices(LoginPageContent, [LoginService]);
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({

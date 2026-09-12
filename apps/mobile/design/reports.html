@@ -1,0 +1,208 @@
+<!-- 设计稿 · 复盘（日报） · 390×844 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital Mobile · 复盘</title>
+<style>
+  :root{
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-deep:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --dim:#555E56; --faint:#98A098; --line:#E2E6E0;
+    --done:#2F9E63; --doing:#3D6FD1; --soon:#B4761E; --overdue:#CE4A45;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    background:var(--canvas);color:var(--ink);-webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column}
+  .num{font-variant-numeric:tabular-nums}
+  .status{height:54px;padding:18px 28px 0;display:flex;justify-content:space-between;align-items:flex-start;flex:none}
+  .status .time{font-size:15px;font-weight:600}
+  .status .icons{display:flex;gap:6px;align-items:center}
+  .pagehead{height:52px;padding:0 8px;display:flex;align-items:center;gap:2px;flex:none}
+  .pagehead .title{flex:1;font-size:26px;font-weight:700;padding-left:12px}
+  .iconbtn{width:40px;height:40px;display:grid;place-items:center;border-radius:20px;color:var(--ink)}
+  .scroll{flex:1;min-height:0;overflow-y:auto;padding:0 16px 16px;scrollbar-width:none}
+  .scroll::-webkit-scrollbar{display:none}
+  /* kicker */
+  .kicker{display:flex;align-items:center;gap:8px;padding:2px 4px 0}
+  .kicker .lab{font-size:11px;font-weight:600;letter-spacing:1px;color:var(--accent);white-space:nowrap}
+  .kicker .rule{flex:1;height:1px;background:var(--line)}
+  .kicker .saved{font-size:12px;color:var(--faint);white-space:nowrap}
+  /* segmented */
+  .seg{display:flex;background:var(--muted);border-radius:19px;padding:3px;margin-top:14px}
+  .seg span{flex:1;height:32px;border-radius:16px;display:grid;place-items:center;font-size:13px;font-weight:500;color:var(--dim)}
+  .seg span.on{background:var(--elevated);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgb(20 34 24/8%)}
+  .meta-line{margin-top:12px;padding:0 4px;font-size:12px;color:var(--dim);letter-spacing:.02em}
+  /* stat card */
+  .card{background:var(--elevated);border-radius:14px;box-shadow:0 1px 2px rgb(20 34 24/5%),0 10px 28px rgb(20 34 24/7%)}
+  .statcard{margin-top:12px;padding:16px;display:flex}
+  .stat{flex:1;display:flex;flex-direction:column;gap:3px}
+  .stat .top{display:flex;align-items:center;gap:6px}
+  .stat .dot{width:6px;height:6px;border-radius:3px}
+  .stat .v{font-size:20px;line-height:28px;font-weight:700}
+  .stat .l{font-size:12px;color:var(--dim)}
+  .streak{margin-top:0;padding:0 16px 14px;font-size:12px;color:var(--dim)}
+  /* review sections */
+  .eyebrow{display:flex;align-items:center;gap:8px;margin:22px 4px 6px}
+  .eyebrow .chev{color:var(--faint)}
+  .eyebrow .lab{font-size:11px;font-weight:600;letter-spacing:1px;color:var(--faint)}
+  .eyebrow .cnt{font-size:11px;color:var(--faint)}
+  .eyebrow .rule{flex:1;height:1px;background:var(--line)}
+  .rev{display:flex;align-items:center;gap:10px;padding:7px 4px}
+  .rev .mk{width:14px;flex:none;display:grid;place-items:center}
+  .rev .t{font-size:14px;color:var(--ink)}
+  .rev .tm{margin-left:auto;font-size:12px;color:var(--faint)}
+  /* report paper */
+  .paper{background:var(--elevated);border:1px solid var(--line);border-radius:20px;margin-top:14px;
+    box-shadow:0 1px 2px rgb(20 34 24/5%),0 10px 28px rgb(20 34 24/7%);padding:0 20px 16px;overflow:hidden}
+  .paper .bar{height:3px;border-radius:2px;background:var(--accent);margin:14px 0 14px;width:44px}
+  .paper .rtitle{font-size:20px;line-height:28px;font-weight:700}
+  .paper .body{font-size:14px;line-height:24.5px;color:var(--ink);margin-top:10px}
+  .paper .body p+p{margin-top:8px}
+  .paper .inserts{display:flex;gap:4px;margin-top:14px}
+  .ins{display:flex;align-items:center;gap:5px;height:32px;padding:0 10px;border-radius:8px;color:var(--accent);font-size:13px;font-weight:500}
+  /* heatmap */
+  .heatcard{margin-top:12px;padding:14px 12px 12px}
+  .hgrid{display:grid;grid-template-columns:repeat(7,1fr);row-gap:4px}
+  .day{height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:10px}
+  .day .dn{font-size:12px;color:var(--ink)}
+  .day .wd{width:4px;height:4px;border-radius:2px;background:var(--accent)}
+  .day .wdsp{width:4px;height:4px}
+  .day.sel{background:var(--accent)}
+  .day.sel .dn{color:#fff;font-weight:600}
+  .day.sel .wd{background:#fff}
+  .day.today{box-shadow:inset 0 0 0 2px var(--accent)}
+  .legend{margin-top:10px;font-size:12px;color:var(--dim)}
+  /* recent */
+  .recent{margin-top:12px;padding:4px 0}
+  .ritem{display:flex;align-items:center;gap:10px;padding:11px 16px}
+  .ritem+.ritem{border-top:1px solid var(--line)}
+  .ritem .t{flex:1;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ritem .tm{font-size:12px;color:var(--faint)}
+  /* action bar + tabbar */
+  .actionbar{flex:none;background:var(--elevated);border-top:1px solid var(--line);
+    box-shadow:0 -2px 12px rgb(20 34 24/6%);padding:10px 16px;display:flex;align-items:center;gap:6px}
+  .savestate{flex:1;font-size:12px;color:var(--faint)}
+  .btn{height:36px;padding:0 14px;border-radius:10px;display:grid;place-items:center;font-size:13px;font-weight:600}
+  .btn.quiet{color:var(--dim);font-weight:500}
+  .btn.ghost{background:var(--accent-subtle);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#fff;padding:0 18px}
+  .tabbar{flex:none;height:78px;background:var(--elevated);border-top:1px solid var(--line);
+    display:grid;grid-template-columns:repeat(5,1fr);padding:8px 4px 22px}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--faint)}
+  .tab .lab{font-size:11px;font-weight:500}
+  .tab.on{color:var(--accent)}
+</style>
+</head>
+<body>
+  <div class="status">
+    <span class="time num">9:41</span>
+    <span class="icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><path d="M23 4v4c1-.3 1.6-1 1.6-2S24 4.3 23 4z" fill="currentColor" opacity=".4"/></svg>
+    </span>
+  </div>
+  <div class="pagehead">
+    <span class="title">复盘</span>
+    <span class="iconbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
+  </div>
+
+  <div class="scroll" id="scroll">
+    <div class="kicker">
+      <span class="lab">把完成的事留下痕迹</span><span class="rule"></span>
+    </div>
+    <div class="seg"><span class="on">日报</span><span>周报</span><span>月报</span><span>年报</span></div>
+    <div class="meta-line num">2026-09-12 · 周六</div>
+
+    <div class="card statcard">
+      <div class="stat"><div class="top"><span class="dot" style="background:var(--done)"></span><span class="v num">5</span></div><span class="l">完成</span></div>
+      <div class="stat"><div class="top"><span class="dot" style="background:var(--doing)"></span><span class="v num">2</span></div><span class="l">结转</span></div>
+      <div class="stat"><div class="top"><span class="dot" style="background:var(--soon)"></span><span class="v num">3</span></div><span class="l">收集</span></div>
+    </div>
+
+    <div class="eyebrow">
+      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      <span class="lab">完成</span><span class="cnt num">5</span><span class="rule"></span>
+    </div>
+    <div class="rev"><span class="mk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--done)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><span class="t">完成最新博客文章的去 SaaS 化</span><span class="tm num">16:40</span></div>
+    <div class="rev"><span class="mk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--done)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><span class="t">今天把简历弄完</span><span class="tm num">15:12</span></div>
+    <div class="rev"><span class="mk"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--done)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg></span><span class="t">锻炼</span><span class="tm num">08:30</span></div>
+
+    <div class="eyebrow">
+      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      <span class="lab">结转</span><span class="cnt num">2</span><span class="rule"></span>
+    </div>
+    <div class="eyebrow" style="margin-top:14px">
+      <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+      <span class="lab">收集</span><span class="cnt num">3</span><span class="rule"></span>
+    </div>
+
+    <div class="paper">
+      <div class="bar"></div>
+      <div class="rtitle">9月12日 · 周六</div>
+      <div class="body">
+        <p>上午把拖了两周的去 SaaS 化收尾了，构建时间从 40s 降到 12s。简历也终于发出去。</p>
+        <p>下午效率一般，宜家购物排得太满。明天上午留白，只安排一件事。</p>
+      </div>
+      <div class="inserts">
+        <span class="ins"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>插入任务</span>
+        <span class="ins"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>插入稍后读</span>
+      </div>
+    </div>
+
+    <div class="eyebrow" style="margin-top:26px"><span class="lab">往期</span><span class="rule"></span><span class="lab num" style="letter-spacing:0;text-transform:none">2026-09</span></div>
+    <div class="card heatcard">
+      <div class="hgrid">
+        <div class="day"></div>
+        <div class="day" style="background:rgb(28 122 79/.30)"><span class="dn num">1</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num">2</span><span class="wdsp"></span></div>
+        <div class="day" style="background:rgb(28 122 79/.55)"><span class="dn num">3</span><span class="wd"></span></div>
+        <div class="day" style="background:rgb(28 122 79/.30)"><span class="dn num">4</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num">5</span><span class="wdsp"></span></div>
+        <div class="day" style="background:rgb(28 122 79/.43)"><span class="dn num">6</span><span class="wdsp"></span></div>
+        <div class="day" style="background:rgb(28 122 79/.30)"><span class="dn num">7</span><span class="wdsp"></span></div>
+        <div class="day" style="background:rgb(28 122 79/.68)"><span class="dn num">8</span><span class="wd"></span></div>
+        <div class="day"><span class="dn num">9</span><span class="wdsp"></span></div>
+        <div class="day" style="background:rgb(28 122 79/.30)"><span class="dn num">10</span><span class="wdsp"></span></div>
+        <div class="day" style="background:rgb(28 122 79/.43)"><span class="dn num">11</span><span class="wdsp"></span></div>
+        <div class="day sel"><span class="dn num">12</span><span class="wd"></span></div>
+        <div class="day today"><span class="dn num">13</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">14</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">15</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">16</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">17</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">18</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">19</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">20</span><span class="wdsp"></span></div>
+        <div class="day"><span class="dn num" style="color:var(--faint)">21</span><span class="wdsp"></span></div>
+      </div>
+      <div class="legend">点日期看那一天；颜色深浅 = 完成数（绝对刻度，5+ 饱和）。</div>
+    </div>
+
+    <div class="eyebrow" style="margin-top:26px"><span class="lab">最近完成</span><span class="rule"></span></div>
+    <div class="card recent">
+      <div class="ritem"><span class="t">完成最新博客文章的去 SaaS 化</span><span class="tm num">16:40</span></div>
+      <div class="ritem"><span class="t">今天把简历弄完</span><span class="tm num">15:12</span></div>
+      <div class="ritem"><span class="t">还图书馆的书</span><span class="tm num">昨天</span></div>
+    </div>
+    <div style="height:8px"></div>
+  </div>
+
+  <div class="actionbar">
+    <span class="savestate num">已自动保存 11:02</span>
+    <span class="btn quiet">填充</span>
+    <span class="btn ghost">生成</span>
+    <span class="btn primary">保存</span>
+  </div>
+  <div class="tabbar">
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg><span class="lab">今天</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg><span class="lab">待办</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7 4.5 4 5v13c3-.5 6-.2 8 1.5 2-1.7 5-2 8-1.5V5c-3-.5-6-.2-8 1.5z"/><path d="M12 6.5V19.5"/></svg><span class="lab">收集</span></span>
+    <span class="tab on"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span class="lab">复盘</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/></svg><span class="lab">我的</span></span>
+  </div>
+</body>
+</html>

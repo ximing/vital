@@ -1,13 +1,15 @@
 {
   "extends": "@vital/tsconfig/app.json",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "declaration": false,
     "types": []
   },
   "include": [
     "app.config.ts",
-    "expo-env.d.ts",
     "vitest.config.ts",
     "app/**/*.ts",
     "app/**/*.tsx",
@@ -16,5 +18,7 @@
     "__tests__/**/*.ts",
     "__tests__/**/*.tsx"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

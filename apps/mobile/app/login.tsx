@@ -1,5 +1,5 @@
 import { Redirect } from 'expo-router';
-import { useAuth } from '../src/auth/AuthProvider';
+import { useAuth } from '../src/services/auth.service';
 import { Loading } from '../src/components/Loading';
 import { LoginPage } from '../src/features/login';
 import { needsOnboarding } from '../src/lib/onboarding';

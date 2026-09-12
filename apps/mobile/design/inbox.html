@@ -1,0 +1,135 @@
+<!-- 设计稿 · 收集（稍后读列表） · 390×844 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital Mobile · 收集</title>
+<style>
+  :root{
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-deep:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --dim:#555E56; --faint:#98A098; --line:#E2E6E0;
+    --done:#2F9E63; --doing:#3D6FD1; --soon:#B4761E; --overdue:#CE4A45; --fav:#D9A62E;
+    --src-web:#3D6FD1; --src-wechat:#229E4E; --src-ext:#6A5CD0; --src-manual:#2C9C8C; --src-mobile:#B4761E;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    background:var(--canvas);color:var(--ink);position:relative;-webkit-font-smoothing:antialiased}
+  .num{font-variant-numeric:tabular-nums}
+  .status{height:54px;padding:18px 28px 0;display:flex;justify-content:space-between;align-items:flex-start}
+  .status .time{font-size:15px;font-weight:600}
+  .status .icons{display:flex;gap:6px;align-items:center}
+  .pagehead{height:52px;padding:0 8px;display:flex;align-items:center;gap:2px}
+  .pagehead .title{flex:1;font-size:26px;font-weight:700;padding-left:12px}
+  .iconbtn{width:40px;height:40px;display:grid;place-items:center;border-radius:20px;color:var(--ink)}
+  /* filter chips */
+  .chips{display:flex;gap:8px;padding:6px 16px 4px}
+  .chip{height:32px;padding:0 14px;border-radius:16px;border:1px solid var(--line);background:var(--elevated);
+    color:var(--dim);font-size:13px;font-weight:500;display:flex;align-items:center;gap:5px}
+  .chip.on{background:var(--accent-subtle);border-color:transparent;color:var(--accent);font-weight:600}
+  .chip .n{font-size:12px}
+  /* eyebrow */
+  .eyebrow{display:flex;align-items:center;gap:8px;margin:20px 20px 8px;padding:0 4px}
+  .eyebrow .lab{font-size:11px;font-weight:600;letter-spacing:1px;color:var(--faint)}
+  .eyebrow .cnt{font-size:11px;color:var(--faint)}
+  .eyebrow .rule{flex:1;height:1px;background:var(--line)}
+  /* entry card */
+  .entry{background:var(--elevated);border-radius:14px;margin:0 16px 10px;padding:14px 16px 12px;
+    box-shadow:0 1px 2px rgb(20 34 24/5%),0 10px 28px rgb(20 34 24/7%)}
+  .ehead{display:flex;align-items:center;gap:10px}
+  .tile{width:24px;height:24px;border-radius:6px;flex:none;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700}
+  .etitle{flex:1;min-width:0;font-size:15px;line-height:22px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .etitle.read{color:var(--dim)}
+  .unread{width:8px;height:8px;border-radius:4px;background:var(--accent);flex:none}
+  .esum{margin-top:6px;font-size:13px;line-height:19px;color:var(--dim);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .emeta{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--faint)}
+  .emeta .sp{flex:1}
+  .converted{height:20px;padding:0 8px;border-radius:10px;background:var(--accent-subtle);color:var(--accent);
+    font-size:11px;font-weight:600;display:grid;place-items:center}
+  /* fab + tabbar */
+  .fab{position:absolute;right:20px;bottom:98px;width:56px;height:56px;border-radius:28px;background:var(--accent);
+    display:grid;place-items:center;color:#fff;box-shadow:0 1px 2px rgb(20 34 24/5%),0 10px 24px rgb(20 34 24/14%)}
+  .tabbar{position:absolute;left:0;right:0;bottom:0;height:78px;background:var(--elevated);
+    border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:8px 4px 22px}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--faint)}
+  .tab .lab{font-size:11px;font-weight:500}
+  .tab.on{color:var(--accent)}
+</style>
+</head>
+<body>
+  <div class="status">
+    <span class="time num">9:41</span>
+    <span class="icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><path d="M23 4v4c1-.3 1.6-1 1.6-2S24 4.3 23 4z" fill="currentColor" opacity=".4"/></svg>
+    </span>
+  </div>
+  <div class="pagehead">
+    <span class="title">收集</span>
+    <span class="iconbtn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
+  </div>
+
+  <div class="chips">
+    <span class="chip on">全部</span>
+    <span class="chip">未读<span class="n num">6</span></span>
+    <span class="chip">收藏</span>
+    <span class="chip">归档</span>
+  </div>
+
+  <div class="eyebrow"><span class="lab">今天</span><span class="cnt num">2</span><span class="rule"></span></div>
+
+  <div class="entry">
+    <div class="ehead">
+      <span class="tile" style="background:var(--src-web)">少</span>
+      <span class="etitle">本地优先软件：数据应该住在你的设备上</span>
+      <span class="unread"></span>
+    </div>
+    <div class="esum">Local-first 不是离线模式的别名，而是一套关于数据所有权的工程主张：协作软件也能把真相源放在用户设备上……</div>
+    <div class="emeta"><span>网页</span><span class="num">· 2 小时前</span><span class="sp"></span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--fav)" stroke="var(--fav)" stroke-width="1.4" stroke-linejoin="round"><path d="M12 17l-5.5 3.5 1.8-6.3L3.5 9.7l6.5-.3L12 3.5l2 5.9 6.5.3-4.8 4.5 1.8 6.3z"/></svg>
+    </div>
+  </div>
+
+  <div class="entry">
+    <div class="ehead">
+      <span class="tile" style="background:var(--src-wechat)">知</span>
+      <span class="etitle">为什么你的待办清单越列越长</span>
+      <span class="unread"></span>
+    </div>
+    <div class="esum">清单膨胀的根源不是懒，而是「收集」和「承诺」混在了一起。把收集箱和今日清单分开，是第一步……</div>
+    <div class="emeta"><span>微信</span><span class="num">· 9:12</span><span class="sp"></span></div>
+  </div>
+
+  <div class="eyebrow"><span class="lab">昨天</span><span class="cnt num">3</span><span class="rule"></span></div>
+
+  <div class="entry">
+    <div class="ehead">
+      <span class="tile" style="background:var(--src-ext)">H</span>
+      <span class="etitle read">How AI agents actually remember things</span>
+    </div>
+    <div class="esum">A field guide to agent memory architectures: scratchpads, episodic stores, and why retrieval quality beats storage size……</div>
+    <div class="emeta"><span>扩展</span><span class="num">· 昨天 21:08</span><span class="sp"></span><span class="converted">已转任务</span></div>
+  </div>
+
+  <div class="entry">
+    <div class="ehead">
+      <span class="tile" style="background:var(--src-manual)">随</span>
+      <span class="etitle read">随笔：平静生产力的三个习惯</span>
+    </div>
+    <div class="emeta" style="margin-top:8px"><span>手动</span><span class="num">· 昨天 14:32</span><span class="sp"></span></div>
+  </div>
+
+  <div class="fab"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>
+
+  <div class="tabbar">
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg><span class="lab">今天</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg><span class="lab">待办</span></span>
+    <span class="tab on"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7 4.5 4 5v13c3-.5 6-.2 8 1.5 2-1.7 5-2 8-1.5V5c-3-.5-6-.2-8 1.5z"/><path d="M12 6.5V19.5"/></svg><span class="lab">收集</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span class="lab">复盘</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/></svg><span class="lab">我的</span></span>
+  </div>
+</body>
+</html>

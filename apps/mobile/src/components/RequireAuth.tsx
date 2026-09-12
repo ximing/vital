@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Redirect } from 'expo-router';
-import { useAuth } from '../auth/AuthProvider';
+import { useAuth } from '../services/auth.service';
 import { Loading } from './Loading';
 
 export function RequireAuth({ children }: { children: ReactNode }) {

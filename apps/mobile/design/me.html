@@ -1,0 +1,145 @@
+<!-- 设计稿 · 我的 / 设置 · 390×844 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital Mobile · 我的</title>
+<style>
+  :root{
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-deep:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --dim:#555E56; --faint:#98A098; --line:#E2E6E0;
+    --done:#2F9E63; --doing:#3D6FD1; --overdue:#CE4A45;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:390px;height:844px;overflow:hidden}
+  body{font-family:-apple-system,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    background:var(--canvas);color:var(--ink);position:relative;-webkit-font-smoothing:antialiased}
+  .num{font-variant-numeric:tabular-nums}
+  .status{height:54px;padding:18px 28px 0;display:flex;justify-content:space-between;align-items:flex-start}
+  .status .time{font-size:15px;font-weight:600}
+  .status .icons{display:flex;gap:6px;align-items:center}
+  .pagehead{height:52px;padding:0 20px;display:flex;align-items:center}
+  .pagehead .title{flex:1;font-size:26px;font-weight:700}
+  .eyebrow{display:flex;align-items:center;gap:8px;margin:20px 20px 8px;padding:0 4px}
+  .eyebrow:first-of-type{margin-top:10px}
+  .eyebrow .lab{font-size:11px;font-weight:600;letter-spacing:1px;color:var(--faint)}
+  .eyebrow .rule{flex:1;height:1px;background:var(--line)}
+  .card{background:var(--elevated);border-radius:14px;margin:0 16px;
+    box-shadow:0 1px 2px rgb(20 34 24/5%),0 10px 28px rgb(20 34 24/7%)}
+  /* account */
+  .acct{padding:16px}
+  .acct .top{display:flex;align-items:center;gap:14px}
+  .avatar{width:56px;height:56px;border-radius:28px;background:var(--accent-subtle);display:grid;place-items:center;
+    font-size:22px;font-weight:700;color:var(--accent)}
+  .acct .name{font-size:17px;line-height:24px;font-weight:600}
+  .acct .mail{font-size:13px;color:var(--dim);margin-top:1px}
+  .acct .btns{display:flex;gap:10px;margin-top:14px}
+  .btn-sm{height:32px;padding:0 14px;border-radius:9px;display:grid;place-items:center;font-size:13px;font-weight:600}
+  .btn-sm.ghost{background:var(--accent-subtle);color:var(--accent)}
+  .btn-sm.quiet{color:var(--overdue);font-weight:500}
+  /* segmented */
+  .appear{padding:14px 16px 16px}
+  .appear .hint{font-size:13px;color:var(--dim);margin-bottom:12px}
+  .seg{display:flex;background:var(--muted);border-radius:19px;padding:3px}
+  .seg span{flex:1;height:32px;border-radius:16px;display:grid;place-items:center;font-size:13px;font-weight:500;color:var(--dim)}
+  .seg span.on{background:var(--elevated);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgb(20 34 24/8%)}
+  /* nav rows */
+  .navrow{display:flex;align-items:center;gap:12px;height:52px;padding:0 16px}
+  .navrow .ic{color:var(--dim);flex:none}
+  .navrow .lab{flex:1;font-size:15px;color:var(--ink)}
+  .navrow .val{font-size:13px;color:var(--faint)}
+  .navrow .chev{color:var(--faint);flex:none}
+  .navrow+.navrow{border-top:1px solid var(--line)}
+  .navrow+.navrow{border-top:1px solid var(--line)}
+  /* switch */
+  .sw{width:44px;height:26px;border-radius:13px;background:var(--muted);position:relative;flex:none}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:10px;background:#fff;
+    box-shadow:0 1px 3px rgb(0 0 0/20%)}
+  .sw.on{background:var(--accent)}
+  .sw.on::after{left:21px}
+  /* tabbar */
+  .tabbar{position:absolute;left:0;right:0;bottom:0;height:78px;background:var(--elevated);
+    border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:8px 4px 22px}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--faint)}
+  .tab .lab{font-size:11px;font-weight:500}
+  .tab.on{color:var(--accent)}
+</style>
+</head>
+<body>
+  <div class="status">
+    <span class="time num">9:41</span>
+    <span class="icons">
+      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="5" width="3" height="6" rx="1"/><rect x="9" y="2.5" width="3" height="8.5" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="16" height="8" rx="2" fill="currentColor"/><path d="M23 4v4c1-.3 1.6-1 1.6-2S24 4.3 23 4z" fill="currentColor" opacity=".4"/></svg>
+    </span>
+  </div>
+  <div class="pagehead"><span class="title">我的</span></div>
+
+  <div class="eyebrow"><span class="lab">账户</span><span class="rule"></span></div>
+  <div class="card acct">
+    <div class="top">
+      <span class="avatar">S</span>
+      <div><div class="name">Simon</div><div class="mail">morningxm@hotmail.com</div></div>
+    </div>
+    <div class="btns"><span class="btn-sm ghost">更换头像</span><span class="btn-sm quiet">退出登录</span></div>
+  </div>
+
+  <div class="eyebrow"><span class="lab">外观</span><span class="rule"></span></div>
+  <div class="card appear">
+    <div class="hint">浅色、深色，或跟随系统。</div>
+    <div class="seg"><span class="on">跟随系统</span><span>浅</span><span>深</span></div>
+  </div>
+
+  <div class="eyebrow"><span class="lab">AI</span><span class="rule"></span></div>
+  <div class="card">
+    <div class="navrow">
+      <svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4.1 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 002.5 2.5z"/></svg>
+      <span class="lab">习惯</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div class="navrow">
+      <svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.4 8.4 0 01-3.8-.9L3 20l1.9-5.2a8.4 8.4 0 01-.9-3.8A8.5 8.5 0 018.6 3.4a8.4 8.4 0 013.8-.9h.6a8.5 8.5 0 018 8.5z"/><path d="M8.5 10.5h7M8.5 13.8h4.5"/></svg>
+      <span class="lab">线程</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div class="navrow">
+      <svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 4 12L16 12h5"/></svg>
+      <span class="lab">Agent 活动</span><span class="val num">今日 6 次</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+    <div class="navrow">
+      <svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.5h6M10 21.5h4M12 2.5a6 6 0 00-3.7 10.7c.8.7 1.2 1.4 1.4 2.3h4.6c.2-.9.6-1.6 1.4-2.3A6 6 0 0012 2.5z"/></svg>
+      <span class="lab">记忆</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+  </div>
+
+  <div class="eyebrow"><span class="lab">通知</span><span class="rule"></span></div>
+  <div class="card">
+    <div class="navrow"><span class="lab" style="margin-left:0">有提醒时间时推送</span><span class="sw on"></span></div>
+    <div class="navrow"><span class="lab">复盘提醒</span><span class="sw"></span></div>
+    <div class="navrow"><span class="lab">MeoW 推送渠道</span><span class="val" style="color:var(--done)">已接通</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+  </div>
+
+  <div class="eyebrow"><span class="lab">LLM</span><span class="rule"></span></div>
+  <div class="card">
+    <div class="navrow">
+      <svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4z"/><path d="M18.5 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>
+      <span class="lab">Provider 配置</span><span class="val num">Dashscope</span>
+      <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+  </div>
+  <div style="height:90px"></div>
+
+  <div class="tabbar">
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></svg><span class="lab">今天</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/></svg><span class="lab">待办</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 4.8 7 4.5 4 5v13c3-.5 6-.2 8 1.5 2-1.7 5-2 8-1.5V5c-3-.5-6-.2-8 1.5z"/><path d="M12 6.5V19.5"/></svg><span class="lab">收集</span></span>
+    <span class="tab"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span class="lab">复盘</span></span>
+    <span class="tab on"><svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.5-3.5 4.5-5 7.5-5s6 1.5 7.5 5"/></svg><span class="lab">我的</span></span>
+  </div>
+</body>
+</html>
