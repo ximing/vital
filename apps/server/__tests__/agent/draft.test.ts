@@ -6,7 +6,7 @@ import {
   fauxProvider,
   fauxToolCall,
 } from '@earendil-works/pi-ai';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { enqueueTaskDraft, processDueAgentJobs } from '../../src/agent/jobs.js';
@@ -229,6 +229,173 @@ describe('POST /api/v1/tasks/:id/draft', () => {
   });
 });
 
+describe('GET /api/v1/tasks/:id/draft', () => {
+  async function makeDelegable(token: string, title: string): Promise<string> {
+    const taskId = await createTask(token, title);
+    await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${taskId}`,
+      token,
+      payload: { delegable: true },
+    });
+    return taskId;
+  }
+
+  async function seedJob(
+    userId: string,
+    taskId: string,
+    status: 'pending' | 'running' | 'done' | 'failed' | 'cancelled',
+    lastError: string | null = null,
+  ): Promise<void> {
+    const now = new Date();
+    await getDb().insert(agentJobs).values({
+      id: randomUUID(),
+      userId,
+      jobType: 'task.draft',
+      payload: { taskId, manual: true, trigger: 'manual' },
+      dedupKey: `task.draft:${taskId}`,
+      scheduledAt: now,
+      status,
+      lastError,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  it('rejects tasks that are not delegable, completed, or not owned', async () => {
+    const alice = await registerUser(app, 'alice');
+    const bob = await registerUser(app, 'bob');
+    const plain = await createTask(alice.token, '普通任务');
+    expect(
+      (await injectJson(app, { method: 'GET', url: `/api/v1/tasks/${plain}/draft`, token: alice.token }))
+        .statusCode,
+    ).toBe(400);
+    expect(
+      (await injectJson(app, { method: 'GET', url: `/api/v1/tasks/${plain}/draft`, token: bob.token }))
+        .statusCode,
+    ).toBe(404);
+  });
+
+  it('returns idle without inserting a job', async () => {
+    const alice = await registerUser(app, 'alice');
+    const taskId = await makeDelegable(alice.token, '空状态任务');
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${taskId}/draft`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'idle', action: null });
+    const jobs = await getDb()
+      .select()
+      .from(agentJobs)
+      .where(eq(agentJobs.dedupKey, `task.draft:${taskId}`));
+    expect(jobs).toHaveLength(0);
+  });
+
+  it('returns queued after POST without producing an action', async () => {
+    const alice = await registerUser(app, 'alice');
+    const taskId = await makeDelegable(alice.token, '排队任务');
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${taskId}/draft`,
+      token: alice.token,
+    });
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${taskId}/draft`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'queued', action: null });
+  });
+
+  it('returns pending with the action when a proposal is waiting', async () => {
+    const alice = await registerUser(app, 'alice');
+    const taskId = await makeDelegable(alice.token, '有方案任务');
+    const actionId = randomUUID();
+    await getDb().insert(agentActions).values({
+      id: actionId,
+      userId: alice.id,
+      actionType: 'task.draft',
+      targetType: 'task',
+      targetId: taskId,
+      payload: { draft: '先列提纲。' },
+      feedback: 'pending',
+    });
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${taskId}/draft`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('pending');
+    expect(res.json().action.id).toBe(actionId);
+    expect(res.json().action.payload.draft).toBe('先列提纲。');
+  });
+
+  it('returns failed when the job failed or finished with no proposal', async () => {
+    const alice = await registerUser(app, 'alice');
+    const failedId = await makeDelegable(alice.token, '失败任务');
+    await seedJob(alice.id, failedId, 'failed', 'LLM_UNAVAILABLE');
+    const failed = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${failedId}/draft`,
+      token: alice.token,
+    });
+    expect(failed.statusCode).toBe(200);
+    expect(failed.json()).toEqual({ status: 'failed', action: null });
+
+    const skippedId = await makeDelegable(alice.token, '跳过任务');
+    await seedJob(alice.id, skippedId, 'done', 'skipped:no-llm');
+    const skipped = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${skippedId}/draft`,
+      token: alice.token,
+    });
+    expect(skipped.json()).toEqual({ status: 'failed', action: null });
+
+    const emptyId = await makeDelegable(alice.token, '空结果任务');
+    await seedJob(alice.id, emptyId, 'done', null);
+    const empty = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${emptyId}/draft`,
+      token: alice.token,
+    });
+    expect(empty.json()).toEqual({ status: 'failed', action: null });
+  });
+
+  it('returns idle after the proposal is accepted, not failed', async () => {
+    const alice = await registerUser(app, 'alice');
+    const taskId = await makeDelegable(alice.token, '已采纳任务');
+    const actionId = randomUUID();
+    await getDb().insert(agentActions).values({
+      id: actionId,
+      userId: alice.id,
+      actionType: 'task.draft',
+      targetType: 'task',
+      targetId: taskId,
+      payload: { draft: '第一步。' },
+      feedback: 'pending',
+    });
+    await seedJob(alice.id, taskId, 'done', null);
+    const accepted = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/agent/actions/${actionId}/feedback`,
+      token: alice.token,
+      payload: { feedback: 'accepted' },
+    });
+    expect(accepted.statusCode).toBe(200);
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${taskId}/draft`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'idle', action: null });
+  });
+});
+
 describe('task.draft processor', () => {
   it('drafts a plan via the LLM and writes a pending agent action + usage', async () => {
     const alice = await setupFauxUser('alice');
@@ -256,6 +423,7 @@ describe('task.draft processor', () => {
     expect(actions[0]!.targetType).toBe('task');
     expect(actions[0]!.feedback).toBe('pending');
     expect(actions[0]!.payload['draft']).toBe('1. 列大纲\n2. 收集数据\n3. 约评审');
+    expect(actions[0]!.payload['subtasks']).toBeUndefined();
     expect(actions[0]!.jobId).not.toBeNull();
 
     const usage = await getDb().select().from(agentUsage).where(eq(agentUsage.userId, alice.id));
@@ -363,10 +531,49 @@ describe('task.draft processor', () => {
     expect(jobs[0]!.status).toBe('done');
     expect(jobs[0]!.lastError).toBe('skipped:no-llm');
   });
+
+  it('stores proposed subtasks alongside the draft', async () => {
+    const alice = await setupFauxUser('alice');
+    const faux = installFaux();
+    faux.setResponses([
+      fauxAssistantMessage(
+        fauxToolCall('submit_draft', {
+          draft: '1. 列大纲\n2. 填数据',
+          subtasks: [
+            { title: '列大纲', estimateMinutes: 15 },
+            { title: '填数据', estimateMinutes: 30 },
+          ],
+        }),
+      ),
+    ]);
+    const taskId = await createTask(alice.token, '写季度总结');
+    await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${taskId}`,
+      token: alice.token,
+      payload: { delegable: true },
+    });
+
+    await enqueueTaskDraft(getDb(), alice.id, taskId, new Date());
+    expect(await processDueAgentJobs(new Date())).toBe(1);
+
+    const actions = await draftActions(taskId);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.payload['draft']).toBe('1. 列大纲\n2. 填数据');
+    expect(actions[0]!.payload['subtasks']).toEqual([
+      { title: '列大纲', estimateMinutes: 15 },
+      { title: '填数据', estimateMinutes: 30 },
+    ]);
+  });
 });
 
 describe('task.draft feedback', () => {
-  async function seedDraft(userId: string, taskId: string, draft: string): Promise<string> {
+  async function seedDraft(
+    userId: string,
+    taskId: string,
+    draft: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<string> {
     const id = randomUUID();
     await getDb()
       .insert(agentActions)
@@ -376,10 +583,18 @@ describe('task.draft feedback', () => {
         actionType: 'task.draft',
         targetType: 'task',
         targetId: taskId,
-        payload: { draft },
+        payload: { draft, ...extra },
         feedback: 'pending',
       });
     return id;
+  }
+
+  async function childrenOf(parentId: string) {
+    return getDb()
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.parentId, parentId), isNull(tasks.deletedAt)))
+      .orderBy(asc(tasks.sortOrder), asc(tasks.id));
   }
 
   it('accepted appends the draft to the task notes', async () => {
@@ -425,5 +640,55 @@ describe('task.draft feedback', () => {
     });
     expect(res.statusCode).toBe(200);
     expect((await taskRow(taskId)).notesMd).toBe('原有备注');
+  });
+
+  it('accepted with subtasks appends notes and materializes children', async () => {
+    const alice = await registerUser(app, 'alice');
+    const taskId = await createTask(alice.token, '写季度总结', { notes: '原有备注' });
+    const actionId = await seedDraft(alice.id, taskId, '1. 列大纲\n2. 填数据', {
+      subtasks: [
+        { title: '列大纲', estimateMinutes: 15 },
+        { title: '填数据', estimateMinutes: 30 },
+      ],
+    });
+
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/agent/actions/${actionId}/feedback`,
+      token: alice.token,
+      payload: { feedback: 'accepted' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().feedback).toBe('accepted');
+    expect(res.json().feedbackPayload).toMatchObject({
+      materialized: { taskIds: [expect.any(String), expect.any(String)] },
+    });
+
+    const parentRow = await taskRow(taskId);
+    expect(parentRow.notesMd).toBe('原有备注\n\n1. 列大纲\n2. 填数据');
+    const children = await childrenOf(taskId);
+    expect(children.map((row) => row.title)).toEqual(['列大纲', '填数据']);
+    expect(children.map((row) => row.estimateMinutes)).toEqual([15, 30]);
+    expect(children.every((row) => row.listId === parentRow.listId)).toBe(true);
+  });
+
+  it('accepted on a nested task writes notes but does not nest further', async () => {
+    const alice = await registerUser(app, 'alice');
+    const parent = await createTask(alice.token, '写季度总结');
+    const child = await createTask(alice.token, '列大纲', { parentId: parent });
+    const actionId = await seedDraft(alice.id, child, '先写一段', {
+      subtasks: [{ title: '不应出现', estimateMinutes: 10 }],
+    });
+
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/agent/actions/${actionId}/feedback`,
+      token: alice.token,
+      payload: { feedback: 'accepted' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((await taskRow(child)).notesMd).toBe('先写一段');
+    expect(await childrenOf(child)).toHaveLength(0);
+    expect(res.json().feedbackPayload).toBeNull();
   });
 });

@@ -17,7 +17,7 @@ import {
   type AgentActionRow,
   type TaskRow,
 } from '../db/schema.js';
-import { enqueueOutcomeRefresh } from './jobs.js';
+import { enqueueOutcomeRefresh, type AgentDb } from './jobs.js';
 import { markAgentSchedule } from './scheduling.js';
 import { lockAgentUser } from './user-lock.js';
 import { syncTaskNotifications } from '../notifications/outbox.js';
@@ -67,7 +67,16 @@ export function summarizePayload(actionType: string, payload: Record<string, unk
     case 'task.draft': {
       const draft = str(payload['draft']);
       const firstLine = draft.split('\n')[0] ?? '';
-      return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+      if (firstLine !== '') {
+        return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+      }
+      const subtasks = Array.isArray(payload['subtasks']) ? payload['subtasks'] : [];
+      return subtasks
+        .map((s) =>
+          s && typeof s === 'object' ? str((s as Record<string, unknown>)['title']) : '',
+        )
+        .filter((title) => title !== '')
+        .join('、');
     }
     case 'report.generate': {
       const notes = str(payload['notes']);
@@ -167,11 +176,13 @@ export async function listAgentActions(
   }));
 }
 
-/** Defensive parse of a decompose payload — the ledger stores free-form jsonb. */
-function parseDecomposeSubtasks(payload: Record<string, unknown>): { title: string; estimateMinutes: number | null }[] {
+type ProposedSubtask = { title: string; estimateMinutes: number | null };
+
+/** Defensive parse of a decompose/draft payload — the ledger stores free-form jsonb. */
+function parseDecomposeSubtasks(payload: Record<string, unknown>): ProposedSubtask[] {
   const raw = payload['subtasks'];
   if (!Array.isArray(raw)) return [];
-  return raw.flatMap((item): { title: string; estimateMinutes: number | null }[] => {
+  return raw.flatMap((item): ProposedSubtask[] => {
     if (typeof item !== 'object' || item === null) return [];
     const record = item as Record<string, unknown>;
     if (typeof record['title'] !== 'string' || record['title'].trim() === '') return [];
@@ -186,12 +197,76 @@ function parseDecomposeSubtasks(payload: Record<string, unknown>): { title: stri
 }
 
 /**
+ * Insert proposed children under `parent`. No-op for nested tasks (one level of
+ * subtasks only) or an empty list. Caller records the returned rows for undo.
+ */
+async function materializeProposedSubtasks(
+  tx: AgentDb,
+  userId: string,
+  parent: TaskRow,
+  subtasks: ProposedSubtask[],
+  now: Date,
+): Promise<TaskRow[]> {
+  if (parent.parentId !== null || subtasks.length === 0) return [];
+  const createdRows: TaskRow[] = [];
+  const user = await getUserEntity(userId);
+  for (const subtask of subtasks) {
+    const [created] = await tx
+      .insert(tasks)
+      .values({
+        id: randomUUID(),
+        userId,
+        listId: parent.listId,
+        parentId: parent.id,
+        outcomeId: parent.outcomeId,
+        estimateMinutes: subtask.estimateMinutes,
+        title: subtask.title,
+        notesMd: '',
+        status: 'todo',
+        priority: 3,
+        pinned: false,
+        isAllDay: false,
+        timezone: parent.timezone,
+        sortOrder: await nextSortOrder(parent.listId, parent.id, tx),
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (created) {
+      createdRows.push(created);
+      await syncTaskNotifications(
+        {
+          id: created.id,
+          userId: created.userId,
+          listId: created.listId,
+          title: created.title,
+          status: created.status,
+          dueAt: created.dueAt ?? null,
+          reminderMode: created.reminderMode ?? null,
+          reminderOffsetMinutes: created.reminderOffsetMinutes ?? null,
+          reminderAt: created.reminderAt ?? null,
+          isAllDay: created.isAllDay,
+          timezone: created.timezone,
+          deletedAt: created.deletedAt ?? null,
+        },
+        user,
+        now,
+        tx,
+      );
+    }
+  }
+  if (parent.outcomeId) await enqueueOutcomeRefresh(tx, userId, parent.outcomeId, now);
+  return createdRows;
+}
+
+/**
  * Record user feedback on a proposal. 'edited' additionally applies the edited
  * payload in the same transaction (rename outcome / override headline etc.).
  * For 'task.decompose', 'accepted' materializes the proposed subtasks inside
  * the same transaction and records their ids in feedbackPayload.materialized
  * (the undo endpoint compensates with a soft delete). For 'task.draft',
- * 'accepted' appends the draft to the task notes.
+ * 'accepted' appends the draft to the task notes and materializes any proposed
+ * subtasks the same way.
  */
 export async function applyActionFeedback(
   userId: string,
@@ -223,68 +298,19 @@ export async function applyActionFeedback(
           // transaction aborts and the proposal stays pending.
           throw AppError.of(409, 'VALIDATION_ERROR', { reason: 'parent task no longer exists' });
         }
-        const user = await getUserEntity(userId);
-        for (const subtask of subtasks) {
-          const [created] = await tx
-            .insert(tasks)
-            .values({
-              id: randomUUID(),
-              userId,
-              listId: parent.listId,
-              parentId: parent.id,
-              outcomeId: parent.outcomeId,
-              estimateMinutes: subtask.estimateMinutes,
-              title: subtask.title,
-              notesMd: '',
-              status: 'todo',
-              priority: 3,
-              pinned: false,
-              isAllDay: false,
-              timezone: parent.timezone,
-              sortOrder: await nextSortOrder(parent.listId, parent.id, tx),
-              createdAt: now,
-              updatedAt: now,
-            })
-            .returning();
-          if (created) {
-            materialized.push(created);
-            await syncTaskNotifications(
-              {
-                id: created.id,
-                userId: created.userId,
-                listId: created.listId,
-                title: created.title,
-                status: created.status,
-                dueAt: created.dueAt ?? null,
-                reminderMode: created.reminderMode ?? null,
-                reminderOffsetMinutes: created.reminderOffsetMinutes ?? null,
-                reminderAt: created.reminderAt ?? null,
-                isAllDay: created.isAllDay,
-                timezone: created.timezone,
-                deletedAt: created.deletedAt ?? null,
-              },
-              user,
-              now,
-              tx,
-            );
-          }
-        }
-        if (parent.outcomeId) await enqueueOutcomeRefresh(tx, userId, parent.outcomeId, now);
+        materialized.push(...(await materializeProposedSubtasks(tx, userId, parent, subtasks, now)));
       }
     }
     if (input.feedback === 'accepted' && row.actionType === 'task.draft') {
       const draft = typeof row.payload['draft'] === 'string' ? row.payload['draft'].trim() : '';
-      if (draft !== '') {
-        const [task] = await tx
-          .select({
-            id: tasks.id,
-            notesMd: tasks.notesMd,
-            deletedAt: tasks.deletedAt,
-          })
-          .from(tasks)
-          .where(and(eq(tasks.id, row.targetId), eq(tasks.userId, userId)))
-          .limit(1);
-        if (task && !task.deletedAt) {
+      const subtasks = parseDecomposeSubtasks(row.payload);
+      const [task] = await tx
+        .select()
+        .from(tasks)
+        .where(and(eq(tasks.id, row.targetId), eq(tasks.userId, userId)))
+        .limit(1);
+      if (task && !task.deletedAt) {
+        if (draft !== '') {
           const base = task.notesMd.trimEnd();
           const notes = (base === '' ? draft : `${base}\n\n${draft}`).slice(0, 50_000);
           await tx
@@ -292,6 +318,7 @@ export async function applyActionFeedback(
             .set({ notesMd: notes, updatedAt: now })
             .where(eq(tasks.id, task.id));
         }
+        materialized.push(...(await materializeProposedSubtasks(tx, userId, task, subtasks, now)));
       }
     }
     if (input.feedback === 'edited' && input.editedPayload) {
@@ -318,7 +345,7 @@ export async function applyActionFeedback(
       }
     }
     const feedbackPayload =
-      input.feedback === 'accepted' && row.actionType === 'task.decompose' && materialized.length > 0
+      input.feedback === 'accepted' && materialized.length > 0
         ? { materialized: { taskIds: materialized.map((t) => t.id) } }
         : (input.editedPayload ?? null);
     const [updated] = await tx
@@ -340,7 +367,7 @@ export async function applyActionFeedback(
       (async () => {
         for (const row of materialized) {
           await indexTask(row).catch((err: unknown) => {
-            console.error('[retrieval] decompose indexTask failed', err);
+            console.error('[retrieval] materialize indexTask failed', err);
           });
         }
       })(),

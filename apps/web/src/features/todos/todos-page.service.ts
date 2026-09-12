@@ -88,7 +88,7 @@ export class TodosPageService extends Service {
         ...(extras.priority !== undefined ? { priority: extras.priority } : {}),
         ...(this.composeDay ? { dueYmd: this.composeDay } : {}),
       });
-      this.query.client.setQueryData(todoKeys.item(task.id), task);
+      this.query.setQueryData(todoKeys.item(task.id), task);
       await this.invalidateTasks();
       await markOnboarding({ createdTask: true });
       this.todos.setSelected(task.id);
@@ -102,7 +102,7 @@ export class TodosPageService extends Service {
     if (extras.priority !== undefined && extras.priority !== 3) next.priority = extras.priority;
     if (extras.status) next.status = extras.status;
     const task = await client.createTask(next);
-    this.query.client.setQueryData(todoKeys.item(task.id), task);
+    this.query.setQueryData(todoKeys.item(task.id), task);
     await this.invalidateTasks();
     await markOnboarding({ createdTask: true });
     this.todos.setSelected(task.id);

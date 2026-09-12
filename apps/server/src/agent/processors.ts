@@ -507,7 +507,8 @@ async function processTaskDecompose(
 /**
  * Manual trigger: draft an execution plan for a delegable task. The proposal
  * lands in the agent_actions ledger; the web 方案卡 applies it into the task
- * notes on accept. Idempotent — a pending draft suppresses re-generation.
+ * notes (and any proposed subtasks) on accept. Idempotent — a pending draft
+ * suppresses re-generation.
  */
 async function processTaskDraft(
   job: AgentJobRow,
@@ -561,6 +562,7 @@ async function processTaskDraft(
     estimateMinutes: task.estimateMinutes,
     existingSubtasks: subtasks.map((s) => s.title),
     memory: memory.map((m) => m.content),
+    canSplit: task.parentId === null,
     ...(similarExamples ? { similarExamples } : {}),
   });
 
@@ -575,23 +577,33 @@ async function processTaskDraft(
   if (!result) return 'skipped:no-llm';
 
   const draft = result.args.draft.trim().slice(0, 2000);
-  if (draft === '') return 'done';
+  const proposed = (result.args.subtasks ?? [])
+    .map((item) => ({
+      title: item.title.trim().slice(0, 500),
+      estimateMinutes: item.estimateMinutes ?? null,
+    }))
+    .filter((item) => item.title !== '');
+  if (draft === '' && proposed.length === 0) return 'done';
 
   await withAgentJobEffects(job, async (tx) => {
     const [current] = await tx.select().from(tasks).where(and(eq(tasks.userId, user.id), eq(tasks.id, taskId), isNull(tasks.deletedAt), inArray(tasks.status, ['todo', 'doing']))).for('update');
     if (!current || !current.delegable) { skipExecution('TASK_CHANGED'); return; }
     const pending = await tx.select({ id: agentActions.id }).from(agentActions).where(and(eq(agentActions.userId, user.id), eq(agentActions.targetId, taskId), eq(agentActions.targetType, 'task'), eq(agentActions.actionType, 'task.draft'), eq(agentActions.feedback, 'pending'))).limit(1);
     if (pending.length) { skipExecution('ALREADY_PENDING'); return; }
-  await recordAgentAction(tx, {
-    id: randomUUID(),
-    userId: user.id,
-    jobId: job.id,
-    actionType: 'task.draft',
-    targetType: 'task',
-    targetId: taskId,
-    payload: { draft },
-    feedback: 'pending',
-  });
+    const subtasksPayload = current.parentId === null ? proposed : [];
+    await recordAgentAction(tx, {
+      id: randomUUID(),
+      userId: user.id,
+      jobId: job.id,
+      actionType: 'task.draft',
+      targetType: 'task',
+      targetId: taskId,
+      payload: {
+        ...(draft !== '' ? { draft } : {}),
+        ...(subtasksPayload.length > 0 ? { subtasks: subtasksPayload } : {}),
+      },
+      feedback: 'pending',
+    });
     executionResult({ resultSummary: '新增 1 项提案' });
   });
   return 'done';

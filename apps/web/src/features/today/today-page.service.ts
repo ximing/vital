@@ -63,7 +63,7 @@ export class TodayPageService extends Service {
         ...(extras.status !== undefined ? { status: extras.status } : {}),
         ...(extras.priority !== undefined ? { priority: extras.priority } : {}),
       });
-      this.query.client.setQueryData(todoKeys.item(task.id), task);
+      this.query.setQueryData(todoKeys.item(task.id), task);
       await markOnboarding({ createdTask: true });
       this.todos.setSelected(task.id);
       this.todos.openDetail(task.id);
@@ -76,7 +76,7 @@ export class TodayPageService extends Service {
     if (extras.priority !== undefined && extras.priority !== 3) next.priority = extras.priority;
     if (extras.status) next.status = extras.status;
     const task = await client.createTask(next);
-    this.query.client.setQueryData(todoKeys.item(task.id), task);
+    this.query.setQueryData(todoKeys.item(task.id), task);
     await markOnboarding({ createdTask: true });
     this.todos.setSelected(task.id);
     await this.refresh();

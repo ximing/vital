@@ -213,12 +213,17 @@ export function buildDraftPrompt(input: {
   estimateMinutes: number | null;
   existingSubtasks: string[];
   memory: string[];
+  /** False when the task is already a subtask — nested children are not allowed. */
+  canSplit: boolean;
   /** Similar completed tasks with their subtask splits, as reference examples. */
   similarExamples?: SimilarTaskExample[];
 }): PromptPair {
   const system = [
     '你是执行方案起草助手。用户把一个任务标记为「可交给 Agent」，为它起草一份可执行方案（draft）：先做什么、后做什么、需要准备的材料和容易卡住的点。用中文分点列出，≤500 字。',
-    '方案只是草案，用户审阅后才会写进任务备注；不要假装已经执行了任何步骤，不要编造事实。',
+    '方案只是草案，用户审阅后才会写进任务备注、生成子任务；不要假装已经执行了任何步骤，不要编造事实。',
+    input.canSplit
+      ? '如果任务可以拆开，同时给出 2-8 个可在一次专注内完成的子任务（title + 可选 estimateMinutes）。不要重复已有子任务。拆不动就不要给 subtasks。'
+      : '这是子任务，不要再拆，不要给 subtasks。',
     '必须调用 submit_draft 工具提交结果，不要输出其他文字。',
     DATA_RULE,
   ].join('');

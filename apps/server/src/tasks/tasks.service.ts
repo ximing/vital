@@ -41,6 +41,7 @@ import { isUniqueViolation } from '../db/pg.js';
 import {
   inboxItems,
   agentActions,
+  agentJobs,
   taskCompletions,
   tasks,
   taskTags,
@@ -714,19 +715,50 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   return dtoOf(updated);
 }
 
-/**
- * Manual trigger: the user asks the agent to draft an execution plan for a
- * delegable task. Idempotent — an existing pending draft is returned as-is;
- * otherwise a task.draft job is (re)armed and runs in the worker.
- */
-export async function requestTaskDraft(userId: string, id: string): Promise<TaskDraftTrigger> {
-  const task = await getOwnedTaskOr404(userId, id);
+function assertDraftable(task: TaskRow): void {
   if (!task.delegable || task.status === 'done' || task.status === 'canceled') {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
-  const db = getDb();
-  const [pending] = await db
+}
+
+async function pendingDraftAction(userId: string, taskId: string) {
+  const [pending] = await getDb()
     .select()
+    .from(agentActions)
+    .where(
+      and(
+        eq(agentActions.userId, userId),
+        eq(agentActions.targetType, 'task'),
+        eq(agentActions.targetId, taskId),
+        eq(agentActions.actionType, 'task.draft'),
+        eq(agentActions.feedback, 'pending'),
+      ),
+    )
+    .limit(1);
+  return pending ?? null;
+}
+
+/**
+ * Read-only view of the draft job for a delegable task. Does not enqueue.
+ * Used by the web detail pane to restore "起草中" / failure after remount.
+ */
+export async function getTaskDraft(userId: string, id: string): Promise<TaskDraftTrigger> {
+  const task = await getOwnedTaskOr404(userId, id);
+  assertDraftable(task);
+  const pending = await pendingDraftAction(userId, task.id);
+  if (pending) return { status: 'pending', action: toAgentActionDto(pending) };
+
+  const [job] = await getDb()
+    .select()
+    .from(agentJobs)
+    .where(and(eq(agentJobs.userId, userId), eq(agentJobs.dedupKey, `task.draft:${task.id}`)))
+    .limit(1);
+  if (!job) return { status: 'idle', action: null };
+  if (job.status === 'pending' || job.status === 'running') return { status: 'queued', action: null };
+  if (job.status === 'failed' || job.lastError) return { status: 'failed', action: null };
+
+  const [anyAction] = await getDb()
+    .select({ id: agentActions.id })
     .from(agentActions)
     .where(
       and(
@@ -734,12 +766,24 @@ export async function requestTaskDraft(userId: string, id: string): Promise<Task
         eq(agentActions.targetType, 'task'),
         eq(agentActions.targetId, task.id),
         eq(agentActions.actionType, 'task.draft'),
-        eq(agentActions.feedback, 'pending'),
       ),
     )
     .limit(1);
+  if (!anyAction) return { status: 'failed', action: null };
+  return { status: 'idle', action: null };
+}
+
+/**
+ * Manual trigger: the user asks the agent to draft an execution plan for a
+ * delegable task. Idempotent — an existing pending draft is returned as-is;
+ * otherwise a task.draft job is (re)armed and runs in the worker.
+ */
+export async function requestTaskDraft(userId: string, id: string): Promise<TaskDraftTrigger> {
+  const task = await getOwnedTaskOr404(userId, id);
+  assertDraftable(task);
+  const pending = await pendingDraftAction(userId, task.id);
   if (pending) return { status: 'pending', action: toAgentActionDto(pending) };
-  await enqueueTaskDraft(db, userId, task.id, new Date());
+  await enqueueTaskDraft(getDb(), userId, task.id, new Date());
   return { status: 'queued', action: null };
 }
 

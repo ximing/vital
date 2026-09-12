@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildClusterPrompt,
   buildDecomposePrompt,
+  buildDraftPrompt,
   buildHeadlinePrompt,
   buildReportPrompt,
 } from '../../src/agent/prompts.js';
@@ -82,5 +83,29 @@ describe('agent prompt builders inject distilled memory', () => {
       memory: [],
     });
     expect(user).not.toContain('从用户纠偏中学到的偏好');
+  });
+});
+
+describe('buildDraftPrompt', () => {
+  const base = {
+    taskTitle: '写季度总结',
+    notes: '',
+    outcomeName: null as string | null,
+    dueAt: null as string | null,
+    estimateMinutes: null as number | null,
+    existingSubtasks: [] as string[],
+    memory: [] as string[],
+  };
+
+  it('asks for subtasks when the task can split', () => {
+    const { system } = buildDraftPrompt({ ...base, canSplit: true });
+    expect(system).toContain('submit_draft');
+    expect(system).toContain('2-8');
+    expect(system).toContain('子任务');
+  });
+
+  it('forbids nested subtasks when the task is already a child', () => {
+    const { system } = buildDraftPrompt({ ...base, canSplit: false });
+    expect(system).toContain('不要给 subtasks');
   });
 });

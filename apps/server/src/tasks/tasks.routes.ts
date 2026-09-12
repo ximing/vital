@@ -20,6 +20,7 @@ import {
   createTaskFromText,
   deleteTask,
   getTask,
+  getTaskDraft,
   listTasks,
   patchTask,
   reorderTasks,
@@ -91,6 +92,14 @@ export function registerTaskRoutes(app: FastifyInstance): void {
     const { id } = idParams.parse(req.params);
     await deleteTask(user.id, id);
     return reply.code(204).send();
+  });
+
+  /** Read-only draft job status for a delegable task. Does not enqueue. */
+  app.get('/api/v1/tasks/:id/draft', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    return getTaskDraft(user.id, id);
   });
 
   /** Ask the agent to draft an execution plan for a delegable task (idempotent). */

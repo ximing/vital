@@ -90,6 +90,16 @@ export function proposeSubtasksTool(capture: (args: ProposeSubtasksArgs) => void
 export const submitDraftSchema = Type.Object({
   /** Execution-plan draft in Chinese, markdown bullet points. */
   draft: Type.String({ minLength: 1, maxLength: 2000 }),
+  /** Optional split of the same plan into concrete subtasks. */
+  subtasks: Type.Optional(
+    Type.Array(
+      Type.Object({
+        title: Type.String({ minLength: 1, maxLength: 200 }),
+        estimateMinutes: Type.Optional(Type.Integer({ minimum: 1, maximum: 24 * 60 })),
+      }),
+      { minItems: 1, maxItems: 8 },
+    ),
+  ),
 });
 export type SubmitDraftArgs = Static<typeof submitDraftSchema>;
 
@@ -97,7 +107,8 @@ export function submitDraftTool(capture: (args: SubmitDraftArgs) => void): Agent
   return {
     name: 'submit_draft',
     label: '提交执行方案',
-    description: '提交该任务的一份可执行方案草案：步骤顺序、所需材料和注意点。',
+    description:
+      '提交该任务的一份可执行方案草案（步骤顺序、所需材料和注意点），并在可拆时附带 2-8 个子任务。',
     parameters: submitDraftSchema,
     execute: (_toolCallId, params) => {
       capture(params);
