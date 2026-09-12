@@ -10,6 +10,7 @@ import { subscribeSystemTheme } from '@/lib/theme';
 import { startSync, stopSync } from '@/features/sync/sync-engine';
 import { authService, useAuth } from '@/services/auth.service';
 import { registerVitalServices } from '@/services/register';
+import { Button } from '@/ui/button';
 import { VitalMark } from '@/shell/VitalMark';
 import '@/styles/app.css';
 
@@ -29,6 +30,20 @@ function BootScreen() {
       <p className="mt-4 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {t.boot.label}
       </p>
+    </div>
+  );
+}
+
+function UnreachableScreen() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-canvas text-fg">
+      <VitalMark className="h-12 w-12 text-accent" />
+      <p className="mt-4 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+        {t.boot.unreachable}
+      </p>
+      <Button className="mt-4" onClick={() => void authService().retryBoot()}>
+        {t.boot.retry}
+      </Button>
     </div>
   );
 }
@@ -53,6 +68,7 @@ function Root() {
   }, [status, userId]);
 
   if (status === 'booting') return <BootScreen />;
+  if (status === 'unavailable') return <UnreachableScreen />;
   return <App />;
 }
 

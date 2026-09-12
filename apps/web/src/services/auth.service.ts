@@ -1,9 +1,10 @@
 import { resolve, Service, useObserverService } from '@rabjs/react';
+import { isSessionInvalidError } from '@vital/api-client';
 import type { LoginInput, RegisterInput, UserProfile } from '@vital/dto';
 import { AUTH_CLEARED_EVENT, client } from '@/api/client';
 import { ThemeService } from '@/services/theme.service';
 
-export type AuthStatus = 'booting' | 'ready';
+export type AuthStatus = 'booting' | 'ready' | 'unavailable';
 
 export class AuthService extends Service {
   status: AuthStatus = 'booting';
@@ -30,10 +31,14 @@ export class AuthService extends Service {
   }
 
   async boot(): Promise<void> {
-    const ok = await client.boot();
-    if (!ok) {
+    const result = await client.boot();
+    if (result === 'guest') {
       this.user = null;
       this.status = 'ready';
+      return;
+    }
+    if (result === 'unreachable') {
+      this.status = 'unavailable';
       return;
     }
     try {
@@ -41,10 +46,19 @@ export class AuthService extends Service {
       this.themeService.setChoice(user.themePreference);
       this.user = user;
       this.status = 'ready';
-    } catch {
-      this.user = null;
-      this.status = 'ready';
+    } catch (err) {
+      if (isSessionInvalidError(err)) {
+        this.user = null;
+        this.status = 'ready';
+        return;
+      }
+      this.status = 'unavailable';
     }
+  }
+
+  async retryBoot(): Promise<void> {
+    this.status = 'booting';
+    await this.boot();
   }
 
   async login(input: LoginInput): Promise<void> {

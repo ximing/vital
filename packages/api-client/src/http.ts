@@ -109,6 +109,13 @@ function wrapNetwork(err: unknown): ApiError {
   return new ApiError(0, 'NETWORK_ERROR', err instanceof Error ? err.message : '网络错误');
 }
 
+/** Server rejected the session. Network / 5xx / 429 are not this. */
+export function isSessionInvalidError(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 401;
+}
+
+export type BootResult = 'ok' | 'guest' | 'unreachable';
+
 /** Low-level HTTP: cookie vs bearer, single-flight 401 refresh, replay once. */
 export class Http {
   private readonly baseUrl: string;
@@ -127,21 +134,25 @@ export class Http {
 
   /**
    * Cookie web after reload: access is memory-only, `vital_rt` remains.
-   * Tries refresh once; false means treat the user as logged out.
+   * Tries refresh once. 'guest' is an explicit invalid session; 'unreachable'
+   * means the session could not be proven valid or invalid.
    */
-  async boot(): Promise<boolean> {
+  async boot(): Promise<BootResult> {
     const existing = await this.tokenStore.getAccessToken();
     if (existing !== null && existing !== '') {
-      return true;
+      return 'ok';
     }
     if (this.authMode !== 'cookie') {
-      return false;
+      const refreshToken = await this.tokenStore.getRefreshToken();
+      if (refreshToken === null || refreshToken === '') {
+        return 'guest';
+      }
     }
     try {
       await this.refresh();
-      return true;
-    } catch {
-      return false;
+      return 'ok';
+    } catch (err) {
+      return isSessionInvalidError(err) ? 'guest' : 'unreachable';
     }
   }
 
@@ -174,7 +185,7 @@ export class Http {
     return { status: res.status, data: await parseBody(res) };
   }
 
-  /** Single-flight: concurrent 401s share one refresh. Failure clears the store. */
+  /** Single-flight: concurrent 401s share one refresh. */
   refresh(): Promise<AuthResponse> {
     if (this.refreshPromise === null) {
       this.refreshPromise = this.doRefresh().finally(() => {
@@ -249,19 +260,20 @@ export class Http {
     } else {
       const refreshToken = await this.tokenStore.getRefreshToken();
       if (refreshToken === null || refreshToken === '') {
-        await settle(this.tokenStore.clear());
         throw new ApiError(401, 'INVALID_TOKEN', '登录已过期');
       }
       refreshOpts.body = { refreshToken };
     }
     const res = await this.doFetch('/api/v1/auth/refresh', refreshOpts);
     if (!res.ok) {
-      await settle(this.tokenStore.clear());
-      throw await toApiError(res);
+      const err = await toApiError(res);
+      if (isSessionInvalidError(err)) {
+        await settle(this.tokenStore.clear());
+      }
+      throw err;
     }
     const data = await parseBody<unknown>(res);
     if (!isAuthResponse(data)) {
-      await settle(this.tokenStore.clear());
       throw new ApiError(0, 'INVALID_RESPONSE', '响应格式错误');
     }
     const tokens = tokensForStore(this.authMode, data.tokens);

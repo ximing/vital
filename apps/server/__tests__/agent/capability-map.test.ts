@@ -51,6 +51,7 @@ describe('capability ↔ actionType map', () => {
     expect(capabilityOfActionType('outcome.suggestion')).toBe('headline');
     expect(capabilityOfActionType('outcome.headline')).toBe('headline');
     expect(capabilityOfActionType('task.draft')).toBe('draft');
+    expect(capabilityOfActionType('report.generate')).toBe('report');
     expect(capabilityOfActionType('habit.create')).toBeNull();
   });
 });

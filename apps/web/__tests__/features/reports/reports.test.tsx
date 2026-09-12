@@ -33,6 +33,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       getReportEmbeds: vi.fn(),
       patchReport: vi.fn(),
       fillReport: vi.fn(),
+      generateReport: vi.fn(),
       syncHead: vi.fn(),
       completeTask: vi.fn(),
       uncompleteTask: vi.fn(),
@@ -227,6 +228,7 @@ describe('reports workspace', () => {
       bodyMd: input.bodyMd ?? daily.bodyMd,
       title: input.title ?? daily.title,
     }));
+    vi.mocked(client.generateReport).mockResolvedValue({ status: 'queued', jobId: 'job-1' });
     vi.mocked(client.fillReport).mockResolvedValue({
       ...daily,
       revision: 2,
@@ -557,6 +559,35 @@ describe('reports workspace', () => {
     expect(client.getReport).not.toHaveBeenCalled();
     expect(await screen.findByText(t.reports.remoteUpdated)).toBeInTheDocument();
     expect(screen.getByLabelText(t.reports.title)).toHaveValue(`${daily.title}改`);
+  });
+
+  it('queues daily report generation from the editor', async () => {
+    const generated = makeReport({
+      id: 'r-daily',
+      revision: 2,
+      bodyMd: `${daily.bodyMd}完成了纪要。\n`,
+    });
+    vi.mocked(client.generateReport).mockImplementation(async () => {
+      vi.mocked(client.getReport).mockResolvedValue(generated);
+      return { status: 'queued', jobId: 'job-1' };
+    });
+    const user = userEvent.setup();
+    renderAt('/reports/r-daily');
+    const button = await screen.findByTestId('report-generate');
+    expect(button).toHaveTextContent(t.reports.generate);
+    await user.click(button);
+    await waitFor(() => {
+      expect(client.generateReport).toHaveBeenCalledWith('r-daily');
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('report-wysiwyg').textContent).toContain('完成了纪要。');
+    });
+  });
+
+  it('hides one-click generate on weekly reports', async () => {
+    renderAt('/reports/r-weekly');
+    expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
+    expect(screen.queryByTestId('report-generate')).not.toBeInTheDocument();
   });
 
   it('shows overview error when stats cannot load', async () => {

@@ -74,6 +74,9 @@ function sessionDirty(s: Session): boolean {
   return isDirty(s.draftMd, s.serverMd) || s.draftTitle.trim() !== s.serverTitle.trim();
 }
 
+const GENERATE_WAIT_MS = 60_000;
+const GENERATE_POLL_MS = 3_000;
+
 /** Inline period stat — Sora numeral + caption label, no KPI card chrome. */
 function MetaStat({ tone, value, label }: { tone: string; value: number; label: string }) {
   return (
@@ -149,6 +152,7 @@ export function ReportsWorkspace() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveInFlightRef = useRef<Promise<Report> | null>(null);
   const fillingRef = useRef(false);
+  const [generating, setGenerating] = useState(false);
   const saveFnRef = useRef(actions.save);
   const runSaveTrackedRef = useRef<((live: Session) => Promise<Report>) | undefined>(undefined);
 
@@ -365,6 +369,57 @@ export function ReportsWorkspace() {
     }
   }
 
+  async function generate(): Promise<void> {
+    const live = sessionRef.current;
+    if (!live || live.filling || generating || liveType !== 'daily') return;
+    cancelSaveTimer();
+    if (sessionDirty(live)) {
+      try {
+        await runSaveTracked(live);
+      } catch {
+        return;
+      }
+    }
+    const reportId = live.id;
+    const baseline = extractNotes((sessionRef.current ?? live).serverMd, 'daily');
+    fillingRef.current = true;
+    patchLive((s) => ({ ...s, filling: true, saveError: null }));
+    setGenerating(true);
+    try {
+      const queued = await client.generateReport(reportId);
+      if (queued.status === 'disabled') {
+        fillingRef.current = false;
+        patchLive((s) => ({ ...s, filling: false, saveError: t.reports.generateDisabled }));
+        return;
+      }
+      const started = Date.now();
+      while (true) {
+        if (idRef.current !== reportId) {
+          fillingRef.current = false;
+          return;
+        }
+        const remote = await actions.loadReport(reportId);
+        if (extractNotes(remote.bodyMd, 'daily') !== baseline) {
+          fillingRef.current = false;
+          commitSession({ ...sessionFrom(remote, sessionRef.current), filling: false });
+          reportUi().setEmbeds(remote.embeds);
+          actions.refreshStats('daily', reportId);
+          void markOnboarding({ wroteDaily: true });
+          return;
+        }
+        if (Date.now() - started >= GENERATE_WAIT_MS) break;
+        await new Promise((resolve) => setTimeout(resolve, GENERATE_POLL_MS));
+      }
+      fillingRef.current = false;
+      patchLive((s) => ({ ...s, filling: false, saveError: t.reports.generateTimeout }));
+    } catch (err) {
+      fillingRef.current = false;
+      patchLive((s) => ({ ...s, filling: false, saveError: humanError(err) }));
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   async function reloadRemote(): Promise<void> {
     if (id === '') return;
     try {
@@ -571,6 +626,17 @@ export function ReportsWorkspace() {
                     );
                   })}
                 </div>
+                {liveType === 'daily' ? (
+                  <Button
+                    variant="quiet"
+                    data-testid="report-generate"
+                    disabled={!online || session.filling}
+                    loading={generating}
+                    onClick={() => void generate()}
+                  >
+                    {generating ? t.reports.generating : t.reports.generate}
+                  </Button>
+                ) : null}
               </div>
 
               <div className="mt-2 flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1 pl-4">

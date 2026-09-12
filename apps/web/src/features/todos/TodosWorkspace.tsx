@@ -36,6 +36,7 @@ import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { usePopover } from '@/ui/use-popover';
 import {
   useCalendarQuery,
+  useDetailTask,
   useListsQuery,
   useTagsQuery,
   useTasksQuery,
@@ -135,7 +136,10 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const selected =
     tasks.find((task) => task.id === selectedId) ??
     (tasksQuery.data ?? []).find((task) => task.id === selectedId);
-  const detailTask = selected;
+  const detailTask = useDetailTask(detailOpen ? selectedId : null, [
+    ...tasks,
+    ...(tasksQuery.data ?? []),
+  ]);
 
   const title = listTitle(
     listId,

@@ -27,11 +27,17 @@ export const AGENT_MEMORY_SCOPES = [
   'reflect',
   'distill',
   'notify',
+  'report',
 ] as const;
 export type AgentMemoryScope = (typeof AGENT_MEMORY_SCOPES)[number];
 
 /** Discriminated per job_type. */
-export type AgentJobPayload = ({ outcomeId: string } | { taskId: string } | { date: string }) & {
+export type AgentJobPayload = (
+  | { outcomeId: string }
+  | { taskId: string }
+  | { date: string }
+  | { reportId: string }
+) & {
   scheduleGeneration?: number; scheduleFeedbackThrough?: string;
   trigger?: string; manual?: boolean; mode?: 'incremental' | 'maintenance';
 };
@@ -68,7 +74,7 @@ export const agentJobs = pgTable(
     index('idx_agent_jobs_user_type').on(t.userId, t.jobType),
     check(
       'agent_jobs_type_check',
-      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'memory.distill', 'habit.spawn', 'notify.scan', 'index.sync')`,
+      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'memory.distill', 'habit.spawn', 'notify.scan', 'index.sync', 'report.generate')`,
     ),
     check(
       'agent_jobs_status_check',
@@ -103,9 +109,9 @@ export const agentActions = pgTable(
     index('idx_agent_actions_target').on(t.targetType, t.targetId, t.feedback),
     check(
       'agent_actions_type_check',
-      sql`${t.actionType} IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'task.draft', 'habit.create', 'habit.adjust', 'habit.nudge')`,
+      sql`${t.actionType} IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'task.draft', 'habit.create', 'habit.adjust', 'habit.nudge', 'report.generate')`,
     ),
-    check('agent_actions_target_type_check', sql`${t.targetType} IN ('outcome', 'task', 'habit')`),
+    check('agent_actions_target_type_check', sql`${t.targetType} IN ('outcome', 'task', 'habit', 'report')`),
     check(
       'agent_actions_feedback_check',
       sql`${t.feedback} IN ('pending', 'accepted', 'edited', 'dismissed', 'undone')`,
@@ -139,7 +145,7 @@ export const agentMemory = pgTable(
     check('agent_memory_kind_check', sql`${t.kind} IN ('preference', 'pattern', 'correction')`),
     check(
       'agent_memory_scope_check',
-      sql`${t.scope} <> '{}' AND ${t.scope} <@ ARRAY['all', 'headline', 'cluster', 'decompose', 'draft', 'reflect', 'distill', 'notify']::text[]`,
+      sql`${t.scope} <> '{}' AND ${t.scope} <@ ARRAY['all', 'headline', 'cluster', 'decompose', 'draft', 'reflect', 'distill', 'notify', 'report']::text[]`,
     ),
   ],
 );

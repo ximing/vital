@@ -28,6 +28,7 @@ import type {
   ExtensionAuthCodeResponse,
   FillReportInput,
   GetReportQuery,
+  ReportGenerateTrigger,
   Habit,
   LlmCatalogProvider,
   LlmProviderInput,
@@ -94,13 +95,13 @@ import type {
   CreateApiTokenInput,
   CreatedApiToken,
 } from '@vital/dto';
-import { Http, isAuthResponse, tokensForStore } from './http.js';
+import { Http, isAuthResponse, tokensForStore, type BootResult } from './http.js';
 import { ApiError, type VitalClientOptions } from './types.js';
 import { uploadImpl, type UploadInput } from './upload.js';
 
 export interface VitalClient {
   readonly authMode: AuthMode;
-  boot(): Promise<boolean>;
+  boot(): Promise<BootResult>;
   register(input: RegisterInput): Promise<AuthResponse>;
   login(input: LoginInput): Promise<AuthResponse>;
   createExtensionAuthCode(): Promise<ExtensionAuthCodeResponse>;
@@ -223,6 +224,7 @@ export interface VitalClient {
   getReportEmbeds(id: string): Promise<ReportEmbedsResponse>;
   patchReport(id: string, input: PatchReportInput): Promise<Report>;
   fillReport(id: string, input: FillReportInput): Promise<Report>;
+  generateReport(id: string): Promise<ReportGenerateTrigger>;
   syncHead(): Promise<SyncHead>;
   syncChanges(query: { since: string; limit?: number }): Promise<SyncChanges>;
 }
@@ -484,6 +486,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       http.request(`/api/v1/reports/${id}`, { method: 'PATCH', body: input }),
     fillReport: (id, input) =>
       http.request(`/api/v1/reports/${id}/fill`, { method: 'POST', body: input }),
+    generateReport: (id) =>
+      http.request(`/api/v1/reports/${id}/generate`, { method: 'POST', body: {} }),
     syncHead: () => http.request('/api/v1/sync/head'),
     syncChanges: (query) => {
       const q: Record<string, string | number | boolean | undefined> = { since: query.since };

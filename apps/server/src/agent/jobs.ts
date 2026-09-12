@@ -177,6 +177,22 @@ export async function enqueueTaskDraft(
   });
 }
 
+/** Manual trigger: write the daily report notes from today's facts. */
+export async function enqueueReportGenerate(
+  db: AgentDb,
+  userId: string,
+  reportId: string,
+  now: Date,
+): Promise<string | null> {
+  return enqueueAgentJob(db, {
+    userId,
+    jobType: 'report.generate',
+    payload: { reportId, manual: true, trigger: 'manual' },
+    dedupKey: `report.generate:${reportId}`,
+    scheduledAt: now,
+  });
+}
+
 export async function hasPendingDecomposeAction(db: AgentDb, taskId: string, userId: string): Promise<boolean> {
   const rows = await db
     .select({ id: agentActions.id })

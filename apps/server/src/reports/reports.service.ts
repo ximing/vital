@@ -12,6 +12,7 @@ import {
   reportTypeSchema,
   type FillReportInput,
   type GetReportQuery,
+  type ReportGenerateTrigger,
   type InboxStatus,
   type ListReportsQuery,
   type PatchReportInput,
@@ -40,6 +41,7 @@ import {
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
+import { enqueueReportGenerate } from '../agent/jobs.js';
 import { computeCarriedSnapshot } from './carry.js';
 import { currentPeriod, localDate, periodInstants, previousPeriodStart } from './period.js';
 
@@ -479,4 +481,18 @@ export async function fillReport(
   const updated = await bumpOrConflict(user.id, id, input.revision, { bodyMd });
   await syncEmbedLinks(user.id, id, updated.bodyMd);
   return liveReport(updated);
+}
+
+/**
+ * Queue a report.generate job for a daily report. The worker writes the notes
+ * section from that day's completed / carried / captured / habit facts.
+ */
+export async function requestReportGenerate(
+  userId: string,
+  id: string,
+): Promise<ReportGenerateTrigger> {
+  const row = await getOwnedReportOr404(userId, id);
+  if (asType(row.type) !== 'daily') throw AppError.of(400, 'VALIDATION_ERROR');
+  const jobId = await enqueueReportGenerate(getDb(), userId, row.id, new Date());
+  return { status: jobId ? 'queued' : 'disabled', jobId };
 }

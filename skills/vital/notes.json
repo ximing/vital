@@ -5,6 +5,7 @@
   "POST /api/v1/tasks/from-text": "Parse natural language into a task using the account LLM settings.",
   "GET /api/v1/tasks": "List tasks in a list. `listId` may be a UUID or `smart:today` / `smart:inbox` / `smart:upcoming` / `smart:someday` / `smart:done`.",
   "GET /api/v1/reports/current": "Get or create the report for the period containing `at` (defaults to now).",
+  "POST /api/v1/reports/:id/generate": "Queue an agent job that writes the daily report notes from that day's completed, carried, captured and habit data. Daily reports only.",
   "POST /api/v1/tokens": "Create a personal access token. The `token` field is returned once.",
   "GET /api/v1/tokens/:id/access": "Call log for one token, newest first, retained 30 days."
 }

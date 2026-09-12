@@ -11,6 +11,7 @@ import type { AgentActionType } from '@vital/dto';
  * - cluster  (agent.cluster, processOutcomeCluster)  emits outcome.create
  * - decompose (agent.decompose, processTaskDecompose) emits task.decompose
  * - draft    (agent.draft, processTaskDraft)         emits task.draft
+ * - report   (agent.report, processReportGenerate)   emits report.generate
  *
  * A run may emit several actions, so per-capability cost is an *amortized*
  * figure: the capability's total cost divided by its adopted proposals.
@@ -23,6 +24,7 @@ export const CAPABILITY_ACTION_MAP = {
   cluster: ['outcome.create'],
   decompose: ['task.decompose'],
   draft: ['task.draft'],
+  report: ['report.generate'],
 } as const satisfies Record<string, readonly AgentActionType[]>;
 
 export type CostCapability = keyof typeof CAPABILITY_ACTION_MAP;

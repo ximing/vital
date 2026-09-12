@@ -10,10 +10,11 @@ export const agentActionTypeSchema = z.enum([
   'habit.create',
   'habit.adjust',
   'habit.nudge',
+  'report.generate',
 ]);
 export type AgentActionType = z.infer<typeof agentActionTypeSchema>;
 
-export const agentTargetTypeSchema = z.enum(['outcome', 'task', 'habit']);
+export const agentTargetTypeSchema = z.enum(['outcome', 'task', 'habit', 'report']);
 export type AgentTargetType = z.infer<typeof agentTargetTypeSchema>;
 
 export const agentFeedbackSchema = z.enum([
@@ -234,6 +235,7 @@ export const agentMemoryScopeSchema = z.enum([
   'reflect',
   'distill',
   'notify',
+  'report',
 ]);
 export type AgentMemoryScopeValue = z.infer<typeof agentMemoryScopeSchema>;
 

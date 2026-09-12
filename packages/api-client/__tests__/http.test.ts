@@ -118,14 +118,14 @@ describe('Http cookie mode', () => {
       }
       return respond(500, { error: { code: 'NO', message: 'no' } });
     });
-    expect(await http.boot()).toBe(true);
+    expect(await http.boot()).toBe('ok');
     expect(refreshCount).toBe(1);
     expect(store.tokens?.accessToken).toBe('booted');
-    expect(await http.boot()).toBe(true);
+    expect(await http.boot()).toBe('ok');
     expect(refreshCount).toBe(1);
   });
 
-  it('boot returns false and clears when cookie refresh fails', async () => {
+  it('boot returns guest and clears when cookie refresh is 401', async () => {
     const store = memoryStore();
     const http = makeHttp('cookie', store, (url) => {
       if (urlOf(url).endsWith('/api/v1/auth/refresh')) {
@@ -133,8 +133,20 @@ describe('Http cookie mode', () => {
       }
       return respond(200, {});
     });
-    expect(await http.boot()).toBe(false);
+    expect(await http.boot()).toBe('guest');
     expect(store.cleared).toBe(true);
+  });
+
+  it('boot returns unreachable and does not clear when cookie refresh is 500', async () => {
+    const store = memoryStore();
+    const http = makeHttp('cookie', store, (url) => {
+      if (urlOf(url).endsWith('/api/v1/auth/refresh')) {
+        return respond(500, { error: { code: 'INTERNAL_ERROR', message: '暂时不可用' } });
+      }
+      return respond(200, {});
+    });
+    expect(await http.boot()).toBe('unreachable');
+    expect(store.cleared).toBe(false);
   });
 
   it('concurrent 401s only fire one cookie refresh (single-flight)', async () => {
@@ -225,12 +237,28 @@ describe('Http bearer mode', () => {
       calls += 1;
       return respond(200, {});
     });
-    expect(await http.boot()).toBe(false);
+    expect(await http.boot()).toBe('guest');
     expect(calls).toBe(0);
   });
 });
 
 describe('Http refresh failure and replay', () => {
+  it('refresh 500 does not clear the session', async () => {
+    const store = memoryStore({ accessToken: 'expired', refreshToken: 'r1', expiresIn: 900 });
+    const http = makeHttp('bearer', store, (url) => {
+      if (urlOf(url).endsWith('/api/v1/auth/refresh')) {
+        return respond(500, { error: { code: 'INTERNAL_ERROR', message: '暂时不可用' } });
+      }
+      return respond(401, { error: { code: 'INVALID_TOKEN', message: 'x' } });
+    });
+    await expect(http.request('/api/v1/lists')).rejects.toMatchObject({
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    expect(store.cleared).toBe(false);
+    expect(store.tokens?.refreshToken).toBe('r1');
+  });
+
   it('failed refresh clears and throws the server ApiError', async () => {
     const store = memoryStore({ accessToken: 'expired', refreshToken: 'dead', expiresIn: 900 });
     const http = makeHttp('bearer', store, (url) => {

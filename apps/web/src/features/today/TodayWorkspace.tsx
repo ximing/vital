@@ -24,6 +24,7 @@ import { QuickAdd, type ComposeExtras } from '@/features/todos/QuickAdd';
 import { applyDraftToCreate, type ScheduleDraft } from '@/features/todos/schedule-draft';
 import { TaskDetail } from '@/features/todos/TaskDetail';
 import {
+  useDetailTask,
   useListsQuery,
   useTagsQuery,
   useTasksQuery,
@@ -95,7 +96,7 @@ export function TodayWorkspace() {
   );
 
   const selected = tasks.find((task) => task.id === selectedId);
-  const detailTask = selected;
+  const detailTask = useDetailTask(detailOpen ? selectedId : null, tasks);
 
   const intent = llmReady(user?.llm, 'task.parse');
   const agentReady = llmReady(user?.llm, 'agent.headline');

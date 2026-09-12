@@ -191,6 +191,9 @@ describe('todos workspace', () => {
     vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.getTask).mockImplementation(async (id) =>
+      makeTask({ id, title: `task-${id}` }),
+    );
     vi.mocked(client.calendar).mockResolvedValue({ instances: [] });
   });
 
@@ -535,5 +538,40 @@ describe('todos workspace', () => {
       }),
     );
     expect(client.createTask).not.toHaveBeenCalled();
+  });
+
+  it('keeps the detail pane open when opening a subtask that is not in the current list', async () => {
+    const parent = makeTask({
+      id: 'parent-1',
+      title: '写季度总结',
+      listId: inbox.id,
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+    });
+    const child = makeTask({
+      id: 'child-1',
+      title: '列大纲',
+      listId: inbox.id,
+      parentId: parent.id,
+      dueAt: null,
+    });
+    vi.mocked(client.listTasks).mockImplementation(async ({ listId }) => ({
+      items:
+        listId === 'smart:today' ? [parent] : listId === inbox.id ? [parent, child] : [],
+      nextCursor: null,
+    }));
+    vi.mocked(client.getTask).mockImplementation(async (id) => {
+      if (id === child.id) return child;
+      if (id === parent.id) return parent;
+      throw new Error(`unknown task ${id}`);
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/todos/lists/smart:today');
+    const row = await screen.findByRole('option', { name: parent.title });
+    await user.click(within(row).getByRole('button', { name: t.todos.openDetail }));
+    expect(await screen.findByRole('complementary', { name: parent.title })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: child.title }));
+    expect(await screen.findByRole('complementary', { name: child.title })).toBeInTheDocument();
+    expect(screen.getByLabelText(t.todos.title)).toHaveValue(child.title);
+    expect(screen.getByLabelText(t.todos.closeDetail)).toBeInTheDocument();
   });
 });

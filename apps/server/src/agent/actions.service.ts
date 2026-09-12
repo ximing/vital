@@ -12,6 +12,7 @@ import {
   agentActions,
   habits,
   outcomes,
+  reports,
   tasks,
   type AgentActionRow,
   type TaskRow,
@@ -68,6 +69,11 @@ export function summarizePayload(actionType: string, payload: Record<string, unk
       const firstLine = draft.split('\n')[0] ?? '';
       return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
     }
+    case 'report.generate': {
+      const notes = str(payload['notes']);
+      const firstLine = notes.split('\n')[0] ?? '';
+      return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+    }
     default: {
       // habit.* have no producers yet — fall back to a name-ish field, then raw JSON.
       const name = str(payload['name']) || str(payload['hint']) || str(payload['content']);
@@ -115,6 +121,14 @@ export async function targetNamesFor(
       .from(habits)
       .where(and(eq(habits.userId, userId), inArray(habits.id, habitIds)));
     for (const row of found) map.set(row.id, row.name);
+  }
+  const reportIds = idsByType.get('report') ?? [];
+  if (reportIds.length > 0) {
+    const found = await db
+      .select({ id: reports.id, title: reports.title })
+      .from(reports)
+      .where(and(eq(reports.userId, userId), inArray(reports.id, reportIds)));
+    for (const row of found) map.set(row.id, row.title);
   }
   return map;
 }

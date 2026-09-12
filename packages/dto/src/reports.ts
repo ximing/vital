@@ -113,6 +113,15 @@ export const fillReportInputSchema = z.object({
 });
 export type FillReportInput = z.infer<typeof fillReportInputSchema>;
 
+/**
+ * POST /reports/:id/generate result. 'queued' means a report.generate job was
+ * (re)armed; 'disabled' when the agent worker is off.
+ */
+export interface ReportGenerateTrigger {
+  status: 'queued' | 'disabled';
+  jobId: string | null;
+}
+
 export const reportIdParamsSchema = z.object({
   id: uuidSchema,
 });

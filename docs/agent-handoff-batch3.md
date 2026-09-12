@@ -20,24 +20,25 @@ vital 的自进化闭环 = 信号采集 → 蒸馏 → 检索注入 → 提案 �
 
 1. 项目记忆：
    - `/Users/ximing/.claude/projects/-Users-ximing-project-mygithub-vital/memory/vital-batch2-cost-eval-schedule.md`（上一批产出 + **pnpm script 参数透传、gen-vital-skill 再生成**的坑）
-   - `/Users/ximing/.claude/projects/-Users-ximing-project-mygithub-vital/memory/vital-batch1-transactional-acceptance.md`（drizzle journal when 时间戳单调递增的坑——本批要出 0029 迁移）
+   - `/Users/ximing/.claude/projects/-Users-ximing-project-mygithub-vital/memory/vital-batch1-transactional-acceptance.md`（drizzle journal when 时间戳单调递增的坑——本批要出 0030 迁移）
    - `/Users/ximing/.claude/projects/-Users-ximing-project-mygithub-vital/memory/vital-csi-verification.md`、`vital-v13-status.md`（csi 流程与 worker 重启）
 2. 仓库有 CodeGraph 索引（`.codegraph/`），定位代码优先用 `codegraph explore` 或 MCP 工具。
-3. 工作区应该是干净的（前两批已 commit）；若有零星未提交改动，先看 `git status` 确认归属，不要动别人的。
+3. 工作区状态：前两批（物化/undo/编辑事件流、成本评估/调度可见性）已 commit。当前未提交改动属于**另一批进行中的工作**（mobile 端 UI 重构 + `report.generate` 能力，含 0029 迁移）——等它 commit 后再启动本批；若启动时它仍未提交，**不要动这些文件**，尤其 `processors.ts`、`agent.ts` schema、`_journal.json` 与 0029 迁移（本批的 0030 迁移排在它之后）。
 
 ## 现状锚点（已核实，从这里开始读代码）
 
 | 锚点 | 现状 |
 |---|---|
-| `apps/server/src/retrieval/tasks.ts:140-217` | `searchSimilarTasks`：混合检索（Qdrant 向量 ∪ Meili 稀疏 → RRF → rerank），支持 `status` / `excludeId` 过滤，返回 `SimilarTaskHit {id, title}`；**客户端未配置时返回 null，infra 错误向上抛（调用方须 catch 降级）**。目前只有 processors 3 个调用点 |
+| `apps/server/src/retrieval/tasks.ts:140-217` | `searchSimilarTasks`：混合检索（Qdrant 向量 ∪ Meili 稀疏 → RRF → rerank），支持 `status` / `excludeId` 过滤，返回 `SimilarTaskHit {id, title}`；**客户端未配置时返回 null，infra 错误向上抛（调用方须 catch 降级）**。目前仅 processors 1 个调用点（`processors.ts:254`） |
 | `apps/server/src/retrieval/pipeline.ts:146-211` | `searchMemories`：混合记忆检索，同样 null 降级语义；**hit 之后什么都不记**（任务 B 要加 lastRetrievedAt） |
-| `apps/server/src/agent/processors.ts:69` | `MEMORY_TOTAL_LIMIT = 30`，evict oldest non-manual——任务 B 改这里 |
-| `apps/server/src/agent/processors.ts:125` 附近 | `loadAgentMemory` → `searchMemories`；**存在 PG fallback 路径**（检索客户端缺失时），lastRetrievedAt 更新必须覆盖两条路径，否则 dev/test 与生产行为不一致。先找到 fallback 的确切位置 |
+| `apps/server/src/agent/harness.ts:37` | `loadAgentMemory`：**混合路径与 PG fallback 都收敛在这个函数**（有 query 走 `searchMemories`，null/异常时落到 PG recency 路径）。任务 B 的 lastRetrievedAt 更新点就在这里，覆盖两个分支 |
+| `apps/server/src/agent/harness.ts:75` 附近 | PG fallback 路径的 select **只取 `kind`/`content`，不含 `id`**——要更新 lastRetrievedAt 必须先给这个 select 加 id，这是最容易漏的一步 |
+| `apps/server/src/agent/processors.ts:75` | `MEMORY_TOTAL_LIMIT = 30`；evict 循环在 `processors.ts:823` 附近（`orderBy asc createdAt` 后逐条删 non-manual 直到回到上限）——任务 B 改这里 |
 | `apps/server/src/retrieval/pipeline.ts:23` | `trackIndexJob`：fire-and-forget 索引 + 每日 index.sync 兜底——**刚建的任务可能不在索引里**，这就是任务 A 要 SQL 补召回的原因 |
 | `apps/server/src/llm/parse-task.ts:267` | `interpretTaskText`：智能解析建任务的 LLM 入口 |
 | `apps/server/src/inbox/inbox.service.ts` | inbox convert → 建任务 |
 | `apps/server/src/tasks/tasks.service.ts:440` | `createTask`（sortOrder 在这层分配）；**注意：decompose 物化（批次 1）也走建任务**——重复检测不能对这些内部创建触发，接线位置见 A1 |
-| `apps/server/drizzle/` | 最新 0028，本批新迁移从 **0029** 开始（journal when 时间戳必须单调递增） |
+| `apps/server/drizzle/` | 最新 0029（`report.generate` 枚举扩展，**未提交**），本批新迁移从 **0030** 开始，journal when 时间戳必须大于 0029 的 |
 | rerank 服务 | `rerank.rerankTexts` 的返回形状（是否带 score）**先核实**，任务 A 的阈值过滤依赖它 |
 
 ## 任务 A：收集时重复检测
@@ -73,8 +74,8 @@ findPotentialDuplicates(userId, query, excludeId?): Promise<SimilarTaskHit[]>
 
 ### B1 lastRetrievedAt
 
-- 迁移 0029：`agent_memory` 加 `last_retrieved_at timestamptz null`（注意 journal when 单调递增的坑）。
-- **两条检索路径都要更新**：`searchMemories` 混合路径命中后、以及 `loadAgentMemory` 的 PG fallback 路径命中后，批量 `UPDATE agent_memory SET last_retrieved_at = now WHERE id IN (hits)`。放在 hits 确定之后（rerank 之后的结果，不是 recall 阶段的候选）。
+- 迁移 0030：`agent_memory` 加 `last_retrieved_at timestamptz null`（注意 journal when 单调递增的坑，且排在未提交的 0029 之后）。
+- **更新点收敛在 `harness.ts` 的 `loadAgentMemory`**（`searchMemories` 的全部调用方都在这里）：混合路径 hits 非 null 时更新 hit id 集合；PG fallback 路径先给 select 补上 `id` 再同样更新。批量 `UPDATE agent_memory SET last_retrieved_at = now WHERE id IN (...)`。放在 hits 确定之后（rerank 之后的结果，不是 recall 阶段的候选）。
 - 写放大在本规模下可接受（每次命中几十行 update），注释说明。
 - **索引无需重建**：lastRetrievedAt 不进 Qdrant/Meili 的内容字段，touch 记忆不得触发 re-index。
 
@@ -101,7 +102,7 @@ findPotentialDuplicates(userId, query, excludeId?): Promise<SimilarTaskHit[]>
 
 ### 任务 B 测试清单
 
-- [ ] 混合路径与 PG fallback 路径命中后 lastRetrievedAt 都被更新（两条路径分别测）
+- [ ] 混合路径与 PG fallback 路径命中后 lastRetrievedAt 都被更新（两条路径分别测；PG fallback 的 select 补 id 后行为不变——kind/content 返回值与排序不回归）
 - [ ] 超限淘汰：宽限期内新记忆不被淘汰（总数可短暂超 30）；宽限期外按 COALESCE 最旧先走；从未被召回的老记忆先于最近被召回的老记忆被淘汰；manual 永不淘汰
 - [ ] 淘汰留痕：agent_memory_history 有记录、executionResult 含淘汰摘要
 - [ ] touch 记忆不触发 re-index（若有索引调用 mock，断言未发生）
@@ -111,7 +112,7 @@ findPotentialDuplicates(userId, query, excludeId?): Promise<SimilarTaskHit[]>
 
 按记忆 `vital-csi-verification.md` 流程（dev 登录、页面内 API 造数、originalUrl 去重）：
 
-1. **环境**：dev 库**手动**跑 0029 迁移（dev/test 库分离）；重启 dev server 和 worker；api-client 重新 build。确认 dev 环境检索客户端（Qdrant/Meili/embedding）已配置——没配置的话 SQL 窗口路径仍应工作（这本身是个验收点）。
+1. **环境**：dev 库**手动**跑 0030 迁移（dev/test 库分离；若 0029 尚未在 dev 上跑过，先跑 0029）；重启 dev server 和 worker；api-client 重新 build。确认 dev 环境检索客户端（Qdrant/Meili/embedding）已配置——没配置的话 SQL 窗口路径仍应工作（这本身是个验收点）。
 2. **场景 A（重复检测）**：建任务"提交季度报告" → 再建"提交季度报告 "（近似标题）→ 提示"可能已有"出现且可跳转；**紧接着连续建两个相似任务**（第二个命中第一个，此时第一个尚未进索引——验证 SQL 窗口路径）；触发一次 decompose 采纳 → 子任务创建无任何查重提示闪现。
 3. **场景 B（淘汰）**：页面内 API 造数灌 30+ 条记忆（含 manual、含不同 createdAt）→ 触发 `POST /api/v1/agent/memory/distill` → 查库验证：淘汰名单符合 B2 规则、lastRetrievedAt 在检索后更新、执行记录里有淘汰摘要。
 4. 截图归档，originalUrl 去重后交付。
@@ -128,5 +129,6 @@ findPotentialDuplicates(userId, query, excludeId?): Promise<SimilarTaskHit[]>
 - 不做后续批次内容：自动合并（#5）、两阶段聚类（#7）、主动程度开关、调度器扫描优化（#9）、索引写入搬进 agent_jobs（#10）、召回率/rerank 增益评估指标——哪怕看起来顺手
 - 不改前两批的物化/undo/编辑事件流/成本评估逻辑
 - 不动 `MEMORY_TOTAL_LIMIT = 30` 的数值本身
+- 不动进行中批次的未提交改动：mobile 重构、`report.generate` 相关代码与测试（`processors.ts` 里 report 的部分只读不写）
 - 不引入新依赖
 - 不 commit、不 push

@@ -9,6 +9,7 @@ export const LLM_CAPABILITIES = [
   'agent.cluster',
   'agent.decompose',
   'agent.draft',
+  'agent.report',
   'agent.reflect',
   'agent.distill',
   'agent.notify',

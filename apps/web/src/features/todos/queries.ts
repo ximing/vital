@@ -11,7 +11,7 @@ import type {
   Task,
   TaskPriority,
 } from '@vital/dto';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { todosUi } from './todos-ui.service';
@@ -22,6 +22,7 @@ export const todoKeys = {
   tags: ['todos', 'tags'] as const,
   counts: ['todos', 'counts'] as const,
   tasks: (listId: string) => ['todos', 'tasks', listId] as const,
+  item: (id: string) => ['todos', 'task', id] as const,
   calendar: (from: string, to: string) => ['todos', 'calendar', from, to] as const,
 };
 
@@ -76,6 +77,48 @@ export function useTasksQuery(listId: string, enabled = true) {
   });
 }
 
+export function findTaskInCache(qc: QueryClient, id: string): Task | undefined {
+  for (const [, data] of qc.getQueriesData<Task[]>({ queryKey: ['todos', 'tasks'] })) {
+    if (!Array.isArray(data)) continue;
+    const found = data.find((task) => task.id === id);
+    if (found) return found;
+  }
+  return qc.getQueryData<Task>(todoKeys.item(id));
+}
+
+export function useTaskQuery(id: string | null) {
+  return useQuery({
+    queryKey: todoKeys.item(id ?? ''),
+    queryFn: () => {
+      if (id === null || id === '') throw new Error('task id required');
+      return client.getTask(id);
+    },
+    enabled: id !== null && id !== '',
+  });
+}
+
+/**
+ * Task shown in the detail pane. Subtasks often live on the parent list but
+ * not on the current smart list (e.g. today), so the pane must not depend on
+ * the visible row set alone.
+ */
+export function useDetailTask(selectedId: string | null, localTasks: Task[]): Task | undefined {
+  const qc = useQueryClient();
+  const fromLocal = selectedId
+    ? localTasks.find((task) => task.id === selectedId)
+    : undefined;
+  const fromCache =
+    selectedId !== null && fromLocal === undefined
+      ? findTaskInCache(qc, selectedId)
+      : undefined;
+  const fetchId =
+    selectedId !== null && fromLocal === undefined && fromCache === undefined
+      ? selectedId
+      : null;
+  const fetched = useTaskQuery(fetchId);
+  return fromLocal ?? fromCache ?? fetched.data;
+}
+
 export function useCalendarQuery(from: string, to: string, enabled = true) {
   return useQuery({
     queryKey: todoKeys.calendar(from, to),
@@ -94,6 +137,7 @@ export function useTodoActions() {
   const create = useMutation({
     mutationFn: (input: CreateTaskInput) => client.createTask(input),
     onSuccess: async (task) => {
+      qc.setQueryData(todoKeys.item(task.id), task);
       await invalidate();
       await markOnboarding({ createdTask: true });
       todosUi().setSelected(task.id);
@@ -103,6 +147,7 @@ export function useTodoActions() {
   const createFromText = useMutation({
     mutationFn: (input: CreateTaskFromTextInput) => client.createTaskFromText(input),
     onSuccess: async (task) => {
+      qc.setQueryData(todoKeys.item(task.id), task);
       await invalidate();
       await markOnboarding({ createdTask: true });
       todosUi().setSelected(task.id);
@@ -113,7 +158,10 @@ export function useTodoActions() {
   const patch = useMutation({
     mutationFn: ({ id, input }: { id: string; input: PatchTaskInput }) =>
       client.patchTask(id, input),
-    onSuccess: () => invalidate(),
+    onSuccess: (task) => {
+      qc.setQueryData(todoKeys.item(task.id), task);
+      return invalidate();
+    },
   });
 
   const remove = useMutation({

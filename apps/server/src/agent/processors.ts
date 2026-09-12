@@ -4,6 +4,7 @@ import { agentMemoryFeedback, agentMemoryHistory, agentMemoryMaintenance } from 
 import { agentEditEvents, agentEditFeedback } from '../db/schema/agent-edit-events.js';
 import { recordAgentAction } from './action-ledger.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { extractNotes, replaceNotes } from '@vital/dto';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
@@ -12,6 +13,7 @@ import {
   agentActions,
   agentMemory,
   outcomes,
+  reports,
   taskCompletions,
   tasks,
   users,
@@ -28,6 +30,7 @@ import {
   buildDistillPrompt,
   buildDraftPrompt,
   buildHeadlinePrompt,
+  buildReportPrompt,
   type DistillActionFact,
   type DistillEditFact,
   type SimilarTaskExample,
@@ -53,8 +56,11 @@ import {
   type SubmitNotificationArgs,
   submitDraftTool,
   type SubmitDraftArgs,
+  submitReportTool,
+  type SubmitReportArgs,
 } from './tools.js';
 import { executionResult, skipExecution, withExecution } from './executions.service.js';
+import { getReportReview } from '../reports/overview.service.js';
 import { enqueueProactiveInsights } from '../notifications/insights.js';
 import { indexMemory, removeMemoryIndex, trackIndexJob } from '../retrieval/pipeline.js';
 import { memorySimilarityPairs } from '../retrieval/dedup.js';
@@ -591,6 +597,92 @@ async function processTaskDraft(
   return 'done';
 }
 
+function sanitizeReportNotes(raw: string): string {
+  let notes = raw.trim();
+  notes = notes.replace(/^#+\s*.+\n+/, '');
+  notes = notes.replace(/^##\s*记录\s*\n+/, '');
+  notes = notes.replace(/\[\[[^\]]+\]\]/g, '').trim();
+  return notes.slice(0, 4000);
+}
+
+/** Manual: write the daily report's notes section from that period's facts. */
+async function processReportGenerate(
+  job: AgentJobRow,
+  user: User,
+  now: Date,
+): Promise<AgentJobResult> {
+  if (!('reportId' in job.payload)) { skipExecution('INVALID_PAYLOAD'); return 'done'; }
+  const reportId = job.payload.reportId;
+  const db = getDb();
+  const [row] = await db.select().from(reports).where(and(eq(reports.id, reportId), eq(reports.userId, user.id))).limit(1);
+  if (!row) { skipExecution('REPORT_NOT_FOUND'); return 'done'; }
+  if (row.type !== 'daily') { skipExecution('NOT_DAILY'); return 'done'; }
+
+  const notesAtStart = extractNotes(row.bodyMd, 'daily');
+  const review = await getReportReview(user.id, reportId);
+  const memory = await loadAgentMemory(user.id, 'report', row.title);
+  executionResult({
+    inputSummary: `仅当前用户：完成 ${String(review.completed.length)}、结转 ${String(review.carried.length)}、收集 ${String(review.captured.length)}、习惯 ${String(review.habitProgress.length)}、${String(memory.length)} 条记忆`,
+    targetType: 'report',
+    targetId: reportId,
+  });
+  const prompt = buildReportPrompt({
+    title: row.title,
+    periodStart: row.periodStart,
+    periodEnd: row.periodEnd,
+    completed: review.completed.slice(0, 30).map((item) => ({ title: item.title })),
+    carried: review.carried.slice(0, 20).map((item) => ({ title: item.title, dueAt: item.dueAt })),
+    captured: review.captured.slice(0, 15).map((item) => ({ title: item.title })),
+    habits: review.habitProgress.slice(0, 10).map((item) => ({
+      title: item.title,
+      done: item.done,
+      target: item.target,
+    })),
+    existingNotes: notesAtStart,
+    memory: memory.map((m) => m.content),
+  });
+
+  const result = await runWithCritic<SubmitReportArgs>({
+    user,
+    job,
+    capability: 'agent.report',
+    systemPrompt: prompt.system,
+    userPrompt: prompt.user,
+    makeTool: submitReportTool,
+  });
+  if (!result) return 'skipped:no-llm';
+
+  const notes = sanitizeReportNotes(result.args.notes);
+  if (notes === '') { skipExecution('EMPTY_NOTES'); return 'done'; }
+
+  await withAgentJobEffects(job, async (tx) => {
+    const [current] = await tx.select().from(reports).where(and(eq(reports.userId, user.id), eq(reports.id, reportId))).for('update');
+    if (!current) { skipExecution('REPORT_NOT_FOUND'); return; }
+    if (current.type !== 'daily') { skipExecution('NOT_DAILY'); return; }
+    if (extractNotes(current.bodyMd, 'daily') !== notesAtStart) { skipExecution('NOTES_CHANGED'); return; }
+    const bodyMd = replaceNotes(current.bodyMd, 'daily', notes);
+    if (bodyMd === current.bodyMd) { skipExecution('NO_CHANGES'); return; }
+    const [updated] = await tx.update(reports).set({
+      bodyMd,
+      revision: current.revision + 1,
+      updatedAt: now,
+    }).where(and(eq(reports.id, reportId), eq(reports.userId, user.id), eq(reports.revision, current.revision))).returning();
+    if (!updated) { skipExecution('NOTES_CHANGED'); return; }
+    await recordAgentAction(tx, {
+      id: randomUUID(),
+      userId: user.id,
+      jobId: job.id,
+      actionType: 'report.generate',
+      targetType: 'report',
+      targetId: reportId,
+      payload: { notes },
+      feedback: 'accepted',
+    });
+    executionResult({ resultSummary: '已写入日报记录' });
+  });
+  return 'done';
+}
+
 /** Rule-only: fan out refreshes for stale threads + cluster when the pile is big. */
 async function processReflectDaily(
   job: AgentJobRow,
@@ -770,6 +862,7 @@ export async function processAgentJob(job: AgentJobRow, now: Date): Promise<Agen
     userId: job.userId, capability: job.jobType, jobId: job.id, attempt: job.attemptCount + 1,
     ...('taskId' in job.payload ? { targetType: 'task', targetId: job.payload.taskId } : {}),
     ...('outcomeId' in job.payload ? { targetType: 'outcome', targetId: job.payload.outcomeId } : {}),
+    ...('reportId' in job.payload ? { targetType: 'report', targetId: job.payload.reportId } : {}),
   }, async () => {
     const result = await processAgentJobInner(job, now);
     if (result === 'skipped:no-llm') skipExecution('NO_MODEL');
@@ -814,6 +907,8 @@ async function processAgentJobInner(job: AgentJobRow, now: Date): Promise<AgentJ
       return processTaskDecompose(job, user, now);
     case 'task.draft':
       return processTaskDraft(job, user, now);
+    case 'report.generate':
+      return processReportGenerate(job, user, now);
     case 'reflect.daily':
       return processReflectDaily(job, user, now);
     case 'memory.distill':

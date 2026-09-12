@@ -638,6 +638,13 @@ export interface ReportEmbedsResponse {
 ```
 
 ```ts
+export interface ReportGenerateTrigger {
+  status: 'queued' | 'disabled';
+  jobId: string | null;
+}
+```
+
+```ts
 export interface ReportPeriodRef {
   start: string;
   end: string;
@@ -1748,6 +1755,19 @@ Request body (`fillReportInputSchema`):
 
 - `revision`: number int min 1
 
+#### `POST /api/v1/reports/:id/generate`
+
+Queue an agent job that writes the daily report notes from that day's completed, carried, captured and habit data. Daily reports only.
+
+- Auth: Bearer required
+- Client: `generateReport`
+- Status: 202
+- Response: `ReportGenerateTrigger`
+
+Path params:
+
+- `id`: uuid
+
 #### `GET /api/v1/reports/:id/review`
 
 Get Report Review
@@ -2127,9 +2147,9 @@ List Agent Actions
 
 Query (`agentActionsQuerySchema`):
 
-- `targetType`: "outcome" | "task" | "habit" (optional)
+- `targetType`: "outcome" | "task" | "habit" | "report" (optional)
 - `targetId`: uuid (optional)
-- `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "task.draft" | "habit.create" | "habit.adjust" | "habit.nudge" (optional)
+- `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "task.draft" | "habit.create" | "habit.adjust" | "habit.nudge" | "report.generate" (optional)
 - `feedback`: "pending" | "accepted" | "edited" | "dismissed" | "undone" (optional)
 - `days`: number int min 1 (optional)
 
@@ -2191,7 +2211,7 @@ Request body (`createAgentMemorySchema`):
 
 - `kind`: "preference" | "pattern" | "correction"
 - `content`: string 1–300
-- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify"[]
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify" | "report"[]
 
 #### `DELETE /api/v1/agent/memory/:id`
 
@@ -2222,7 +2242,7 @@ Request body (`patchAgentMemorySchema`):
 
 - `kind`: "preference" | "pattern" | "correction" (optional)
 - `content`: string 1–300 (optional)
-- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify"[] (optional)
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify" | "report"[] (optional)
 
 #### `GET /api/v1/agent/metrics`
 

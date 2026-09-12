@@ -106,6 +106,25 @@ export function submitDraftTool(capture: (args: SubmitDraftArgs) => void): Agent
   };
 }
 
+export const submitReportSchema = Type.Object({
+  /** Daily-report notes in Chinese markdown, without the heading. */
+  notes: Type.String({ minLength: 1, maxLength: 4000 }),
+});
+export type SubmitReportArgs = Static<typeof submitReportSchema>;
+
+export function submitReportTool(capture: (args: SubmitReportArgs) => void): AgentTool<typeof submitReportSchema> {
+  return {
+    name: 'submit_report',
+    label: '提交日报记录',
+    description: '提交日报「记录」一节的正文：客观、具体，markdown 短文，不要标题或实体引用。',
+    parameters: submitReportSchema,
+    execute: (_toolCallId, params) => {
+      capture(params);
+      return Promise.resolve({ content: [{ type: 'text', text: 'ok' }], details: null, terminate: true });
+    },
+  };
+}
+
 const memoryScopeSchema = Type.Union(
   AGENT_MEMORY_SCOPES.map((s) => Type.Literal(s)),
 );

@@ -151,6 +151,60 @@ export function buildDecomposePrompt(input: {
   return { system, user };
 }
 
+export interface ReportGenerateFacts {
+  title: string;
+  periodStart: string;
+  periodEnd: string;
+  completed: { title: string }[];
+  carried: { title: string; dueAt: string | null }[];
+  captured: { title: string }[];
+  habits: { title: string; done: number; target: number | null }[];
+  existingNotes: string;
+  memory: string[];
+}
+
+function renderReportList(items: string[]): string {
+  return items.length === 0 ? '（无）' : items.map((item) => `- ${item}`).join('\n');
+}
+
+export function buildReportPrompt(input: ReportGenerateFacts): PromptPair {
+  const system = [
+    '你是个人日报撰写助手。根据当天事实，用中文写「记录」一节：客观、具体、不鸡汤，markdown 短文，≤800 字。',
+    '只写记录正文，不要输出标题、不要输出「## 记录」这类标题，不要编造未给出的完成事项。',
+    '不要使用 [[task:...]] 或 [[inbox:...]] 引用。没有可写的事实时写一两句诚实的空记录，不要编造。',
+    '若用户已写过记录，在保留其意思的前提下整理成更完整的当日记录，不要无视原文。',
+    '必须调用 submit_report 工具提交结果，不要输出其他文字。',
+    DATA_RULE,
+  ].join('');
+  const completed = renderReportList(input.completed.map((item) => item.title));
+  const carried = renderReportList(
+    input.carried.map((item) => `${item.title}${item.dueAt ? ` 截止 ${item.dueAt}` : ''}`),
+  );
+  const captured = renderReportList(input.captured.map((item) => item.title));
+  const habits = renderReportList(
+    input.habits.map((item) =>
+      item.target !== null ? `${item.title} ${String(item.done)}/${String(item.target)}` : `${item.title} ×${String(item.done)}`,
+    ),
+  );
+  const user = [
+    `日报：<data>${input.title}</data>`,
+    `周期：${input.periodStart} → ${input.periodEnd}`,
+    `今日完成：\n<data>\n${completed}\n</data>`,
+    `进行中 / 结转：\n<data>\n${carried}\n</data>`,
+    `稍后读：\n<data>\n${captured}\n</data>`,
+    `习惯进展：\n<data>\n${habits}\n</data>`,
+    input.existingNotes !== ''
+      ? `用户已写的记录：\n<data>\n${input.existingNotes}\n</data>`
+      : '',
+    input.memory.length > 0
+      ? `从用户纠偏中学到的偏好（参考）：\n<data>\n${input.memory.map((m) => `- ${m}`).join('\n')}\n</data>`
+      : '',
+  ]
+    .filter((line) => line !== '')
+    .join('\n');
+  return { system, user };
+}
+
 export function buildDraftPrompt(input: {
   taskTitle: string;
   notes: string;

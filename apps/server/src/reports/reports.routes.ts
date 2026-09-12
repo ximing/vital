@@ -10,6 +10,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
+import { limitLlm } from '../plugins/rate-limit.js';
 import { getReportOverview, getReportReview } from './overview.service.js';
 import {
   countReportsByType,
@@ -19,6 +20,7 @@ import {
   getReportEmbeds,
   listReports,
   patchReport,
+  requestReportGenerate,
 } from './reports.service.js';
 
 export function registerReportRoutes(app: FastifyInstance): void {
@@ -67,6 +69,14 @@ export function registerReportRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = reportIdParamsSchema.parse(req.params);
     return fillReport(user.id, id, fillReportInputSchema.parse(req.body));
+  });
+
+  app.post('/api/v1/reports/:id/generate', { preHandler: [requireAuth, limitLlm] }, async (req, reply) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = reportIdParamsSchema.parse(req.params);
+    const result = await requestReportGenerate(user.id, id);
+    return reply.code(202).send(result);
   });
 
   app.get('/api/v1/reports/:id', { preHandler: [requireAuth] }, async (req) => {
