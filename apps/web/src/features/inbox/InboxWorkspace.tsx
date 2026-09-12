@@ -1,8 +1,11 @@
+import { bindServices } from '@rabjs/react';
+import type { FC } from 'react';
 import { t } from '@/copy';
 import { EmptyReader } from './EmptyInbox';
+import { InboxPageService } from './inbox-page.service';
 import { InboxListColumn } from './InboxListPanel';
 
-export function InboxWorkspace() {
+function InboxWorkspaceContent() {
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 bg-canvas">
       <InboxListColumn />
@@ -17,3 +20,5 @@ export function InboxWorkspace() {
     </div>
   );
 }
+
+export const InboxWorkspace: FC = bindServices(InboxWorkspaceContent, [InboxPageService]);

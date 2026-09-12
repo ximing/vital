@@ -1,11 +1,22 @@
+import { observer, useService } from '@rabjs/react';
+import type { FC } from 'react';
 import { t } from '@/copy';
 import { EmptyArt } from '@/ui/empty-art';
 import { emptyCopyKey } from './model';
-import { useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 import { QUICK_ADD_ID, focusById } from './keyboard';
 
-export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'board' | 'week' }) {
-  const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
+export const EmptyTasks: FC<{
+  listId: string;
+  kind: 'list' | 'board' | 'week';
+}> = observer(function EmptyTasks({
+  listId,
+  kind,
+}: {
+  listId: string;
+  kind: 'list' | 'board' | 'week';
+}) {
+  const todos = useService(TodosUiService);
   const copy =
     kind === 'board'
       ? t.empty.board
@@ -25,7 +36,7 @@ export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'b
           type="button"
           className="mt-5 inline-flex min-h-[var(--touch-min)] items-center rounded-2xl bg-accent px-4 font-medium text-on-accent transition-[background-color] duration-[var(--ease-out)] hover:bg-accent-hover"
           onClick={() => {
-            requestQuickAdd();
+            todos.requestQuickAdd();
             focusById(QUICK_ADD_ID);
           }}
         >
@@ -34,7 +45,7 @@ export function EmptyTasks({ listId, kind }: { listId: string; kind: 'list' | 'b
       ) : null}
     </div>
   );
-}
+});
 
 export function TaskSkeleton() {
   return (

@@ -12,11 +12,15 @@ import {
   Sun,
   Target,
 } from 'lucide-react';
+import { bindServices } from '@rabjs/react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { HOME_PATH, TODOS_HOME_PATH, t } from '@/copy';
 import { ActivationChecklist } from '@/features/onboarding';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
+import { InboxUiService } from '@/features/inbox/inbox-ui.service';
+import { ReportUiService } from '@/features/reports/report-ui.service';
+import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { AccountMenu } from '@/shell/AccountMenu';
 import { loadPaneWidth, RAIL_WIDTH, savePaneWidth, type PaneSection } from '@/shell/chrome';
 import { SecondaryPane } from '@/shell/SecondaryPane';
@@ -24,7 +28,7 @@ import { sectionOf, showsPane, type AppSection } from '@/shell/section';
 import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { Icon } from '@/ui/icon';
-import { useState } from 'react';
+import { useState, type FC } from 'react';
 
 const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
   { id: 'today', to: HOME_PATH, icon: Sun, label: t.rail.today },
@@ -48,7 +52,7 @@ function railItemClass(active: boolean): string {
   }`;
 }
 
-export function Shell() {
+function ShellContent() {
   const location = useLocation();
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
@@ -157,3 +161,9 @@ export function Shell() {
     </div>
   );
 }
+
+export const Shell: FC = bindServices(ShellContent, [
+  TodosUiService,
+  InboxUiService,
+  ReportUiService,
+]);

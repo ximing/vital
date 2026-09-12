@@ -1,16 +1,18 @@
-import type { AgentAction, Task } from '@vital/dto';
+import type { AgentAction, Task, TaskDraftTrigger } from '@vital/dto';
+import { observer, useService } from '@rabjs/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Bot, Sparkles } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { humanError } from '@/lib/errors';
 import { Button } from '@/ui/button';
 import { Icon } from '@/ui/icon';
 import { todoKeys } from '@/features/todos/queries';
+import { decomposeSubtasks } from '@/features/today/model';
 import { todayKeys } from '@/features/today/queries';
+import { TodosUiService } from './todos-ui.service';
 
-/** How long the trigger keeps polling for the worker's proposal before giving up. */
-const DRAFT_WAIT_MS = 60_000;
 const DRAFT_POLL_MS = 3_000;
 
 function draftText(action: AgentAction): string {
@@ -21,110 +23,127 @@ function draftText(action: AgentAction): string {
 /**
  * TaskDetail section for the delegable flag + agent-drafted execution plan.
  * The toggle persists via onToggleDelegable; the trigger enqueues a task.draft
- * job and polls until the worker's proposal shows up. The poll fetches the
- * pending-actions list itself and renders from its own copy — relying on an
+ * job. In-flight / failed status is read from GET /tasks/:id/draft so closing
+ * the drawer and reopening keeps "起草中" or the retry affordance. The poll
+ * also writes the pending action into the shared query cache — relying on an
  * invalidate of the parent's query alone could leave `action` stuck at null
- * (no active observer to refetch, or a refetch superseded mid-flight) while
- * the draft already sits in the DB. Apply/ignore go through the shared
- * feedback endpoint — the server writes the draft into the notes on accept.
+ * while the draft already sits in the DB. Apply/ignore go through the shared
+ * feedback endpoint — the server writes the draft into the notes and
+ * materializes any proposed subtasks on accept. The notes editor is local
+ * state, so the parent must apply the draft text itself (`onNotesApplied`)
+ * or the card closing looks like a no-op.
  */
-export function DraftSection({
+export const DraftSection: FC<{
+  task: Task;
+  /** Pending task.draft proposal for this task, if any. */
+  action: AgentAction | null;
+  onToggleDelegable: (value: boolean) => void;
+  /** Flush unsaved notes so the server appends onto the latest body. */
+  onBeforeApply?: () => Promise<void>;
+  /** Mirror the server-side notes append into the open editor. */
+  onNotesApplied?: (draft: string) => void;
+}> = observer(function DraftSection({
   task,
   action,
   onToggleDelegable,
+  onBeforeApply,
+  onNotesApplied,
 }: {
   task: Task;
   /** Pending task.draft proposal for this task, if any. */
   action: AgentAction | null;
   onToggleDelegable: (value: boolean) => void;
+  /** Flush unsaved notes so the server appends onto the latest body. */
+  onBeforeApply?: () => Promise<void>;
+  /** Mirror the server-side notes append into the open editor. */
+  onNotesApplied?: (draft: string) => void;
 }) {
+  const todos = useService(TodosUiService);
   const qc = useQueryClient();
-  const [triggered, setTriggered] = useState(false);
-  const [timedOut, setTimedOut] = useState(false);
-  const [polled, setPolled] = useState<AgentAction | null>(null);
+  const jobStatus = todos.draftStatus[task.id] ?? 'idle';
+  const polled = todos.draftPolled[task.id] ?? null;
   const [busy, setBusy] = useState<'apply' | 'dismiss' | null>(null);
-  const waitingSince = useRef<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const open = task.status === 'todo' || task.status === 'doing';
-  // The parent's prop wins; `polled` is the copy the poll fetched itself.
+  // The parent's prop wins; `polled` is the copy GET fetched itself.
   const proposal = action ?? polled;
   const draft = proposal !== null ? draftText(proposal) : '';
-  // Derived: the spinner stops as soon as the proposal lands (or the task closes).
-  const waiting = triggered && proposal === null && open;
+  const subtasks = proposal !== null ? decomposeSubtasks(proposal) : [];
+  const hasProposal = draft !== '' || subtasks.length > 0;
+  const waiting = jobStatus === 'queued' && proposal === null && open;
+  const failed = jobStatus === 'failed' && proposal === null && open;
 
-  // While waiting, poll the pending-actions endpoint directly.
   useEffect(() => {
-    if (!waiting) return;
+    if (!open || !task.delegable) return;
     let cancelled = false;
     const queryKey = todayKeys.decompose(task.id);
-    const poll = async () => {
-      if (
-        waitingSince.current !== null &&
-        Date.now() - waitingSince.current > DRAFT_WAIT_MS
-      ) {
-        waitingSince.current = null;
-        setTriggered(false);
-        setTimedOut(true);
+
+    const applyResult = (result: TaskDraftTrigger, ignoreIdle: boolean) => {
+      if (result.status === 'pending' && result.action !== null) {
+        const landed = result.action;
+        qc.setQueryData<AgentAction[]>(queryKey, (prev) => {
+          const rest = (prev ?? []).filter((item) => item.actionType !== 'task.draft');
+          return [landed, ...rest];
+        });
+        todos.setDraftJob(task.id, { polled: landed, status: 'idle' });
         return;
       }
+      if (result.status === 'queued') {
+        todos.setDraftJob(task.id, { status: 'queued' });
+        return;
+      }
+      if (result.status === 'failed') {
+        todos.setDraftJob(task.id, { polled: null, status: 'failed' });
+        return;
+      }
+      if (!ignoreIdle) todos.setDraftJob(task.id, { status: 'idle' });
+    };
+
+    const tick = async (ignoreIdle: boolean) => {
       try {
-        const actions = await client.listAgentActions({
-          targetType: 'task',
-          targetId: task.id,
-          feedback: 'pending',
-        });
+        const result = await client.getTaskDraft(task.id);
         if (cancelled) return;
-        // Keep the shared cache in sync for any mounted observer.
-        qc.setQueryData<AgentAction[]>(queryKey, actions);
-        const found = actions.find((item) => item.actionType === 'task.draft') ?? null;
-        if (found !== null) {
-          waitingSince.current = null;
-          setTriggered(false);
-          setPolled(found);
-        }
+        applyResult(result, ignoreIdle);
       } catch {
-        // Transient failure — the next tick retries.
+        // Transient failure — keep the current phase; the next tick retries.
       }
     };
-    void poll();
-    const timer = setInterval(() => void poll(), DRAFT_POLL_MS);
+
+    void tick(waiting);
+    const timer = waiting ? setInterval(() => void tick(true), DRAFT_POLL_MS) : null;
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer !== null) clearInterval(timer);
     };
-  }, [waiting, qc, task.id]);
+  }, [waiting, open, task.delegable, qc, task.id, todos]);
 
   if (!open) return null;
 
   async function trigger() {
-    setTimedOut(false);
-    setPolled(null);
-    setTriggered(true);
-    waitingSince.current = Date.now();
+    setError(null);
+    todos.setDraftJob(task.id, { polled: null, status: 'queued' });
     try {
       const result = await client.draftTask(task.id);
       await qc.invalidateQueries({ queryKey: todayKeys.decompose(task.id) });
       if (result.status === 'pending' && result.action !== null) {
-        waitingSince.current = null;
-        setTriggered(false);
-        setPolled(result.action);
+        todos.setDraftJob(task.id, { polled: result.action, status: 'idle' });
       }
     } catch {
-      waitingSince.current = null;
-      setTriggered(false);
+      todos.setDraftJob(task.id, { status: 'idle' });
     }
   }
 
   async function settle(feedback: 'accepted' | 'dismissed') {
     if (proposal === null) return;
     await client.sendAgentActionFeedback(proposal.id, { feedback });
-    setTriggered(false);
-    setTimedOut(false);
-    setPolled(null);
-    waitingSince.current = null;
+    setError(null);
+    todos.setDraftJob(task.id, { polled: null, status: 'idle' });
     await qc.invalidateQueries({ queryKey: todayKeys.decompose(task.id) });
     if (feedback === 'accepted') {
-      // The server appended the draft to the notes — refresh task reads.
+      // The server appended the draft to the notes (and created subtasks) —
+      // refresh task reads. Notes themselves are local state; the parent
+      // mirrors the append via onNotesApplied.
       await qc.invalidateQueries({ queryKey: todoKeys.all });
       await qc.invalidateQueries({ queryKey: todayKeys.all });
     }
@@ -132,8 +151,13 @@ export function DraftSection({
 
   async function apply() {
     setBusy('apply');
+    setError(null);
     try {
+      await onBeforeApply?.();
       await settle('accepted');
+      onNotesApplied?.(draft);
+    } catch (err) {
+      setError(humanError(err));
     } finally {
       setBusy(null);
     }
@@ -141,8 +165,11 @@ export function DraftSection({
 
   async function dismiss() {
     setBusy('dismiss');
+    setError(null);
     try {
       await settle('dismissed');
+    } catch (err) {
+      setError(humanError(err));
     } finally {
       setBusy(null);
     }
@@ -178,7 +205,7 @@ export function DraftSection({
         </p>
       ) : null}
 
-      {task.delegable && proposal === null && !timedOut ? (
+      {task.delegable && proposal === null && !failed ? (
         <div>
           <Button
             variant="quiet"
@@ -193,10 +220,10 @@ export function DraftSection({
         </div>
       ) : null}
 
-      {task.delegable && proposal === null && timedOut ? (
-        <div data-region="draft-timeout" className="flex items-center gap-2">
+      {task.delegable && proposal === null && failed ? (
+        <div data-region="draft-failed" className="flex items-center gap-2">
           <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-            {t.todos.draftTimeout}
+            {t.todos.draftFailed}
           </p>
           <Button
             variant="quiet"
@@ -209,7 +236,7 @@ export function DraftSection({
         </div>
       ) : null}
 
-      {task.delegable && proposal !== null && draft !== '' ? (
+      {task.delegable && proposal !== null && hasProposal ? (
         <div
           data-region="draft-card"
           className="rounded-[14px] border border-accent/25 bg-accent-subtle/50 px-3.5 py-3"
@@ -219,20 +246,60 @@ export function DraftSection({
             {t.todos.draftTitle}
           </p>
           <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-            {t.todos.draftHint}
+            {subtasks.length > 0 ? t.todos.draftHintWithSubtasks : t.todos.draftHint}
           </p>
-          <p className="mt-2 whitespace-pre-wrap text-[length:var(--text-meta)] leading-[var(--text-meta-lh,var(--text-body-lh))] text-fg">
-            {draft}
-          </p>
-          <div className="mt-2.5 flex items-center gap-2">
-            <Button
-              className="h-7 min-h-7 px-3 text-[length:var(--text-caption)]"
-              loading={busy === 'apply'}
-              disabled={busy !== null}
-              onClick={() => void apply()}
-            >
-              {t.todos.draftApply}
-            </Button>
+          {draft !== '' ? (
+            <p className="mt-2 whitespace-pre-wrap text-[length:var(--text-meta)] leading-[var(--text-meta-lh,var(--text-body-lh))] text-fg">
+              {draft}
+            </p>
+          ) : null}
+          {subtasks.length > 0 ? (
+            <div className="mt-2.5">
+              <p className="text-[length:var(--text-caption)] text-muted">{t.todos.draftSubtasks}</p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {subtasks.map((subtask, index) => (
+                  <li
+                    key={`${String(index)}-${subtask.title}`}
+                    className="flex items-center gap-2 text-[length:var(--text-meta)] text-fg"
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {String(index + 1)}. {subtask.title}
+                    </span>
+                    {subtask.estimateMinutes !== null ? (
+                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 font-mono text-[11px] text-tertiary">
+                        {t.todos.estimateMinutes.replace('{n}', String(subtask.estimateMinutes))}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {error !== null ? (
+            <p className="mt-2 text-[length:var(--text-caption)] text-danger">{error}</p>
+          ) : null}
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {draft !== '' ? (
+              <Button
+                className="h-7 min-h-7 px-3 text-[length:var(--text-caption)]"
+                loading={busy === 'apply'}
+                disabled={busy !== null}
+                onClick={() => void apply()}
+              >
+                {t.todos.draftApply}
+              </Button>
+            ) : null}
+            {subtasks.length > 0 ? (
+              <Button
+                variant={draft !== '' ? 'quiet' : 'primary'}
+                className="h-7 min-h-7 px-3 text-[length:var(--text-caption)]"
+                loading={busy === 'apply'}
+                disabled={busy !== null}
+                onClick={() => void apply()}
+              >
+                {t.todos.draftApplySubtasks}
+              </Button>
+            ) : null}
             <Button
               variant="quiet"
               className="h-7 min-h-7 px-2.5 text-[length:var(--text-caption)]"
@@ -247,4 +314,4 @@ export function DraftSection({
       ) : null}
     </div>
   );
-}
+});

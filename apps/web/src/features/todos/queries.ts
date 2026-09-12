@@ -11,10 +11,11 @@ import type {
   Task,
   TaskPriority,
 } from '@vital/dto';
+import { useService } from '@rabjs/react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
-import { todosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 
 export const todoKeys = {
   all: ['todos'] as const,
@@ -132,6 +133,7 @@ export function useCalendarQuery(from: string, to: string, enabled = true) {
 
 export function useTodoActions() {
   const qc = useQueryClient();
+  const todos = useService(TodosUiService);
   const invalidate = () => qc.invalidateQueries({ queryKey: todoKeys.all });
 
   const create = useMutation({
@@ -140,7 +142,7 @@ export function useTodoActions() {
       qc.setQueryData(todoKeys.item(task.id), task);
       await invalidate();
       await markOnboarding({ createdTask: true });
-      todosUi().setSelected(task.id);
+      todos.setSelected(task.id);
     },
   });
 
@@ -150,8 +152,8 @@ export function useTodoActions() {
       qc.setQueryData(todoKeys.item(task.id), task);
       await invalidate();
       await markOnboarding({ createdTask: true });
-      todosUi().setSelected(task.id);
-      todosUi().openDetail(task.id);
+      todos.setSelected(task.id);
+      todos.openDetail(task.id);
     },
   });
 
@@ -167,7 +169,7 @@ export function useTodoActions() {
   const remove = useMutation({
     mutationFn: (id: string) => client.deleteTask(id),
     onSuccess: () => {
-      todosUi().closeDetail();
+      todos.closeDetail();
       return invalidate();
     },
   });
@@ -207,7 +209,7 @@ export function useTodoActions() {
   async function complete(task: Task): Promise<void> {
     if (task.status === 'canceled') return;
     if (task.status === 'done' && task.recurrence === null) return;
-    const ui = todosUi();
+    const ui = todos;
     if (ui.completeUndo && !ui.completeUndo.wantUndo && ui.completeUndo.taskId === task.id) {
       await undoComplete();
       return;
@@ -215,29 +217,29 @@ export function useTodoActions() {
     ui.startComplete(task);
     try {
       const res = await client.completeTask(task.id);
-      const live = todosUi().completeUndo;
-      todosUi().setCompletionId(task.id, res.undo.completionId);
+      const live = todos.completeUndo;
+      todos.setCompletionId(task.id, res.undo.completionId);
       if (live?.taskId === task.id && live.wantUndo) {
         await client.uncompleteTask(task.id, { completionId: res.undo.completionId });
-        todosUi().finishUndo();
+        todos.finishUndo();
       }
       await invalidate();
       await markOnboarding({ completedTask: true });
     } catch (err) {
-      todosUi().failComplete();
+      todos.failComplete();
       throw err;
     }
   }
 
   async function undoComplete(): Promise<void> {
-    const live = todosUi().completeUndo;
+    const live = todos.completeUndo;
     if (!live) return;
     if (live.completionId === null) {
-      todosUi().markWantUndo();
+      todos.markWantUndo();
       return;
     }
     await client.uncompleteTask(live.taskId, { completionId: live.completionId });
-    todosUi().finishUndo();
+    todos.finishUndo();
     await invalidate();
   }
 
@@ -248,7 +250,7 @@ export function useTodoActions() {
 
   async function setStatus(task: Task, status: 'todo' | 'doing'): Promise<void> {
     if (task.status === 'done') {
-      const completionId = todosUi().lastCompletionId[task.id];
+      const completionId = todos.lastCompletionId[task.id];
       if (completionId === undefined) return;
       await client.uncompleteTask(task.id, { completionId });
       if (status === 'doing') await client.patchTask(task.id, { status: 'doing' });

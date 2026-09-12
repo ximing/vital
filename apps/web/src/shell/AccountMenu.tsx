@@ -1,15 +1,17 @@
+import { observer, useService } from '@rabjs/react';
 import { Settings } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type FC } from 'react';
 import { NavLink } from 'react-router';
 import { t } from '@/copy';
-import { useAuth } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
 import { initialsOf } from '@/shell/rail-nav';
 import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { Icon } from '@/ui/icon';
 
-export function AccountMenu({ collapsed, railWidth }: { collapsed: boolean; railWidth: number }) {
-  const user = useAuth((s) => s.user);
-  const logout = useAuth((s) => s.logout);
+export const AccountMenu: FC<{ collapsed: boolean; railWidth: number }> = observer(
+  function AccountMenu({ collapsed, railWidth }) {
+  const auth = useService(AuthService);
+  const user = auth.user;
   const [open, setOpen] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -99,7 +101,7 @@ export function AccountMenu({ collapsed, railWidth }: { collapsed: boolean; rail
             className="flex w-full px-3 py-2 text-left text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg"
             onClick={() => {
               setOpen(false);
-              void logout();
+              void auth.logout();
             }}
           >
             {t.nav.logout}
@@ -108,4 +110,4 @@ export function AccountMenu({ collapsed, railWidth }: { collapsed: boolean; rail
       ) : null}
     </div>
   );
-}
+});

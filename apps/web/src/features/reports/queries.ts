@@ -8,7 +8,7 @@ import type {
   ReportType,
   SearchHit,
 } from '@vital/dto';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
 import type { SlashHit } from './model';
@@ -91,19 +91,6 @@ export function useReportActions() {
     if (asCurrent) qc.setQueryData(reportKeys.current(report.type), report);
   }
 
-  const fill = useMutation({
-    mutationFn: ({ id, revision }: { id: string; revision: number }) =>
-      client.fillReport(id, { revision }),
-    onSuccess: (report) => {
-      cacheReport(report);
-      void qc.invalidateQueries({ queryKey: reportKeys.list(report.type) });
-      void qc.invalidateQueries({ queryKey: reportKeys.current(report.type) });
-      void qc.invalidateQueries({ queryKey: reportKeys.counts });
-      void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
-      void qc.invalidateQueries({ queryKey: reportKeys.review(report.id) });
-    },
-  });
-
   async function markWroteDaily(type: ReportType): Promise<void> {
     if (type === 'weekly') await markOnboarding({ openedWeekly: true });
     if (type !== 'daily') return;
@@ -143,7 +130,7 @@ export function useReportActions() {
     if (id) void qc.invalidateQueries({ queryKey: reportKeys.review(id) });
   }
 
-  return { fill, save, loadCurrent, loadReport, loadEmbeds, cacheReport, refreshStats };
+  return { save, loadCurrent, loadReport, loadEmbeds, cacheReport, refreshStats };
 }
 
 function hitsFromSearch(items: SearchHit[]): SlashHit[] {

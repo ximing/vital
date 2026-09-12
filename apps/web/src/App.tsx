@@ -3,7 +3,7 @@ import { HOME_PATH, TODOS_HOME_PATH } from '@/copy';
 import { InboxReader, InboxWorkspace } from '@/features/inbox';
 import { OnboardingPage } from '@/features/onboarding';
 import { ReportsWorkspace } from '@/features/reports';
-import { SearchPage } from '@/features/search/SearchPage';
+import { SearchPage } from '@/features/search';
 import { ThreadWorkspace, TodayWorkspace } from '@/features/today';
 import { TodosWorkspace } from '@/features/todos';
 import { ExtensionAuthPage } from '@/pages/extension-auth';

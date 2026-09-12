@@ -59,11 +59,16 @@ export const agentActionIdParamsSchema = z.object({
 export type AgentActionIdParams = z.infer<typeof agentActionIdParamsSchema>;
 
 /**
- * POST /tasks/:id/draft result: 'pending' returns the existing un-decided
- * draft (idempotent re-trigger); 'queued' means a task.draft job was (re)armed.
+ * GET/POST /tasks/:id/draft.
+ * - idle: nothing in flight and no pending proposal (GET only)
+ * - queued: a task.draft job is pending/running
+ * - pending: an undecided proposal is ready (`action` is set)
+ * - failed: the latest job finished without a proposal (GET only)
+ * POST never returns idle/failed — it either returns the existing proposal or
+ * (re)arms a job.
  */
 export interface TaskDraftTrigger {
-  status: 'queued' | 'pending';
+  status: 'idle' | 'queued' | 'pending' | 'failed';
   action: AgentAction | null;
 }
 

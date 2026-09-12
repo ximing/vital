@@ -1,4 +1,4 @@
-import { resolve, Service, useObserverService } from '@rabjs/react';
+import { resolve, Service } from '@rabjs/react';
 import { isSessionInvalidError } from '@vital/api-client';
 import type { LoginInput, RegisterInput, UserProfile } from '@vital/dto';
 import { AUTH_CLEARED_EVENT, client } from '@/api/client';
@@ -92,11 +92,6 @@ export class AuthService extends Service {
 
 export function authService(): AuthService {
   return resolve(AuthService);
-}
-
-export function useAuth<T>(selector: (s: AuthService) => T): T {
-  const [value] = useObserverService(AuthService, selector);
-  return value;
 }
 
 export function setAuthForTest(user: UserProfile | null, status: AuthStatus = 'ready'): void {

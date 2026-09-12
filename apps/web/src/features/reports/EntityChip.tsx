@@ -1,16 +1,18 @@
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper } from '@tiptap/react';
+import { observer, useService } from '@rabjs/react';
 import { isEntityKind } from '@vital/markdown';
+import type { FC } from 'react';
 import { t } from '@/copy';
 import { chipDeleted, chipLabel, taskChipStatus } from './model';
-import { useReportUi } from './report-ui.service';
+import { ReportUiService } from './report-ui.service';
 
-export function EntityChipView({ node }: NodeViewProps) {
+export const EntityChipView: FC<NodeViewProps> = observer(function EntityChipView({ node }) {
   const kindRaw = node.attrs.kind;
   const idRaw = node.attrs.id;
   const kind = typeof kindRaw === 'string' && isEntityKind(kindRaw) ? kindRaw : 'task';
   const id = typeof idRaw === 'string' ? idRaw : '';
-  const embeds = useReportUi((s) => s.embeds);
+  const embeds = useService(ReportUiService).embeds;
   const deleted = chipDeleted(kind, id, embeds);
   const fallback = kind === 'task' ? t.reports.chipTask : t.reports.chipInbox;
   const label = deleted ? t.reports.deleted : chipLabel(kind, id, embeds, fallback);
@@ -41,4 +43,4 @@ export function EntityChipView({ node }: NodeViewProps) {
       <span className="vital-chip-label">{label}</span>
     </NodeViewWrapper>
   );
-}
+});

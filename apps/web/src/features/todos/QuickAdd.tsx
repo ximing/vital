@@ -1,6 +1,7 @@
 import type { List, TaskPriority } from '@vital/dto';
+import { observer, useService } from '@rabjs/react';
 import { CircleArrowUp, Folder, LoaderCircle } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
@@ -11,7 +12,7 @@ import { inboxList, listPickerRows } from './model';
 import { PriorityMenu } from './priority';
 import { emptyScheduleDraft, type ScheduleDraft } from './schedule-draft';
 import { SchedulePopover } from './SchedulePopover';
-import { useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 
 export type ComposeExtras = {
   listId: string;
@@ -19,7 +20,21 @@ export type ComposeExtras = {
   status?: 'todo' | 'doing';
 };
 
-export function QuickAdd({
+export const QuickAdd: FC<{
+  onSubmit: (title: string, draft: ScheduleDraft, extras: ComposeExtras) => Promise<void> | void;
+  disabled?: boolean;
+  hint?: string;
+  listName: string;
+  lists: List[];
+  defaultListId: string;
+  zone: string;
+  weekStartsOn: 0 | 1;
+  variant?: 'bar' | 'card';
+  captureId?: boolean;
+  lockedPriority?: TaskPriority;
+  lockedStatus?: 'todo' | 'doing';
+  intent?: boolean;
+}> = observer(function QuickAdd({
   onSubmit,
   disabled,
   hint,
@@ -51,7 +66,7 @@ export function QuickAdd({
   const inputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
   const statusId = useId();
-  const nonce = useTodosUi((s) => s.quickAddNonce);
+  const nonce = useService(TodosUiService).quickAddNonce;
   const [draft, setDraft] = useState<ScheduleDraft>(emptyScheduleDraft);
   const [priority, setPriority] = useState<TaskPriority>(lockedPriority ?? 3);
   const [listId, setListId] = useState(defaultListId);
@@ -248,7 +263,7 @@ export function QuickAdd({
       {errorNode}
     </form>
   );
-}
+});
 
 function ListMenu({
   lists,

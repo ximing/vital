@@ -1,16 +1,33 @@
 import type { List, Tag, Task, TaskPriority } from '@vital/dto';
-import type { DragEvent } from 'react';
+import { observer, useService } from '@rabjs/react';
+import { type DragEvent, type FC } from 'react';
 import { t } from '@/copy';
 import { listTitle, splitByPriority, splitByStatus } from './model';
 import { QuickAdd, type ComposeExtras } from './QuickAdd';
 import type { ScheduleDraft } from './schedule-draft';
 import { TaskRow } from './TaskRow';
-import { useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 
 const STATUS_COLS = ['todo', 'doing', 'done'] as const;
 const PRIORITY_COLS: TaskPriority[] = [0, 1, 2, 3];
 
-export function BoardView({
+export const BoardView: FC<{
+  listId: string;
+  tasks: Task[];
+  tags: Tag[];
+  lists: List[];
+  timeZone: string;
+  weekStartsOn: 0 | 1;
+  defaultListId: string;
+  listName: string;
+  disabled?: boolean;
+  onComplete: (task: Task) => void;
+  onStatus: (task: Task, status: 'todo' | 'doing') => void;
+  onPriority: (task: Task, priority: TaskPriority) => void;
+  onCreate: (title: string, draft: ScheduleDraft, extras: ComposeExtras) => void;
+  intent?: boolean;
+  onTaskMenu?: (task: Task, x: number, y: number) => void;
+}> = observer(function BoardView({
   listId,
   tasks,
   tags,
@@ -43,10 +60,7 @@ export function BoardView({
   intent?: boolean;
   onTaskMenu?: (task: Task, x: number, y: number) => void;
 }) {
-  const boardMode = useTodosUi((s) => s.boardMode);
-  const hideCompleted = useTodosUi((s) => s.hideCompleted);
-  const selectedId = useTodosUi((s) => s.selectedId);
-  const openDetail = useTodosUi((s) => s.openDetail);
+  const todos = useService(TodosUiService);
 
   function dragStart(event: DragEvent<HTMLDivElement>, task: Task) {
     event.dataTransfer.setData('text/plain', task.id);
@@ -64,12 +78,12 @@ export function BoardView({
         key={task.id}
         task={task}
         depth={0}
-        selected={selectedId === task.id}
+        selected={todos.selectedId === task.id}
         timeZone={timeZone}
         tags={tags}
         listName={listId.startsWith('smart:') ? listTitle(task.listId, lists, '') : undefined}
-        onSelect={() => openDetail(task.id)}
-        onOpen={() => openDetail(task.id)}
+        onSelect={() => todos.openDetail(task.id)}
+        onOpen={() => todos.openDetail(task.id)}
         onComplete={() => onComplete(task)}
         onDragStart={(event) => dragStart(event, task)}
         onDragOver={dragOver}
@@ -87,20 +101,20 @@ export function BoardView({
 
   const byStatus = splitByStatus(tasks);
   const byPriority = splitByPriority(tasks);
-  const statusCols = hideCompleted ? (['todo', 'doing'] as const) : STATUS_COLS;
+  const statusCols = todos.hideCompleted ? (['todo', 'doing'] as const) : STATUS_COLS;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div
         className={`grid min-h-0 flex-1 auto-rows-fr gap-4 overflow-x-auto ${
-          boardMode === 'status'
+          todos.boardMode === 'status'
             ? statusCols.length === 2
               ? 'grid-cols-2'
               : 'grid-cols-3'
             : 'grid-cols-4'
         }`}
       >
-        {boardMode === 'status'
+        {todos.boardMode === 'status'
           ? statusCols.map((status, index) => (
               <section
                 key={status}
@@ -175,4 +189,4 @@ export function BoardView({
       </div>
     </div>
   );
-}
+});

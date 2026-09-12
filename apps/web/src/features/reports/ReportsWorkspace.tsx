@@ -1,8 +1,9 @@
-import type { Report, ReportType, SyncHead } from '@vital/dto';
+import type { ReportType, SyncHead } from '@vital/dto';
 import { extractNotes, replaceNotes } from '@vital/dto';
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { bindServices, useService } from '@rabjs/react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef, type FC } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { useOnline } from '@/features/inbox/online';
@@ -11,71 +12,20 @@ import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import {
-  applyRemoteBody,
   decidePoll,
   formatPeriodRange,
-  isDirty,
-  isRevisionConflict,
   parseReportType,
   POLL_MS,
   REPORT_TYPES,
   reportHref,
   SAVE_DEBOUNCE_MS,
 } from './model';
-import {
-  reportKeys,
-  useCurrentReportQuery,
-  useReportActions,
-  useReportQuery,
-  useReportReviewQuery,
-} from './queries';
-import { useAuth } from '@/services/auth.service';
+import { reportKeys, useCurrentReportQuery, useReportQuery, useReportReviewQuery } from './queries';
 import { ReportsCalendar } from './ReportsCalendar';
+import { ReportsPageService, sessionDirty } from './reports-page.service';
 import { ReviewLists } from './ReviewLists';
 import { StatsBlock } from './StatsBlock';
-import { reportUi } from './report-ui.service';
 import { WysiwygEditor } from './WysiwygEditor';
-
-type Session = {
-  id: string;
-  draftMd: string;
-  serverMd: string;
-  draftTitle: string;
-  serverTitle: string;
-  revision: number;
-  editorKey: number;
-  conflict: boolean;
-  blockSave: boolean;
-  filling: boolean;
-  remoteToast: boolean;
-  saveError: string | null;
-  saveState: 'idle' | 'saving' | 'saved';
-};
-
-function sessionFrom(report: Report, prev?: Session | null): Session {
-  return {
-    id: report.id,
-    draftMd: report.bodyMd,
-    serverMd: report.bodyMd,
-    draftTitle: report.title,
-    serverTitle: report.title,
-    revision: report.revision,
-    editorKey: (prev?.editorKey ?? 0) + 1,
-    conflict: false,
-    blockSave: false,
-    filling: false,
-    remoteToast: false,
-    saveError: null,
-    saveState: 'idle',
-  };
-}
-
-function sessionDirty(s: Session): boolean {
-  return isDirty(s.draftMd, s.serverMd) || s.draftTitle.trim() !== s.serverTitle.trim();
-}
-
-const GENERATE_WAIT_MS = 60_000;
-const GENERATE_POLL_MS = 3_000;
 
 /** Inline period stat — Sora numeral + caption label, no KPI card chrome. */
 function MetaStat({ tone, value, label }: { tone: string; value: number; label: string }) {
@@ -94,28 +44,28 @@ function MetaStat({ tone, value, label }: { tone: string; value: number; label: 
   );
 }
 
-export function ReportsWorkspace() {
+function ReportsWorkspaceContent() {
+  const page = useService(ReportsPageService);
+  const qc = useQueryClient();
   const { id = '' } = useParams();
   const [search] = useSearchParams();
   const navigate = useNavigate();
   const typeParam = parseReportType(search.get('type'));
   const online = useOnline();
-  const actions = useReportActions();
-  const user = useAuth((s) => s.user);
-  const timeZone = user?.timezone ?? 'UTC';
+  const timeZone = page.timeZone;
   const formatCompletedAt = (iso: string): string =>
     new Date(iso).toLocaleDateString('zh-CN', {
       timeZone,
       month: 'long',
       day: 'numeric',
     });
-  const weekStartsOn = user?.weekStartsOn === 0 ? 0 : 1;
+  const weekStartsOn = page.weekStartsOn;
 
   const reportQuery = useReportQuery(id, id !== '');
   const reviewQuery = useReportReviewQuery(id, id !== '');
   const currentQuery = useCurrentReportQuery(typeParam, id === '');
-  const qc = useQueryClient();
   const liveType: ReportType = reportQuery.data?.type ?? typeParam;
+  page.setRouteId(id);
 
   // `/reports` (and `?type=…`) has no document of its own: resolve the current
   // period and replace the URL with the canonical `/reports/:id` editor route.
@@ -133,51 +83,18 @@ export function ReportsWorkspace() {
     if (liveType === 'weekly') void markOnboarding({ openedWeekly: true });
   }, [liveType]);
 
-  const [session, setSession] = useState<Session | null>(null);
   const report = reportQuery.data && reportQuery.data.id === id ? reportQuery.data : undefined;
-  if (report && session?.id !== report.id) {
-    setSession(sessionFrom(report, session));
-  }
+  if (report) page.adoptReport(report);
 
   useEffect(() => {
-    if (!report || session?.id !== report.id) return;
-    reportUi().setEmbeds(report.embeds);
-  }, [report, session?.id]);
+    if (!report || page.session?.id !== report.id) return;
+    page.reportsUi.setEmbeds(report.embeds);
+  }, [report, page, page.session?.id]);
 
-  const dirty = session ? sessionDirty(session) : false;
-  const dirtyRef = useRef(false);
-  const draftMdRef = useRef('');
-  const idRef = useRef(id);
-  const sessionRef = useRef(session);
+  const session = page.session;
+  const dirty = page.dirty;
+  const generating = page.generating;
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const saveInFlightRef = useRef<Promise<Report> | null>(null);
-  const fillingRef = useRef(false);
-  const [generating, setGenerating] = useState(false);
-  const saveFnRef = useRef(actions.save);
-  const runSaveTrackedRef = useRef<((live: Session) => Promise<Report>) | undefined>(undefined);
-
-  useEffect(() => {
-    dirtyRef.current = dirty;
-    draftMdRef.current = session?.draftMd ?? '';
-    idRef.current = id;
-    sessionRef.current = session;
-    saveFnRef.current = actions.save;
-  });
-
-  function commitSession(next: Session | null): void {
-    sessionRef.current = next;
-    dirtyRef.current = next ? sessionDirty(next) : false;
-    draftMdRef.current = next?.draftMd ?? '';
-    fillingRef.current = next?.filling === true;
-    if (next) idRef.current = next.id;
-    setSession(next);
-  }
-
-  function patchLive(fn: (s: Session) => Session): void {
-    const live = sessionRef.current;
-    if (!live) return;
-    commitSession(fn(live));
-  }
 
   function cancelSaveTimer(): void {
     if (saveTimerRef.current !== null) {
@@ -195,42 +112,25 @@ export function ReportsWorkspace() {
       try {
         const head = await client.syncHead();
         if (cancelled) return;
-        const dirtyNow = dirtyRef.current;
-        const action = decidePoll(prev, head, dirtyNow);
+        const action = decidePoll(prev, head, page.dirty);
         prev = head;
-        const reportId = idRef.current;
+        const reportId = page.routeId;
         if (reportId === '') return;
         if (action.reloadBody) {
           const remote = await client.getReport(reportId);
-          if (cancelled || dirtyRef.current || fillingRef.current) return;
-          const body = applyRemoteBody(dirtyRef.current, draftMdRef.current, remote.bodyMd);
-          if (body !== remote.bodyMd) return;
-          const next = sessionFrom(remote, sessionRef.current);
-          sessionRef.current = next;
-          dirtyRef.current = false;
-          draftMdRef.current = next.draftMd;
-          fillingRef.current = false;
-          setSession(next);
-          reportUi().setEmbeds(remote.embeds);
+          if (cancelled || page.dirty || page.session?.filling) return;
+          page.applyRemoteBody(remote);
           return;
         }
         if (action.fetchEmbeds || action.toastRemote) {
           const res = await client.getReportEmbeds(reportId);
-          if (cancelled || fillingRef.current) return;
-          reportUi().mergeEmbeds(res.embeds);
+          if (cancelled || page.session?.filling) return;
+          page.reportsUi.mergeEmbeds(res.embeds);
           if (action.toastRemote) {
             // The global report watermark also moves for our own saves and
             // other reports. Compare this document's revision only after any
             // pending save has acknowledged its new revision.
-            const pendingSave = saveInFlightRef.current;
-            if (pendingSave) await pendingSave.catch(() => undefined);
-            if (cancelled || fillingRef.current) return;
-            const live = sessionRef.current;
-            if (live && live.id === reportId && res.revision > live.revision) {
-              const next = { ...live, remoteToast: true };
-              sessionRef.current = next;
-              setSession(next);
-            }
+            await page.applyRemoteToast(reportId, res.revision);
           }
         }
       } catch {
@@ -244,75 +144,19 @@ export function ReportsWorkspace() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [id, online]);
-
-  async function runSave(live: Session): Promise<Report> {
-    const bodyChanged = isDirty(live.draftMd, live.serverMd);
-    const titleChanged = live.draftTitle.trim() !== live.serverTitle.trim();
-    patchLive((s) => ({ ...s, saveState: 'saving', saveError: null }));
-    try {
-      const saved = await saveFnRef.current(live.id, {
-        revision: live.revision,
-        ...(bodyChanged ? { bodyMd: live.draftMd } : {}),
-        ...(titleChanged ? { title: live.draftTitle.trim() } : {}),
-      });
-      const current = sessionRef.current;
-      if (current && current.id === live.id) {
-        commitSession({
-          ...current,
-          revision: saved.revision,
-          serverMd:
-            bodyChanged && !isDirty(current.draftMd, live.draftMd)
-              ? live.draftMd
-              : current.serverMd,
-          serverTitle: titleChanged ? live.draftTitle.trim() : current.serverTitle,
-          saveState: 'saved',
-        });
-      }
-      reportUi().mergeEmbeds(saved.embeds);
-      return saved;
-    } catch (err) {
-      if (isRevisionConflict(err)) {
-        patchLive((s) => ({
-          ...s,
-          conflict: true,
-          blockSave: true,
-          filling: false,
-          saveState: 'idle',
-        }));
-        fillingRef.current = false;
-      } else {
-        patchLive((s) => ({ ...s, saveError: humanError(err), saveState: 'idle' }));
-      }
-      throw err;
-    }
-  }
-
-  async function runSaveTracked(live: Session): Promise<Report> {
-    const existing = saveInFlightRef.current;
-    if (existing) return existing;
-    const promise = runSave(live).finally(() => {
-      if (saveInFlightRef.current === promise) saveInFlightRef.current = null;
-    });
-    saveInFlightRef.current = promise;
-    return promise;
-  }
+  }, [id, online, page]);
 
   useEffect(() => {
-    runSaveTrackedRef.current = runSaveTracked;
-  });
-
-  useEffect(() => {
-    const live = sessionRef.current;
+    const live = page.session;
     if (!live || live.id !== id || !online || live.conflict || live.blockSave) return;
-    if (fillingRef.current || live.filling) return;
+    if (live.filling) return;
     if (!sessionDirty(live)) return;
     const timer = setTimeout(() => {
       if (saveTimerRef.current === timer) saveTimerRef.current = null;
-      if (fillingRef.current) return;
-      const now = sessionRef.current;
-      if (!now || now.id !== id || now.conflict || now.blockSave || !sessionDirty(now)) return;
-      void runSaveTrackedRef.current?.(now).catch(() => undefined);
+      const now = page.session;
+      if (!now || now.id !== id || now.conflict || now.blockSave || now.filling) return;
+      if (!sessionDirty(now)) return;
+      void page.runSaveTracked().catch(() => undefined);
     }, SAVE_DEBOUNCE_MS);
     saveTimerRef.current = timer;
     return () => {
@@ -322,6 +166,7 @@ export function ReportsWorkspace() {
   }, [
     id,
     online,
+    page,
     session?.id,
     session?.draftMd,
     session?.draftTitle,
@@ -341,145 +186,19 @@ export function ReportsWorkspace() {
       if (id === '') return;
       event.preventDefault();
       cancelSaveTimer();
-      const live = sessionRef.current;
+      const live = page.session;
       if (!live || live.id !== id || live.conflict || live.blockSave || live.filling) return;
       if (!sessionDirty(live)) return;
-      void runSaveTrackedRef.current?.(live).catch(() => undefined);
+      void page.runSaveTracked().catch(() => undefined);
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [id]);
+  }, [id, page]);
 
   async function openPeriod(next: ReportType, at?: string): Promise<void> {
     cancelSaveTimer();
-    try {
-      if (saveInFlightRef.current) await saveInFlightRef.current;
-      const live = sessionRef.current;
-      if (live && live.id === id && sessionDirty(live) && !live.conflict && !live.blockSave) {
-        await runSaveTracked(live);
-      }
-      const current = await actions.loadCurrent(next, at);
-      navigate(reportHref(current.id, current.type));
-    } catch (err) {
-      if (isRevisionConflict(err)) {
-        patchLive((s) => ({ ...s, conflict: true, blockSave: true }));
-      } else {
-        patchLive((s) => ({ ...s, saveError: humanError(err) }));
-      }
-    }
-  }
-
-  async function generate(): Promise<void> {
-    const live = sessionRef.current;
-    if (!live || live.filling || generating || liveType !== 'daily') return;
-    cancelSaveTimer();
-    if (sessionDirty(live)) {
-      try {
-        await runSaveTracked(live);
-      } catch {
-        return;
-      }
-    }
-    const reportId = live.id;
-    const baseline = extractNotes((sessionRef.current ?? live).serverMd, 'daily');
-    fillingRef.current = true;
-    patchLive((s) => ({ ...s, filling: true, saveError: null }));
-    setGenerating(true);
-    try {
-      const queued = await client.generateReport(reportId);
-      if (queued.status === 'disabled') {
-        fillingRef.current = false;
-        patchLive((s) => ({ ...s, filling: false, saveError: t.reports.generateDisabled }));
-        return;
-      }
-      const started = Date.now();
-      while (true) {
-        if (idRef.current !== reportId) {
-          fillingRef.current = false;
-          return;
-        }
-        const remote = await actions.loadReport(reportId);
-        if (extractNotes(remote.bodyMd, 'daily') !== baseline) {
-          fillingRef.current = false;
-          commitSession({ ...sessionFrom(remote, sessionRef.current), filling: false });
-          reportUi().setEmbeds(remote.embeds);
-          actions.refreshStats('daily', reportId);
-          void markOnboarding({ wroteDaily: true });
-          return;
-        }
-        if (Date.now() - started >= GENERATE_WAIT_MS) break;
-        await new Promise((resolve) => setTimeout(resolve, GENERATE_POLL_MS));
-      }
-      fillingRef.current = false;
-      patchLive((s) => ({ ...s, filling: false, saveError: t.reports.generateTimeout }));
-    } catch (err) {
-      fillingRef.current = false;
-      patchLive((s) => ({ ...s, filling: false, saveError: humanError(err) }));
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function reloadRemote(): Promise<void> {
-    if (id === '') return;
-    try {
-      const remote = await actions.loadReport(id);
-      fillingRef.current = false;
-      commitSession(sessionFrom(remote, sessionRef.current));
-      reportUi().setEmbeds(remote.embeds);
-    } catch (err) {
-      patchLive((s) => ({ ...s, saveError: humanError(err) }));
-    }
-  }
-
-  async function toggleTask(taskId: string): Promise<void> {
-    const embed = reportUi().embeds.tasks[taskId];
-    if (!embed || embed.deletedAt !== null) return;
-    try {
-      if (embed.status === 'done') {
-        const completionId = reportUi().lastCompletionId[taskId];
-        if (completionId === undefined) return;
-        await client.uncompleteTask(taskId, { completionId });
-      } else {
-        const res = await client.completeTask(taskId);
-        reportUi().setCompletionId(taskId, res.undo.completionId);
-      }
-      if (id !== '') {
-        const res = await actions.loadEmbeds(id);
-        reportUi().mergeEmbeds(res.embeds);
-      }
-      actions.refreshStats(liveType, id);
-    } catch (err) {
-      patchLive((s) => ({ ...s, saveError: humanError(err) }));
-    }
-  }
-
-  function handleHydrate(md: string): void {
-    patchLive((s) => {
-      const draftMd = replaceNotes(s.draftMd, liveType, md);
-      const wasDirty = sessionDirty({ ...s, draftMd });
-      return { ...s, draftMd, serverMd: wasDirty ? s.serverMd : draftMd };
-    });
-  }
-
-  async function toggleReviewTask(task: {
-    taskId: string;
-    completionId: string | null;
-  }): Promise<void> {
-    try {
-      if (task.completionId) {
-        await client.uncompleteTask(task.taskId, { completionId: task.completionId });
-      } else {
-        await client.completeTask(task.taskId);
-      }
-      if (id !== '') {
-        const res = await actions.loadEmbeds(id);
-        reportUi().mergeEmbeds(res.embeds);
-      }
-      actions.refreshStats(liveType, id);
-    } catch (err) {
-      patchLive((s) => ({ ...s, saveError: humanError(err) }));
-    }
+    const current = await page.switchPeriod(next, at);
+    if (current) navigate(reportHref(current.id, current.type));
   }
 
   const loading = id !== '' && reportQuery.isLoading && session?.id !== id;
@@ -541,12 +260,12 @@ export function ReportsWorkspace() {
           {session?.conflict ? (
             <div className="flex flex-wrap items-center gap-3 py-2">
               <Banner>{t.reports.conflict}</Banner>
-              <Button variant="ghost" onClick={() => void reloadRemote()}>
+              <Button variant="ghost" onClick={() => void page.reloadRemote()}>
                 {t.reports.reload}
               </Button>
               <Button
                 variant="quiet"
-                onClick={() => patchLive((s) => ({ ...s, conflict: false, blockSave: true }))}
+                onClick={() => page.patchLive((s) => ({ ...s, conflict: false, blockSave: true }))}
               >
                 {t.reports.keepLocal}
               </Button>
@@ -556,7 +275,7 @@ export function ReportsWorkspace() {
           {session?.remoteToast && !session.conflict ? (
             <div className="flex flex-wrap items-center gap-3 py-2" role="status">
               <p className="text-[length:var(--text-meta)] text-muted">{t.reports.remoteUpdated}</p>
-              <Button variant="ghost" onClick={() => void reloadRemote()}>
+              <Button variant="ghost" onClick={() => void page.reloadRemote()}>
                 {t.reports.reload}
               </Button>
             </div>
@@ -593,7 +312,7 @@ export function ReportsWorkspace() {
                     value={session.draftTitle}
                     disabled={!online || session.filling}
                     onChange={(event) =>
-                      patchLive((s) => ({ ...s, draftTitle: event.target.value }))
+                      page.patchLive((s) => ({ ...s, draftTitle: event.target.value }))
                     }
                     className="report-title w-full bg-transparent text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)] text-fg outline-none"
                   />
@@ -632,7 +351,10 @@ export function ReportsWorkspace() {
                     data-testid="report-generate"
                     disabled={!online || session.filling}
                     loading={generating}
-                    onClick={() => void generate()}
+                    onClick={() => {
+                      cancelSaveTimer();
+                      void page.generate(liveType);
+                    }}
                   >
                     {generating ? t.reports.generating : t.reports.generate}
                   </Button>
@@ -673,7 +395,7 @@ export function ReportsWorkspace() {
                 {reviewQuery.data ? (
                   <ReviewLists
                     review={reviewQuery.data}
-                    onToggleTask={(task) => void toggleReviewTask(task)}
+                    onToggleTask={(task) => void page.toggleReviewTask(task, liveType)}
                     onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
                     onOpenInbox={(inboxId) => navigate(`/inbox/${inboxId}`)}
                     formatCompletedAt={formatCompletedAt}
@@ -690,10 +412,13 @@ export function ReportsWorkspace() {
                   bodyMd={extractNotes(session.draftMd, liveType)}
                   editable={online && !session.filling}
                   onChange={(md) =>
-                    patchLive((s) => ({ ...s, draftMd: replaceNotes(s.draftMd, liveType, md) }))
+                    page.patchLive((s) => ({
+                      ...s,
+                      draftMd: replaceNotes(s.draftMd, liveType, md),
+                    }))
                   }
-                  onHydrate={handleHydrate}
-                  onToggleTask={(taskId) => void toggleTask(taskId)}
+                  onHydrate={(md) => page.hydrateNotes(md, liveType)}
+                  onToggleTask={(taskId) => void page.toggleTask(taskId, liveType)}
                 />
               </div>
             </div>
@@ -721,3 +446,5 @@ export function ReportsWorkspace() {
     </div>
   );
 }
+
+export const ReportsWorkspace: FC = bindServices(ReportsWorkspaceContent, [ReportsPageService]);

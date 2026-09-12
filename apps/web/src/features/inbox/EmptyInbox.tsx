@@ -1,13 +1,14 @@
+import { observer, useService } from '@rabjs/react';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type FC } from 'react';
 import { t } from '@/copy';
 import { Button } from '@/ui/button';
 import { Icon } from '@/ui/icon';
 import { PASTE_URL_ID } from './model';
-import { useInboxUi } from './inbox-ui.service';
+import { InboxUiService } from './inbox-ui.service';
 
-export function EmptyInbox() {
-  const requestPaste = useInboxUi((s) => s.requestPaste);
+export const EmptyInbox: FC = observer(function EmptyInbox() {
+  const inbox = useService(InboxUiService);
   const [hint, setHint] = useState(false);
 
   return (
@@ -25,7 +26,7 @@ export function EmptyInbox() {
         <Button
           variant="ghost"
           onClick={() => {
-            requestPaste();
+            inbox.requestPaste();
             document.getElementById(PASTE_URL_ID)?.focus();
           }}
         >
@@ -49,7 +50,7 @@ export function EmptyInbox() {
       </p>
     </div>
   );
-}
+});
 
 export function EmptyReader() {
   return (

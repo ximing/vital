@@ -86,7 +86,7 @@ export interface AgentActionLogItem extends AgentAction {
 
 ```ts
 export interface TaskDraftTrigger {
-  status: 'queued' | 'pending';
+  status: 'idle' | 'queued' | 'pending' | 'failed';
   action: AgentAction | null;
 }
 ```
@@ -1391,6 +1391,18 @@ Complete Task
 - Auth: Bearer required
 - Client: `completeTask`
 - Response: `CompleteTaskResponse`
+
+Path params:
+
+- `id`: uuid
+
+#### `GET /api/v1/tasks/:id/draft`
+
+Read-only draft job status for a delegable task. Does not enqueue.
+
+- Auth: Bearer required
+- Client: `getTaskDraft`
+- Response: `TaskDraftTrigger`
 
 Path params:
 

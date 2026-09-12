@@ -9,15 +9,14 @@ import {
   ListTodo,
   Star,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type UIEvent } from 'react';
+import { bindServices, useService } from '@rabjs/react';
+import { useEffect, useRef, useState, type FC, type UIEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { useOutcomesQuery } from '@/features/today/queries';
 import { useTagsQuery } from '@/features/todos/queries';
-import { todosUi } from '@/features/todos/todos-ui.service';
 import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Icon, type LucideIcon } from '@/ui/icon';
@@ -35,9 +34,10 @@ import {
 } from './model';
 import { InboxTagEditor } from './InboxTags';
 import { useOnline } from './online';
+import { InboxPageService } from './inbox-page.service';
 import { useInboxActions, useInboxItemQuery } from './queries';
 import { ReaderArticle } from './ReaderArticle';
-import { useInboxUi } from './inbox-ui.service';
+import { InboxUiService } from './inbox-ui.service';
 
 const CONTENT_WIDTH = 'mx-auto w-full max-w-[700px] px-8 xl:max-w-[840px] 2xl:max-w-[920px]';
 
@@ -75,19 +75,20 @@ function ActionButton({
   );
 }
 
-export function InboxReader() {
+function InboxReaderContent() {
+  const page = useService(InboxPageService);
+  const inbox = useService(InboxUiService);
   const { id = '' } = useParams();
   const online = useOnline();
-  const timeZone = useAuth((s) => s.user?.timezone) ?? 'UTC';
+  const timeZone = page.timeZone;
   const query = useInboxItemQuery(id);
   const tags = useTagsQuery().data ?? [];
   const outcomes = useOutcomesQuery().data ?? [];
   const actions = useInboxActions();
-  const fontSize = useInboxUi((s) => s.fontSize);
-  const setFontSize = useInboxUi((s) => s.setFontSize);
+  const fontSize = inbox.fontSize;
   const [reportHint, setReportHint] = useState(false);
   const [convertNote, setConvertNote] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const actionError = page.actionError;
 
   const item = query.data;
   const refetchItem = query.refetch;
@@ -129,41 +130,38 @@ export function InboxReader() {
 
   async function onFavorite() {
     if (!item || !patchable) return;
-    setActionError(null);
+    page.setActionError(null);
     try {
       await actions.patch.mutateAsync({
         id: item.id,
         input: { status: nextFavoriteStatus(item) },
       });
     } catch (err) {
-      setActionError(humanError(err));
+      page.setActionError(humanError(err));
     }
   }
 
   async function onArchive() {
     if (!item || !patchable) return;
-    setActionError(null);
+    page.setActionError(null);
     try {
       await actions.patch.mutateAsync({
         id: item.id,
         input: { status: item.status === 'archived' ? 'unread' : 'archived' },
       });
     } catch (err) {
-      setActionError(humanError(err));
+      page.setActionError(humanError(err));
     }
   }
 
   async function onConvert() {
     if (!item || converted) return;
-    setActionError(null);
     try {
-      const res = await actions.convertKeepUrl(item.id);
+      const res = await page.convertKeepUrl(item.id);
       setConvertNote(t.inbox.convertKeptUrl);
-      if (res.task.id) {
-        todosUi().openDetail(res.task.id);
-      }
+      if (res.task.id) page.openConvertedTask(res.task.id);
     } catch (err) {
-      setActionError(humanError(err));
+      page.setActionError(humanError(err));
     }
   }
 
@@ -254,7 +252,7 @@ export function InboxReader() {
                       ? 'bg-accent-subtle text-fg'
                       : 'text-muted hover:bg-surface-muted hover:text-fg'
                   }`}
-                  onClick={() => setFontSize(size)}
+                  onClick={() => inbox.setFontSize(size)}
                 >
                   {t.inbox.font[size]}
                 </button>
@@ -365,11 +363,11 @@ export function InboxReader() {
                 placeholder={t.inbox.attachOutcome}
                 disabled={!online}
                 onChange={(outcomeId) => {
-                  setActionError(null);
+                  page.setActionError(null);
                   void actions.patch
                     .mutateAsync({ id: item.id, input: { outcomeId } })
                     .catch((err) => {
-                      setActionError(humanError(err));
+                      page.setActionError(humanError(err));
                     });
                 }}
               />
@@ -378,9 +376,9 @@ export function InboxReader() {
                 tags={tags}
                 disabled={!online}
                 onChange={(tagIds) => {
-                  setActionError(null);
+                  page.setActionError(null);
                   void actions.patch.mutateAsync({ id: item.id, input: { tagIds } }).catch((err) => {
-                    setActionError(humanError(err));
+                    page.setActionError(humanError(err));
                   });
                 }}
                 onCreate={(name) => actions.createTag.mutateAsync(name)}
@@ -407,3 +405,5 @@ export function InboxReader() {
     </div>
   );
 }
+
+export const InboxReader: FC = bindServices(InboxReaderContent, [InboxPageService]);

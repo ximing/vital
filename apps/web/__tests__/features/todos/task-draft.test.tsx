@@ -14,6 +14,7 @@ vi.mock('@/api/client', async (importOriginal) => {
   return {
     ...actual,
     client: {
+      getTaskDraft: vi.fn(),
       draftTask: vi.fn(),
       listAgentActions: vi.fn(),
       sendAgentActionFeedback: vi.fn(),
@@ -100,6 +101,7 @@ function renderDetail(task: Task, action: AgentAction | null, onPatch = vi.fn())
 describe('draft polling', () => {
   beforeEach(() => {
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.getTaskDraft).mockResolvedValue({ status: 'idle', action: null });
   });
   afterEach(() => {
     vi.clearAllMocks();
@@ -143,22 +145,30 @@ describe('draft polling', () => {
     );
   }
 
-  it('brings up the draft card when the proposal lands mid-poll', async () => {
+  it('restores 起草中 on remount without clicking generate again', async () => {
+    vi.mocked(client.getTaskDraft).mockResolvedValue({ status: 'queued', action: null });
+    renderDetailWithQuery(makeTask({ delegable: true }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: t.todos.draftWaiting })).toBeDisabled();
+    });
+    expect(client.draftTask).not.toHaveBeenCalled();
+  });
+
+  it('brings up the draft card when GET flips from queued to pending', async () => {
     vi.useFakeTimers();
     try {
       let landed = false;
-      vi.mocked(client.listAgentActions).mockImplementation(() =>
-        Promise.resolve(landed ? [draftAction] : []),
+      vi.mocked(client.getTaskDraft).mockImplementation(() =>
+        Promise.resolve(
+          landed
+            ? { status: 'pending' as const, action: draftAction }
+            : { status: 'queued' as const, action: null },
+        ),
       );
-      vi.mocked(client.draftTask).mockResolvedValue({ status: 'queued', action: null });
       renderDetailWithQuery(makeTask({ delegable: true }));
       await act(async () => {});
+      expect(screen.getByRole('button', { name: t.todos.draftWaiting })).toBeDisabled();
 
-      fireEvent.click(screen.getByRole('button', { name: t.todos.draftTrigger }));
-      await act(async () => {});
-      expect(client.draftTask).toHaveBeenCalledWith('task-1');
-
-      // The worker writes the draft while the drawer is polling.
       landed = true;
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3_000);
@@ -171,21 +181,20 @@ describe('draft polling', () => {
     }
   });
 
-  it('keeps polling past a slow refetch instead of giving up early', async () => {
+  it('keeps polling past a slow GET instead of giving up early', async () => {
     vi.useFakeTimers();
     try {
       let landed = false;
-      vi.mocked(client.listAgentActions).mockImplementation(() =>
-        Promise.resolve(landed ? [draftAction] : []),
+      vi.mocked(client.getTaskDraft).mockImplementation(() =>
+        Promise.resolve(
+          landed
+            ? { status: 'pending' as const, action: draftAction }
+            : { status: 'queued' as const, action: null },
+        ),
       );
-      vi.mocked(client.draftTask).mockResolvedValue({ status: 'queued', action: null });
       renderDetailWithQuery(makeTask({ delegable: true }));
       await act(async () => {});
 
-      fireEvent.click(screen.getByRole('button', { name: t.todos.draftTrigger }));
-      await act(async () => {});
-
-      // The draft only shows up after several poll rounds.
       await act(async () => {
         await vi.advanceTimersByTimeAsync(9_000);
       });
@@ -202,50 +211,50 @@ describe('draft polling', () => {
     }
   });
 
-  it('shows a visible timeout notice with retry instead of silently reverting', async () => {
+  it('shows a visible failure notice with retry when the job finishes empty', async () => {
     vi.useFakeTimers();
     try {
-      vi.mocked(client.listAgentActions).mockResolvedValue([]);
-      vi.mocked(client.draftTask).mockResolvedValue({ status: 'queued', action: null });
+      let status: 'queued' | 'failed' = 'queued';
+      vi.mocked(client.getTaskDraft).mockImplementation(() =>
+        Promise.resolve({ status, action: null }),
+      );
       renderDetailWithQuery(makeTask({ delegable: true }));
       await act(async () => {});
+      expect(screen.getByRole('button', { name: t.todos.draftWaiting })).toBeDisabled();
 
-      fireEvent.click(screen.getByRole('button', { name: t.todos.draftTrigger }));
-      await act(async () => {});
-
+      status = 'failed';
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(66_000);
+        await vi.advanceTimersByTimeAsync(3_000);
       });
 
-      expect(screen.getByText(t.todos.draftTimeout)).toBeInTheDocument();
+      expect(screen.getByText(t.todos.draftFailed)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: t.todos.draftRetry })).toBeEnabled();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('retries after a timeout and picks up the late draft', async () => {
+  it('retries after a failure and picks up the late draft', async () => {
     vi.useFakeTimers();
     try {
-      let landed = false;
-      vi.mocked(client.listAgentActions).mockImplementation(() =>
-        Promise.resolve(landed ? [draftAction] : []),
-      );
-      vi.mocked(client.draftTask).mockResolvedValue({ status: 'queued', action: null });
+      let phase: 'failed' | 'queued' | 'pending' = 'failed';
+      vi.mocked(client.getTaskDraft).mockImplementation(() => {
+        if (phase === 'pending') return Promise.resolve({ status: 'pending', action: draftAction });
+        if (phase === 'queued') return Promise.resolve({ status: 'queued', action: null });
+        return Promise.resolve({ status: 'failed', action: null });
+      });
+      vi.mocked(client.draftTask).mockImplementation(async () => {
+        phase = 'queued';
+        return { status: 'queued', action: null };
+      });
       renderDetailWithQuery(makeTask({ delegable: true }));
       await act(async () => {});
+      expect(screen.getByText(t.todos.draftFailed)).toBeInTheDocument();
 
-      fireEvent.click(screen.getByRole('button', { name: t.todos.draftTrigger }));
-      await act(async () => {});
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(66_000);
-      });
-      expect(screen.getByText(t.todos.draftTimeout)).toBeInTheDocument();
-
-      // Retry re-arms the wait; the worker's draft finally lands.
-      landed = true;
       fireEvent.click(screen.getByRole('button', { name: t.todos.draftRetry }));
       await act(async () => {});
+      expect(client.draftTask).toHaveBeenCalledWith('task-1');
+      phase = 'pending';
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3_000);
       });
@@ -254,12 +263,22 @@ describe('draft polling', () => {
       vi.useRealTimers();
     }
   });
+
+  it('keeps the trigger when GET fails instead of flipping to failed', async () => {
+    vi.mocked(client.getTaskDraft).mockRejectedValue(new Error('network'));
+    renderDetailWithQuery(makeTask({ delegable: true }));
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: t.todos.draftTrigger })).toBeEnabled();
+    });
+    expect(screen.queryByText(t.todos.draftFailed)).not.toBeInTheDocument();
+  });
 });
 
 describe('TaskDetail delegable + agent draft', () => {
   beforeEach(() => {
     // Default: no pending proposals; individual tests override as needed.
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.getTaskDraft).mockResolvedValue({ status: 'idle', action: null });
   });
   afterEach(() => {
     vi.clearAllMocks();
@@ -318,7 +337,7 @@ describe('TaskDetail delegable + agent draft', () => {
     expect(screen.queryByRole('button', { name: t.todos.draftTrigger })).not.toBeInTheDocument();
   });
 
-  it('写进备注 records accepted feedback; the server appends the draft to notes', async () => {
+  it('写进备注 records accepted feedback and puts the plan into the notes editor', async () => {
     vi.mocked(client.sendAgentActionFeedback).mockResolvedValue({
       ...draftAction,
       feedback: 'accepted',
@@ -333,6 +352,63 @@ describe('TaskDetail delegable + agent draft', () => {
         feedback: 'accepted',
       });
     });
+    await waitFor(() => {
+      expect(screen.getByLabelText(t.todos.notes).textContent).toMatch(/列大纲/);
+    });
+  });
+
+  it('shows proposed subtasks and a generate-subtasks action', () => {
+    renderDetail(makeTask({ delegable: true }), {
+      ...draftAction,
+      payload: {
+        draft: '1. 列大纲\n2. 收集数据',
+        subtasks: [
+          { title: '列大纲', estimateMinutes: 15 },
+          { title: '收集数据', estimateMinutes: 30 },
+        ],
+      },
+    });
+    expect(screen.getByText(t.todos.draftSubtasks)).toBeInTheDocument();
+    expect(screen.getByText(t.todos.estimateMinutes.replace('{n}', '15'))).toBeInTheDocument();
+    expect(screen.getByText(t.todos.estimateMinutes.replace('{n}', '30'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.todos.draftApplySubtasks })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.todos.draftApply })).toBeInTheDocument();
+  });
+
+  it('生成子任务 accepts the same proposal as 写进备注', async () => {
+    vi.mocked(client.sendAgentActionFeedback).mockResolvedValue({
+      ...draftAction,
+      feedback: 'accepted',
+    });
+    const user = userEvent.setup();
+    renderDetail(makeTask({ delegable: true }), {
+      ...draftAction,
+      payload: {
+        draft: '1. 列大纲',
+        subtasks: [{ title: '列大纲', estimateMinutes: 15 }],
+      },
+    });
+
+    await user.click(screen.getByRole('button', { name: t.todos.draftApplySubtasks }));
+
+    await waitFor(() => {
+      expect(client.sendAgentActionFeedback).toHaveBeenCalledWith('action-1', {
+        feedback: 'accepted',
+      });
+    });
+  });
+
+  it('shows an error when 写进备注 fails instead of going silent', async () => {
+    vi.mocked(client.sendAgentActionFeedback).mockRejectedValue(new Error('网络出错'));
+    const user = userEvent.setup();
+    renderDetail(makeTask({ delegable: true }), draftAction);
+
+    await user.click(screen.getByRole('button', { name: t.todos.draftApply }));
+
+    await waitFor(() => {
+      expect(screen.getByText('网络出错')).toBeInTheDocument();
+    });
+    expect(screen.getByText(t.todos.draftTitle)).toBeInTheDocument();
   });
 
   it('忽略 records dismissed feedback', async () => {

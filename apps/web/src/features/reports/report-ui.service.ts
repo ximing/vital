@@ -1,4 +1,4 @@
-import { resolve, Service, useObserverService } from '@rabjs/react';
+import { resolve, Service } from '@rabjs/react';
 import type { ReportEmbeds } from '@vital/dto';
 import { EMPTY_EMBEDS, type SlashQuery } from './model';
 
@@ -35,11 +35,6 @@ export class ReportUiService extends Service {
 
 export function reportUi(): ReportUiService {
   return resolve(ReportUiService);
-}
-
-export function useReportUi<T>(selector: (s: ReportUiService) => T): T {
-  const [value] = useObserverService(ReportUiService, selector);
-  return value;
 }
 
 export function resetReportUi(): void {

@@ -1,4 +1,4 @@
-import { resolve, Service, useObserverService } from '@rabjs/react';
+import { resolve, Service } from '@rabjs/react';
 import type { InboxPreview } from '@vital/dto';
 import { type PendingSave, type ReaderSize } from './model';
 
@@ -75,11 +75,6 @@ export class InboxUiService extends Service {
 
 export function inboxUi(): InboxUiService {
   return resolve(InboxUiService);
-}
-
-export function useInboxUi<T>(selector: (s: InboxUiService) => T): T {
-  const [value] = useObserverService(InboxUiService, selector);
-  return value;
 }
 
 export function resetInboxUi(): void {

@@ -1,5 +1,6 @@
+import { observer, useService } from '@rabjs/react';
 import { Link2, LoaderCircle, Sparkles } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FC, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
@@ -9,17 +10,16 @@ import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { hostLabel, normalizePasteUrl, PASTE_URL_ID } from './model';
 import { useInboxActions } from './queries';
-import { useInboxUi } from './inbox-ui.service';
+import { InboxUiService } from './inbox-ui.service';
 
-export function PasteUrl({ disabled }: { disabled?: boolean }) {
+export const PasteUrl: FC<{ disabled?: boolean }> = observer(function PasteUrl({ disabled }) {
+  const inbox = useService(InboxUiService);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const actions = useInboxActions();
-  const nonce = useInboxUi((s) => s.pasteNonce);
-  const preview = useInboxUi((s) => s.preview);
-  const previewTitle = useInboxUi((s) => s.previewTitle);
-  const setPreview = useInboxUi((s) => s.setPreview);
-  const setPreviewTitle = useInboxUi((s) => s.setPreviewTitle);
+  const nonce = inbox.pasteNonce;
+  const preview = inbox.preview;
+  const previewTitle = inbox.previewTitle;
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
             value={displayed}
             onChange={(e) => {
               setValue(e.target.value);
-              if (preview) setPreview(null);
+              if (preview) inbox.setPreview(null);
             }}
             placeholder={t.inbox.pastePlaceholder}
             aria-label={t.inbox.pastePlaceholder}
@@ -128,7 +128,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
             <input
               value={previewTitle}
               maxLength={500}
-              onChange={(e) => setPreviewTitle(e.target.value)}
+              onChange={(e) => inbox.setPreviewTitle(e.target.value)}
               className={`${FIELD_CONTROL_CLASS} w-full font-semibold`}
             />
           </label>
@@ -149,7 +149,7 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
               variant="quiet"
               disabled={busy}
               onClick={() => {
-                setPreview(null);
+                inbox.setPreview(null);
                 setError(null);
               }}
             >
@@ -160,4 +160,4 @@ export function PasteUrl({ disabled }: { disabled?: boolean }) {
       ) : null}
     </div>
   );
-}
+});

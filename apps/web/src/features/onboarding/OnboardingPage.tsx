@@ -1,44 +1,26 @@
-import { useState } from 'react';
+import { bindServices, useService } from '@rabjs/react';
+import type { FC } from 'react';
 import { useNavigate } from 'react-router';
 import { HOME_PATH, t } from '@/copy';
-import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { EmptyArt } from '@/ui/empty-art';
 import { markOnboarding } from './mark';
 import { ONBOARDING_HREFS } from './model';
+import { OnboardingPageService } from './onboarding-page.service';
 
-export function OnboardingPage() {
+function OnboardingPageContent() {
+  const page = useService(OnboardingPageService);
   const navigate = useNavigate();
-  const user = useAuth((s) => s.user);
-  const [step, setStep] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const copy = t.onboarding.steps[step];
-  const dest = ONBOARDING_HREFS[step];
+  const user = page.auth.user;
+  const busy = page.$model.skipAll.loading;
+  const copy = t.onboarding.steps[page.step];
+  const dest = ONBOARDING_HREFS[page.step];
   if (!copy || dest === undefined) return null;
   const href: string = dest;
 
-  async function skipAll(): Promise<void> {
-    setBusy(true);
-    setError(null);
-    try {
-      await markOnboarding({ dismissed: true });
-      navigate(HOME_PATH, { replace: true });
-    } catch (err) {
-      setError(humanError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function goNext(): void {
-    if (step >= ONBOARDING_HREFS.length - 1) {
-      navigate(HOME_PATH, { replace: true });
-      return;
-    }
-    setStep((n) => n + 1);
+    if (page.next() === 'home') navigate(HOME_PATH, { replace: true });
   }
 
   function goAction(): void {
@@ -51,7 +33,7 @@ export function OnboardingPage() {
       <div className="mx-auto w-full max-w-md">
         <EmptyArt />
         <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-          {t.onboarding.stepOf.replace('{n}', String(step + 1))}
+          {t.onboarding.stepOf.replace('{n}', String(page.step + 1))}
         </p>
         <h1 className="mt-2 text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
           {copy.title}
@@ -59,16 +41,25 @@ export function OnboardingPage() {
         <p className="mt-2 text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
           {copy.body}
         </p>
-        {error ? <Banner>{error}</Banner> : null}
+        {page.error ? <Banner>{page.error}</Banner> : null}
         <div className="mt-6 flex flex-wrap gap-2">
           <Button onClick={goAction} disabled={busy}>
             {copy.action}
           </Button>
           <Button variant="ghost" onClick={goNext} disabled={busy}>
-            {step >= ONBOARDING_HREFS.length - 1 ? t.onboarding.start : t.onboarding.next}
+            {page.step >= ONBOARDING_HREFS.length - 1 ? t.onboarding.start : t.onboarding.next}
           </Button>
         </div>
-        <Button variant="quiet" className="mt-4 px-0" onClick={() => void skipAll()} disabled={busy}>
+        <Button
+          variant="quiet"
+          className="mt-4 px-0"
+          onClick={() => {
+            void page.skipAll().then((ok) => {
+              if (ok) navigate(HOME_PATH, { replace: true });
+            });
+          }}
+          disabled={busy}
+        >
           {t.onboarding.skipAll}
         </Button>
         {user ? (
@@ -80,3 +71,5 @@ export function OnboardingPage() {
     </div>
   );
 }
+
+export const OnboardingPage: FC = bindServices(OnboardingPageContent, [OnboardingPageService]);

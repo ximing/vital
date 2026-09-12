@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { RSRoot } from '@rabjs/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { observer, RSRoot, useService } from '@rabjs/react';
 import { setupWindowRootContainer } from '@rabjs/devtools';
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -8,7 +8,8 @@ import { App } from '@/App';
 import { t } from '@/copy';
 import { subscribeSystemTheme } from '@/lib/theme';
 import { startSync, stopSync } from '@/features/sync/sync-engine';
-import { authService, useAuth } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
+import { appQueryClient } from '@/services/query.service';
 import { registerVitalServices } from '@/services/register';
 import { Button } from '@/ui/button';
 import { VitalMark } from '@/shell/VitalMark';
@@ -17,13 +18,7 @@ import '@/styles/app.css';
 registerVitalServices();
 setupWindowRootContainer();
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: true },
-  },
-});
-
-function BootScreen() {
+const BootScreen = observer(function BootScreen() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-canvas text-fg">
       <VitalMark className="pulse-mark h-12 w-12 text-accent" />
@@ -32,29 +27,31 @@ function BootScreen() {
       </p>
     </div>
   );
-}
+});
 
-function UnreachableScreen() {
+const UnreachableScreen = observer(function UnreachableScreen() {
+  const auth = useService(AuthService);
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-canvas text-fg">
       <VitalMark className="h-12 w-12 text-accent" />
       <p className="mt-4 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {t.boot.unreachable}
       </p>
-      <Button className="mt-4" onClick={() => void authService().retryBoot()}>
+      <Button className="mt-4" onClick={() => void auth.retryBoot()}>
         {t.boot.retry}
       </Button>
     </div>
   );
-}
+});
 
-function Root() {
-  const status = useAuth((s) => s.status);
-  const userId = useAuth((s) => s.user?.id ?? null);
+const Root = observer(function Root() {
+  const auth = useService(AuthService);
+  const status = auth.status;
+  const userId = auth.user?.id ?? null;
 
   useEffect(() => {
-    void authService().boot();
-  }, []);
+    void auth.boot();
+  }, [auth]);
 
   useEffect(() => subscribeSystemTheme(), []);
 
@@ -63,21 +60,21 @@ function Root() {
       stopSync();
       return;
     }
-    startSync(queryClient);
+    startSync(appQueryClient);
     return () => stopSync();
   }, [status, userId]);
 
   if (status === 'booting') return <BootScreen />;
   if (status === 'unavailable') return <UnreachableScreen />;
   return <App />;
-}
+});
 
 const rootEl = document.getElementById('root');
 if (rootEl) {
   createRoot(rootEl).render(
     <StrictMode>
       <RSRoot>
-        <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={appQueryClient}>
           <BrowserRouter>
             <Root />
           </BrowserRouter>

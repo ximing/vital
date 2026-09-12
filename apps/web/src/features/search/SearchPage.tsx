@@ -1,11 +1,11 @@
 import type { SearchHit } from '@vital/dto';
-import { useEffect, useState } from 'react';
+import { bindServices, useService } from '@rabjs/react';
+import { useEffect, type FC } from 'react';
 import { Link } from 'react-router';
-import { client } from '@/api/client';
 import { t } from '@/copy';
-import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { EmptyArt } from '@/ui/empty-art';
+import { SearchPageService } from './search-page.service';
 
 function hrefOf(hit: SearchHit): string {
   if (hit.type === 'task') return `/todos/lists/${hit.task.listId}?task=${hit.task.id}`;
@@ -25,36 +25,24 @@ function kindOf(hit: SearchHit): string {
   return t.palette.report;
 }
 
-export function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [result, setResult] = useState<{
-    q: string;
-    items: SearchHit[];
-    error: string | null;
-  } | null>(null);
-  const q = query.trim();
-  const items = q === '' ? null : result?.q === q ? result.items : null;
-  const error = q === '' ? null : result?.q === q ? result.error : null;
-  const loading = q !== '' && result?.q !== q;
+function SearchPageContent() {
+  const page = useService(SearchPageService);
+  const q = page.query.trim();
+  const items = q === '' ? null : page.result?.q === q ? page.result.items : null;
+  const error = q === '' ? null : page.result?.q === q ? page.result.error : null;
+  const loading = q !== '' && page.result?.q !== q;
 
   useEffect(() => {
     if (q === '') return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
-      void client
-        .search({ q, limit: 20 })
-        .then((res) => {
-          if (!cancelled) setResult({ q, items: res.items, error: null });
-        })
-        .catch((err: unknown) => {
-          if (!cancelled) setResult({ q, items: [], error: humanError(err) });
-        });
+      if (!cancelled) void page.search(q);
     }, 160);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [q]);
+  }, [q, page]);
 
   const empty = q === '' || items === null;
 
@@ -71,8 +59,8 @@ export function SearchPage() {
       <input
         autoFocus
         type="search"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        value={page.query}
+        onChange={(event) => page.setQuery(event.target.value)}
         placeholder={t.search.placeholder}
         aria-label={t.search.placeholder}
         className="mt-6 h-11 w-full rounded-[14px] border border-border bg-surface px-4 text-fg shadow-[var(--shadow-xs)] placeholder:text-muted outline-none focus:border-focus focus:shadow-[0_0_0_3px_var(--focus-ring)]"
@@ -108,3 +96,5 @@ export function SearchPage() {
     </div>
   );
 }
+
+export const SearchPage: FC = bindServices(SearchPageContent, [SearchPageService]);

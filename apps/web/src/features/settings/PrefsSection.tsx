@@ -1,10 +1,9 @@
-import { useState } from 'react';
-import { client } from '@/api/client';
+import { bindServices, useService } from '@rabjs/react';
+import type { FC } from 'react';
 import { t } from '@/copy';
-import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { SelectField } from '@/ui/select-field';
+import { PrefsSectionService } from './prefs.service';
 
 const ZONES = [
   'Asia/Shanghai',
@@ -20,21 +19,10 @@ const ZONES = [
   'Australia/Sydney',
 ];
 
-export function PrefsSection() {
-  const user = useAuth((s) => s.user);
-  const setUser = useAuth((s) => s.setUser);
-  const [error, setError] = useState<string | null>(null);
+function PrefsSectionContent() {
+  const page = useService(PrefsSectionService);
+  const user = page.auth.user;
   const zones = user && !ZONES.includes(user.timezone) ? [user.timezone, ...ZONES] : ZONES;
-
-  async function patch(input: { timezone?: string; weekStartsOn?: 0 | 1 }): Promise<void> {
-    setError(null);
-    try {
-      const next = await client.updateMe(input);
-      setUser(next);
-    } catch (err) {
-      setError(humanError(err));
-    }
-  }
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -46,7 +34,7 @@ export function PrefsSection() {
           value={user?.timezone ?? 'UTC'}
           ariaLabel={t.settings.timezone}
           options={zones.map((zone) => ({ value: zone, label: zone }))}
-          onChange={(timezone) => void patch({ timezone })}
+          onChange={(timezone) => void page.patch({ timezone })}
         />
       </label>
       <div role="radiogroup" aria-label={t.settings.weekStartsOn}>
@@ -67,7 +55,7 @@ export function PrefsSection() {
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() => void patch({ weekStartsOn: value })}
+                onClick={() => void page.patch({ weekStartsOn: value })}
                 className={`min-h-[var(--touch-min)] rounded-md px-3 text-[length:var(--text-meta)] ${
                   active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
                 }`}
@@ -78,7 +66,9 @@ export function PrefsSection() {
           })}
         </div>
       </div>
-      {error ? <Banner>{error}</Banner> : null}
+      {page.error ? <Banner>{page.error}</Banner> : null}
     </div>
   );
 }
+
+export const PrefsSection: FC = bindServices(PrefsSectionContent, [PrefsSectionService]);

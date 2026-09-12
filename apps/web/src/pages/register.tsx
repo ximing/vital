@@ -1,56 +1,26 @@
-import { registerInputSchema } from '@vital/dto';
-import { useState, type FormEvent } from 'react';
+import { bindServices, useService } from '@rabjs/react';
+import { type FC, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { t } from '@/copy';
-import { humanError } from '@/lib/errors';
 import { AuthLayout } from '@/pages/auth-layout';
-import { useAuth } from '@/services/auth.service';
+import { RegisterPageService } from '@/pages/register.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
 
-type FieldErrors = { email?: string; displayName?: string; password?: string; confirm?: string };
-
-export function RegisterPage() {
-  const register = useAuth((s) => s.register);
+function RegisterPageContent() {
+  const page = useService(RegisterPageService);
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
-  const [email, setEmail] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const submitting = page.$model.register.loading;
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (submitting) return;
-    if (password !== confirm) {
-      setErrors({ confirm: t.auth.passwordMismatch });
-      return;
-    }
-    const parsed = registerInputSchema.safeParse({ email, password, displayName });
-    if (!parsed.success) {
-      const next: FieldErrors = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0];
-        if (key === 'email' && next.email === undefined) next.email = t.auth.invalidEmail;
-        if (key === 'displayName' && next.displayName === undefined) {
-          next.displayName = t.auth.displayNameRequired;
-        }
-        if (key === 'password' && next.password === undefined) next.password = t.auth.passwordMin;
-      }
-      setErrors(next);
-      return;
-    }
-    setErrors({});
-    setFormError(null);
-    setSubmitting(true);
-    void register(parsed.data)
-      .then(() => navigate('/onboarding', { replace: true }))
-      .catch((err: unknown) => setFormError(humanError(err)))
-      .finally(() => setSubmitting(false));
+    if (!page.validate()) return;
+    void page.register().then((ok) => {
+      if (ok) navigate('/onboarding', { replace: true });
+    });
   }
 
   return (
@@ -61,37 +31,37 @@ export function RegisterPage() {
           name="email"
           type="email"
           autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          error={errors.email}
+          value={page.email}
+          onChange={(e) => page.setEmail(e.target.value)}
+          error={page.errors.email}
         />
         <Field
           label={t.auth.displayName}
           name="displayName"
           autoComplete="name"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          error={errors.displayName}
+          value={page.displayName}
+          onChange={(e) => page.setDisplayName(e.target.value)}
+          error={page.errors.displayName}
         />
         <Field
           label={t.auth.password}
           name="password"
           type="password"
           autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={errors.password}
+          value={page.password}
+          onChange={(e) => page.setPassword(e.target.value)}
+          error={page.errors.password}
         />
         <Field
           label={t.auth.confirmPassword}
           name="confirm"
           type="password"
           autoComplete="new-password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          error={errors.confirm}
+          value={page.confirm}
+          onChange={(e) => page.setConfirm(e.target.value)}
+          error={page.errors.confirm}
         />
-        {formError ? <Banner>{formError}</Banner> : null}
+        {page.formError ? <Banner>{page.formError}</Banner> : null}
         <Button type="submit" className="w-full" loading={submitting}>
           {submitting ? t.auth.registering : t.auth.registerSubmit}
         </Button>
@@ -109,3 +79,5 @@ export function RegisterPage() {
     </AuthLayout>
   );
 }
+
+export const RegisterPage: FC = bindServices(RegisterPageContent, [RegisterPageService]);

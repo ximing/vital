@@ -1,30 +1,28 @@
 import {
   LLM_CAPABILITIES,
   type LlmCapability,
-  type LlmCatalogProvider,
   type LlmProviderPublic,
-  type LlmRouting,
   type LlmSettingsPublic,
 } from '@vital/dto';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { client } from '@/api/client';
+import { bindServices, useService } from '@rabjs/react';
+import { useEffect, useMemo, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
 import { SelectField } from '@/ui/select-field';
 import { ModelSelect } from './ModelSelect';
-import { ModelParameters, parseModelParameters } from './ModelParameters';
+import { ModelParameters } from './ModelParameters';
+import {
+  AddProviderService,
+  LlmSectionService,
+  ProviderParametersService,
+  llmRouteKey,
+  type CatalogProvider,
+} from './llm.service';
 
-type CatalogProvider = LlmCatalogProvider;
-
-function routeKey(providerId: string, model: string): string {
-  return `${providerId}::${model}`;
-}
-
-function AddProviderForm({
+function AddProviderFormContent({
   catalog,
   onDone,
   onError,
@@ -33,38 +31,17 @@ function AddProviderForm({
   onDone: (next: LlmSettingsPublic) => void;
   onError: (message: string) => void;
 }) {
-  const [providerId, setProviderId] = useState('openai');
-  const [label, setLabel] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [picked, setPicked] = useState<string[]>([]);
-  const [parameterDrafts, setParameterDrafts] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  const entry = catalog.find((item) => item.id === providerId);
-  const isCustom = providerId === 'custom';
+  const page = useService(AddProviderService);
+  const entry = catalog.find((item) => item.id === page.providerId);
+  const isCustom = page.providerId === 'custom';
+  const saving = page.$model.submit.loading;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const models = picked;
-    setSaving(true);
     try {
-      const next = await client.addLlmProvider({
-        providerId,
-        label:
-          label.trim() || (isCustom ? t.settings.llm.customEndpoint : (entry?.name ?? providerId)),
-        ...(isCustom ? { baseUrl: baseUrl.trim() } : {}),
-        apiKey: apiKey.trim(),
-        models,
-        ...(Object.keys(parameterDrafts).length
-          ? { modelParameters: parseModelParameters(models, parameterDrafts) }
-          : {}),
-      });
-      onDone(next);
+      onDone(await page.submit(catalog));
     } catch (err) {
       onError(humanError(err));
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -74,23 +51,19 @@ function AddProviderForm({
       className="mt-3 flex flex-col gap-3 rounded-[14px] border border-border bg-elevated p-4"
     >
       <SelectField
-        value={providerId}
+        value={page.providerId}
         ariaLabel={t.settings.llm.addProvider}
         options={[
           ...catalog.map((item) => ({ value: item.id, label: item.name })),
           { value: 'custom', label: t.settings.llm.customEndpoint },
         ]}
-        onChange={(next) => {
-          setProviderId(next);
-          setPicked([]);
-          setParameterDrafts({});
-        }}
+        onChange={(next) => page.setProviderId(next)}
       />
       <Field
         label={t.settings.llm.providerLabel}
         name="providerLabel"
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
+        value={page.label}
+        onChange={(e) => page.setLabel(e.target.value)}
         placeholder={isCustom ? t.settings.llm.providerLabelPlaceholder : (entry?.name ?? '')}
         autoComplete="off"
         spellCheck={false}
@@ -99,34 +72,34 @@ function AddProviderForm({
         <Field
           label={t.settings.llm.apiBase}
           name="providerBaseUrl"
-          value={baseUrl}
-          onChange={(e) => setBaseUrl(e.target.value)}
+          value={page.baseUrl}
+          onChange={(e) => page.setBaseUrl(e.target.value)}
           placeholder={t.settings.llm.apiBaseHint}
           autoComplete="off"
           spellCheck={false}
         />
       ) : null}
       <ModelSelect
-        key={providerId}
+        key={page.providerId}
         options={entry?.models ?? []}
-        value={picked}
-        onChange={setPicked}
+        value={page.picked}
+        onChange={(next) => page.setPicked(next)}
       />
-      {picked.map((modelId) => (
+      {page.picked.map((modelId) => (
         <ModelParameters
           key={modelId}
           modelId={modelId}
           model={entry?.models.find((model) => model.id === modelId)}
-          raw={parameterDrafts[modelId] ?? ''}
-          onChange={(raw) => setParameterDrafts((previous) => ({ ...previous, [modelId]: raw }))}
+          raw={page.parameterDrafts[modelId] ?? ''}
+          onChange={(raw) => page.setParameterDraft(modelId, raw)}
         />
       ))}
       <Field
         label={t.settings.llm.apiKey}
         name="providerApiKey"
         type="password"
-        value={apiKey}
-        onChange={(e) => setApiKey(e.target.value)}
+        value={page.apiKey}
+        onChange={(e) => page.setApiKey(e.target.value)}
         placeholder={t.settings.llm.apiKeyPlaceholder}
         autoComplete="new-password"
         spellCheck={false}
@@ -135,7 +108,7 @@ function AddProviderForm({
         <Button
           type="submit"
           loading={saving}
-          disabled={apiKey.trim() === '' || picked.length === 0}
+          disabled={page.apiKey.trim() === '' || page.picked.length === 0}
         >
           {t.settings.llm.add}
         </Button>
@@ -144,7 +117,13 @@ function AddProviderForm({
   );
 }
 
-function ProviderParameters({
+const AddProviderForm: FC<{
+  catalog: CatalogProvider[];
+  onDone: (next: LlmSettingsPublic) => void;
+  onError: (message: string) => void;
+}> = bindServices(AddProviderFormContent, [AddProviderService]);
+
+function ProviderParametersContent({
   provider,
   catalog,
   onDone,
@@ -157,16 +136,10 @@ function ProviderParameters({
   onError: (message: string) => void;
   onTest: (model: string) => void;
 }) {
-  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      provider.models.map((id) => [
-        id,
-        JSON.stringify(provider.modelParameters?.[id] ?? {}, null, 2),
-      ]),
-    ),
-  );
-  const [saving, setSaving] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  const page = useService(ProviderParametersService);
+  page.adopt(provider);
+  const saving = page.$model.save.loading;
+
   return (
     <details className="pb-3">
       <summary className="cursor-pointer text-sm text-muted">
@@ -177,18 +150,10 @@ function ProviderParameters({
         onSubmit={(event) => {
           event.preventDefault();
           void (async () => {
-            setSaving(true);
             try {
-              onDone(
-                await client.patchLlmProvider(provider.id, {
-                  modelParameters: parseModelParameters(provider.models, drafts),
-                }),
-              );
-              setDirty(false);
+              onDone(await page.save(provider));
             } catch (err) {
               onError(err instanceof Error ? err.message : humanError(err));
-            } finally {
-              setSaving(false);
             }
           })();
         }}
@@ -200,16 +165,13 @@ function ProviderParameters({
               model={catalog
                 .find((item) => item.id === provider.providerId)
                 ?.models.find((model) => model.id === modelId)}
-              raw={drafts[modelId] ?? ''}
-              onChange={(raw) => {
-                setDrafts((previous) => ({ ...previous, [modelId]: raw }));
-                setDirty(true);
-              }}
+              raw={page.drafts[modelId] ?? ''}
+              onChange={(raw) => page.setDraft(modelId, raw)}
             />
             <Button
               type="button"
               variant="quiet"
-              disabled={dirty || saving}
+              disabled={page.dirty || saving}
               onClick={() => onTest(modelId)}
             >
               测试 {modelId}
@@ -221,85 +183,40 @@ function ProviderParameters({
             保存模型参数
           </Button>
         </div>
-        {dirty ? <p className="text-sm text-muted">保存参数后可测试连接。</p> : null}
+        {page.dirty ? <p className="text-sm text-muted">保存参数后可测试连接。</p> : null}
       </form>
     </details>
   );
 }
 
-export function LlmSection() {
-  const user = useAuth((s) => s.user);
-  const setUser = useAuth((s) => s.setUser);
-  const llm: LlmSettingsPublic = user?.llm ?? { providers: [], routing: {} };
-  const [catalog, setCatalog] = useState<CatalogProvider[]>([]);
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [testingId, setTestingId] = useState<string | null>(null);
+const ProviderParameters: FC<{
+  provider: LlmProviderPublic;
+  catalog: CatalogProvider[];
+  onDone: (next: LlmSettingsPublic) => void;
+  onError: (message: string) => void;
+  onTest: (model: string) => void;
+}> = bindServices(ProviderParametersContent, [ProviderParametersService]);
+
+function LlmSectionContent() {
+  const page = useService(LlmSectionService);
+  const llm = page.llm;
 
   useEffect(() => {
-    client
-      .llmCatalog()
-      .then((res) => setCatalog(res.providers))
-      .catch(() => setCatalog([]));
-  }, []);
-
-  function apply(next: LlmSettingsPublic) {
-    if (user) setUser({ ...user, llm: next });
-  }
+    void page.loadCatalog();
+  }, [page]);
 
   const modelOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
     for (const provider of llm.providers) {
       for (const model of provider.models) {
         options.push({
-          value: routeKey(provider.id, model),
+          value: llmRouteKey(provider.id, model),
           label: `${model} · ${provider.label}`,
         });
       }
     }
     return options;
   }, [llm.providers]);
-
-  async function onRoute(capability: LlmCapability, value: string) {
-    setError(null);
-    const routing: LlmRouting = { ...llm.routing };
-    if (value === '') {
-      routing[capability] = null;
-    } else {
-      const [providerId, model] = value.split('::');
-      routing[capability] = { providerId: providerId!, model: model! };
-    }
-    try {
-      apply(await client.putLlmRouting({ routing }));
-      setNotice(t.settings.llm.saved);
-    } catch (err) {
-      setError(humanError(err));
-    }
-  }
-
-  async function onTest(provider: LlmProviderPublic, model = provider.models[0] ?? '') {
-    setTestingId(provider.id);
-    setError(null);
-    setNotice(null);
-    try {
-      await client.testLlmProvider(provider.id, model);
-      setNotice(t.settings.llm.testOk);
-    } catch (err) {
-      setError(humanError(err));
-    } finally {
-      setTestingId(null);
-    }
-  }
-
-  async function onRemove(provider: LlmProviderPublic) {
-    setError(null);
-    try {
-      apply(await client.removeLlmProvider(provider.id));
-    } catch (err) {
-      setError(humanError(err));
-    }
-  }
 
   return (
     <div className="flex max-w-2xl flex-col gap-8">
@@ -336,45 +253,45 @@ export function LlmSection() {
                 <Button
                   type="button"
                   variant="ghost"
-                  loading={testingId === provider.id}
+                  loading={page.testingId === provider.id}
                   disabled={!provider.apiKeySet}
-                  onClick={() => void onTest(provider)}
+                  onClick={() => void page.test(provider)}
                 >
                   {t.settings.llm.test}
                 </Button>
-                <Button type="button" variant="quiet" onClick={() => void onRemove(provider)}>
+                <Button type="button" variant="quiet" onClick={() => void page.remove(provider)}>
                   {t.settings.llm.removeProvider}
                 </Button>
               </div>
               <ProviderParameters
                 provider={provider}
-                catalog={catalog}
+                catalog={page.catalog}
                 onDone={(next) => {
-                  apply(next);
-                  setError(null);
-                  setNotice(t.settings.llm.saved);
+                  page.apply(next);
+                  page.setError(null);
+                  page.setNotice(t.settings.llm.saved);
                 }}
-                onError={setError}
-                onTest={(model) => void onTest(provider, model)}
+                onError={(message) => page.setError(message)}
+                onTest={(model) => void page.test(provider, model)}
               />
             </div>
           ))}
         </div>
-        {adding ? (
+        {page.adding ? (
           <AddProviderForm
-            catalog={catalog}
+            catalog={page.catalog}
             onDone={(next) => {
-              apply(next);
-              setAdding(false);
-              setNotice(t.settings.llm.saved);
+              page.apply(next);
+              page.setAdding(false);
+              page.setNotice(t.settings.llm.saved);
             }}
-            onError={setError}
+            onError={(message) => page.setError(message)}
           />
         ) : (
           <button
             type="button"
             className="mt-3 w-full rounded-[14px] border border-dashed border-border px-4 py-3 text-[length:var(--text-meta)] text-muted hover:border-accent hover:text-accent"
-            onClick={() => setAdding(true)}
+            onClick={() => page.setAdding(true)}
           >
             ＋ {t.settings.llm.addProvider}
           </button>
@@ -389,9 +306,9 @@ export function LlmSection() {
           {t.settings.llm.routingHint}
         </p>
         <div className="mt-3 divide-y divide-border/60">
-          {LLM_CAPABILITIES.map((capability) => {
+          {LLM_CAPABILITIES.map((capability: LlmCapability) => {
             const route = llm.routing[capability];
-            const value = route ? routeKey(route.providerId, route.model) : '';
+            const value = route ? llmRouteKey(route.providerId, route.model) : '';
             return (
               <div key={capability} className="flex items-center gap-3 py-2.5">
                 <span className="w-20 shrink-0 text-[length:var(--text-body)]">
@@ -416,7 +333,7 @@ export function LlmSection() {
                       : [{ value: '', label: t.settings.llm.followDefault }]),
                     ...modelOptions,
                   ]}
-                  onChange={(next) => void onRoute(capability, next)}
+                  onChange={(next) => void page.saveRoute(capability, next)}
                 />
               </div>
             );
@@ -424,12 +341,14 @@ export function LlmSection() {
         </div>
       </section>
 
-      {error ? <Banner>{error}</Banner> : null}
-      {notice ? (
+      {page.error ? <Banner>{page.error}</Banner> : null}
+      {page.notice ? (
         <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-          {notice}
+          {page.notice}
         </p>
       ) : null}
     </div>
   );
 }
+
+export const LlmSection: FC = bindServices(LlmSectionContent, [LlmSectionService]);

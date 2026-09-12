@@ -1,10 +1,11 @@
+import { observer, useService } from '@rabjs/react';
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { useState } from 'react';
+import type { FC } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { resolveTheme, type ThemeChoice } from '@/lib/theme';
-import { useAuth } from '@/services/auth.service';
-import { themeService } from '@/services/theme.service';
+import { AuthService } from '@/services/auth.service';
+import { ThemeService } from '@/services/theme.service';
 import { Icon } from '@/ui/icon';
 
 const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
@@ -13,22 +14,24 @@ const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'dark', label: t.theme.dark, icon: Moon },
 ];
 
-function persistTheme(next: ThemeChoice, signedIn: boolean): void {
-  themeService().setChoice(next);
+function persistTheme(theme: ThemeService, next: ThemeChoice, signedIn: boolean): void {
+  theme.setChoice(next);
   if (signedIn) {
     void client.updateMe({ themePreference: next }).catch(() => undefined);
   }
 }
 
-export function ThemeSwitch({ variant = 'menu' }: { variant?: 'menu' | 'rail' }) {
-  const user = useAuth((s) => s.user);
-  const [choice, setChoice] = useState(() => themeService().choice);
+export const ThemeSwitch: FC<{ variant?: 'menu' | 'rail' }> = observer(function ThemeSwitch({
+  variant = 'menu',
+}) {
+  const user = useService(AuthService).user;
+  const theme = useService(ThemeService);
+  const choice = theme.choice;
   const dark = resolveTheme(choice) === 'dark';
 
   function toggle() {
-    const next = resolveTheme(themeService().choice) === 'dark' ? 'light' : 'dark';
-    persistTheme(next, Boolean(user));
-    setChoice(next);
+    const next = resolveTheme(theme.choice) === 'dark' ? 'light' : 'dark';
+    persistTheme(theme, next, Boolean(user));
   }
 
   if (variant === 'rail') {
@@ -73,15 +76,17 @@ export function ThemeSwitch({ variant = 'menu' }: { variant?: 'menu' | 'rail' })
       </span>
     </button>
   );
-}
+});
 
-export function ThemeToggle({ compact = false }: { compact?: boolean }) {
-  const user = useAuth((s) => s.user);
-  const [choice, setChoice] = useState(() => themeService().choice);
+export const ThemeToggle: FC<{ compact?: boolean }> = observer(function ThemeToggle({
+  compact = false,
+}) {
+  const user = useService(AuthService).user;
+  const theme = useService(ThemeService);
+  const choice = theme.choice;
 
   function onChoose(next: ThemeChoice) {
-    persistTheme(next, Boolean(user));
-    setChoice(next);
+    persistTheme(theme, next, Boolean(user));
   }
 
   if (compact) {
@@ -136,4 +141,4 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       })}
     </div>
   );
-}
+});

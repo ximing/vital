@@ -306,7 +306,9 @@ describe('inbox workspace', () => {
     expect(screen.getByText('无标签')).toBeInTheDocument();
     await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: /#工作/ }));
     expect(await screen.findByText('带标签')).toBeInTheDocument();
-    expect(screen.queryByText('无标签')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('无标签')).not.toBeInTheDocument();
+    });
   });
 
   it('adds a tag from the reader', async () => {

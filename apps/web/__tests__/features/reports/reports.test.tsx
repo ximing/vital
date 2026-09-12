@@ -32,7 +32,6 @@ vi.mock('@/api/client', async (importOriginal) => {
       getReportReview: vi.fn(),
       getReportEmbeds: vi.fn(),
       patchReport: vi.fn(),
-      fillReport: vi.fn(),
       generateReport: vi.fn(),
       syncHead: vi.fn(),
       completeTask: vi.fn(),
@@ -66,7 +65,6 @@ const mockUser: UserProfile = {
 };
 
 const TASK_ID = '11111111-1111-4111-8111-111111111111';
-const INBOX_ID = '22222222-2222-4222-8222-222222222222';
 
 const dailyBody = [
   '# 2026年9月6日 日报',
@@ -229,15 +227,6 @@ describe('reports workspace', () => {
       title: input.title ?? daily.title,
     }));
     vi.mocked(client.generateReport).mockResolvedValue({ status: 'queued', jobId: 'job-1' });
-    vi.mocked(client.fillReport).mockResolvedValue({
-      ...daily,
-      revision: 2,
-      bodyMd: `${daily.bodyMd}[[inbox:${INBOX_ID}]]\n`,
-      embeds: {
-        ...daily.embeds,
-        inbox: { [INBOX_ID]: { id: INBOX_ID, title: '一篇', status: 'unread', deletedAt: null } },
-      },
-    });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.search).mockResolvedValue({ items: [], nextCursor: null });

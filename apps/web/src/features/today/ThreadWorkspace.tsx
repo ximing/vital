@@ -1,12 +1,14 @@
 import type { Outcome, OutcomeDetail, OutcomeSignal, Task } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { bindServices, useService } from '@rabjs/react';
+import { useQuery } from '@tanstack/react-query';
+import { QueryService } from '@/services/query.service';
+import { useState, type FC, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { inboxKeys, useInboxListQuery } from '@/features/inbox/queries';
@@ -15,9 +17,10 @@ import { inboxList } from '@/features/todos/model';
 import { TaskDetail } from '@/features/todos/TaskDetail';
 import { useListsQuery, useTagsQuery, useTodoActions } from '@/features/todos/queries';
 import { UndoToast } from '@/features/todos/UndoToast';
-import { todosUi, useTodosUi } from '@/features/todos/todos-ui.service';
+import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { isUndoable } from './model';
-import { todayKeys, useOutcomeActions, useOutcomeDetailQuery } from './queries';
+import { ThreadPageService } from './thread-page.service';
+import { useOutcomeActions, useOutcomeDetailQuery, usePendingDecomposeQuery } from './queries';
 
 const DETAIL_COL =
   'flex h-full min-h-0 w-[clamp(24rem,40%,40rem)] shrink-0 border-l border-border/60';
@@ -326,6 +329,7 @@ function NextStepCard({
   timeZone: string;
   onNewTask: () => void;
 }) {
+  const todos = useService(TodosUiService);
   const closed = detail.outcome.status === 'closed';
   const nextTask = detail.tasks.find((task) => task.status === 'todo' || task.status === 'doing');
   const text = detail.outcome.ruleNextStep ?? detail.outcome.agentSuggestion;
@@ -350,7 +354,7 @@ function NextStepCard({
             <Button
               variant="quiet"
               className="border border-border bg-elevated"
-              onClick={() => todosUi().openDetail(nextTask.id)}
+              onClick={() => todos.openDetail(nextTask.id)}
             >
               {t.thread.viewTask}
             </Button>
@@ -441,6 +445,7 @@ function TaskRow({
   done: boolean;
   onToggle: (task: Task) => void;
 }) {
+  const todos = useService(TodosUiService);
   return (
     <div className="flex items-center gap-3 border-b border-border/60 px-2 py-2.5">
       <button
@@ -455,7 +460,7 @@ function TaskRow({
       </button>
       <button
         type="button"
-        onClick={() => todosUi().openDetail(task.id)}
+        onClick={() => todos.openDetail(task.id)}
         className={`min-w-0 flex-1 truncate text-left text-[length:var(--text-body)] ${
           done ? 'text-muted line-through' : 'text-fg'
         }`}
@@ -723,7 +728,7 @@ function MaterialsSection({
   detail: OutcomeDetail;
   onRefresh: () => void;
 }) {
-  const qc = useQueryClient();
+  const query = useService(QueryService);
   const [attaching, setAttaching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detachedToast, setDetachedToast] = useState(false);
@@ -734,7 +739,7 @@ function MaterialsSection({
       await client.patchInbox(id, { outcomeId: null });
       setDetachedToast(true);
       onRefresh();
-      await qc.invalidateQueries({ queryKey: inboxKeys.all });
+      await query.invalidate(inboxKeys.all);
     } catch (err) {
       setError(humanError(err));
     }
@@ -802,7 +807,7 @@ function MaterialsSection({
           onDone={() => {
             setAttaching(false);
             onRefresh();
-            void qc.invalidateQueries({ queryKey: inboxKeys.all });
+            void query.invalidate(inboxKeys.all);
           }}
           onCancel={() => setAttaching(false)}
         />
@@ -855,28 +860,37 @@ function ThreadCanvas({ children }: { children: ReactNode }) {
 const BACK_LINK_CLASS =
   'mt-4 inline-flex items-center rounded-md px-2 py-1 text-[length:var(--text-meta)] text-muted transition-colors hover:bg-surface-muted hover:text-fg';
 
-export function ThreadWorkspace() {
+function ThreadWorkspaceContent() {
+  const page = useService(ThreadPageService);
+  const todos = useService(TodosUiService);
+  const auth = useService(AuthService);
   const { id = '' } = useParams();
-  const user = useAuth((s) => s.user);
+  const user = auth.user;
   const timeZone = user?.timezone ?? 'UTC';
-  const qc = useQueryClient();
 
   const detailQuery = useOutcomeDetailQuery(id);
   const listsQuery = useListsQuery();
   const tagsQuery = useTagsQuery();
   const todoActions = useTodoActions();
 
-  const selectedId = useTodosUi((s) => s.selectedId);
-  const detailOpen = useTodosUi((s) => s.detailOpen);
-  const [now] = useState(() => new Date());
-  const [creatingTask, setCreatingTask] = useState(false);
+  const selectedId = todos.selectedId;
+  const detailOpen = todos.detailOpen;
+  const now = page.now;
+  const creatingTask = page.creatingTask;
 
   const detail = detailQuery.data ?? null;
   const tasks = detail?.tasks ?? [];
   const detailTask = detailOpen ? tasks.find((task) => task.id === selectedId) : undefined;
+  const decomposeQuery = usePendingDecomposeQuery(
+    detailOpen && detailTask && detailTask.parentId === null ? detailTask.id : null,
+  );
+  const decomposeAction =
+    (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.decompose') ?? null;
+  const draftAction =
+    (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.draft') ?? null;
 
   function refresh(): void {
-    void qc.invalidateQueries({ queryKey: todayKeys.all });
+    void page.refresh();
   }
 
   const backLink = (
@@ -937,13 +951,13 @@ export function ThreadWorkspace() {
         <NextStepCard
           detail={detail}
           timeZone={timeZone}
-          onNewTask={() => setCreatingTask(true)}
+          onNewTask={() => page.startCreate()}
         />
         <TasksSection
           detail={detail}
           timeZone={timeZone}
           creating={creatingTask}
-          onCreatingChange={setCreatingTask}
+          onCreatingChange={(value) => page.setCreating(value)}
           onRefresh={refresh}
         />
         <MaterialsSection detail={detail} onRefresh={refresh} />
@@ -959,6 +973,8 @@ export function ThreadWorkspace() {
             lists={listsQuery.data ?? []}
             tags={tagsQuery.data ?? []}
             outcomes={[detail.outcome]}
+            decomposeAction={decomposeAction}
+            draftAction={draftAction}
             timeZone={timeZone}
             onPatch={(input) =>
               todoActions.patch.mutateAsync({ id: detailTask.id, input }).then(refresh)
@@ -986,3 +1002,5 @@ export function ThreadWorkspace() {
     </div>
   );
 }
+
+export const ThreadWorkspace: FC = bindServices(ThreadWorkspaceContent, [ThreadPageService]);

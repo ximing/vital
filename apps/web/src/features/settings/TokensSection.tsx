@@ -1,11 +1,10 @@
-import type { ApiToken, ApiTokenAccessLog, CreatedApiToken } from '@vital/dto';
-import { useEffect, useState, type FormEvent } from 'react';
-import { client } from '@/api/client';
+import { bindServices, useService } from '@rabjs/react';
+import { useEffect, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
-import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
+import { TokensSectionService } from './tokens.service';
 
 const copy = t.settings.tokens;
 
@@ -15,142 +14,64 @@ function formatTime(iso: string): string {
   return date.toLocaleString('zh-CN', { hour12: false });
 }
 
-export function TokensSection() {
-  const [name, setName] = useState('');
-  const [items, setItems] = useState<ApiToken[]>([]);
-  const [created, setCreated] = useState<CreatedApiToken | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [accessId, setAccessId] = useState<string | null>(null);
-  const [accessLogs, setAccessLogs] = useState<ApiTokenAccessLog[] | null>(null);
-  const [accessLoading, setAccessLoading] = useState(false);
+function TokensSectionContent() {
+  const page = useService(TokensSectionService);
+  const saving = page.$model.create.loading || page.$model.revoke.loading;
+  const accessLoading = page.$model.toggleAccess.loading;
 
   useEffect(() => {
-    void client
-      .listApiTokens()
-      .then((res) => setItems(res.items))
-      .catch((err: unknown) => setError(humanError(err)));
-  }, []);
+    void page.load();
+  }, [page]);
 
-  async function onCreate(event: FormEvent): Promise<void> {
+  function onCreate(event: FormEvent): void {
     event.preventDefault();
-    const next = name.trim();
-    if (next === '') return;
-    setSaving(true);
-    setError(null);
-    setCopied(false);
-    try {
-      const token = await client.createApiToken({ name: next });
-      setCreated(token);
-      setName('');
-      setItems((await client.listApiTokens()).items);
-    } catch (err) {
-      setError(humanError(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onCopy(): Promise<void> {
-    if (!created) return;
-    try {
-      await navigator.clipboard.writeText(created.token);
-      setCopied(true);
-    } catch (err) {
-      setError(humanError(err));
-    }
-  }
-
-  async function onRevoke(id: string): Promise<void> {
-    if (confirmId !== id) {
-      setConfirmId(id);
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    try {
-      await client.revokeApiToken(id);
-      setConfirmId(null);
-      if (created?.id === id) setCreated(null);
-      if (accessId === id) {
-        setAccessId(null);
-        setAccessLogs(null);
-      }
-      setItems((await client.listApiTokens()).items);
-    } catch (err) {
-      setError(humanError(err));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onToggleAccess(id: string): Promise<void> {
-    if (accessId === id) {
-      setAccessId(null);
-      setAccessLogs(null);
-      return;
-    }
-    setAccessId(id);
-    setAccessLogs(null);
-    setAccessLoading(true);
-    setError(null);
-    try {
-      const res = await client.listApiTokenAccess(id, { limit: 50 });
-      setAccessLogs(res.items);
-    } catch (err) {
-      setError(humanError(err));
-      setAccessId(null);
-    } finally {
-      setAccessLoading(false);
-    }
+    void page.create();
   }
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <form onSubmit={(e) => void onCreate(e)} className="flex flex-col gap-4">
+      <form onSubmit={onCreate} className="flex flex-col gap-4">
         <Field
           label={copy.name}
           name="apiTokenName"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          value={page.name}
+          onChange={(e) => page.setName(e.target.value)}
           placeholder={copy.namePlaceholder}
           maxLength={50}
           autoComplete="off"
         />
-        {error ? <Banner>{error}</Banner> : null}
+        {page.error ? <Banner>{page.error}</Banner> : null}
         <div>
-          <Button type="submit" loading={saving} disabled={name.trim() === ''}>
+          <Button type="submit" loading={saving} disabled={page.name.trim() === ''}>
             {copy.create}
           </Button>
         </div>
       </form>
 
-      {created ? (
+      {page.created ? (
         <div className="rounded-xl bg-surface-muted px-4 py-3">
           <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
             {copy.created}
           </p>
           <p className="mt-2 break-all font-mono text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg">
-            {created.token}
+            {page.created.token}
           </p>
           <div className="mt-3">
-            <Button type="button" variant="ghost" onClick={() => void onCopy()}>
-              {copied ? copy.copied : copy.copy}
+            <Button type="button" variant="ghost" onClick={() => void page.copy()}>
+              {page.copied ? copy.copied : copy.copy}
             </Button>
           </div>
         </div>
       ) : null}
 
-      {items.length === 0 ? (
+      {page.items.length === 0 ? (
         <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
           {copy.empty}
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {items.map((item) => {
-            const open = accessId === item.id;
+          {page.items.map((item) => {
+            const open = page.accessId === item.id;
             return (
               <li key={item.id} className="rounded-xl bg-surface-muted px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -172,8 +93,8 @@ export function TokensSection() {
                     <Button
                       type="button"
                       variant="quiet"
-                      onClick={() => void onToggleAccess(item.id)}
-                      disabled={accessLoading && accessId === item.id}
+                      onClick={() => void page.toggleAccess(item.id)}
+                      disabled={accessLoading && page.accessId === item.id}
                     >
                       {open ? copy.hideAccess : copy.access}
                     </Button>
@@ -181,9 +102,9 @@ export function TokensSection() {
                       type="button"
                       variant="danger"
                       disabled={saving}
-                      onClick={() => void onRevoke(item.id)}
+                      onClick={() => void page.revoke(item.id)}
                     >
-                      {confirmId === item.id ? copy.confirmRevoke : copy.revoke}
+                      {page.confirmId === item.id ? copy.confirmRevoke : copy.revoke}
                     </Button>
                   </div>
                 </div>
@@ -192,17 +113,17 @@ export function TokensSection() {
                     <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
                       {copy.accessHint}
                     </p>
-                    {accessLoading || accessLogs === null ? (
+                    {accessLoading || page.accessLogs === null ? (
                       <p className="mt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
                         …
                       </p>
-                    ) : accessLogs.length === 0 ? (
+                    ) : page.accessLogs.length === 0 ? (
                       <p className="mt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
                         {copy.accessEmpty}
                       </p>
                     ) : (
                       <ul className="mt-2 flex flex-col gap-1.5">
-                        {accessLogs.map((log) => (
+                        {page.accessLogs.map((log) => (
                           <li
                             key={log.id}
                             className="font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted"
@@ -222,3 +143,5 @@ export function TokensSection() {
     </div>
   );
 }
+
+export const TokensSection: FC = bindServices(TokensSectionContent, [TokensSectionService]);

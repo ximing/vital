@@ -22,6 +22,20 @@ describe('Emerald Garden tokens', () => {
 
   it('keeps the restrained editorial type scale', () => {
     expect(sharedTokens.type.body).toEqual({ fontSize: 14, lineHeight: 21 });
+    expect(sharedTokens.type.section).toEqual({ fontSize: 16, lineHeight: 24 });
     expect(sharedTokens.type.display).toEqual({ fontSize: 26, lineHeight: 34 });
+  });
+
+  it('locks the inbox source hues', () => {
+    expect(lightColors.srcExtension).toBe('#6A5CD0');
+    expect(lightColors.srcWechat).toBe('#229E4E');
+    expect(lightColors.srcWeb).toBe('#3D6FD1');
+    expect(lightColors.srcMobile).toBe('#B4761E');
+    expect(lightColors.srcManual).toBe('#2C9C8C');
+    expect(darkColors.srcExtension).toBe('#9D8EF0');
+    expect(darkColors.srcWechat).toBe('#5CCF82');
+    expect(darkColors.srcWeb).toBe('#7FA8F0');
+    expect(darkColors.srcMobile).toBe('#E0A94E');
+    expect(darkColors.srcManual).toBe('#5CC9B8');
   });
 });

@@ -27,6 +27,11 @@ export interface ColorTokens {
   reportYearly: string;
   danger: string;
   scrim: string;
+  srcExtension: string;
+  srcWechat: string;
+  srcWeb: string;
+  srcMobile: string;
+  srcManual: string;
 }
 
 export const lightColors: ColorTokens = {
@@ -58,6 +63,11 @@ export const lightColors: ColorTokens = {
   reportYearly: '#155E3D',
   danger: '#CE4A45',
   scrim: 'rgb(27 33 29 / 32%)',
+  srcExtension: '#6A5CD0',
+  srcWechat: '#229E4E',
+  srcWeb: '#3D6FD1',
+  srcMobile: '#B4761E',
+  srcManual: '#2C9C8C',
 };
 
 export const darkColors: ColorTokens = {
@@ -89,6 +99,11 @@ export const darkColors: ColorTokens = {
   reportYearly: '#82E0B6',
   danger: '#E8756C',
   scrim: 'rgba(0, 0, 0, 0.52)',
+  srcExtension: '#9D8EF0',
+  srcWechat: '#5CCF82',
+  srcWeb: '#7FA8F0',
+  srcMobile: '#E0A94E',
+  srcManual: '#5CC9B8',
 };
 
 export const sharedTokens = {
@@ -109,6 +124,7 @@ export const sharedTokens = {
     caption: { fontSize: 12, lineHeight: 16 },
     meta: { fontSize: 13, lineHeight: 18 },
     body: { fontSize: 14, lineHeight: 21 },
+    section: { fontSize: 16, lineHeight: 24 },
     title: { fontSize: 20, lineHeight: 28 },
     display: { fontSize: 26, lineHeight: 34 },
   },

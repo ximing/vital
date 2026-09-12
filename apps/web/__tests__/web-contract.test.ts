@@ -74,13 +74,13 @@ describe('web shell contract', () => {
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
     expect(pkg.dependencies.dompurify).toBeTruthy();
     const copy = read('src/copy.ts');
-    expect(copy).toContain('把稍后读的页先丢进来。');
+    expect(copy).toContain('把值得重读的东西，先安静地放在这里。');
     expect(copy).toContain('打开一条稍后再读。');
     const client = read('src/api/client.ts');
     expect(client).toContain("authMode: 'cookie'");
   });
 
-  it('reports live under features/reports with TipTap, source toggle, and empty copy', () => {
+  it('reports live under features/reports with TipTap and empty copy', () => {
     const app = read('src/App.tsx');
     expect(app).toContain('/reports/:id');
     expect(app).toContain('ReportsWorkspace');
@@ -88,9 +88,9 @@ describe('web shell contract', () => {
     expect(pkg.dependencies['@tiptap/starter-kit']).toContain('^2');
     expect(pkg.dependencies['@vital/markdown']).toBe('workspace:*');
     const copy = read('src/copy.ts');
-    expect(copy).toContain('写今天的日报，把完成的事留下痕迹。');
+    expect(copy).toContain('今天想留下一句就够。');
     expect(copy).toContain('格子深浅是完成多少');
-    expect(copy).toContain('从本周期填充');
+    expect(copy).toContain('一键生成');
     const ws = read('src/features/reports/ReportsWorkspace.tsx');
     const model = read('src/features/reports/model.ts');
     expect(ws).toContain('syncHead');
@@ -116,7 +116,7 @@ describe('web shell contract', () => {
     expect(palette).toContain('isPaletteToggle');
     expect(palette).toContain("event.key === 'k'");
     expect(palette).toContain('searchResultsToItems');
-    const search = read('src/features/search/SearchPage.tsx');
+    const search = read('src/features/search/search-page.service.ts');
     expect(search).toContain('.search({ q, limit: 20 })');
     const copy = read('src/copy.ts');
     expect(copy).toContain('输入关键词搜任务、稍后读和报告。');

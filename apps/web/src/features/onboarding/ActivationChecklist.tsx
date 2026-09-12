@@ -1,13 +1,15 @@
 import { ONBOARDING_CHECKLIST_KEYS } from '@vital/dto';
+import { observer, useService } from '@rabjs/react';
+import type { FC } from 'react';
 import { useNavigate } from 'react-router';
 import { t } from '@/copy';
-import { useAuth } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
 import { markOnboarding } from './mark';
 import { checklistHref, remainingCount, showChecklist } from './model';
 
-export function ActivationChecklist() {
+export const ActivationChecklist: FC = observer(function ActivationChecklist() {
   const navigate = useNavigate();
-  const user = useAuth((s) => s.user);
+  const user = useService(AuthService).user;
   const state = user?.onboarding;
   if (!state || !showChecklist(state)) return null;
   const left = remainingCount(state);
@@ -62,4 +64,4 @@ export function ActivationChecklist() {
       </ul>
     </aside>
   );
-}
+});

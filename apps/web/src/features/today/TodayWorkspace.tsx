@@ -1,27 +1,16 @@
 import { llmReady, type Task } from '@vital/dto';
-import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { bindServices, useService } from '@rabjs/react';
+import type { FC } from 'react';
 import { Link } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { TaskSkeleton } from '@/features/todos/EmptyTasks';
 import { useTodosKeyboard } from '@/features/todos/keyboard';
-import {
-  applyOptimisticComplete,
-  createPayload,
-  formatHm,
-  fromDatetimeLocal,
-  inboxList,
-  isOverdue,
-  listVisibleIds,
-  todayYmd,
-  zonedLocalMidnightIso,
-} from '@/features/todos/model';
-import { QuickAdd, type ComposeExtras } from '@/features/todos/QuickAdd';
-import { applyDraftToCreate, type ScheduleDraft } from '@/features/todos/schedule-draft';
+import { applyOptimisticComplete, inboxList, isOverdue, listVisibleIds } from '@/features/todos/model';
+import { QuickAdd } from '@/features/todos/QuickAdd';
 import { TaskDetail } from '@/features/todos/TaskDetail';
 import {
   useDetailTask,
@@ -31,14 +20,15 @@ import {
   useTodoActions,
 } from '@/features/todos/queries';
 import { UndoToast } from '@/features/todos/UndoToast';
-import { useTodosUi } from '@/features/todos/todos-ui.service';
+import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { OutcomeBoard } from './OutcomeBoard';
 import { NowCard } from './NowCard';
 import { PulseStrip } from './PulseStrip';
 import { AgentProposalsCard } from './AgentProposalsCard';
 import { TodaySectionHead } from './SectionHead';
 import { TodayTaskList } from './TodayTaskList';
-import { todayKeys, useHabitsQuery, usePendingDecomposeQuery, useTodayQuery } from './queries';
+import { TodayPageService } from './today-page.service';
+import { useHabitsQuery, usePendingDecomposeQuery, useTodayQuery } from './queries';
 
 const TODAY_LIST_ID = 'smart:today';
 const DETAIL_COL =
@@ -61,11 +51,13 @@ function LlmSetupBanner() {
   );
 }
 
-export function TodayWorkspace() {
-  const user = useAuth((s) => s.user);
-  const timeZone = user?.timezone ?? 'UTC';
-  const weekStartsOn = user?.weekStartsOn === 0 ? 0 : 1;
-  const qc = useQueryClient();
+function TodayWorkspaceContent() {
+  const page = useService(TodayPageService);
+  const todos = useService(TodosUiService);
+  const auth = useService(AuthService);
+  const user = auth.user;
+  const timeZone = page.timeZone;
+  const weekStartsOn = page.weekStartsOn;
 
   const todayQuery = useTodayQuery();
   const habitsQuery = useHabitsQuery();
@@ -74,11 +66,11 @@ export function TodayWorkspace() {
   const tasksQuery = useTasksQuery(TODAY_LIST_ID);
   const actions = useTodoActions();
 
-  const selectedId = useTodosUi((s) => s.selectedId);
-  const detailOpen = useTodosUi((s) => s.detailOpen);
-  const completingIds = useTodosUi((s) => s.completingIds);
-  const completeUndo = useTodosUi((s) => s.completeUndo);
-  const [now] = useState(() => new Date());
+  const selectedId = todos.selectedId;
+  const detailOpen = todos.detailOpen;
+  const completingIds = todos.completingIds;
+  const completeUndo = todos.completeUndo;
+  const now = page.now;
 
   const dashboard = todayQuery.data;
   const outcomes = dashboard?.outcomes ?? [];
@@ -101,52 +93,12 @@ export function TodayWorkspace() {
   const intent = llmReady(user?.llm, 'task.parse');
   const agentReady = llmReady(user?.llm, 'agent.headline');
 
-  function refreshToday(): void {
-    void qc.invalidateQueries({ queryKey: todayKeys.all });
-  }
-
   async function handleComplete(task: Task) {
     try {
       await actions.complete(task);
     } finally {
-      refreshToday();
+      await page.refresh();
     }
-  }
-
-  /** Push every overdue task's due date to today, keeping its time-of-day. */
-  function postponeOverdue(overdue: Task[]) {
-    const today = todayYmd(timeZone);
-    for (const task of overdue) {
-      if (task.dueAt === null || task.status === 'done' || task.status === 'canceled') continue;
-      const dueAt = task.isAllDay
-        ? zonedLocalMidnightIso(today, timeZone)
-        : fromDatetimeLocal(`${today}T${formatHm(task.dueAt, timeZone)}`, timeZone);
-      actions.patch.mutate({ id: task.id, input: { dueAt } });
-    }
-    refreshToday();
-  }
-
-  async function handleCreate(name: string, draft: ScheduleDraft, extras: ComposeExtras) {
-    if (!inboxId) return;
-    if (intent) {
-      await actions.createFromText.mutateAsync({
-        text: name,
-        listId: extras.listId || inboxId,
-        timezone: timeZone,
-        smartListId: TODAY_LIST_ID,
-        ...(extras.status !== undefined ? { status: extras.status } : {}),
-        ...(extras.priority !== undefined ? { priority: extras.priority } : {}),
-      });
-      refreshToday();
-      return;
-    }
-    const base = createPayload(name, TODAY_LIST_ID, inboxId, timeZone, new Date());
-    const next = applyDraftToCreate(base, draft, timeZone);
-    if (extras.listId) next.listId = extras.listId;
-    if (extras.priority !== undefined && extras.priority !== 3) next.priority = extras.priority;
-    if (extras.status) next.status = extras.status;
-    await actions.create.mutateAsync(next);
-    refreshToday();
   }
 
   const persistedTasksQuery = useTasksQuery(detailTask?.listId ?? '', detailTask !== undefined);
@@ -167,9 +119,9 @@ export function TodayWorkspace() {
     visibleIds,
     selected,
     onComplete: (task) => void handleComplete(task),
-    onUndo: () => void actions.undoComplete().then(refreshToday),
+    onUndo: () => void actions.undoComplete().then(() => page.refresh()),
     onPriority: (task, priority) => {
-      void actions.setPriority(task, priority).then(refreshToday);
+      void actions.setPriority(task, priority).then(() => page.refresh());
     },
   });
 
@@ -244,7 +196,7 @@ export function TodayWorkspace() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => postponeOverdue(overdueTasks)}
+                      onClick={() => page.postponeOverdue(overdueTasks)}
                       className="inline-flex h-7 shrink-0 items-center rounded-full border border-due px-3 text-[length:var(--text-caption)] font-semibold text-due transition-[color,background-color] duration-[var(--ease-out)] hover:bg-due hover:text-on-accent"
                     >
                       {t.today.postponeAll}
@@ -261,13 +213,13 @@ export function TodayWorkspace() {
                     timeZone={timeZone}
                     onComplete={(task) => void handleComplete(task)}
                     onReorder={(input) => actions.reorder.mutate(input)}
-                    onPostpone={postponeOverdue}
+                    onPostpone={(overdue) => page.postponeOverdue(overdue)}
                   />
 
                   <div className="mt-1 px-1 pb-1">
                     <QuickAdd
                       variant="bar"
-                      onSubmit={handleCreate}
+                      onSubmit={(name, draft, extras) => page.create(name, draft, extras, inboxId)}
                       disabled={!inboxId}
                       listName={t.lists.today}
                       lists={lists}
@@ -299,10 +251,10 @@ export function TodayWorkspace() {
             draftAction={draftAction}
             timeZone={timeZone}
             onPatch={(input) =>
-              actions.patch.mutateAsync({ id: detailTask.id, input }).then(refreshToday)
+              actions.patch.mutateAsync({ id: detailTask.id, input }).then(() => page.refresh())
             }
             onComplete={(task: Task) => void handleComplete(task)}
-            onDelete={() => actions.remove.mutate(detailTask.id, { onSettled: refreshToday })}
+            onDelete={() => actions.remove.mutate(detailTask.id, { onSettled: () => void page.refresh() })}
             onAddSubtask={(name) => {
               void actions.create
                 .mutateAsync({
@@ -311,14 +263,16 @@ export function TodayWorkspace() {
                   parentId: detailTask.id,
                   ...(detailTask.outcomeId ? { outcomeId: detailTask.outcomeId } : {}),
                 })
-                .then(refreshToday);
+                .then(() => page.refresh());
             }}
             onCreateTag={async (name) => actions.createTag.mutateAsync(name)}
           />
         </div>
       ) : null}
 
-      <UndoToast onUndo={() => void actions.undoComplete().then(refreshToday)} />
+      <UndoToast onUndo={() => void actions.undoComplete().then(() => page.refresh())} />
     </div>
   );
 }
+
+export const TodayWorkspace: FC = bindServices(TodayWorkspaceContent, [TodayPageService]);

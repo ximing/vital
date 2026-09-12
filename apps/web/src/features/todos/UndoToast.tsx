@@ -1,9 +1,11 @@
+import { observer, useService } from '@rabjs/react';
+import type { FC } from 'react';
 import { t } from '@/copy';
-import { useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 
-export function UndoToast({ onUndo }: { onUndo: () => void }) {
-  const undo = useTodosUi((s) => s.completeUndo);
-  if (undo === null || undo.wantUndo) return null;
+export const UndoToast: FC<{ onUndo: () => void }> = observer(function UndoToast({ onUndo }) {
+  const todos = useService(TodosUiService);
+  if (todos.completeUndo === null || todos.completeUndo.wantUndo) return null;
 
   return (
     <div
@@ -11,7 +13,7 @@ export function UndoToast({ onUndo }: { onUndo: () => void }) {
       className="fixed bottom-6 left-1/2 z-[var(--z-toast)] flex -translate-x-1/2 items-center gap-3 rounded-md bg-surface px-4 py-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg shadow-[var(--shadow)]"
     >
       <span>
-        {t.todos.undoComplete}「{undo.title}」
+        {t.todos.undoComplete}「{todos.completeUndo.title}」
       </span>
       <button
         type="button"
@@ -22,4 +24,4 @@ export function UndoToast({ onUndo }: { onUndo: () => void }) {
       </button>
     </div>
   );
-}
+});

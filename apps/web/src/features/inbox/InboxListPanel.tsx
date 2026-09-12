@@ -1,11 +1,10 @@
-import type { InboxItem } from '@vital/dto';
+import { observer, useService } from '@rabjs/react';
 import { Plus } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FC, type PointerEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { useTagsQuery } from '@/features/todos/queries';
 import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
 import {
   clampInboxListWidth,
   loadInboxListWidth,
@@ -18,6 +17,7 @@ import { Icon } from '@/ui/icon';
 import { usePopover } from '@/ui/use-popover';
 import { EmptyInbox, InboxSkeleton } from './EmptyInbox';
 import { InboxContextMenu } from './InboxContextMenu';
+import { InboxPageService } from './inbox-page.service';
 import { PendingRow, SaveRow } from './InboxRow';
 import {
   canPatchStatus,
@@ -31,7 +31,7 @@ import {
 import { useOnline } from './online';
 import { PasteUrl } from './PasteUrl';
 import { useInboxActions, useInboxListQuery } from './queries';
-import { useInboxUi } from './inbox-ui.service';
+import { InboxUiService } from './inbox-ui.service';
 
 const POPOVER_W = 416;
 
@@ -95,26 +95,30 @@ export function InboxListColumn({
  * The saves list is the protagonist of /inbox: page header (kicker / display
  * title / mono meta), day-grouped rows and the paste popover.
  */
-export function InboxListPanel({ selectedId }: { selectedId?: string }) {
+export const InboxListPanel: FC<{ selectedId?: string }> = observer(function InboxListPanel({
+  selectedId,
+}) {
+  const page = useService(InboxPageService);
+  const inbox = useService(InboxUiService);
   const navigate = useNavigate();
   const [search] = useSearchParams();
   const filter = parseInboxFilter(search.get('filter'));
   const tagId = parseInboxTagId(search.get('tag'));
   const online = useOnline();
-  const timeZone = useAuth((s) => s.user?.timezone) ?? 'UTC';
+  const timeZone = page.timeZone;
   const inboxQuery = useInboxListQuery();
   const tags = useTagsQuery().data ?? [];
   const actions = useInboxActions();
-  const pending = useInboxUi((s) => s.pending);
-  const pasteNonce = useInboxUi((s) => s.pasteNonce);
-  const preview = useInboxUi((s) => s.preview);
+  const pending = inbox.pending;
+  const pasteNonce = inbox.pasteNonce;
+  const preview = inbox.preview;
   const pasteRef = useRef<HTMLDivElement>(null);
   const pasteBtnRef = useRef<HTMLButtonElement>(null);
   const pastePopover = usePopover(pasteRef);
   const [pasteAnchor, setPasteAnchor] = useState<{ right: number; top: number } | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [statusNote, setStatusNote] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ item: InboxItem; x: number; y: number } | null>(null);
+  const actionError = page.actionError;
+  const statusNote = page.statusNote;
+  const menu = page.itemMenu;
 
   function openPaste(): void {
     const rect = pasteBtnRef.current?.getBoundingClientRect();
@@ -149,9 +153,9 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
     items.length === 0 && pending.length === 0 && !inboxQuery.isLoading && inboxQuery.error === null;
 
   function patchStatus(id: string, status: 'later' | 'unread' | 'archived'): void {
-    setActionError(null);
+    page.setActionError(null);
     void actions.patch.mutateAsync({ id, input: { status } }).catch((err) => {
-      setActionError(humanError(err));
+      page.setActionError(humanError(err));
     });
   }
 
@@ -282,7 +286,7 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
                   }
                   onContextMenu={(event) => {
                     event.preventDefault();
-                    setMenu({ item, x: event.clientX, y: event.clientY });
+                    page.openItemMenu(item, event.clientX, event.clientY);
                   }}
                 />
               ))}
@@ -297,16 +301,15 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
           x={menu.x}
           y={menu.y}
           disabled={!online}
-          onClose={() => setMenu(null)}
+          onClose={() => page.closeItemMenu()}
           onOpen={() => navigate(`/inbox/${menuItem.id}`)}
           onFavorite={() => patchStatus(menuItem.id, nextFavoriteStatus(menuItem))}
           onArchive={() =>
             patchStatus(menuItem.id, menuItem.status === 'archived' ? 'unread' : 'archived')
           }
           onConvert={() => {
-            setActionError(null);
-            void actions.convertKeepUrl(menuItem.id).catch((err) => {
-              setActionError(humanError(err));
+            void page.convertKeepUrl(menuItem.id).catch((err) => {
+              page.setActionError(humanError(err));
             });
           }}
           onCopyUrl={() => {
@@ -315,11 +318,11 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
               // Clipboard unavailable.
             });
           }}
-          onAddToReport={() => setStatusNote(t.inbox.addToReportStub)}
+          onAddToReport={() => page.setStatusNote(t.inbox.addToReportStub)}
           onPatchTags={(tagIds) => {
-            setActionError(null);
+            page.setActionError(null);
             void actions.patch.mutateAsync({ id: menuItem.id, input: { tagIds } }).catch((err) => {
-              setActionError(humanError(err));
+              page.setActionError(humanError(err));
             });
           }}
           onCreateTag={(name) => actions.createTag.mutateAsync(name)}
@@ -331,11 +334,11 @@ export function InboxListPanel({ selectedId }: { selectedId?: string }) {
                 if (selectedId === menuItem.id) navigate('/inbox');
               })
               .catch((err) => {
-                setActionError(humanError(err));
+                page.setActionError(humanError(err));
               });
           }}
         />
       ) : null}
     </div>
   );
-}
+});

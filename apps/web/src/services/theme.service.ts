@@ -1,4 +1,4 @@
-import { resolve, Service, useObserverService } from '@rabjs/react';
+import { resolve, Service } from '@rabjs/react';
 import { getThemeChoice, setThemeChoice, type ThemeChoice } from '@/lib/theme';
 
 export class ThemeService extends Service {
@@ -16,9 +16,4 @@ export class ThemeService extends Service {
 
 export function themeService(): ThemeService {
   return resolve(ThemeService);
-}
-
-export function useThemeService<T>(selector: (s: ThemeService) => T): T {
-  const [value] = useObserverService(ThemeService, selector);
-  return value;
 }

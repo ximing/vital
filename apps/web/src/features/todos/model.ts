@@ -10,7 +10,6 @@ import { t } from '@/copy';
 
 export const UNDO_COMPLETE_MS = 5000;
 
-export type CircadianSlot = 'night' | 'morning' | 'afternoon' | 'evening';
 export type TodoView = 'list' | 'board' | 'week';
 export type BoardMode = 'status' | 'priority';
 export type TaskNode = { task: Task; children: Task[] };
@@ -175,22 +174,6 @@ export function fromDatetimeLocal(value: string, timeZone: string): string {
   if (ymd === undefined || time === undefined) return value;
   const clock = time.length === 5 ? `${time}:00` : time;
   return zonedWallTimeIso(ymd, clock, timeZone);
-}
-
-export function hourInZone(timeZone: string, now = new Date()): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hour: 'numeric',
-    hourCycle: 'h23',
-  }).formatToParts(now);
-  return Number(part(parts, 'hour')) % 24;
-}
-
-export function circadianSlot(hour: number): CircadianSlot {
-  if (hour < 6) return 'night';
-  if (hour < 12) return 'morning';
-  if (hour < 18) return 'afternoon';
-  return 'evening';
 }
 
 export function isOpen(task: Task): boolean {
@@ -575,6 +558,14 @@ export function formatHm(iso: string, timeZone: string): string {
   }).formatToParts(new Date(iso));
   const hour = String(Number(part(parts, 'hour')) % 24).padStart(2, '0');
   return `${hour}:${part(parts, 'minute')}`;
+}
+
+/** Next dueAt if this overdue task is pushed to `today` (keeps time-of-day). */
+export function overdueDueAtForToday(task: Task, today: string, timeZone: string): string | null {
+  if (task.dueAt === null || task.status === 'done' || task.status === 'canceled') return null;
+  return task.isAllDay
+    ? zonedLocalMidnightIso(today, timeZone)
+    : fromDatetimeLocal(`${today}T${formatHm(task.dueAt, timeZone)}`, timeZone);
 }
 
 export function formatHumanDay(ymd: string, timeZone: string, now = new Date()): string {

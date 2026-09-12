@@ -1,6 +1,8 @@
-import { resolve, Service, useObserverService } from '@rabjs/react';
-import type { Task } from '@vital/dto';
+import { resolve, Service } from '@rabjs/react';
+import type { AgentAction, Task } from '@vital/dto';
 import { UNDO_COMPLETE_MS, type BoardMode } from './model';
+
+export type DraftJobStatus = 'idle' | 'queued' | 'failed';
 
 export type CompleteUndo = {
   taskId: string;
@@ -24,6 +26,10 @@ export class TodosUiService extends Service {
   completeUndo: CompleteUndo | null = null;
   completingIds: string[] = [];
   lastCompletionId: Record<string, string> = {};
+  /** Per-task agent draft job, survives closing the detail pane. */
+  draftStatus: Record<string, DraftJobStatus> = {};
+  draftPolled: Record<string, AgentAction | null> = {};
+  draftError: Record<string, string | null> = {};
   private undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   setSelected(id: string | null): void {
@@ -108,6 +114,27 @@ export class TodosUiService extends Service {
     if (live) this.completingIds = withoutId(this.completingIds, live.taskId);
   }
 
+  draftJobStatus(taskId: string): DraftJobStatus {
+    return this.draftStatus[taskId] ?? 'idle';
+  }
+
+  draftJobPolled(taskId: string): AgentAction | null {
+    return this.draftPolled[taskId] ?? null;
+  }
+
+  draftJobError(taskId: string): string | null {
+    return this.draftError[taskId] ?? null;
+  }
+
+  setDraftJob(
+    taskId: string,
+    patch: { status?: DraftJobStatus; polled?: AgentAction | null; error?: string | null },
+  ): void {
+    if (patch.status !== undefined) this.draftStatus = { ...this.draftStatus, [taskId]: patch.status };
+    if (patch.polled !== undefined) this.draftPolled = { ...this.draftPolled, [taskId]: patch.polled };
+    if (patch.error !== undefined) this.draftError = { ...this.draftError, [taskId]: patch.error };
+  }
+
   reset(): void {
     this.clearTimer();
     this.selectedId = null;
@@ -120,6 +147,9 @@ export class TodosUiService extends Service {
     this.completeUndo = null;
     this.completingIds = [];
     this.lastCompletionId = {};
+    this.draftStatus = {};
+    this.draftPolled = {};
+    this.draftError = {};
   }
 
   private clearTimer(): void {
@@ -132,11 +162,6 @@ export class TodosUiService extends Service {
 
 export function todosUi(): TodosUiService {
   return resolve(TodosUiService);
-}
-
-export function useTodosUi<T>(selector: (s: TodosUiService) => T): T {
-  const [value] = useObserverService(TodosUiService, selector);
-  return value;
 }
 
 export function resetTodosUi(): void {

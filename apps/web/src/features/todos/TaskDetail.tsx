@@ -1,8 +1,9 @@
 import type { AgentAction, List, Outcome, PatchTaskInput, Tag, Task } from '@vital/dto';
+import { observer, useService } from '@rabjs/react';
 import { Ellipsis, Folder, Pin, Plus, Timer, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
-import { useAuth } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
 import { FIELD_CONTROL_OPEN_CLASS, FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { META_CHIP_CLASS, OutcomeField } from '@/ui/outcome-field';
@@ -15,9 +16,27 @@ import { PriorityMenu } from './priority';
 import { draftFromTask, draftToPatch, scheduleDayPatch } from './schedule-draft';
 import { SchedulePopover } from './SchedulePopover';
 import { TaskCheckbox } from './TaskRow';
-import { todosUi, useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 
-export function TaskDetail({
+export const TaskDetail: FC<{
+  task: Task;
+  subtasks: Task[];
+  lists: List[];
+  tags: Tag[];
+  /** Open threads for the outcome selector. */
+  outcomes?: Outcome[];
+  /** Pending task.decompose proposal for this task, if any. */
+  decomposeAction?: AgentAction | null;
+  /** Pending task.draft proposal for this task, if any. */
+  draftAction?: AgentAction | null;
+  timeZone: string;
+  /** May return a promise; save-status indicator tracks its settlement. */
+  onPatch: (input: PatchTaskInput) => Promise<unknown> | void;
+  onComplete: (task: Task) => void;
+  onDelete: () => void;
+  onAddSubtask: (title: string) => void;
+  onCreateTag: (name: string) => Promise<Tag | void>;
+}> = observer(function TaskDetail({
   task,
   subtasks,
   lists,
@@ -50,8 +69,9 @@ export function TaskDetail({
   onAddSubtask: (title: string) => void;
   onCreateTag: (name: string) => Promise<Tag | void>;
 }) {
-  const closeDetail = useTodosUi((s) => s.closeDetail);
-  const weekStartsOn = useAuth((s) => (s.user?.weekStartsOn === 0 ? 0 : 1));
+  const todos = useService(TodosUiService);
+  const auth = useService(AuthService);
+  const weekStartsOn = auth.user?.weekStartsOn === 0 ? 0 : 1;
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
   const [subTitle, setSubTitle] = useState('');
@@ -121,6 +141,27 @@ export function TaskDetail({
     notesTimer.current = setTimeout(() => {
       if (next !== task.notes) runPatch({ notes: next });
     }, 600);
+  }
+
+  async function flushNotes() {
+    if (notesTimer.current) {
+      clearTimeout(notesTimer.current);
+      notesTimer.current = null;
+    }
+    if (notes !== task.notes) await Promise.resolve(onPatch({ notes }));
+  }
+
+  function applyDraftToNotes(draft: string) {
+    const text = draft.trim();
+    if (text === '') return;
+    if (notesTimer.current) {
+      clearTimeout(notesTimer.current);
+      notesTimer.current = null;
+    }
+    setNotes((prev) => {
+      const base = prev.trimEnd();
+      return (base === '' ? text : `${base}\n\n${text}`).slice(0, 50_000);
+    });
   }
 
   function toggleTag(id: string) {
@@ -256,7 +297,7 @@ export function TaskDetail({
           <button
             type="button"
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
-            onClick={() => closeDetail()}
+            onClick={() => todos.closeDetail()}
             aria-label={t.todos.closeDetail}
           >
             <Icon icon={X} size={16} />
@@ -325,6 +366,8 @@ export function TaskDetail({
           task={task}
           action={draftAction}
           onToggleDelegable={(delegable) => runPatch({ delegable })}
+          onBeforeApply={flushNotes}
+          onNotesApplied={applyDraftToNotes}
         />
 
         <div className="mt-7">
@@ -357,7 +400,7 @@ export function TaskDetail({
                       className={`min-w-0 flex-1 truncate py-1.5 text-left text-[length:var(--text-body)] ${
                         child.status === 'done' ? 'text-muted line-through' : 'text-fg'
                       }`}
-                      onClick={() => todosUi().openDetail(child.id)}
+                      onClick={() => todos.openDetail(child.id)}
                     >
                       {child.title}
                     </button>
@@ -392,7 +435,7 @@ export function TaskDetail({
       </div>
     </aside>
   );
-}
+});
 
 const ESTIMATE_PRESETS = [15, 30, 60, 120] as const;
 

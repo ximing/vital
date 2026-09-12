@@ -1,7 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
-import { registerVitalServices } from '@/services/register';
+import { resetInboxUi } from '@/features/inbox/inbox-ui.service';
+import { resetReportUi } from '@/features/reports/report-ui.service';
+import { resetTodosUi } from '@/features/todos/todos-ui.service';
+import { registerSessionUiServicesForTest, registerVitalServices } from '@/services/register';
 
 class MemoryStorage implements Storage {
   readonly #items = new Map<string, string>();
@@ -36,7 +39,11 @@ if (typeof globalThis.localStorage === 'undefined') {
 }
 
 registerVitalServices();
+registerSessionUiServicesForTest();
 
 afterEach(() => {
   cleanup();
+  resetTodosUi();
+  resetInboxUi();
+  resetReportUi();
 });

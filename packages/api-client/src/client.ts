@@ -179,6 +179,8 @@ export interface VitalClient {
   deleteAgentMemory(id: string): Promise<void>;
   getTask(id: string): Promise<Task>;
   patchTask(id: string, input: PatchTaskInput): Promise<Task>;
+  /** Read-only draft job status; does not enqueue. */
+  getTaskDraft(id: string): Promise<TaskDraftTrigger>;
   /** Ask the agent to draft an execution plan; 'pending' returns the existing draft. */
   draftTask(id: string): Promise<TaskDraftTrigger>;
   deleteTask(id: string): Promise<void>;
@@ -421,6 +423,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     },
     getTask: (id) => http.request(`/api/v1/tasks/${id}`),
     patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),
+    getTaskDraft: (id) => http.request(`/api/v1/tasks/${id}/draft`),
     draftTask: (id) =>
       http.request(`/api/v1/tasks/${id}/draft`, { method: 'POST', body: {} }),
     deleteTask: (id) => http.request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),

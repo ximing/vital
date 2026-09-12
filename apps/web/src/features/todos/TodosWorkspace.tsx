@@ -1,10 +1,11 @@
-import { llmReady, SMART_LIST_IDS, type SmartListId, type Task, type TaskPriority } from '@vital/dto';
+import { llmReady, type Task, type TaskPriority } from '@vital/dto';
+import { bindServices, useService } from '@rabjs/react';
 import { CalendarDays, Columns3, Ellipsis, EyeOff, List, PanelRightClose } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import { NavLink, useParams, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Icon } from '@/ui/icon';
@@ -16,21 +17,16 @@ import { useOutcomesQuery } from '@/features/today/queries';
 import {
   applyOptimisticComplete,
   boardVisibleIds,
-  createPayload,
   filterTasks,
-  formatHm,
   formatHumanDay,
-  fromDatetimeLocal,
   inboxList,
   listTitle,
   listVisibleIds,
   todayYmd,
   weekRangeIso,
-  zonedLocalMidnightIso,
   type TodoView,
 } from './model';
-import { applyDraftToCreate, type ScheduleDraft } from './schedule-draft';
-import { QuickAdd, type ComposeExtras } from './QuickAdd';
+import { QuickAdd } from './QuickAdd';
 import { TaskContextMenu } from './TaskContextMenu';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { usePopover } from '@/ui/use-popover';
@@ -43,8 +39,9 @@ import {
   useTodoActions,
 } from './queries';
 import { TaskDetail } from './TaskDetail';
+import { TodosPageService } from './todos-page.service';
 import { UndoToast } from './UndoToast';
-import { todosUi, useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 import { WeekView } from './WeekView';
 import { usePendingDecomposeQuery } from '@/features/today/queries';
 
@@ -74,13 +71,16 @@ function viewHref(view: TodoView, listId: string): string {
 const DETAIL_COL =
   'flex h-full min-h-0 w-[clamp(24rem,40%,40rem)] shrink-0 border-l border-border/60';
 
-export function TodosWorkspace({ view }: { view: TodoView }) {
+function TodosWorkspaceContent({ view }: { view: TodoView }) {
+  const page = useService(TodosPageService);
+  const todos = useService(TodosUiService);
+  const auth = useService(AuthService);
   const params = useParams();
   const [search] = useSearchParams();
   const listId = params.listId ?? search.get('list') ?? 'smart:today';
-  const user = useAuth((s) => s.user);
-  const timeZone = user?.timezone ?? 'UTC';
-  const weekStartsOn = user?.weekStartsOn === 0 ? 0 : 1;
+  const user = auth.user;
+  const timeZone = page.timeZone;
+  const weekStartsOn = page.weekStartsOn;
   const online = useOnline();
 
   const listsQuery = useListsQuery();
@@ -89,28 +89,25 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
   const outcomesQuery = useOutcomesQuery();
   const actions = useTodoActions();
 
-  const [weekAnchor, setWeekAnchor] = useState(() => todayYmd(timeZone));
-  const [composeDay, setComposeDay] = useState<string | null>(null);
+  const weekAnchor = page.weekAnchor;
+  const composeDay = page.composeDay;
   const range = useMemo(
     () => weekRangeIso(weekAnchor, weekStartsOn, timeZone),
     [weekAnchor, weekStartsOn, timeZone],
   );
   const calendarQuery = useCalendarQuery(range.from, range.to, view === 'week');
 
-  const selectedId = useTodosUi((s) => s.selectedId);
-  const detailOpen = useTodosUi((s) => s.detailOpen);
-  const openDetail = useTodosUi((s) => s.openDetail);
-  const listFilter = useTodosUi((s) => s.listFilter);
-  const setListFilter = useTodosUi((s) => s.setListFilter);
-  const filterFocusNonce = useTodosUi((s) => s.filterFocusNonce);
-  const completingIds = useTodosUi((s) => s.completingIds);
-  const completeUndo = useTodosUi((s) => s.completeUndo);
-  const boardMode = useTodosUi((s) => s.boardMode);
-  const hideCompleted = useTodosUi((s) => s.hideCompleted);
-  const closeDetail = useTodosUi((s) => s.closeDetail);
+  const selectedId = todos.selectedId;
+  const detailOpen = todos.detailOpen;
+  const listFilter = todos.listFilter;
+  const filterFocusNonce = todos.filterFocusNonce;
+  const completingIds = todos.completingIds;
+  const completeUndo = todos.completeUndo;
+  const boardMode = todos.boardMode;
+  const hideCompleted = todos.hideCompleted;
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const viewMenu = usePopover(viewMenuRef);
-  const [taskMenu, setTaskMenu] = useState<{ task: Task; x: number; y: number } | null>(null);
+  const taskMenu = page.taskMenu;
 
   useEffect(() => {
     if (filterFocusNonce > 0) document.getElementById(LIST_FILTER_ID)?.focus();
@@ -118,8 +115,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
 
   const taskParam = search.get('task');
   useEffect(() => {
-    if (taskParam) openDetail(taskParam);
-  }, [openDetail, taskParam]);
+    if (taskParam) todos.openDetail(taskParam);
+  }, [todos, taskParam]);
 
   const lists = listsQuery.data ?? [];
   const tags = tagsQuery.data ?? [];
@@ -167,46 +164,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
 
   const inboxId = inbox?.id;
   const defaultListId = listId.startsWith('smart:') ? (inboxId ?? '') : listId;
-
-  /** Push every overdue task's due date to today, keeping its time-of-day. */
-  function postponeOverdue(overdue: Task[]) {
-    const today = todayYmd(timeZone);
-    for (const task of overdue) {
-      if (task.dueAt === null || task.status === 'done' || task.status === 'canceled') continue;
-      const dueAt = task.isAllDay
-        ? zonedLocalMidnightIso(today, timeZone)
-        : fromDatetimeLocal(`${today}T${formatHm(task.dueAt, timeZone)}`, timeZone);
-      actions.patch.mutate({ id: task.id, input: { dueAt } });
-    }
-  }
-
   const intent = llmReady(user?.llm, 'task.parse');
-
-  async function handleCreate(name: string, draft: ScheduleDraft, extras: ComposeExtras) {
-    if (!inboxId) return;
-    if (intent) {
-      await actions.createFromText.mutateAsync({
-        text: name,
-        listId: extras.listId || inboxId,
-        timezone: timeZone,
-        ...((SMART_LIST_IDS as readonly string[]).includes(listId)
-          ? { smartListId: listId as SmartListId }
-          : {}),
-        ...(extras.status !== undefined ? { status: extras.status } : {}),
-        ...(extras.priority !== undefined ? { priority: extras.priority } : {}),
-        ...(composeDay ? { dueYmd: composeDay } : {}),
-      });
-      setComposeDay(null);
-      return;
-    }
-    const base = createPayload(name, listId, inboxId, timeZone, new Date(), composeDay ?? undefined);
-    const next = applyDraftToCreate(base, draft, timeZone);
-    if (extras.listId) next.listId = extras.listId;
-    if (extras.priority !== undefined && extras.priority !== 3) next.priority = extras.priority;
-    if (extras.status) next.status = extras.status;
-    await actions.create.mutateAsync(next);
-    setComposeDay(null);
-  }
 
   const persistedTasksQuery = useTasksQuery(detailTask?.listId ?? '', Boolean(detailTask));
   const subtasks = (persistedTasksQuery.data ?? tasks).filter(
@@ -318,7 +276,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                           className={`h-8 flex-1 rounded-md text-[length:var(--text-caption)] ${
                             boardMode === mode ? 'bg-elevated text-fg' : 'text-muted hover:text-fg'
                           }`}
-                          onClick={() => todosUi().setBoardMode(mode)}
+                          onClick={() => todos.setBoardMode(mode)}
                         >
                           {mode === 'status' ? t.todos.boardByStatus : t.todos.boardByPriority}
                         </button>
@@ -330,7 +288,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                     role="menuitem"
                     className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
                     onClick={() => {
-                      todosUi().setHideCompleted(!hideCompleted);
+                      todos.setHideCompleted(!hideCompleted);
                       viewMenu.close();
                     }}
                   >
@@ -342,7 +300,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                     role="menuitem"
                     className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
                     onClick={() => {
-                      closeDetail();
+                      todos.closeDetail();
                       viewMenu.close();
                     }}
                   >
@@ -356,7 +314,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
               id={LIST_FILTER_ID}
               type="search"
               value={listFilter}
-              onChange={(e) => setListFilter(e.target.value)}
+              onChange={(e) => todos.setListFilter(e.target.value)}
               className="sr-only"
               aria-label={t.todos.filterPlaceholder}
             />
@@ -380,7 +338,9 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           {view !== 'board' ? (
             <QuickAdd
               variant="bar"
-              onSubmit={handleCreate}
+              onSubmit={(name, draft, extras) =>
+                inboxId ? page.create(name, draft, extras, listId, inboxId) : undefined
+              }
               disabled={!online || !inboxId || defaultListId === ''}
               listName={title}
               lists={lists}
@@ -412,8 +372,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 timeZone={timeZone}
                 onComplete={(task) => void actions.complete(task)}
                 onReorder={(input) => actions.reorder.mutate(input)}
-                onPostpone={postponeOverdue}
-                onTaskMenu={(task, x, y) => setTaskMenu({ task, x, y })}
+                onPostpone={(overdue) => page.postponeOverdue(overdue)}
+                onTaskMenu={(task, x, y) => page.openTaskMenu(task, x, y)}
               />
             ) : view === 'board' ? (
               <BoardView
@@ -431,9 +391,11 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 onPriority={(task, priority: TaskPriority) =>
                   void actions.setPriority(task, priority)
                 }
-                onCreate={handleCreate}
+                onCreate={(name, draft, extras) => {
+                  if (inboxId) void page.create(name, draft, extras, listId, inboxId);
+                }}
                 intent={intent}
-                onTaskMenu={(task, x, y) => setTaskMenu({ task, x, y })}
+                onTaskMenu={(task, x, y) => page.openTaskMenu(task, x, y)}
               />
             ) : calendarQuery.isLoading ? (
               <TaskSkeleton />
@@ -448,15 +410,12 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
                 instances={instances}
                 timeZone={timeZone}
                 composeDay={composeDay}
-                onSelectDay={(ymd) => {
-                  setWeekAnchor(ymd);
-                  setComposeDay(null);
-                }}
+                onSelectDay={(ymd) => page.setWeekAnchor(ymd)}
                 onAddDay={(ymd) => {
-                  setComposeDay(ymd);
-                  todosUi().requestQuickAdd();
+                  page.setComposeDay(ymd);
+                  todos.requestQuickAdd();
                 }}
-                onOpen={openDetail}
+                onOpen={(taskId) => todos.openDetail(taskId)}
               />
             )}
           </div>
@@ -467,7 +426,7 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           {detailPanel}
         </div>
       ) : detailPanel ? (
-        <TaskDetailHost view={view} onClose={closeDetail}>
+        <TaskDetailHost view={view} onClose={() => todos.closeDetail()}>
           {detailPanel}
         </TaskDetailHost>
       ) : null}
@@ -479,8 +438,8 @@ export function TodosWorkspace({ view }: { view: TodoView }) {
           y={taskMenu.y}
           lists={lists}
           timeZone={timeZone}
-          onClose={() => setTaskMenu(null)}
-          onOpen={() => openDetail(taskMenu.task.id)}
+          onClose={() => page.closeTaskMenu()}
+          onOpen={() => todos.openDetail(taskMenu.task.id)}
           onComplete={(task) => void actions.complete(task)}
           onPatch={(task, input) => actions.patch.mutate({ id: task.id, input })}
           onDelete={(task) => actions.remove.mutate(task.id)}
@@ -516,3 +475,7 @@ function TaskDetailHost({
     </div>
   );
 }
+
+export const TodosWorkspace: FC<{ view: TodoView }> = bindServices(TodosWorkspaceContent, [
+  TodosPageService,
+]);

@@ -27,7 +27,7 @@ import {
   Strikethrough,
   Table as TableIcon,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FC, type MouseEvent } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
 import { markOnboarding } from '@/features/onboarding/mark';
@@ -36,7 +36,8 @@ import { isImageMime, uploadReportFile } from './media';
 import { withStubEmbed, type SlashHit } from './model';
 import { insertChip, slashFromEditor } from './slash';
 import { SlashMenu } from './SlashMenu';
-import { reportUi, useReportUi } from './report-ui.service';
+import { observer, useService } from '@rabjs/react';
+import { ReportUiService } from './report-ui.service';
 import { fetchUploadUrl, uploadIdOf, useUploadUrls } from './upload-url';
 
 function asPm(md: string): PmNode {
@@ -97,7 +98,14 @@ const UploadedImage = Image.extend({
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif';
 const FILE_ACCEPT = `${IMAGE_ACCEPT},application/pdf,text/plain,text/markdown,.pdf,.txt,.md`;
 
-export function WysiwygEditor({
+export const WysiwygEditor: FC<{
+  reportId: string;
+  bodyMd: string;
+  editable: boolean;
+  onChange: (md: string) => void;
+  onHydrate: (md: string) => void;
+  onToggleTask: (id: string) => void;
+}> = observer(function WysiwygEditor({
   reportId,
   bodyMd,
   editable,
@@ -112,8 +120,7 @@ export function WysiwygEditor({
   onHydrate: (md: string) => void;
   onToggleTask: (id: string) => void;
 }) {
-  const setSlash = useReportUi((s) => s.setSlash);
-  const slash = useReportUi((s) => s.slash);
+  const reportsUi = useService(ReportUiService);
   const onChangeRef = useRef(onChange);
   const onHydrateRef = useRef(onHydrate);
   const hydrated = useRef(false);
@@ -207,7 +214,7 @@ export function WysiwygEditor({
         spellcheck: 'true',
       },
       handleKeyDown: (_view, event) => {
-        if (event.key === 'Enter' && reportUi().slash) {
+        if (event.key === 'Enter' && reportsUi.slash) {
           return true;
         }
         return false;
@@ -240,10 +247,10 @@ export function WysiwygEditor({
       const md = serializePmJSONToMarkdown(instance.getJSON());
       setLiveMd(md);
       if (hydrated.current) onChangeRef.current(md);
-      setSlash(slashFromEditor(instance));
+      reportsUi.setSlash(slashFromEditor(instance));
     },
     onSelectionUpdate: ({ editor: instance }) => {
-      setSlash(slashFromEditor(instance));
+      reportsUi.setSlash(slashFromEditor(instance));
       bump((n) => n + 1);
     },
     onTransaction: () => bump((n) => n + 1),
@@ -259,15 +266,15 @@ export function WysiwygEditor({
   }, [editable, editor]);
 
   useEffect(() => {
-    return () => setSlash(null);
-  }, [setSlash]);
+    return () => reportsUi.setSlash(null);
+  }, [reportsUi]);
 
   function pick(hit: SlashHit): void {
     if (!editor) return;
-    const current = reportUi().slash;
+    const current = reportsUi.slash;
     insertChip(editor, current, hit.kind, hit.id);
-    reportUi().mergeEmbeds(withStubEmbed({ tasks: {}, inbox: {} }, hit.kind, hit.id, hit.title));
-    setSlash(null);
+    reportsUi.mergeEmbeds(withStubEmbed({ tasks: {}, inbox: {} }, hit.kind, hit.id, hit.title));
+    reportsUi.setSlash(null);
     if (hit.kind === 'task') void markOnboarding({ pinnedTask: true });
   }
 
@@ -470,12 +477,16 @@ export function WysiwygEditor({
       <div className="min-h-[16rem] min-w-0 flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
-      {slash && editor ? (
-        <SlashMenu slash={slash} onPick={pick} onClose={() => setSlash(null)} />
+      {reportsUi.slash && editor ? (
+        <SlashMenu
+          slash={reportsUi.slash}
+          onPick={pick}
+          onClose={() => reportsUi.setSlash(null)}
+        />
       ) : null}
     </div>
   );
-}
+});
 
 function ToolbarSep() {
   return <span className="w-1 shrink-0" aria-hidden />;

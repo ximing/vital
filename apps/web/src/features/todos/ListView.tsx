@@ -1,6 +1,7 @@
 import type { List, Tag, Task } from '@vital/dto';
+import { observer, useService } from '@rabjs/react';
 import { ChevronDown, ChevronRight, Pin } from 'lucide-react';
-import { useState, type DragEvent } from 'react';
+import { useState, type DragEvent, type FC } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
 import { EmptyTasks } from './EmptyTasks';
@@ -14,7 +15,7 @@ import {
   type ListSection,
 } from './model';
 import { TaskRow } from './TaskRow';
-import { useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 
 function GroupHeading({
   children,
@@ -87,7 +88,17 @@ function sectionTitle(section: ListSection, timeZone: string): string | null {
   return null;
 }
 
-export function ListView({
+export const ListView: FC<{
+  listId: string;
+  tasks: Task[];
+  tags: Tag[];
+  lists: List[];
+  timeZone: string;
+  onComplete: (task: Task) => void;
+  onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
+  onPostpone?: (tasks: Task[]) => void;
+  onTaskMenu?: (task: Task, x: number, y: number) => void;
+}> = observer(function ListView({
   listId,
   tasks,
   tags,
@@ -108,8 +119,7 @@ export function ListView({
   onPostpone?: (tasks: Task[]) => void;
   onTaskMenu?: (task: Task, x: number, y: number) => void;
 }) {
-  const selectedId = useTodosUi((s) => s.selectedId);
-  const openDetail = useTodosUi((s) => s.openDetail);
+  const todos = useService(TodosUiService);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
 
   function toggleSection(key: string) {
@@ -150,7 +160,7 @@ export function ListView({
         key={task.id}
         task={task}
         depth={depth}
-        selected={selectedId === task.id}
+        selected={todos.selectedId === task.id}
         timeZone={timeZone}
         tags={tags}
         listName={
@@ -158,8 +168,8 @@ export function ListView({
             ? listTitle(task.listId, lists, '')
             : undefined
         }
-        onSelect={() => openDetail(task.id)}
-        onOpen={() => openDetail(task.id)}
+        onSelect={() => todos.openDetail(task.id)}
+        onOpen={() => todos.openDetail(task.id)}
         onComplete={() => onComplete(task)}
         onDragStart={(event) => handleDragStart(event, task)}
         onDragOver={handleDragOver}
@@ -225,4 +235,4 @@ export function ListView({
       })}
     </div>
   );
-}
+});

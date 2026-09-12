@@ -1,8 +1,9 @@
 import type { Task, TaskPriority } from '@vital/dto';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { useService } from '@rabjs/react';
 import { HOME_PATH } from '@/copy';
-import { todosUi, useTodosUi } from './todos-ui.service';
+import { TodosUiService } from './todos-ui.service';
 
 export const QUICK_ADD_ID = 'todo-quick-add';
 export const LIST_FILTER_ID = 'todo-list-filter';
@@ -39,10 +40,7 @@ export function useTodosKeyboard(opts: {
   onPriority: (task: Task, priority: TaskPriority) => void;
 }): void {
   const navigate = useNavigate();
-  const setSelected = useTodosUi((s) => s.setSelected);
-  const openDetail = useTodosUi((s) => s.openDetail);
-  const requestQuickAdd = useTodosUi((s) => s.requestQuickAdd);
-  const requestFilterFocus = useTodosUi((s) => s.requestFilterFocus);
+  const todos = useService(TodosUiService);
 
   const visibleRef = useRef(opts.visibleIds);
   const selectedRef = useRef(opts.selected);
@@ -63,18 +61,18 @@ export function useTodosKeyboard(opts: {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTypingTarget(event.target)) return;
 
-      const undo = todosUi().completeUndo;
+      const undo = todos.completeUndo;
       const toastLive = undo !== null && !undo.wantUndo;
 
       if (event.key === 'n') {
         event.preventDefault();
-        requestQuickAdd();
+        todos.requestQuickAdd();
         focusById(QUICK_ADD_ID);
         return;
       }
       if (event.key === '/') {
         event.preventDefault();
-        requestFilterFocus();
+        todos.requestFilterFocus();
         focusById(LIST_FILTER_ID);
         return;
       }
@@ -87,17 +85,17 @@ export function useTodosKeyboard(opts: {
         event.preventDefault();
         const next = moveSelection(
           visibleRef.current,
-          todosUi().selectedId,
+          todos.selectedId,
           event.key === 'j' ? 1 : -1,
         );
-        setSelected(next);
+        todos.setSelected(next);
         return;
       }
       if (event.key === 'Enter') {
-        const id = todosUi().selectedId;
+        const id = todos.selectedId;
         if (id === null) return;
         event.preventDefault();
-        openDetail(id);
+        todos.openDetail(id);
         return;
       }
       if (event.key === 'e') {
@@ -120,5 +118,5 @@ export function useTodosKeyboard(opts: {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate, openDetail, requestFilterFocus, requestQuickAdd, setSelected]);
+  }, [navigate, todos]);
 }

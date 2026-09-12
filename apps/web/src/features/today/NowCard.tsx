@@ -1,14 +1,19 @@
 import type { NowRecommendation, Outcome, TodayNow } from '@vital/dto';
-import { useState } from 'react';
+import { observer, useService } from '@rabjs/react';
+import { useState, type FC } from 'react';
 import { t } from '@/copy';
-import { useTodosUi } from '@/features/todos/todos-ui.service';
+import { TodosUiService } from '@/features/todos/todos-ui.service';
 
 /**
  * "当下" card: left — current time, continuous free time and the rule reason;
  * right — 1–2 rule-based picks. Recommendations are candidates, not a
  * sequence; 换一个 rotates them locally.
  */
-export function NowCard({
+export const NowCard: FC<{
+  now: TodayNow;
+  outcomes: Outcome[];
+  timeZone: string;
+}> = observer(function NowCard({
   now,
   outcomes,
   timeZone,
@@ -17,7 +22,7 @@ export function NowCard({
   outcomes: Outcome[];
   timeZone: string;
 }) {
-  const openDetail = useTodosUi((s) => s.openDetail);
+  const todos = useService(TodosUiService);
   const [offset, setOffset] = useState(0);
 
   const recs = now.recommendations;
@@ -90,7 +95,7 @@ export function NowCard({
             key={rec.taskId}
             type="button"
             data-region="now-recommendation"
-            onClick={() => openDetail(rec.taskId)}
+            onClick={() => todos.openDetail(rec.taskId)}
             className="flex flex-col gap-0.5 rounded-xl border border-border bg-elevated px-3.5 py-2.5 text-left transition-[border-color,box-shadow] duration-[var(--ease-out)] hover:border-accent hover:shadow-[var(--shadow-xs)]"
           >
             <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-semibold text-fg">
@@ -105,4 +110,4 @@ export function NowCard({
       </div>
     </section>
   );
-}
+});

@@ -1,70 +1,44 @@
-import { ImagePlus, LogOut } from 'lucide-react';
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { IMAGE_MIME_TYPES } from '@vital/dto';
-import { client } from '@/api/client';
+import { bindServices, useService } from '@rabjs/react';
+import { ImagePlus, LogOut } from 'lucide-react';
+import { useRef, type ChangeEvent, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
-import { humanError } from '@/lib/errors';
-import { useAuth } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Field } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { AccountSectionService } from './account.service';
 
-export function AccountSection() {
-  const user = useAuth((s) => s.user);
-  const setUser = useAuth((s) => s.setUser);
-  const logout = useAuth((s) => s.logout);
-  const [displayName, setDisplayName] = useState(user?.displayName ?? '');
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [avatarFailed, setAvatarFailed] = useState(false);
+function AccountSectionContent() {
+  const page = useService(AccountSectionService);
+  page.prime();
+  const user = page.auth.user;
+  const saving = page.$model.saveProfile.loading || page.$model.saveAvatar.loading;
   const avatarInput = useRef<HTMLInputElement>(null);
   const initial = (user?.displayName ?? '?').slice(0, 1);
 
-  async function onAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+  function onAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || !user || !(IMAGE_MIME_TYPES as readonly string[]).includes(file.type)) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const uploaded = await client.upload({ file, mime: file.type, size: file.size });
-      await client.bindUpload(uploaded.id, { ownerType: 'user', ownerId: user.id });
-      setAvatarFailed(false);
-      setUser(await client.updateMe({ avatarAttachmentId: uploaded.id }));
-    } catch (err) {
-      setError(humanError(err));
-    } finally {
-      setSaving(false);
-    }
+    void page.saveAvatar(file);
   }
 
-  async function onSubmit(event: FormEvent) {
+  function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const next = displayName.trim();
-    if (next === '' || next === user?.displayName) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const updated = await client.updateMe({ displayName: next });
-      setUser(updated);
-    } catch (err) {
-      setError(humanError(err));
-    } finally {
-      setSaving(false);
-    }
+    void page.saveProfile();
   }
 
   return (
     <div className="flex flex-col gap-8">
       <div className="flex items-center gap-5">
         <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-accent-subtle">
-          {user?.avatarUrl && !avatarFailed ? (
+          {user?.avatarUrl && !page.avatarFailed ? (
             <img
               src={user.avatarUrl}
               alt={t.settings.avatarAlt}
               className="absolute inset-0 h-full w-full object-cover"
-              onError={() => setAvatarFailed(true)}
+              onError={() => page.setAvatarFailed(true)}
             />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-accent-deep">
@@ -86,7 +60,7 @@ export function AccountSection() {
               <Icon icon={ImagePlus} size={15} />
               {t.settings.changeAvatar}
             </Button>
-            <Button variant="quiet" className="gap-2" onClick={() => void logout()}>
+            <Button variant="quiet" className="gap-2" onClick={() => void page.auth.logout()}>
               <Icon icon={LogOut} size={15} />
               {t.nav.logout}
             </Button>
@@ -95,23 +69,23 @@ export function AccountSection() {
               className="sr-only"
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif"
-              onChange={(event) => void onAvatarChange(event)}
+              onChange={(event) => onAvatarChange(event)}
             />
           </div>
         </div>
       </div>
 
-      <form onSubmit={(e) => void onSubmit(e)} className="flex max-w-2xl flex-col gap-4">
+      <form onSubmit={onSubmit} className="flex max-w-2xl flex-col gap-4">
         <Field
           label={t.settings.displayName}
           name="displayName"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
+          value={page.displayName}
+          onChange={(e) => page.setDisplayName(e.target.value)}
           maxLength={50}
         />
-        {error ? <Banner>{error}</Banner> : null}
+        {page.error ? <Banner>{page.error}</Banner> : null}
         <div>
-          <Button type="submit" loading={saving} disabled={displayName.trim() === ''}>
+          <Button type="submit" loading={saving} disabled={page.displayName.trim() === ''}>
             {t.settings.saveProfile}
           </Button>
         </div>
@@ -119,3 +93,5 @@ export function AccountSection() {
     </div>
   );
 }
+
+export const AccountSection: FC = bindServices(AccountSectionContent, [AccountSectionService]);
