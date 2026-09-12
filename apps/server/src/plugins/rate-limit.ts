@@ -67,7 +67,10 @@ export function rateLimitError(): Error {
 export const globalRateLimit = {
   hook: 'preHandler' as const,
   global: true,
-  max: isTest ? 1000 : 120,
+  // Entry nginx (39.96.159.212) is not in the trust list, so every external
+  // request resolves to the same req.ip — a per-IP cap here would throttle
+  // all users collectively. Effectively a DoS guard, not a rate limiter.
+  max: isTest ? 1000 : 1_200_000,
   timeWindow: 60_000,
   keyGenerator: (req: FastifyRequest) => ipFrom(req),
   allowList: (req: FastifyRequest) => {
@@ -110,7 +113,7 @@ function hit(kind: AuthKind, key: string): void {
   }
 }
 
-/** Auth caps stacked on the global 120/min/IP (route config.rateLimit would replace it). */
+/** Auth caps stacked on the global per-IP cap (route config.rateLimit would replace it). */
 export function limitRegister(req: FastifyRequest): Promise<void> {
   hit('register', ipFrom(req));
   return Promise.resolve();
