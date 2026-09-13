@@ -53,6 +53,7 @@ const config: ExpoConfig = {
   android: {
     package: 'plus.aimo.vital',
     versionCode,
+    permissions: ['android.permission.REQUEST_INSTALL_PACKAGES'],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#FFFFFF',

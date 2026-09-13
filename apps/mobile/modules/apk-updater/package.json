@@ -1,0 +1,7 @@
+{
+  "name": "apk-updater",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Background APK download and install for Vital",
+  "main": "src/index.ts"
+}

@@ -56,6 +56,7 @@ Vital 追求的是 **Calm Productivity（安静而有行动力）**：打开后�
 - **多端同步**：Web（cookie auth）、Desktop（Tauri 2）、Mobile（Expo）、Chrome 扩展（MV3/WXT），统一同步协议。
 - **开放 API**：设置页可签发 `vt_` 前缀的个人访问令牌；API 目录由服务端路由自动生成（`pnpm gen:vital-skill`），并附带可让 Claude 等 Agent 直接操作 Vital 的 [skill](skills/vital/SKILL.md)。
 - **通知推送**：worker 进程负责提醒与推送（MeoW）。
+- **Android 自更新**：启动时读 `GET /api/v1/app/android`（服务端查 GitHub Releases latest 的 `app-release.apk`）。有新 `versionCode` 时用系统下载器后台拉取，下完后在「我的」里安装。发布：打 `vMAJOR.MINOR.PATCH` tag，`.github/workflows/android-release.yml` 会把 APK 挂到该 Release。
 
 ## 技术架构
 

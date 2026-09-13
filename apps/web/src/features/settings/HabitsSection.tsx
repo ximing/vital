@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { HabitRing } from '@/features/today/HabitRing';
 import { habitTodayProgress } from '@/features/today/model';
 import { useHabitsQuery, useOutcomesQuery, todayKeys } from '@/features/today/queries';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
@@ -83,7 +84,7 @@ function draftToPatch(draft: HabitDraft): PatchHabitInput | null {
   return patch;
 }
 
-function todayOf(habit: Habit): { done: number; total: number } {
+function todayOf(habit: Habit): { done: number; total: number; complete: boolean } {
   return habitTodayProgress(habit);
 }
 
@@ -123,38 +124,15 @@ function habitChips(habit: Habit, outcomes: Outcome[]): { text: string; hot: boo
   return chips;
 }
 
-const RING_C = 2 * Math.PI * 17;
-
-/** 40px progress ring: fills with today's completion, full + ✓ when done. */
-function HabitRing({ habit }: { habit: Habit }) {
-  const { done, total } = todayOf(habit);
-  const active = habit.active;
-  const progress = active ? done / total : 0;
-  const complete = active && done >= total;
+function HabitRowRing({ habit }: { habit: Habit }) {
+  const { done, total, complete } = todayOf(habit);
   return (
-    <span className="relative h-10 w-10 shrink-0" aria-hidden="true">
-      <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90">
-        <circle cx="20" cy="20" r="17" fill="none" strokeWidth="3.5" className="stroke-surface-muted" />
-        <circle
-          cx="20"
-          cy="20"
-          r="17"
-          fill="none"
-          strokeWidth="3.5"
-          strokeLinecap="round"
-          strokeDasharray={RING_C}
-          strokeDashoffset={RING_C * (1 - progress)}
-          className={complete ? 'stroke-done' : 'stroke-accent'}
-        />
-      </svg>
-      <span
-        className={`absolute inset-0 flex items-center justify-center text-[11px] font-bold tabular-nums ${
-          complete ? 'text-done' : 'text-muted'
-        }`}
-      >
-        {complete ? '✓' : active ? `${done}/${total}` : '0'}
-      </span>
-    </span>
+    <HabitRing
+      done={done}
+      total={total}
+      complete={habit.active && complete}
+      paused={!habit.active}
+    />
   );
 }
 
@@ -426,7 +404,7 @@ function HabitRow({ habit, outcomes }: { habit: Habit; outcomes: Outcome[] }) {
         habit.active ? '' : 'opacity-50'
       }`}
     >
-      <HabitRing habit={habit} />
+      <HabitRowRing habit={habit} />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2 text-[length:var(--text-body)] font-semibold text-fg">
           <span className="truncate">{habit.name}</span>

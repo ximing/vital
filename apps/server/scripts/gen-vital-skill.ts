@@ -386,6 +386,7 @@ const GROUP_ORDER = [
   'llm',
   'sync',
   'health',
+  'app',
 ];
 
 export async function generateApiMarkdown(): Promise<string> {

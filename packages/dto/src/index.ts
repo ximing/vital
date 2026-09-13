@@ -1,3 +1,4 @@
+export * from './app-release.js';
 export * from './auth.js';
 export * from './llm.js';
 export * from './notifications.js';

@@ -2,8 +2,8 @@ import type { Habit, List, Tag, Task } from '@vital/dto';
 import { Link } from 'react-router';
 import { t } from '@/copy';
 import { ListView } from '@/features/todos/ListView';
+import { HabitCard } from './HabitCard';
 import { HabitEmptyCard } from './HabitEmptyCard';
-import { HabitRow } from './HabitRow';
 import { habitTodayProgress, habitTodayTask } from './model';
 
 const TODAY_LIST_ID = 'smart:today';
@@ -58,9 +58,9 @@ export function TodayTaskList({
               {t.today.manageHabits}
             </Link>
           </div>
-          <div className="px-0 pb-1 pt-1">
+          <div className="grid grid-cols-2 gap-2 px-2 pb-2 pt-1 sm:grid-cols-3">
             {activeHabits.map((habit) => (
-              <HabitRow
+              <HabitCard
                 key={habit.id}
                 habit={habit}
                 task={habitTodayTask(tasks, habit.id)}
@@ -71,6 +71,19 @@ export function TodayTaskList({
         </div>
       ) : null}
       {habits.length === 0 ? <HabitEmptyCard /> : null}
+      {habitLane && listTasks.length === 0 ? (
+        // ListView short-circuits to the empty state when there are no tasks;
+        // keep the task group divider so the habit lane still reads as its
+        // own group above it.
+        <div className="flex items-center gap-1 px-2 pb-2 pt-2" data-region="tasks-group-divider">
+          <p className="eyebrow eyebrow-rule min-w-0 flex-1">
+            <span className="truncate">{t.lists.today}</span>
+            <span className="shrink-0 font-mono font-normal normal-case tracking-normal tabular-nums opacity-80">
+              0
+            </span>
+          </p>
+        </div>
+      ) : null}
       <ListView
         listId={TODAY_LIST_ID}
         tasks={listTasks}

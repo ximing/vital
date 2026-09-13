@@ -1,7 +1,7 @@
 import { DEFAULT_LLM_SETTINGS, DEFAULT_NOTIFICATION_PREFS, type UserProfile } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import { createVitalClient } from '../src/client.js';
-import { bodyOf, memoryStore, respond, respond204, urlOf } from './test-helpers.js';
+import { authorizationOf, bodyOf, memoryStore, respond, respond204, urlOf } from './test-helpers.js';
 
 const user: UserProfile = {
   id: 'u1',
@@ -336,5 +336,24 @@ describe('createVitalClient reports + sync', () => {
       'GET http://x/api/v1/sync/head',
       'GET http://x/api/v1/sync/changes?since=2026-09-01T00%3A00%3A00.000Z&limit=50',
     ]);
+  });
+});
+
+describe('createVitalClient android release', () => {
+  it('GET /api/v1/app/android skips auth', async () => {
+    const store = memoryStore({ accessToken: 'secret', expiresIn: 900 });
+    const calls: { url: string; auth: string }[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        calls.push({ url: urlOf(url), auth: authorizationOf(init) });
+        return respond(200, { android: null });
+      },
+    });
+    const res = await client.getAndroidRelease();
+    expect(res).toEqual({ android: null });
+    expect(calls).toEqual([{ url: 'http://x/api/v1/app/android', auth: '' }]);
   });
 });

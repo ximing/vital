@@ -12,6 +12,10 @@ loadEnv({
 
 const boolEnum = z.enum(['true', 'false']).transform((value) => value === 'true');
 
+function optionalNonEmpty<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+}
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3010),
@@ -85,6 +89,11 @@ export const envSchema = z.object({
     .string()
     .regex(/^[a-z][a-z0-9]{0,31}$/)
     .optional(),
+  // Android in-app update reads GitHub Releases. Unset repo disables the
+  // endpoint in tests; non-test falls back to ximing/vital.
+  GITHUB_RELEASES_REPO: optionalNonEmpty(z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/)),
+  GITHUB_RELEASES_TOKEN: optionalNonEmpty(z.string().min(1)),
+  ANDROID_RELEASE_MIN_VERSION_CODE: optionalNonEmpty(z.coerce.number().int().positive()),
 });
 
 export const config = envSchema.parse(process.env);

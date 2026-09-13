@@ -9,6 +9,7 @@ import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
+import { AppUpdateService } from '../../services/app-update.service';
 import { AuthService } from '../../services/auth.service';
 
 export class SettingsService extends Service {
@@ -24,6 +25,10 @@ export class SettingsService extends Service {
 
   get auth(): AuthService {
     return this.resolve(AuthService);
+  }
+
+  get update(): AppUpdateService {
+    return this.resolve(AppUpdateService);
   }
 
   get prefs() {

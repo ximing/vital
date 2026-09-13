@@ -7,7 +7,9 @@ import { setupRNDebug } from '@rabjs/rn-debug';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastHost } from '../src/components/ToastHost';
 import { TaskSheetHost } from '../src/components/TaskSheetHost';
+import { UpdateHost } from '../src/features/settings/UpdateHost';
 import { copy } from '../src/lib/copy';
+import { appUpdateService } from '../src/services/app-update.service';
 import { authService } from '../src/services/auth.service';
 import { registerMobileServices } from '../src/services/register';
 import { themeService } from '../src/services/theme.service';
@@ -31,6 +33,7 @@ export default function RootLayout() {
   useEffect(() => {
     themeService().start();
     authService().start();
+    appUpdateService().start();
   }, []);
 
   return (
@@ -56,6 +59,7 @@ export default function RootLayout() {
               <Stack.Screen name="search" options={{ title: copy.nav.search }} />
             </Stack>
           </TaskSheetHost>
+          <UpdateHost />
           <ToastHost />
         </View>
       </SafeAreaProvider>

@@ -21,6 +21,7 @@ import { checklistHref, markOnboarding, showChecklist } from '../../lib/onboardi
 import { useTheme } from '../../theme/use-theme';
 import { rnShadow } from '../../ui/card';
 import type { LucideIcon } from '../../ui/icon';
+import { formatProgress, progressRatio } from './app-update';
 import { LlmSection } from './LlmSection';
 import { SettingsService } from './settings.service';
 
@@ -65,6 +66,11 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
   const avatarFailed = s.avatarFailed;
   const error = s.error;
   const prefPicker = s.prefPicker;
+  const update = s.update;
+  const updatePhase = update.phase;
+  const updateBytes = update.bytesDownloaded;
+  const updateTotal = update.totalBytes;
+  const updateNotes = update.remote?.releaseNotes;
 
   const aiItems: { icon: LucideIcon; label: string; href: string; value?: string }[] = [
     { icon: Flame, label: copy.me.habits, href: '/habits' },
@@ -322,6 +328,41 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
 
         <SectionHead title={copy.settings.tabs.llm} />
         <LlmSection />
+
+        <SectionHead title={copy.settings.tabs.about} />
+        <View style={[styles.card, styles.cardFlush]}>
+          <NavRow
+            label={copy.settings.update.version}
+            value={versionValue(update)}
+            onPress={() => void update.pressPrimary()}
+          />
+        </View>
+        {updatePhase === 'downloading' ? (
+          <View style={styles.progressBlock}>
+            <View style={styles.track}>
+              <View
+                style={[styles.fill, { width: `${Math.round(progressRatio(updateBytes, updateTotal) * 100)}%` }]}
+              />
+            </View>
+            <Text style={styles.hint}>
+              {formatProgress(updateBytes, updateTotal) || copy.settings.update.downloading}
+            </Text>
+          </View>
+        ) : null}
+        {updatePhase === 'ready' ? (
+          <View style={styles.bannerWrap}>
+            <Banner
+              tone="info"
+              action={{
+                label: copy.settings.update.install,
+                onPress: () => void update.install(),
+              }}
+            >
+              {copy.settings.update.ready}
+            </Banner>
+          </View>
+        ) : null}
+        {updateNotes && updatePhase !== 'idle' ? <Text style={styles.hint}>{updateNotes}</Text> : null}
       </ScrollView>
 
       <PickerSheet
@@ -366,6 +407,22 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
     </SafeAreaView>
   );
 });
+
+function versionValue(update: {
+  phase: string;
+  current: { versionName: string };
+  bytesDownloaded: number;
+  totalBytes: number;
+}): string {
+  if (update.phase === 'checking') return copy.settings.update.checking;
+  if (update.phase === 'downloading') {
+    return formatProgress(update.bytesDownloaded, update.totalBytes) || copy.settings.update.downloading;
+  }
+  if (update.phase === 'ready') return copy.settings.update.readyShort;
+  if (update.phase === 'installing') return copy.settings.update.installing;
+  if (update.phase === 'failed') return copy.settings.update.failed;
+  return update.current.versionName;
+}
 
 export const SettingsHome = bindServices(SettingsHomeContent, [SettingsService]);
 
@@ -428,4 +485,12 @@ const createStyles = (t: Theme) =>
     },
     rowLabel: { flex: 1, fontSize: 15, color: t.fgPrimary },
     btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
+    progressBlock: { gap: t.space[2], paddingHorizontal: t.space[1], paddingTop: t.space[2] },
+    track: {
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: t.bgSurfaceMuted,
+      overflow: 'hidden',
+    },
+    fill: { height: 8, borderRadius: 4, backgroundColor: t.accentPrimary },
   });

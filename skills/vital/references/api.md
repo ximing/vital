@@ -236,6 +236,24 @@ export interface AgentExecution {
 ```
 
 ```ts
+export interface AndroidRelease {
+  versionName: string;
+  versionCode: number;
+  apkUrl: string;
+  sha256?: string | undefined;
+  sizeBytes?: number | undefined;
+  releaseNotes?: string | undefined;
+  minVersionCode?: number | undefined;
+}
+```
+
+```ts
+export interface AppAndroidReleaseResponse {
+  android: AndroidRelease | null;
+}
+```
+
+```ts
 export interface AuthTokens {
   accessToken: string;
   refreshToken?: string;
@@ -2150,6 +2168,16 @@ Sync Head
 #### `GET /api/v1/health/ready`
 
 - Auth: none
+
+### app
+
+#### `GET /api/v1/app/android`
+
+Latest Android APK from GitHub Releases (`ximing/vital` by default). `android` is null when no release with an `.apk` asset is published. Public; the APK is downloaded from `apkUrl` (GitHub `browser_download_url`).
+
+- Auth: none
+- Client: `getAndroidRelease`
+- Response: `AppAndroidReleaseResponse`
 
 ### agent
 

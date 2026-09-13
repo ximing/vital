@@ -2,6 +2,7 @@ import type {
   ActionFeedbackInput,
   AgentAction,
   AgentActionLogItem,
+  AppAndroidReleaseResponse,
   AgentActionsQuery,
   AgentMemoryItem,
   AgentScheduleCapability,
@@ -102,6 +103,7 @@ import { uploadImpl, type UploadInput } from './upload.js';
 export interface VitalClient {
   readonly authMode: AuthMode;
   boot(): Promise<BootResult>;
+  getAndroidRelease(): Promise<AppAndroidReleaseResponse>;
   register(input: RegisterInput): Promise<AuthResponse>;
   login(input: LoginInput): Promise<AuthResponse>;
   createExtensionAuthCode(): Promise<ExtensionAuthCodeResponse>;
@@ -266,6 +268,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
   return {
     authMode: options.authMode,
     boot: () => http.boot(),
+    getAndroidRelease: () =>
+      http.request('/api/v1/app/android', { skipAuth: true, skipAuthRefresh: true }),
     register: async (input) =>
       persistAuth(
         options,

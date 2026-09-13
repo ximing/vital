@@ -448,11 +448,52 @@ describe('today workspace', () => {
     ]);
     renderToday();
     expect(await screen.findByText('喝水')).toBeInTheDocument();
-    expect(screen.getByText('喝水 6/8')).toBeInTheDocument();
+    expect(
+      screen.getByText(t.settings.habits.todayProgress.replace('{done}', '6').replace('{total}', '8')),
+    ).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: '喝水' })).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('锻炼')).toBeInTheDocument();
     expect(screen.getByText(t.settings.habits.todayDone)).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: '锻炼' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('checks in a habit when the progress ring is clicked', async () => {
+    const user = userEvent.setup();
+    const habitTask = makeTask({
+      id: 'habit-task',
+      title: '喝水',
+      habitId: 'h-water',
+      habitSeq: 7,
+    });
+    vi.mocked(client.listHabits).mockResolvedValue([
+      {
+        id: 'h-water',
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+        active: true,
+        createdBy: 'user',
+        sortOrder: 0,
+        outcomeId: null,
+        createdAt: '2026-09-09T00:00:00.000Z',
+        updatedAt: '2026-09-09T00:00:00.000Z',
+        todayDone: 6,
+        todayTotal: 7,
+      },
+    ]);
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [habitTask], nextCursor: null });
+    vi.mocked(client.getToday).mockResolvedValue(makeDashboard({ tasks: [habitTask] }));
+    vi.mocked(client.completeTask).mockResolvedValue({
+      task: { ...habitTask, status: 'done' },
+      undo: { completionId: 'c1' },
+    });
+    renderToday();
+    await user.click(await screen.findByRole('checkbox', { name: '喝水' }));
+    await waitFor(() => {
+      expect(client.completeTask).toHaveBeenCalledWith('habit-task');
+    });
   });
 
   it('hides the habit empty card once a habit is active', async () => {
@@ -479,6 +520,33 @@ describe('today workspace', () => {
     await waitFor(() => {
       expect(screen.queryByText(t.today.habitEmptyTitle)).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps the task group divider when habits exist but there are no tasks', async () => {
+    vi.mocked(client.listHabits).mockResolvedValue([
+      {
+        id: 'h1',
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+        active: true,
+        createdBy: 'user',
+        sortOrder: 0,
+        outcomeId: null,
+        createdAt: '2026-09-09T00:00:00.000Z',
+        updatedAt: '2026-09-09T00:00:00.000Z',
+        todayDone: 0,
+        todayTotal: 0,
+      },
+    ]);
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
+    const { container } = renderToday();
+    await screen.findByRole('checkbox', { name: '喝水' });
+    const divider = container.querySelector('[data-region="tasks-group-divider"]');
+    expect(divider).not.toBeNull();
+    expect(divider).toHaveTextContent(t.lists.today);
   });
 });
 

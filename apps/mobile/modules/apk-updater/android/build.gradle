@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'plus.aimo.vital'
+version = '0.0.0'
+
+android {
+  namespace "expo.modules.apkupdater"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.0"
+  }
+}

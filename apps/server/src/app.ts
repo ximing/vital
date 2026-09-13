@@ -7,6 +7,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAuthRoutes } from './auth/auth.routes.js';
 import { config } from './config.js';
 import { getDb, setDb, type Database } from './db/index.js';
+import { registerAppReleaseRoutes } from './app-release/app-release.routes.js';
 import { registerHealthRoutes } from './health/health.routes.js';
 import { registerInboxRoutes } from './inbox/inbox.routes.js';
 import { registerOutcomeRoutes } from './outcomes/outcomes.routes.js';
@@ -106,6 +107,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
 
   registerErrorHandler(app);
   registerHealthRoutes(app);
+  registerAppReleaseRoutes(app);
   registerAuthRoutes(app);
   registerTokenRoutes(app);
   registerUploadRoutes(app);
