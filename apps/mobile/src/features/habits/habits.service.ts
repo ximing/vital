@@ -1,10 +1,10 @@
 import { Service } from '@rabjs/react';
-import type { CreateHabitInput, Habit, HabitKind, PatchHabitInput } from '@vital/dto';
+import type { CreateHabitInput, Habit, HabitKind, Outcome, PatchHabitInput } from '@vital/dto';
 import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
-import { pullSync, subscribeSync } from '../../lib/sync';
+import { pullSync, subscribeSnapshot, subscribeSync } from '../../lib/sync';
 
 const SYNC_DEBOUNCE_MS = 500;
 const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -16,6 +16,7 @@ export type HabitDraft = {
   targetCount: string;
   windowStart: string;
   windowEnd: string;
+  outcomeId: string | null;
 };
 
 export const EMPTY_HABIT_DRAFT: HabitDraft = {
@@ -25,6 +26,7 @@ export const EMPTY_HABIT_DRAFT: HabitDraft = {
   targetCount: '8',
   windowStart: '',
   windowEnd: '',
+  outcomeId: null,
 };
 
 export function draftFromHabit(habit: Habit): HabitDraft {
@@ -35,6 +37,7 @@ export function draftFromHabit(habit: Habit): HabitDraft {
     targetCount: habit.targetCount === null ? '' : String(habit.targetCount),
     windowStart: habit.windowStart ?? '',
     windowEnd: habit.windowEnd ?? '',
+    outcomeId: habit.outcomeId,
   };
 }
 
@@ -55,6 +58,7 @@ function draftToCreate(draft: HabitDraft): CreateHabitInput {
     name: draft.name.trim(),
     windowStart: draft.windowStart === '' ? undefined : draft.windowStart,
     windowEnd: draft.windowEnd === '' ? undefined : draft.windowEnd,
+    ...(draft.outcomeId ? { outcomeId: draft.outcomeId } : {}),
   };
   if (draft.kind === 'count') return { ...base, kind: 'count', targetCount: Number(draft.targetCount) };
   return { ...base, kind: 'daily' };
@@ -65,6 +69,7 @@ function draftToPatch(draft: HabitDraft): PatchHabitInput {
     name: draft.name.trim(),
     windowStart: draft.windowStart === '' ? null : draft.windowStart,
     windowEnd: draft.windowEnd === '' ? null : draft.windowEnd,
+    outcomeId: draft.outcomeId,
   };
   if (draft.kind === 'count') patch.targetCount = Number(draft.targetCount);
   return patch;
@@ -72,6 +77,7 @@ function draftToPatch(draft: HabitDraft): PatchHabitInput {
 
 export class HabitsService extends Service {
   habits: Habit[] = [];
+  outcomes: Outcome[] = [];
   loading = true;
   refreshing = false;
   error: string | null = null;
@@ -83,6 +89,7 @@ export class HabitsService extends Service {
   private inFlight: Promise<void> | null = null;
   private hasData = false;
   private unsubSync: (() => void) | null = null;
+  private unsubSnapshot: (() => void) | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
 
   start(): void {
@@ -91,11 +98,17 @@ export class HabitsService extends Service {
       if (this.syncTimer) clearTimeout(this.syncTimer);
       this.syncTimer = setTimeout(() => void this.load(false), SYNC_DEBOUNCE_MS);
     });
+    this.unsubSnapshot = subscribeSnapshot((reason) => {
+      if (reason === 'periodic') return;
+      void this.load(false);
+    });
   }
 
   stop(): void {
     this.unsubSync?.();
     this.unsubSync = null;
+    this.unsubSnapshot?.();
+    this.unsubSnapshot = null;
     if (this.syncTimer) {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
@@ -111,7 +124,12 @@ export class HabitsService extends Service {
       if (isRefresh) this.refreshing = true;
       else if (!this.hasData) this.loading = true;
       try {
-        this.habits = await client.listHabits();
+        const [nextHabits, nextOutcomes] = await Promise.all([
+          client.listHabits(),
+          client.listOutcomes('open'),
+        ]);
+        this.habits = nextHabits;
+        this.outcomes = nextOutcomes;
         this.hasData = true;
         this.error = null;
       } catch (err) {

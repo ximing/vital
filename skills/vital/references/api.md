@@ -298,6 +298,8 @@ export interface Habit {
   active: boolean;
   createdBy: HabitCreatedBy;
   sortOrder: number;
+  /** Owning thread (outcome). Habits contribute progress to that thread. */
+  outcomeId: string | null;
   createdAt: string;
   updatedAt: string;
   /** Computed at read time for the dashboard. */
@@ -532,6 +534,8 @@ export interface OutcomeDetail {
   outcome: Outcome;
   /** All non-deleted tasks of this thread; the client groups them open/done. */
   tasks: Task[];
+  /** Habits whose progress counts toward this thread. */
+  habits: Habit[];
   materials: OutcomeMaterial[];
   /** Agent ledger rows touching this thread or its tasks, newest first. */
   agentActions: AgentActionLogItem[];
@@ -2317,6 +2321,7 @@ Request body (`createHabitInputSchema`):
 - `targetCount`: number int min 1 max 99 (optional)
 - `windowStart`: string pattern (optional)
 - `windowEnd`: string pattern (optional)
+- `outcomeId`: uuid (optional)
 
 #### `DELETE /api/v1/habits/:id`
 
@@ -2350,6 +2355,19 @@ Request body (`patchHabitInputSchema`):
 - `windowEnd`: string pattern (optional, nullable)
 - `active`: boolean (optional)
 - `sortOrder`: number int (optional)
+- `outcomeId`: uuid (optional, nullable)
+
+#### `POST /api/v1/habits/:id/tick`
+
+Tick Habit
+
+- Auth: Bearer required
+- Client: `tickHabit`
+- Response: `Habit`
+
+Path params:
+
+- `id`: uuid
 
 ### outcomes
 

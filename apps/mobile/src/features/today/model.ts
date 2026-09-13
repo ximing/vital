@@ -50,10 +50,35 @@ export function sortOutcomes(outcomes: Outcome[]): Outcome[] {
 
 /** Progress chip text for a habit row, e.g. 「喝水 3/8」. */
 export function habitChipText(habit: Habit): string {
-  // Count habits spawn instances one at a time (relay), so todayTotal trails
-  // completions — the meaningful denominator is the daily target.
-  const total = habit.kind === 'count' && habit.targetCount !== null ? habit.targetCount : habit.todayTotal;
-  return `${habit.name} ${habit.todayDone}/${total}`;
+  const { done, total } = habitProgress(habit);
+  return `${habit.name} ${done}/${total}`;
+}
+
+/**
+ * Today ring/chip progress. Count habits use the daily target as the
+ * denominator (relay spawns trail completions). Daily habits are binary:
+ * any completion fills the ring.
+ */
+export function habitProgress(habit: Habit): { done: number; total: number; complete: boolean } {
+  if (habit.kind === 'count' && habit.targetCount !== null && habit.targetCount > 0) {
+    const total = habit.targetCount;
+    const done = Math.min(habit.todayDone, total);
+    return { done, total, complete: done >= total };
+  }
+  const total = Math.max(habit.todayTotal, 1);
+  const done = Math.min(habit.todayDone, total);
+  return { done, total, complete: habit.todayDone > 0 };
+}
+
+/** Open instance to tick. Prefer the newest todo/doing; ignore completed relays. */
+export function habitTodayTask(tasks: Task[], habitId: string): Task | null {
+  let found: Task | null = null;
+  for (const task of tasks) {
+    if (task.habitId !== habitId || task.deletedAt !== null) continue;
+    if (task.status !== 'todo' && task.status !== 'doing') continue;
+    if (found === null || task.createdAt > found.createdAt) found = task;
+  }
+  return found;
 }
 
 export function habitById(habits: Habit[], id: string | null): Habit | undefined {

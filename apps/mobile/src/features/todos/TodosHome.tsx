@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
@@ -29,6 +29,10 @@ const TodosHomeContent = observer(function TodosHomeContent() {
   const insets = useSafeAreaInsets();
   const s = useService(TodosService);
   const openTask = useOpenTask();
+  useEffect(() => {
+    s.start();
+    return () => s.stop();
+  }, [s]);
   useFocusReload(useCallback(() => s.load(), [s]));
   const tz = s.tz;
   const headerTitle = s.current ? listLabel(s.current) : titleCopy(s.listId);

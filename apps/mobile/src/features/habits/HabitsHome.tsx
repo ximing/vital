@@ -23,14 +23,15 @@ import { useTheme } from '../../theme/use-theme';
 import { cardStyle, rnShadow } from '../../ui/card';
 import { HabitsService } from './habits.service';
 
-/** 行内频率描述：类型 · 时间窗 · 今日进度（暂停时标注）。 */
-export function habitMeta(habit: Habit): string {
+/** 行内频率描述：类型 · 时间窗 · 所属线程 · 今日进度（暂停时标注）。 */
+export function habitMeta(habit: Habit, threadName?: string): string {
   const parts: string[] = [
     habit.kind === 'count'
       ? copy.habits.countChip.replace('{n}', String(habit.targetCount ?? 0))
       : copy.habits.dailyChip,
   ];
   if (habit.windowStart && habit.windowEnd) parts.push(`${habit.windowStart}–${habit.windowEnd}`);
+  if (threadName) parts.push(threadName);
   if (!habit.active) {
     parts.push(copy.habits.paused);
     return parts.join(' · ');
@@ -155,7 +156,10 @@ const HabitsHomeContent = observer(function HabitsHomeContent() {
                     ) : null}
                   </View>
                   <Text style={styles.meta} numberOfLines={1}>
-                    {habitMeta(habit)}
+                    {habitMeta(
+                      habit,
+                      s.outcomes.find((outcome) => outcome.id === habit.outcomeId)?.name,
+                    )}
                   </Text>
                 </View>
                 <Switch
@@ -256,6 +260,15 @@ const HabitsHomeContent = observer(function HabitsHomeContent() {
                   maxLength={2}
                 />
               ) : null}
+              <SelectField
+                label={copy.habits.thread}
+                value={draft.outcomeId ?? ''}
+                options={[
+                  { value: '', label: copy.habits.threadNone },
+                  ...s.outcomes.map((outcome) => ({ value: outcome.id, label: outcome.name })),
+                ]}
+                onChange={(outcomeId) => s.patchDraft({ outcomeId: outcomeId === '' ? null : outcomeId })}
+              />
               <View style={styles.windowRow}>
                 <View style={styles.windowCell}>
                   <Field

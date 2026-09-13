@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, isNull, like, max, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, like, max, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type {
   CreateHabitInput,
@@ -11,7 +11,9 @@ import type {
 import { getDb } from '../db/index.js';
 import { habits, tasks, type HabitRow } from '../db/schema.js';
 import { AppError } from '../errors.js';
+import { enqueueOutcomeRefresh } from '../agent/jobs.js';
 import { getInboxList, SORT_GAP } from '../lists/lists.service.js';
+import { assertOwnedOutcomeId } from '../outcomes/shared.js';
 import { allDayLocalMidnight } from '../tasks/recurrence.js';
 
 /** Local copy — keeps this module a leaf (tasks.service imports us for the relay). */
@@ -41,6 +43,7 @@ export function toHabitDto(row: HabitRow, todayDone = 0, todayTotal = 0): Habit 
     active: row.active,
     createdBy: row.createdBy === 'agent' ? 'agent' : 'user',
     sortOrder: row.sortOrder,
+    outcomeId: row.outcomeId,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     todayDone,
@@ -101,6 +104,7 @@ export async function createHabit(
   input: CreateHabitInput,
   createdBy: 'user' | 'agent' = 'user',
 ): Promise<Habit> {
+  if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
   const [maxRow] = await getDb()
     .select({ max: sql<number>`coalesce(max(${habits.sortOrder}), -1)` })
     .from(habits)
@@ -117,9 +121,11 @@ export async function createHabit(
       windowEnd: input.windowEnd ?? null,
       createdBy,
       sortOrder: (maxRow?.max ?? -1) + 1,
+      outcomeId: input.outcomeId ?? null,
     })
     .returning();
   if (!row) throw AppError.of(404, 'NOT_FOUND');
+  if (row.outcomeId) await enqueueOutcomeRefresh(getDb(), userId, row.outcomeId, new Date());
   return toHabitDto(row);
 }
 
@@ -128,7 +134,8 @@ export async function patchHabit(
   id: string,
   input: PatchHabitInput,
 ): Promise<Habit> {
-  await getOwnedHabitOr404(userId, id);
+  const prev = await getOwnedHabitOr404(userId, id);
+  if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
   const [row] = await getDb()
     .update(habits)
     .set({
@@ -138,12 +145,29 @@ export async function patchHabit(
       ...(input.windowEnd !== undefined ? { windowEnd: input.windowEnd } : {}),
       ...(input.active !== undefined ? { active: input.active } : {}),
       ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      ...(input.outcomeId !== undefined ? { outcomeId: input.outcomeId } : {}),
       updatedAt: new Date(),
     })
     .where(eq(habits.id, id))
     .returning();
   if (!row) throw AppError.of(404, 'NOT_FOUND');
+  if (input.outcomeId !== undefined) {
+    const now = new Date();
+    if (row.outcomeId) await enqueueOutcomeRefresh(getDb(), userId, row.outcomeId, now);
+    if (prev.outcomeId && prev.outcomeId !== row.outcomeId) {
+      await enqueueOutcomeRefresh(getDb(), userId, prev.outcomeId, now);
+    }
+  }
   return toHabitDto(row);
+}
+
+export async function listHabitsForOutcome(
+  userId: string,
+  outcomeId: string,
+  timezone: string,
+  now = new Date(),
+): Promise<Habit[]> {
+  return (await listHabits(userId, timezone, now)).filter((habit) => habit.outcomeId === outcomeId);
 }
 
 export async function deleteHabit(userId: string, id: string): Promise<void> {
@@ -184,6 +208,41 @@ async function spawnInstance(
       sortOrder: await nextTaskSortOrder(inbox.id),
     })
     .onConflictDoNothing();
+}
+
+/**
+ * Open today's instance for an explicit tick. Spawns the next seq when the
+ * relay has nothing left (e.g. after the window closed mid-target).
+ */
+export async function ensureOpenTodayInstance(
+  userId: string,
+  habitId: string,
+  timezone: string,
+  now = new Date(),
+): Promise<string | null> {
+  const habit = await getOwnedHabitOr404(userId, habitId);
+  if (!habit.active) return null;
+  const day = habitDay(now, timezone);
+  const progress = await todayProgress(userId, habit.id, day);
+  const target =
+    habit.kind === 'count' && habit.targetCount !== null && habit.targetCount > 0
+      ? habit.targetCount
+      : 1;
+  if (progress.done >= target) return null;
+
+  const openWhere = and(
+    eq(tasks.userId, userId),
+    eq(tasks.habitId, habit.id),
+    like(tasks.habitKey, `${habit.id}:${day}:%`),
+    inArray(tasks.status, ['todo', 'doing']),
+    isNull(tasks.deletedAt),
+  );
+  const [open] = await getDb().select({ id: tasks.id }).from(tasks).where(openWhere).limit(1);
+  if (open) return open.id;
+
+  await spawnInstance(userId, habit, day, progress.total + 1, timezone);
+  const [spawned] = await getDb().select({ id: tasks.id }).from(tasks).where(openWhere).limit(1);
+  return spawned?.id ?? null;
 }
 
 /**

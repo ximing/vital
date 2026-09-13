@@ -12,6 +12,7 @@ import {
   AGENT_MEMORY_SCOPES,
   agentActions,
   agentMemory,
+  habits,
   outcomes,
   reports,
   taskCompletions,
@@ -66,6 +67,11 @@ import { indexMemory, removeMemoryIndex, trackIndexJob } from '../retrieval/pipe
 import { memorySimilarityPairs } from '../retrieval/dedup.js';
 import { syncUserIndexes } from '../retrieval/sync.js';
 import { syncSearchIndexes } from '../retrieval/search.js';
+import {
+  linkedHabitFacts,
+  loadHabitHeadlineFacts,
+  unlinkedHabitFacts,
+} from '../habits/progress.js';
 
 export type AgentJobResult = 'done' | 'skipped:no-llm';
 
@@ -130,8 +136,13 @@ async function processOutcomeRefresh(
       ),
     );
 
+  const habitFacts = await loadHabitHeadlineFacts(user.id, user.timezone, now);
+  const linkedHabits = linkedHabitFacts(habitFacts, outcomeId);
+  const unlinkedHabits = unlinkedHabitFacts(habitFacts);
   const memory = await loadAgentMemory(user.id, 'headline', outcome.name);
-  executionResult({ inputSummary: `仅当前用户：线程内 ${String(openTasks.length)} 项未完成任务，${String(memory.length)} 条记忆` });
+  executionResult({
+    inputSummary: `仅当前用户：线程内 ${String(openTasks.length)} 项未完成任务，${String(linkedHabits.length)} 个已挂载习惯，${String(memory.length)} 条记忆`,
+  });
   const prompt = buildHeadlinePrompt({
     outcomeName: outcome.name,
     ruleSignal: outcome.ruleSignal,
@@ -144,6 +155,22 @@ async function processOutcomeRefresh(
       estimateMinutes: t.estimateMinutes,
     })),
     memory: memory.map((m) => m.content),
+    linkedHabits: linkedHabits.map((habit) => ({
+      id: habit.id,
+      name: habit.name,
+      kind: habit.kind,
+      daysDoneLast7d: habit.daysDoneLast7d,
+      todayDone: habit.todayDone,
+      todayTarget: habit.todayTarget,
+    })),
+    unlinkedHabits: unlinkedHabits.map((habit) => ({
+      id: habit.id,
+      name: habit.name,
+      kind: habit.kind,
+      daysDoneLast7d: habit.daysDoneLast7d,
+      todayDone: habit.todayDone,
+      todayTarget: habit.todayTarget,
+    })),
   });
 
   const result = await runWithCritic<SubmitHeadlineArgs>({
@@ -164,6 +191,8 @@ async function processOutcomeRefresh(
 
   const headline = result.args.headline.trim().slice(0, 500);
   const suggestion = result.args.suggestion.trim().slice(0, 1000);
+  const attachIds = [...new Set(result.args.attachHabitIds ?? [])];
+  const attachable = new Set(unlinkedHabits.map((habit) => habit.id));
   await withAgentJobEffects(job, async (tx) => {
     const [current] = await tx.select().from(outcomes).where(and(eq(outcomes.userId, user.id), eq(outcomes.id, outcomeId), eq(outcomes.status, 'open'))).for('update');
     if (!current) { skipExecution('OUTCOME_CHANGED'); return; }
@@ -196,6 +225,30 @@ async function processOutcomeRefresh(
         targetType: 'outcome',
         targetId: outcomeId,
         payload: { suggestion },
+        feedback: 'pending',
+      });
+    }
+    for (const habitId of attachIds) {
+      if (!attachable.has(habitId)) continue;
+      const [habit] = await tx
+        .select({ id: habits.id, name: habits.name, outcomeId: habits.outcomeId })
+        .from(habits)
+        .where(and(eq(habits.id, habitId), eq(habits.userId, user.id), eq(habits.active, true)))
+        .limit(1)
+        .for('update');
+      if (!habit || habit.outcomeId !== null) continue;
+      await tx
+        .update(habits)
+        .set({ outcomeId, updatedAt: now })
+        .where(and(eq(habits.id, habit.id), eq(habits.userId, user.id), isNull(habits.outcomeId)));
+      await recordAgentAction(tx, {
+        id: randomUUID(),
+        userId: user.id,
+        jobId: job.id,
+        actionType: 'habit.adjust',
+        targetType: 'habit',
+        targetId: habit.id,
+        payload: { outcomeId, outcomeName: current.name, name: habit.name },
         feedback: 'pending',
       });
     }

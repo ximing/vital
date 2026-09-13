@@ -28,11 +28,14 @@ export const habits = pgTable(
     active: boolean('active').notNull().default(true),
     createdBy: varchar('created_by', { length: 8 }).notNull().default('user'),
     sortOrder: integer('sort_order').notNull().default(0),
+    /** Owning thread. No FK — ownership enforced in the service layer. */
+    outcomeId: char('outcome_id', { length: 36 }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [
     index('idx_habits_user_active').on(t.userId, t.active),
+    index('idx_habits_user_outcome').on(t.userId, t.outcomeId),
     check('habits_kind_check', sql`${t.kind} IN ('daily', 'count')`),
     check('habits_created_by_check', sql`${t.createdBy} IN ('user', 'agent')`),
     check(

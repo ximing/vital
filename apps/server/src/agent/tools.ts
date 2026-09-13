@@ -13,6 +13,11 @@ export const submitHeadlineSchema = Type.Object({
   headline: Type.String({ minLength: 1, maxLength: 200 }),
   /** One concrete next move; empty string when nothing sensible. */
   suggestion: Type.String({ maxLength: 500 }),
+  /**
+   * Unlinked habit ids from the prompt that clearly belong to this thread.
+   * Omit or leave empty when none qualify.
+   */
+  attachHabitIds: Type.Optional(Type.Array(Type.String({ minLength: 1, maxLength: 36 }), { maxItems: 8 })),
 });
 export type SubmitHeadlineArgs = Static<typeof submitHeadlineSchema>;
 
@@ -20,7 +25,8 @@ export function submitHeadlineTool(capture: (args: SubmitHeadlineArgs) => void):
   return {
     name: 'submit_headline',
     label: '提交线程状态',
-    description: '提交该线程的一句话状态（headline）和一条下一步建议（suggestion）。',
+    description:
+      '提交该线程的一句话状态（headline）和一条下一步建议（suggestion）。若有未挂载习惯明确属于本线程，一并填 attachHabitIds。',
     parameters: submitHeadlineSchema,
     execute: (_toolCallId, params) => {
       capture(params);

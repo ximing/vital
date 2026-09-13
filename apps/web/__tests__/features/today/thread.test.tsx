@@ -161,6 +161,7 @@ function makeDetail(over: Partial<OutcomeDetail> = {}): OutcomeDetail {
   return {
     outcome: makeOutcome({ id: OUTCOME_ID, name: '换工作' }),
     tasks: [],
+    habits: [],
     materials: [],
     agentActions: [],
     ...over,
@@ -226,6 +227,24 @@ describe('thread workspace', () => {
             completedAt: '2026-09-09T02:00:00.000Z',
           }),
         ],
+        habits: [
+          {
+            id: 'h-exercise',
+            name: '锻炼',
+            kind: 'daily',
+            targetCount: null,
+            windowStart: null,
+            windowEnd: null,
+            active: true,
+            createdBy: 'user',
+            sortOrder: 0,
+            outcomeId: OUTCOME_ID,
+            createdAt: '2026-09-01T00:00:00.000Z',
+            updatedAt: '2026-09-01T00:00:00.000Z',
+            todayDone: 1,
+            todayTotal: 1,
+          },
+        ],
         materials: [
           {
             id: 'm-1',
@@ -271,6 +290,9 @@ describe('thread workspace', () => {
     expect(screen.getByText(t.thread.openGroup.replace('{n}', '1'))).toBeInTheDocument();
     expect(screen.getByText(t.thread.doneGroup.replace('{n}', '1'))).toBeInTheDocument();
     expect(screen.getByText('整理项目经历')).toBeInTheDocument();
+    expect(screen.getByText(t.thread.habitsSection)).toBeInTheDocument();
+    expect(screen.getByText('锻炼')).toBeInTheDocument();
+    expect(screen.getByText('1/1')).toBeInTheDocument();
     // Materials.
     expect(screen.getByText('简历反馈要点')).toBeInTheDocument();
     // Agent timeline: labels per feedback.

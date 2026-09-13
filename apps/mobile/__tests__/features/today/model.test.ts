@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   cardDisplay,
   habitChipText,
+  habitProgress,
+  habitTodayTask,
   isUndoable,
   pendingProposals,
   postponeDueAt,
@@ -162,6 +164,87 @@ describe('cardDisplay', () => {
   });
 });
 
+describe('habitProgress', () => {
+  it('uses targetCount for count habits and is complete at the target', () => {
+    expect(
+      habitProgress({
+        id: 'h1',
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+        active: true,
+        createdBy: 'user',
+        sortOrder: 0,
+        outcomeId: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+        todayDone: 6,
+        todayTotal: 6,
+      }),
+    ).toEqual({ done: 6, total: 8, complete: false });
+    expect(
+      habitProgress({
+        id: 'h1',
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: null,
+        windowEnd: null,
+        active: true,
+        createdBy: 'user',
+        sortOrder: 0,
+        outcomeId: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+        todayDone: 8,
+        todayTotal: 8,
+      }),
+    ).toEqual({ done: 8, total: 8, complete: true });
+  });
+
+  it('treats daily habits as complete once todayDone > 0', () => {
+    expect(
+      habitProgress({
+        id: 'h2',
+        name: '锻炼',
+        kind: 'daily',
+        targetCount: null,
+        windowStart: null,
+        windowEnd: null,
+        active: true,
+        createdBy: 'user',
+        sortOrder: 1,
+        outcomeId: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+        todayDone: 1,
+        todayTotal: 1,
+      }),
+    ).toEqual({ done: 1, total: 1, complete: true });
+  });
+});
+
+describe('habitTodayTask', () => {
+  it('returns the newest open instance and ignores completed ones', () => {
+    const done = makeTask({
+      id: 'a',
+      habitId: 'h1',
+      status: 'done',
+      createdAt: '2026-09-12T10:00:00.000Z',
+    });
+    const open = makeTask({
+      id: 'b',
+      habitId: 'h1',
+      status: 'todo',
+      createdAt: '2026-09-12T08:00:00.000Z',
+    });
+    expect(habitTodayTask([done, open], 'h1')?.id).toBe('b');
+    expect(habitTodayTask([done], 'h1')).toBeNull();
+  });
+});
+
 describe('habitChipText', () => {
   it('uses targetCount as denominator for count habits (relay spawns trail completions)', () => {
     const habit: Habit = {
@@ -174,6 +257,7 @@ describe('habitChipText', () => {
       active: true,
       createdBy: 'user',
       sortOrder: 0,
+      outcomeId: null,
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-01T00:00:00.000Z',
       todayDone: 3,
@@ -193,6 +277,7 @@ describe('habitChipText', () => {
       active: true,
       createdBy: 'user',
       sortOrder: 1,
+      outcomeId: null,
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-01T00:00:00.000Z',
       todayDone: 0,

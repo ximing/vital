@@ -6,7 +6,7 @@ import { toast } from '../../components/toast';
 import { humanError, isNetworkError } from '../../lib/errors';
 import { localDateStamp, zonedLocalMidnightIso } from '../../lib/format';
 import { addDaysYmd, weekDays } from '../../lib/calendar-grid';
-import { pullSync, subscribeSync } from '../../lib/sync';
+import { pullSync, subscribeSnapshot, subscribeSync } from '../../lib/sync';
 import { AuthService } from '../../services/auth.service';
 import { type TaskListView } from './list-meta';
 
@@ -32,6 +32,7 @@ export class TaskListService extends Service {
   movingTask: Task | null = null;
 
   private unsubSync: (() => void) | null = null;
+  private unsubSnapshot: (() => void) | null = null;
 
   get auth(): AuthService {
     return this.resolve(AuthService);
@@ -69,11 +70,22 @@ export class TaskListService extends Service {
         this.items = mergeTasksIntoList(this.items, changes.tasks, this.listId);
       }
     });
+    this.unsubSnapshot = subscribeSnapshot((reason) => {
+      if (reason === 'day') {
+        const today = localDateStamp(this.tz);
+        this.weekAnchor = today;
+        this.selectedDay = today;
+      }
+      if (reason === 'periodic' && !String(this.listId).startsWith('smart:')) return;
+      void this.load(false);
+    });
   }
 
   stop(): void {
     this.unsubSync?.();
     this.unsubSync = null;
+    this.unsubSnapshot?.();
+    this.unsubSnapshot = null;
   }
 
   applyTask(next: Task): void {

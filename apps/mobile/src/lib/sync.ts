@@ -2,28 +2,63 @@ import { AppState, type AppStateStatus, type NativeEventSubscription } from 'rea
 import { latestUpdatedAt, syncEventsUrl } from '@vital/api-client';
 import type { SyncChanges } from '@vital/dto';
 import { apiUrl, client } from './api';
+import { localDateStamp } from './format';
 import { secureTokenStore } from './token-store';
 
 const HEAD_POLL_MS = 15_000;
+const SNAPSHOT_MS = 60_000;
 const MAX_PAGES = 8;
 
 type Listener = (changes: SyncChanges) => void;
 const listeners = new Set<Listener>();
 
+/** Day-scoped screens (today/habits/reports) must refetch; incremental sync has no rows at midnight. */
+export type SnapshotReason = 'day' | 'periodic' | 'foreground';
+type SnapshotListener = (reason: SnapshotReason) => void;
+const snapshotListeners = new Set<SnapshotListener>();
+
 let stopped = true;
 let cursor: string | null = null;
 let socket: WebSocket | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let snapshotTimer: ReturnType<typeof setInterval> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let appSub: NativeEventSubscription | null = null;
 let inFlight: Promise<SyncChanges | null> | null = null;
 let backoff = 1_000;
+let lastLocalDay: string | null = null;
+
+function deviceDay(at = new Date()): string {
+  return localDateStamp(Intl.DateTimeFormat().resolvedOptions().timeZone, at);
+}
 
 export function subscribeSync(listener: Listener): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
+}
+
+export function subscribeSnapshot(listener: SnapshotListener): () => void {
+  snapshotListeners.add(listener);
+  return () => {
+    snapshotListeners.delete(listener);
+  };
+}
+
+function notifySnapshot(reason: SnapshotReason): void {
+  for (const listener of snapshotListeners) listener(reason);
+}
+
+function consumeDayRollover(at = new Date()): boolean {
+  const day = deviceDay(at);
+  if (lastLocalDay === null) {
+    lastLocalDay = day;
+    return false;
+  }
+  if (day === lastLocalDay) return false;
+  lastLocalDay = day;
+  return true;
 }
 
 function notify(changes: SyncChanges): void {
@@ -130,12 +165,38 @@ function connectWs(): void {
   };
 }
 
+function tickPoll(): void {
+  void pullSync().catch(() => undefined);
+  if (consumeDayRollover()) notifySnapshot('day');
+}
+
+function startSnapshotTimer(): void {
+  if (snapshotTimer || stopped) return;
+  snapshotTimer = setInterval(() => {
+    if (consumeDayRollover()) {
+      notifySnapshot('day');
+      return;
+    }
+    notifySnapshot('periodic');
+  }, SNAPSHOT_MS);
+}
+
+function stopSnapshotTimer(): void {
+  if (snapshotTimer) {
+    clearInterval(snapshotTimer);
+    snapshotTimer = null;
+  }
+}
+
 function onAppState(state: AppStateStatus): void {
   if (state === 'active') {
     void pullSync().catch(() => undefined);
+    notifySnapshot(consumeDayRollover() ? 'day' : 'foreground');
+    startSnapshotTimer();
     if (!socket) connectWs();
     return;
   }
+  stopSnapshotTimer();
   if (socket) {
     const live = socket;
     socket = null;
@@ -147,10 +208,12 @@ export function startMobileSync(): void {
   if (!stopped) return;
   stopped = false;
   backoff = 1_000;
+  lastLocalDay = deviceDay();
   void pullSync().catch(() => undefined);
   pollTimer = setInterval(() => {
-    void pullSync().catch(() => undefined);
+    tickPoll();
   }, HEAD_POLL_MS);
+  startSnapshotTimer();
   connectWs();
   appSub = AppState.addEventListener('change', onAppState);
 }
@@ -160,8 +223,10 @@ export function stopMobileSync(): void {
   cursor = null;
   inFlight = null;
   backoff = 1_000;
+  lastLocalDay = null;
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
+  stopSnapshotTimer();
   if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
   if (appSub) {

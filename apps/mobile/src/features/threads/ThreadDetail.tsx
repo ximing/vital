@@ -124,10 +124,25 @@ const ThreadDetailContent = observer(function ThreadDetailContent({ outcomeId }:
         {headline !== null ? <Text style={styles.headline}>{headline}</Text> : null}
         {closed ? <Text style={styles.closedNotice}>{copy.threads.closedNotice}</Text> : null}
 
+        <SectionHead title={copy.threads.habitsSection} count={detail.habits.length} first />
+        {detail.habits.length === 0 ? (
+          <Text style={styles.emptyLine}>{copy.threads.emptyHabits}</Text>
+        ) : (
+          detail.habits.map((habit) => (
+            <View key={habit.id} style={styles.habitRow}>
+              <Text style={styles.habitName} numberOfLines={1}>
+                {habit.name}
+              </Text>
+              <Text style={styles.habitMeta}>
+                {habit.todayDone}/{habit.kind === 'count' ? (habit.targetCount ?? 1) : Math.max(habit.todayTotal, 1)}
+              </Text>
+            </View>
+          ))
+        )}
+
         <SectionHead
           title={copy.threads.tasksSection}
           count={openTasks.length}
-          first
           right={
             <Pressable
               accessibilityRole="button"
@@ -372,6 +387,15 @@ const createStyles = (t: Theme) =>
       lineHeight: t.type.meta.lineHeight,
       color: t.textTertiary,
     },
+    habitRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space[2],
+      paddingHorizontal: t.space[1],
+      paddingVertical: t.space[2],
+    },
+    habitName: { flex: 1, fontSize: 15, lineHeight: 22, fontWeight: '500', color: t.fgPrimary },
+    habitMeta: { fontSize: 12, lineHeight: 16, color: t.textTertiary, fontVariant: ['tabular-nums'] },
     materialRow: {
       paddingHorizontal: t.space[4],
       paddingVertical: t.space[3],

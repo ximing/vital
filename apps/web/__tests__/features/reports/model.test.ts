@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyRemoteBody,
   decidePoll,
+  remoteEditorAction,
   formatPeriodRange,
   insertEntityToken,
   isDirty,
@@ -75,6 +76,36 @@ describe('report poll', () => {
   it('never replaces a dirty bodyMd', () => {
     expect(applyRemoteBody(true, 'local', 'remote')).toBe('local');
     expect(applyRemoteBody(false, 'local', 'remote')).toBe('remote');
+  });
+});
+
+describe('remoteEditorAction', () => {
+  const live = {
+    id: 'r1',
+    draftMd: 'hello\n',
+    draftTitle: '日报',
+    revision: 3,
+  };
+
+  it('ignores an own-save echo so the editor is not remounted', () => {
+    expect(
+      remoteEditorAction(live, { id: 'r1', bodyMd: 'hello\n', title: '日报', revision: 3 }, false),
+    ).toBe('ignore');
+    expect(
+      remoteEditorAction(live, { id: 'r1', bodyMd: 'hello\n', title: '日报', revision: 4 }, false),
+    ).toBe('patch-meta');
+  });
+
+  it('does not remount while the user is typing', () => {
+    expect(
+      remoteEditorAction(live, { id: 'r1', bodyMd: 'remote', title: '日报', revision: 9 }, true),
+    ).toBe('ignore');
+  });
+
+  it('remounts only when a clean editor must take a different body', () => {
+    expect(
+      remoteEditorAction(live, { id: 'r1', bodyMd: 'other', title: '日报', revision: 4 }, false),
+    ).toBe('remount');
   });
 });
 

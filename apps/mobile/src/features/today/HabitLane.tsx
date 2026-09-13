@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Check } from 'lucide-react-native';
-import type { CreateHabitInput, Habit, Task } from '@vital/dto';
+import type { CreateHabitInput, Habit } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { SectionHead } from '../../components/SectionHead';
 import { copy } from '../../lib/copy';
@@ -10,44 +11,88 @@ import { useTheme } from '../../theme/use-theme';
 import { rnShadow } from '../../ui/card';
 import { Icon } from '../../ui/icon';
 import { HabitEmptyCard } from './HabitEmptyCard';
+import { habitProgress } from './model';
 
 const LANE_GAP = 8;
 const VISIBLE_CARDS = 3;
+const RING = 28;
+const RING_STROKE = 2.5;
+const RING_R = (RING - RING_STROKE) / 2;
+const RING_C = 2 * Math.PI * RING_R;
 
-/** Today's live instance for a habit (relay spawns one at a time — take the newest). */
-export function habitTodayTask(tasks: Task[], habitId: string): Task | null {
-  let found: Task | null = null;
-  for (const task of tasks) {
-    if (task.habitId !== habitId || task.deletedAt !== null) continue;
-    if (found === null || task.createdAt > found.createdAt) found = task;
+/** Track + arc; full fill + ✓ once today's target is met (web HabitRing). */
+function HabitRing({
+  done,
+  total,
+  complete,
+  color,
+  track,
+  fillBg,
+  fillFg,
+}: {
+  done: number;
+  total: number;
+  complete: boolean;
+  color: string;
+  track: string;
+  fillBg: string;
+  fillFg: string;
+}) {
+  if (complete) {
+    return (
+      <View style={[ringStyles.fill, { backgroundColor: fillBg }]}>
+        <Icon icon={Check} size={14} strokeWidth={3} color={fillFg} />
+      </View>
+    );
   }
-  return found;
+  const progress = total > 0 ? Math.min(done / total, 1) : 0;
+  return (
+    <View style={ringStyles.box}>
+      <Svg width={RING} height={RING} style={ringStyles.svg}>
+        <Circle
+          cx={RING / 2}
+          cy={RING / 2}
+          r={RING_R}
+          fill="none"
+          stroke={track}
+          strokeWidth={RING_STROKE}
+        />
+        {progress > 0 ? (
+          <Circle
+            cx={RING / 2}
+            cy={RING / 2}
+            r={RING_R}
+            fill="none"
+            stroke={color}
+            strokeWidth={RING_STROKE}
+            strokeLinecap="round"
+            strokeDasharray={`${RING_C} ${RING_C}`}
+            strokeDashoffset={RING_C * (1 - progress)}
+          />
+        ) : null}
+      </Svg>
+    </View>
+  );
 }
 
 function HabitCard({
   habit,
-  task,
   width,
   flex,
-  onToggle,
+  onTick,
 }: {
   habit: Habit;
-  task: Task | null;
   width?: number;
   flex?: number;
-  onToggle: (task: Task) => void;
+  onTick: (habit: Habit) => void;
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  const done = task !== null && task.status === 'done';
-  const total =
-    habit.kind === 'count' && habit.targetCount !== null ? habit.targetCount : habit.todayTotal;
-  const sub =
-    total > 0
-      ? copy.today.habitLaneToday
-          .replace('{done}', String(habit.todayDone))
-          .replace('{total}', String(total))
-      : ' ';
+  const { done, total, complete } = habitProgress(habit);
+  const canTick = !complete;
+  const sub = complete
+    ? copy.habits.todayDone
+    : copy.today.habitLaneToday.replace('{done}', String(done)).replace('{total}', String(total));
 
   return (
     <View
@@ -56,16 +101,24 @@ function HabitCard({
     >
       <Pressable
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: done, disabled: task === null }}
+        accessibilityState={{ checked: complete, disabled: !canTick }}
         accessibilityLabel={habit.name}
-        disabled={task === null}
-        hitSlop={t.space[2]}
+        disabled={!canTick}
+        hitSlop={8}
         onPress={() => {
-          if (task) onToggle(task);
+          if (canTick) onTick(habit);
         }}
-        style={[styles.ring, done && styles.ringDone, task === null && styles.ringDisabled]}
+        style={styles.ringHit}
       >
-        {done ? <Icon icon={Check} size={14} strokeWidth={3} color={t.fgOnAccent} /> : null}
+        <HabitRing
+          done={done}
+          total={total}
+          complete={complete}
+          color={t.statusDone}
+          track={t.borderSubtle}
+          fillBg={t.statusDone}
+          fillFg={t.fgOnAccent}
+        />
       </Pressable>
       <View style={styles.copy}>
         <Text style={styles.name} numberOfLines={1}>
@@ -84,13 +137,11 @@ function HabitCard({
  */
 export function HabitLane({
   habits,
-  tasks,
-  onToggle,
+  onTick,
   onEnableHabit,
 }: {
   habits: Habit[];
-  tasks: Task[];
-  onToggle: (task: Task) => void;
+  onTick: (habit: Habit) => void;
   onEnableHabit: (input: CreateHabitInput) => Promise<void>;
 }) {
   const t = useTheme();
@@ -132,8 +183,7 @@ export function HabitLane({
               key={habit.id}
               habit={habit}
               width={cardWidth}
-              task={habitTodayTask(tasks, habit.id)}
-              onToggle={onToggle}
+              onTick={onTick}
             />
           ))}
         </ScrollView>
@@ -144,8 +194,7 @@ export function HabitLane({
               key={habit.id}
               habit={habit}
               flex={1}
-              task={habitTodayTask(tasks, habit.id)}
-              onToggle={onToggle}
+              onTick={onTick}
             />
           ))}
         </View>
@@ -175,17 +224,12 @@ const createStyles = (t: Theme) =>
       paddingHorizontal: t.space[3],
       paddingVertical: t.space[2],
     },
-    ring: {
-      width: 28,
-      height: 28,
-      borderRadius: t.radius.pill,
-      borderWidth: 1.5,
-      borderColor: t.textTertiary,
+    ringHit: {
+      width: 36,
+      height: 36,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    ringDone: { backgroundColor: t.statusDone, borderColor: t.statusDone },
-    ringDisabled: { opacity: 0.4 },
     copy: { flex: 1, minWidth: 0 },
     name: {
       fontSize: 14,
@@ -201,3 +245,15 @@ const createStyles = (t: Theme) =>
       fontVariant: ['tabular-nums'],
     },
   });
+
+const ringStyles = StyleSheet.create({
+  box: { width: RING, height: RING },
+  svg: { transform: [{ rotate: '-90deg' }] },
+  fill: {
+    width: RING,
+    height: RING,
+    borderRadius: RING / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

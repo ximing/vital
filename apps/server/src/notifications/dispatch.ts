@@ -14,6 +14,7 @@ import {
   type NotificationOutboxRow,
 } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
+import { publishNotification } from '../sync/sync.hub.js';
 import { sendMeow } from './meow.js';
 import { syncTaskNotifications } from './outbox.js';
 import { applyQuietHours } from './quiet-hours.js';
@@ -162,6 +163,15 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
       .where(eq(notificationOutbox.id, job.id));
     return;
   }
+
+  const copy = renderMeowMessage(job.payload);
+  publishNotification(job.userId, {
+    type: 'notify',
+    id: job.id,
+    title: copy.title,
+    body: copy.msg,
+    url: job.eventType === 'agent.insight' ? todayUrl() : taskUrl(job.payload.listId, job.entityId),
+  });
 
   const channels = await getDb()
     .select()

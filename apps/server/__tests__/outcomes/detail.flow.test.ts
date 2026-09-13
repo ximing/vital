@@ -140,6 +140,7 @@ describe('GET /api/v1/outcomes/:id/detail', () => {
     const done = body.tasks.find((task: { title: string }) => task.title === '整理项目经历');
     expect(done.status).toBe('done');
 
+    expect(body.habits).toEqual([]);
     expect(body.materials).toHaveLength(1);
     expect(body.materials[0]).toMatchObject({ title: '简历反馈要点' });
     expect(body.materials[0].extractedHtml).toBeUndefined();

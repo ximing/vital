@@ -130,6 +130,7 @@ describe('applySyncChanges', () => {
     expect(qc.getQueryData<InboxItem[]>(inboxKeys.list)?.[0]?.title).toBe('next');
     expect(qc.getQueryData<ReportListItem[]>(reportKeys.list('daily'))?.[0]?.revision).toBe(2);
     expect(qc.getQueryData<{ bodyMd: string }>(reportKeys.item('r1'))?.bodyMd).toBe('keep');
+    expect(qc.getQueryData<Task>(todoKeys.item('a'))?.title).toBe('new');
     expect(invalidate).toHaveBeenCalled();
   });
 

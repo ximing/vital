@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { latestUpdatedAt, syncEventsUrl, syncHeadMoved } from '@vital/api-client';
 import type { SyncChanges, SyncHead } from '@vital/dto';
 import { client, isTauriRuntime, tauriBaseUrl, tokenStore } from '@/api/client';
+import { browserNotify } from '@/features/notify/browser-notify.service';
 import { applySyncChanges } from './apply-changes';
 
 const HEAD_POLL_MS = 5_000;
@@ -25,10 +26,8 @@ function eventsUrl(): string {
 async function pullChanges(): Promise<void> {
   if (inFlight) return inFlight;
   inFlight = (async () => {
-    if (since === null) {
-      since = new Date().toISOString();
-      return;
-    }
+    // Small lookback on first pull so an invalidate that raced boot is not dropped.
+    if (since === null) since = new Date(Date.now() - 30_000).toISOString();
     for (let i = 0; i < MAX_PAGES; i += 1) {
       const page: SyncChanges = await client.syncChanges({ since });
       if (qc) applySyncChanges(qc, page);
@@ -36,6 +35,7 @@ async function pullChanges(): Promise<void> {
       prevHead = page.head;
       if (!page.truncated) break;
     }
+    browserNotify().scan();
   })().finally(() => {
     inFlight = null;
   });
@@ -44,16 +44,12 @@ async function pullChanges(): Promise<void> {
 
 async function tick(): Promise<void> {
   const head = await client.syncHead();
-  if (since === null) {
-    since = new Date().toISOString();
-    prevHead = head;
+  if (since === null || syncHeadMoved(prevHead, head)) {
+    await pullChanges();
     return;
   }
-  if (!syncHeadMoved(prevHead, head)) {
-    prevHead = head;
-    return;
-  }
-  await pullChanges();
+  prevHead = head;
+  browserNotify().scan();
 }
 
 function scheduleReconnect(): void {
@@ -97,6 +93,11 @@ function connectWs(): void {
     const type = (parsed as { type?: unknown }).type;
     if (type === 'ready') {
       backoff = 1_000;
+      void pullChanges().catch(() => undefined);
+      return;
+    }
+    if (type === 'notify') {
+      browserNotify().showPush(parsed);
       return;
     }
     if (type === 'invalidate') void pullChanges().catch(() => undefined);
@@ -111,7 +112,7 @@ function connectWs(): void {
 }
 
 function onVisibility(): void {
-  if (document.visibilityState === 'visible') void tick().catch(() => undefined);
+  if (document.visibilityState === 'visible') void pullChanges().catch(() => undefined);
 }
 
 function onOnline(): void {
@@ -124,7 +125,7 @@ export function startSync(queryClient: QueryClient): void {
   running = true;
   qc = queryClient;
   backoff = 1_000;
-  void tick().catch(() => undefined);
+  void pullChanges().catch(() => undefined);
   pollTimer = setInterval(() => {
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     void tick().catch(() => undefined);

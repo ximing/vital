@@ -83,6 +83,12 @@ export function summarizePayload(actionType: string, payload: Record<string, unk
       const firstLine = notes.split('\n')[0] ?? '';
       return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
     }
+    case 'habit.adjust': {
+      const habitName = str(payload['name']);
+      const outcomeName = str(payload['outcomeName']);
+      if (habitName !== '' && outcomeName !== '') return `把「${habitName}」挂到「${outcomeName}」`;
+      return outcomeName !== '' ? `挂到「${outcomeName}」` : habitName;
+    }
     default: {
       // habit.* have no producers yet — fall back to a name-ish field, then raw JSON.
       const name = str(payload['name']) || str(payload['hint']) || str(payload['content']);

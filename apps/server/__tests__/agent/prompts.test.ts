@@ -27,6 +27,42 @@ describe('agent prompt builders inject distilled memory', () => {
     expect(system).toContain('<data>');
   });
 
+  it('headline prompt includes linked and unlinked habit facts', () => {
+    const { system, user } = buildHeadlinePrompt({
+      outcomeName: '身体健康',
+      ruleSignal: 'flat',
+      ruleNextStep: null,
+      completedLast7d: 0,
+      openTasks: [],
+      memory: [],
+      linkedHabits: [],
+      unlinkedHabits: [
+        {
+          id: 'habit-exercise',
+          name: '锻炼',
+          kind: 'daily',
+          daysDoneLast7d: 5,
+          todayDone: 1,
+          todayTarget: 1,
+        },
+        {
+          id: 'habit-water',
+          name: '喝水',
+          kind: 'count',
+          daysDoneLast7d: 6,
+          todayDone: 3,
+          todayTarget: 8,
+        },
+      ],
+    });
+    expect(system).toContain('已挂载习惯的近 7 天打卡算作本线程进展');
+    expect(user).toContain('尚未挂载的习惯');
+    expect(user).toContain('id=habit-exercise 锻炼');
+    expect(user).toContain('id=habit-water 喝水');
+    expect(user).toContain('近7天打卡 5 天');
+    expect(user).toMatch(/尚未挂载的习惯[\s\S]*<data>[\s\S]*锻炼[\s\S]*<\/data>/);
+  });
+
   it('cluster prompt carries memory', () => {
     const { user } = buildClusterPrompt({
       existingNames: ['家庭'],

@@ -1,4 +1,4 @@
-import type { AgentAction, Habit, Outcome } from '@vital/dto';
+import type { AgentAction, Habit, Outcome, Task } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import { t } from '@/copy';
 import {
@@ -6,6 +6,8 @@ import {
   decomposeDeferCount,
   decomposeSubtasks,
   habitChipText,
+  habitTodayProgress,
+  habitTodayTask,
   habitTemplateInputs,
   isUndoable,
   pendingDecomposeAction,
@@ -138,12 +140,33 @@ describe('habitChipText', () => {
       active: true,
       createdBy: 'user',
       sortOrder: 0,
+      outcomeId: null,
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-01T00:00:00.000Z',
       todayDone: 3,
       todayTotal: 8,
     };
     expect(habitChipText(habit)).toBe('喝水 3/8');
+  });
+
+  it('counts progress against targetCount when spawned instances trail the target', () => {
+    const habit: Habit = {
+      id: 'h1',
+      name: '喝水',
+      kind: 'count',
+      targetCount: 8,
+      windowStart: '08:00',
+      windowEnd: '22:00',
+      active: true,
+      createdBy: 'user',
+      sortOrder: 0,
+      outcomeId: null,
+      createdAt: '2026-09-01T00:00:00.000Z',
+      updatedAt: '2026-09-01T00:00:00.000Z',
+      todayDone: 6,
+      todayTotal: 6,
+    };
+    expect(habitTodayProgress(habit)).toEqual({ done: 6, total: 8, complete: false });
   });
 
   it('uses targetCount as denominator for count habits (relay spawns trail completions)', () => {
@@ -157,6 +180,7 @@ describe('habitChipText', () => {
       active: true,
       createdBy: 'user',
       sortOrder: 0,
+      outcomeId: null,
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-01T00:00:00.000Z',
       todayDone: 3,
@@ -176,12 +200,58 @@ describe('habitChipText', () => {
       active: true,
       createdBy: 'user',
       sortOrder: 1,
+      outcomeId: null,
       createdAt: '2026-09-01T00:00:00.000Z',
       updatedAt: '2026-09-01T00:00:00.000Z',
       todayDone: 0,
       todayTotal: 1,
     };
     expect(habitChipText(habit)).toBe('锻炼 0/1');
+  });
+});
+
+describe('habitTodayTask', () => {
+  function makeTask(over: Partial<Task> & Pick<Task, 'id'>): Task {
+    return {
+      listId: 'inbox-1',
+      parentId: null,
+      outcomeId: null,
+      estimateMinutes: null,
+      deferCount: 0,
+      delegable: false,
+      habitId: 'h1',
+      habitSeq: 1,
+      title: '喝水',
+      notes: '',
+      status: 'todo',
+      priority: 3,
+      pinned: false,
+      dueAt: null,
+      startAt: null,
+      reminderMode: null,
+      reminderOffsetMinutes: null,
+      reminderAt: null,
+      isAllDay: true,
+      timezone: 'Asia/Shanghai',
+      recurrence: null,
+      recurrenceKind: null,
+      recurrenceDtstart: null,
+      completedAt: null,
+      sortOrder: 1,
+      tagIds: [],
+      deletedAt: null,
+      createdAt: '2026-09-12T08:00:00.000Z',
+      updatedAt: '2026-09-12T08:00:00.000Z',
+      ...over,
+    };
+  }
+
+  it('returns the newest open instance and ignores completed ones', () => {
+    const done = makeTask({ id: 'a', status: 'done', createdAt: '2026-09-12T10:00:00.000Z' });
+    const older = makeTask({ id: 'b', status: 'todo', createdAt: '2026-09-12T08:00:00.000Z' });
+    const newer = makeTask({ id: 'c', status: 'doing', createdAt: '2026-09-12T09:00:00.000Z' });
+    expect(habitTodayTask([done, older, newer], 'h1')?.id).toBe('c');
+    expect(habitTodayTask([done], 'h1')).toBeNull();
   });
 });
 

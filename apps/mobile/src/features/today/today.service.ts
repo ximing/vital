@@ -14,10 +14,10 @@ import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
 import { humanError, isNetworkError } from '../../lib/errors';
 import { isOverdue } from '../../lib/format';
-import { pullSync, subscribeSync } from '../../lib/sync';
+import { pullSync, subscribeSnapshot, subscribeSync } from '../../lib/sync';
 import { AuthService } from '../../services/auth.service';
 import { toggleComplete } from '../todos/complete';
-import { postponeDueAt } from './model';
+import { habitProgress, habitTodayTask, postponeDueAt } from './model';
 
 const SYNC_DEBOUNCE_MS = 500;
 const EXEC_POLL_MS = 15_000;
@@ -34,10 +34,12 @@ export class TodayService extends Service {
   refreshing = false;
   error: string | null = null;
   offline = false;
+  clock = new Date();
 
   private inFlight: Promise<void> | null = null;
   private hasData = false;
   private unsubSync: (() => void) | null = null;
+  private unsubSnapshot: (() => void) | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
   private execTimer: ReturnType<typeof setInterval> | null = null;
   private appStateSub: { remove: () => void } | null = null;
@@ -74,11 +76,18 @@ export class TodayService extends Service {
       }, SYNC_DEBOUNCE_MS);
     });
     this.startExecPoll();
+    if (!this.unsubSnapshot) {
+      this.unsubSnapshot = subscribeSnapshot(() => {
+        void this.load(false);
+      });
+    }
   }
 
   stop(): void {
     this.unsubSync?.();
     this.unsubSync = null;
+    this.unsubSnapshot?.();
+    this.unsubSnapshot = null;
     if (this.syncTimer) {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
@@ -143,6 +152,7 @@ export class TodayService extends Service {
         this.hasData = true;
         this.error = null;
         this.offline = false;
+        this.clock = new Date();
       } catch (err) {
         this.error = humanError(err);
         this.offline = isNetworkError(err);
@@ -179,6 +189,22 @@ export class TodayService extends Service {
   private async runAction(work: () => Promise<void>): Promise<void> {
     try {
       await work();
+      await this.refresh();
+    } catch (err) {
+      toast(humanError(err));
+    }
+  }
+
+  async tickHabit(habit: Habit): Promise<void> {
+    if (habitProgress(habit).complete) return;
+    const open = habitTodayTask(this.dashboard?.tasks ?? [], habit.id);
+    if (open !== null) {
+      await this.completeTask(open);
+      return;
+    }
+    try {
+      const next = await client.tickHabit(habit.id);
+      this.habits = this.habits.map((row) => (row.id === next.id ? next : row));
       await this.refresh();
     } catch (err) {
       toast(humanError(err));

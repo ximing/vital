@@ -73,6 +73,27 @@ export function applyRemoteBody(dirty: boolean, localBody: string, remoteBody: s
   return dirty ? localBody : remoteBody;
 }
 
+/**
+ * How to apply a remote GET onto the open editor.
+ * `remount` recreates TipTap (loses caret). Own-save echoes and metadata-only
+ * updates must not remount — that was stealing focus while writing.
+ */
+export type RemoteEditorAction = 'ignore' | 'patch-meta' | 'remount';
+
+export function remoteEditorAction(
+  live: { id: string; draftMd: string; draftTitle: string; revision: number } | null,
+  remote: { id: string; bodyMd: string; title: string; revision: number },
+  dirty: boolean,
+): RemoteEditorAction {
+  if (live === null || live.id !== remote.id) return 'remount';
+  if (dirty) return 'ignore';
+  const sameBody = !isDirty(live.draftMd, remote.bodyMd);
+  const sameTitle = live.draftTitle.trim() === remote.title.trim();
+  if (sameBody && sameTitle && live.revision >= remote.revision) return 'ignore';
+  if (sameBody) return 'patch-meta';
+  return 'remount';
+}
+
 export function mergeEmbeds(local: ReportEmbeds, remote: ReportEmbeds): ReportEmbeds {
   return {
     tasks: { ...local.tasks, ...remote.tasks },

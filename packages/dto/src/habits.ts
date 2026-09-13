@@ -23,6 +23,8 @@ export interface Habit {
   active: boolean;
   createdBy: HabitCreatedBy;
   sortOrder: number;
+  /** Owning thread (outcome). Habits contribute progress to that thread. */
+  outcomeId: string | null;
   createdAt: string;
   updatedAt: string;
   /** Computed at read time for the dashboard. */
@@ -37,6 +39,7 @@ export const createHabitInputSchema = z
     targetCount: z.number().int().min(1).max(99).optional(),
     windowStart: hmSchema.optional(),
     windowEnd: hmSchema.optional(),
+    outcomeId: uuidSchema.optional(),
   })
   .refine((value) => value.kind !== 'count' || value.targetCount !== undefined, {
     message: 'targetCount required for count habits',
@@ -51,6 +54,7 @@ export const patchHabitInputSchema = z
     windowEnd: hmSchema.nullable().optional(),
     active: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
+    outcomeId: uuidSchema.nullable().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',

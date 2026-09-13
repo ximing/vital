@@ -22,6 +22,24 @@ export interface HeadlineTaskFact {
   estimateMinutes: number | null;
 }
 
+export interface HeadlineHabitFact {
+  id: string;
+  name: string;
+  kind: string;
+  daysDoneLast7d: number;
+  todayDone: number;
+  todayTarget: number;
+}
+
+function renderHeadlineHabits(habits: HeadlineHabitFact[]): string {
+  return habits
+    .map(
+      (habit) =>
+        `- id=${habit.id} ${habit.name}（${habit.kind === 'count' ? `计数 ${String(habit.todayTarget)}/天` : '每日一次'}）近7天打卡 ${String(habit.daysDoneLast7d)} 天；今天 ${String(habit.todayDone)}/${String(habit.todayTarget)}`,
+    )
+    .join('\n');
+}
+
 export function buildHeadlinePrompt(input: {
   outcomeName: string;
   ruleSignal: string | null;
@@ -29,9 +47,15 @@ export function buildHeadlinePrompt(input: {
   completedLast7d: number;
   openTasks: HeadlineTaskFact[];
   memory: string[];
+  linkedHabits?: HeadlineHabitFact[];
+  unlinkedHabits?: HeadlineHabitFact[];
 }): PromptPair {
+  const linked = input.linkedHabits ?? [];
+  const unlinked = input.unlinkedHabits ?? [];
   const system = [
     '你是个人目标看板的状态撰写者。根据给定线程的事实，用中文写一句话状态（headline，≤60 字，客观、不鸡汤）和一条具体可执行的下一步建议（suggestion，≤120 字；没有合适建议就留空字符串）。',
+    '已挂载习惯的近 7 天打卡算作本线程进展；任务列表为空但习惯有打卡时，不要写「无任务完成」。',
+    '尚未挂载的习惯仅在日常行为明确服务于本线程目标时通过 attachHabitIds 关联（例如锻炼、喝水、吃饭、睡眠属于身体健康类线程）；不确定就留空，宁可漏挂也不要错挂。若决定挂上，headline 也要计入它们的进展。',
     '必须调用 submit_headline 工具提交结果，不要输出其他文字。',
     DATA_RULE,
   ].join('');
@@ -49,8 +73,12 @@ export function buildHeadlinePrompt(input: {
   const user = [
     `线程名：<data>${input.outcomeName}</data>`,
     `规则信号：${input.ruleSignal ?? '无'}；规则下一步：<data>${input.ruleNextStep ?? '无'}</data>`,
-    `近 7 天完成 ${String(input.completedLast7d)} 项。`,
+    `近 7 天完成任务 ${String(input.completedLast7d)} 项；已挂载习惯近 7 天打卡天数合计 ${String(linked.reduce((sum, habit) => sum + habit.daysDoneLast7d, 0))}。`,
     `未完成任务：\n<data>\n${tasks}\n</data>`,
+    `已挂载习惯：\n<data>\n${linked.length > 0 ? renderHeadlineHabits(linked) : '（无）'}\n</data>`,
+    unlinked.length > 0
+      ? `尚未挂载的习惯（仅在明确属于本线程时填 attachHabitIds）：\n<data>\n${renderHeadlineHabits(unlinked)}\n</data>`
+      : '',
     input.memory.length > 0
       ? `从用户纠偏中学到的偏好（参考）：\n<data>\n${input.memory.map((m) => `- ${m}`).join('\n')}\n</data>`
       : '',

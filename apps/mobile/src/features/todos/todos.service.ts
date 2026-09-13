@@ -3,6 +3,7 @@ import type { List, ListId } from '@vital/dto';
 import { listIdSchema } from '@vital/dto';
 import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
+import { subscribeSnapshot } from '../../lib/sync';
 import { humanError } from '../../lib/errors';
 import { isOverdue } from '../../lib/format';
 import { AuthService } from '../../services/auth.service';
@@ -29,6 +30,8 @@ export class TodosService extends Service {
   error: string | null = null;
   listEpoch = 0;
 
+  private unsubSnapshot: (() => void) | null = null;
+
   get auth(): AuthService {
     return this.resolve(AuthService);
   }
@@ -43,6 +46,19 @@ export class TodosService extends Service {
 
   get inboxId(): string | undefined {
     return this.lists.find((row) => row.kind === 'inbox')?.id;
+  }
+
+  start(): void {
+    if (this.unsubSnapshot) return;
+    this.unsubSnapshot = subscribeSnapshot((reason) => {
+      if (reason === 'periodic') return;
+      void this.load();
+    });
+  }
+
+  stop(): void {
+    this.unsubSnapshot?.();
+    this.unsubSnapshot = null;
   }
 
   async load(): Promise<void> {

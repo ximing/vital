@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { enqueueAgentJob, enqueueOutcomeRefresh, processDueAgentJobs } from '../../src/agent/jobs.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
-import { agentActions, agentJobs, agentMemory, agentUsage, outcomes, tasks } from '../../src/db/schema.js';
+import { agentActions, agentJobs, agentMemory, agentUsage, habits, outcomes, tasks } from '../../src/db/schema.js';
 import { setPiResolveOverride } from '../../src/llm/pi.js';
 import { refreshOutcomeRuleFields } from '../../src/outcomes/outcomes.service.js';
 import { resetDb } from '../helpers/db.js';
@@ -186,6 +186,48 @@ describe('agent harness: outcome.refresh', () => {
     const refreshJob = jobRows.find((j) => j.jobType === 'outcome.refresh')!;
     expect(refreshJob.status).toBe('done');
     expect(refreshJob.lastError).toBeNull();
+  });
+
+  it('headline attaches unlinked habits that belong to the thread', async () => {
+    const alice = await setupFauxUser('alice');
+    const outcomeId = await createOutcome(alice.token, '身体健康');
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '锻炼', kind: 'daily' },
+    });
+    expect(created.statusCode).toBe(200);
+    const habitId = created.json().id as string;
+
+    const faux = installFaux();
+    faux.setResponses([
+      (context) => {
+        expect(JSON.stringify(context)).toContain(habitId);
+        expect(JSON.stringify(context)).toContain('锻炼');
+        return fauxAssistantMessage(
+          fauxToolCall('submit_headline', {
+            headline: '近 7 天锻炼有进展',
+            suggestion: '今天继续锻炼',
+            attachHabitIds: [habitId],
+          }),
+        );
+      },
+    ]);
+
+    await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
+    expect(await processDueAgentJobs(new Date())).toBe(1);
+
+    const [habit] = await getDb().select().from(habits).where(eq(habits.id, habitId));
+    expect(habit?.outcomeId).toBe(outcomeId);
+    const outcome = await outcomeRow(outcomeId);
+    expect(outcome.agentHeadline).toBe('近 7 天锻炼有进展');
+    const attached = await getDb()
+      .select()
+      .from(agentActions)
+      .where(and(eq(agentActions.userId, alice.id), eq(agentActions.actionType, 'habit.adjust')));
+    expect(attached).toHaveLength(1);
+    expect(attached[0]!.targetId).toBe(habitId);
   });
 
   it('without LLM credentials the job is skipped and rule-layer content is preserved', async () => {

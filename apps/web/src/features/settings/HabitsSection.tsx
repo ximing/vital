@@ -1,10 +1,12 @@
-import type { CreateHabitInput, Habit, HabitKind, PatchHabitInput } from '@vital/dto';
+import type { CreateHabitInput, Habit, HabitKind, Outcome, PatchHabitInput } from '@vital/dto';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useHabitsQuery, todayKeys } from '@/features/today/queries';
+import { habitTodayProgress } from '@/features/today/model';
+import { useHabitsQuery, useOutcomesQuery, todayKeys } from '@/features/today/queries';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
+import { OutcomeField } from '@/ui/outcome-field';
 import { ACTIVITY_CARD } from './ActivitySectionHead';
 
 const copy = t.settings.habits;
@@ -25,6 +27,7 @@ interface HabitDraft {
   targetCount: string;
   windowStart: string;
   windowEnd: string;
+  outcomeId: string | null;
 }
 
 function draftFromHabit(habit: Habit): HabitDraft {
@@ -34,6 +37,7 @@ function draftFromHabit(habit: Habit): HabitDraft {
     targetCount: habit.targetCount === null ? '' : String(habit.targetCount),
     windowStart: habit.windowStart ?? '',
     windowEnd: habit.windowEnd ?? '',
+    outcomeId: habit.outcomeId,
   };
 }
 
@@ -43,6 +47,7 @@ const EMPTY_DRAFT: HabitDraft = {
   targetCount: '8',
   windowStart: '',
   windowEnd: '',
+  outcomeId: null,
 };
 
 /** Validated draft → API input; null when invalid. */
@@ -54,10 +59,11 @@ function draftToInput(draft: HabitDraft): CreateHabitInput | null {
     windowStart: draft.windowStart === '' ? undefined : draft.windowStart,
     windowEnd: draft.windowEnd === '' ? undefined : draft.windowEnd,
   };
-  if (draft.kind === 'daily') return { ...base, kind: 'daily' };
+  const withThread = draft.outcomeId ? { ...base, outcomeId: draft.outcomeId } : base;
+  if (draft.kind === 'daily') return { ...withThread, kind: 'daily' };
   const targetCount = Number(draft.targetCount);
   if (!Number.isInteger(targetCount) || targetCount < 1 || targetCount > 99) return null;
-  return { ...base, kind: 'count', targetCount };
+  return { ...withThread, kind: 'count', targetCount };
 }
 
 function draftToPatch(draft: HabitDraft): PatchHabitInput | null {
@@ -67,6 +73,7 @@ function draftToPatch(draft: HabitDraft): PatchHabitInput | null {
     name,
     windowStart: draft.windowStart === '' ? null : draft.windowStart,
     windowEnd: draft.windowEnd === '' ? null : draft.windowEnd,
+    outcomeId: draft.outcomeId,
   };
   if (draft.kind === 'count') {
     const targetCount = Number(draft.targetCount);
@@ -76,14 +83,12 @@ function draftToPatch(draft: HabitDraft): PatchHabitInput | null {
   return patch;
 }
 
-/** Today progress for the ring and the hot chip: daily counts as done once todayDone > 0. */
 function todayOf(habit: Habit): { done: number; total: number } {
-  const total = Math.max(habit.todayTotal, 1);
-  return { done: Math.min(habit.todayDone, total), total };
+  return habitTodayProgress(habit);
 }
 
 /** Chips under the name; the today chip turns hot once there is progress. */
-function habitChips(habit: Habit): { text: string; hot: boolean }[] {
+function habitChips(habit: Habit, outcomes: Outcome[]): { text: string; hot: boolean }[] {
   const chips: { text: string; hot: boolean }[] = [
     {
       text:
@@ -96,6 +101,8 @@ function habitChips(habit: Habit): { text: string; hot: boolean }[] {
   if (habit.windowStart && habit.windowEnd) {
     chips.push({ text: `${habit.windowStart}–${habit.windowEnd}`, hot: false });
   }
+  const thread = outcomes.find((outcome) => outcome.id === habit.outcomeId);
+  if (thread) chips.push({ text: thread.name, hot: false });
   if (habit.active) {
     const { done, total } = todayOf(habit);
     if (habit.kind === 'count') {
@@ -279,7 +286,7 @@ function WindowField({
   );
 }
 
-function AddHabitForm({ onDone }: { onDone: () => void }) {
+function AddHabitForm({ onDone, outcomes }: { onDone: () => void; outcomes: Outcome[] }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<HabitDraft>(EMPTY_DRAFT);
   const create = useMutation({
@@ -316,6 +323,12 @@ function AddHabitForm({ onDone }: { onDone: () => void }) {
         <TargetField draft={draft} onChange={setDraft} />
       </div>
       <WindowField draft={draft} onChange={setDraft} />
+      <OutcomeField
+        value={draft.outcomeId}
+        outcomes={outcomes}
+        placeholder={copy.thread}
+        onChange={(outcomeId) => setDraft({ ...draft, outcomeId })}
+      />
       <span className="flex gap-2">
         <button
           type="submit"
@@ -332,7 +345,7 @@ function AddHabitForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function HabitRow({ habit }: { habit: Habit }) {
+function HabitRow({ habit, outcomes }: { habit: Habit; outcomes: Outcome[] }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -375,6 +388,12 @@ function HabitRow({ habit }: { habit: Habit }) {
             <TargetField draft={draft} onChange={setDraft} />
           </div>
           <WindowField draft={draft} onChange={setDraft} />
+          <OutcomeField
+            value={draft.outcomeId}
+            outcomes={outcomes}
+            placeholder={copy.thread}
+            onChange={(outcomeId) => setDraft({ ...draft, outcomeId })}
+          />
           <span className="flex gap-2">
             <button
               type="submit"
@@ -423,7 +442,7 @@ function HabitRow({ habit }: { habit: Habit }) {
           ) : null}
         </span>
         <span className="mt-1.5 flex flex-wrap gap-1.5">
-          {habitChips(habit).map((chip) => (
+          {habitChips(habit, outcomes).map((chip) => (
             <span
               key={chip.text}
               className={`inline-flex h-5 items-center rounded-full px-2 font-mono text-[11px] tabular-nums ${
@@ -480,6 +499,7 @@ export function HabitsSection({
   onDoneAdding: () => void;
 }) {
   const query = useHabitsQuery();
+  const outcomesQuery = useOutcomesQuery();
 
   if (query.isPending) {
     return (
@@ -524,7 +544,9 @@ export function HabitsSection({
         </div>
       </div>
 
-      {adding ? <AddHabitForm onDone={onDoneAdding} /> : null}
+      {adding ? (
+        <AddHabitForm onDone={onDoneAdding} outcomes={outcomesQuery.data ?? []} />
+      ) : null}
 
       {habits.length === 0 ? (
         <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
@@ -534,7 +556,7 @@ export function HabitsSection({
         <div className={ACTIVITY_CARD}>
           <ul className="flex flex-col">
             {habits.map((habit) => (
-              <HabitRow key={habit.id} habit={habit} />
+              <HabitRow key={habit.id} habit={habit} outcomes={outcomesQuery.data ?? []} />
             ))}
           </ul>
         </div>

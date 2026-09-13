@@ -4,13 +4,14 @@ import { t } from '@/copy';
 import { ListView } from '@/features/todos/ListView';
 import { HabitEmptyCard } from './HabitEmptyCard';
 import { HabitRow } from './HabitRow';
-import { habitById } from './model';
+import { habitTodayProgress, habitTodayTask } from './model';
 
 const TODAY_LIST_ID = 'smart:today';
 
 /**
- * Lower half of /today: today's tasks (smart:today). Open habit instances render
- * as progress rows. Thread cards navigate to the thread page instead of filtering.
+ * Lower half of /today: today's tasks (smart:today). Active habits always
+ * render in the lane (including completed ones) so today's progress stays
+ * visible. Regular tasks sit below; habit instances are not mixed into that list.
  */
 export function TodayTaskList({
   tasks,
@@ -31,44 +32,42 @@ export function TodayTaskList({
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
   onPostpone: (tasks: Task[]) => void;
 }) {
-  const habitTasks = tasks.filter((task) => task.habitId !== null && task.status !== 'done');
-  const habitTaskIds = new Set(habitTasks.map((task) => task.id));
-  const listTasks = tasks.filter((task) => !habitTaskIds.has(task.id));
-  const habitLane = habits.length > 0;
-  const habitDone = habits.reduce((sum, habit) => sum + habit.todayDone, 0);
-  const habitTotal = habits.reduce((sum, habit) => sum + habit.todayTotal, 0);
+  const activeHabits = habits.filter((habit) => habit.active);
+  const listTasks = tasks.filter((task) => task.habitId === null);
+  const habitLane = activeHabits.length > 0;
+  const habitDone = activeHabits.reduce((sum, habit) => sum + habitTodayProgress(habit).done, 0);
+  const habitTotal = activeHabits.reduce((sum, habit) => sum + habitTodayProgress(habit).total, 0);
 
   return (
     <div>
       {habitLane ? (
-        <div className="flex items-center gap-2 px-2 pb-0.5 pt-1">
-          <p className="eyebrow eyebrow-rule min-w-0 flex-1">
-            {t.today.habitLane}
-            {habitTotal > 0
-              ? ` · ${t.today.habitLaneToday
-                  .replace('{done}', String(habitDone))
-                  .replace('{total}', String(habitTotal))}`
-              : ''}
-          </p>
-          <Link
-            to="/habits"
-            className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
-          >
-            {t.today.manageHabits}
-          </Link>
-        </div>
-      ) : null}
-      {habitTasks.length > 0 ? (
-        <div className="px-0 pb-1 pt-1">
-          {habitTasks.map((task) => (
-            <HabitRow
-              key={task.id}
-              task={task}
-              habit={habitById(habits, task.habitId)}
-              timeZone={timeZone}
-              onComplete={onComplete}
-            />
-          ))}
+        <div>
+          <div className="flex items-center gap-2 px-2 pb-0.5 pt-1">
+            <p className="eyebrow eyebrow-rule min-w-0 flex-1">
+              {t.today.habitLane}
+              {habitTotal > 0
+                ? ` · ${t.today.habitLaneToday
+                    .replace('{done}', String(habitDone))
+                    .replace('{total}', String(habitTotal))}`
+                : ''}
+            </p>
+            <Link
+              to="/habits"
+              className="inline-flex shrink-0 items-center rounded-md px-2 py-1 text-[length:var(--text-meta)] text-tertiary transition-colors hover:bg-surface-muted hover:text-fg"
+            >
+              {t.today.manageHabits}
+            </Link>
+          </div>
+          <div className="px-0 pb-1 pt-1">
+            {activeHabits.map((habit) => (
+              <HabitRow
+                key={habit.id}
+                habit={habit}
+                task={habitTodayTask(tasks, habit.id)}
+                onComplete={onComplete}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
       {habits.length === 0 ? <HabitEmptyCard /> : null}

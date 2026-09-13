@@ -31,6 +31,8 @@ import { getUserEntity } from '../auth/auth.service.js';
 import { summarizePayload, targetNamesFor, toAgentActionDto } from '../agent/actions.service.js';
 import { trackIndexJob } from '../retrieval/pipeline.js';
 import { indexOutcome, removeOutcomeIndex } from '../retrieval/search.js';
+import { listHabitsForOutcome } from '../habits/habits.service.js';
+import { linkedHabitFacts, loadHabitHeadlineFacts } from '../habits/progress.js';
 import { listTasks } from '../tasks/tasks.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 import { computeNow } from './now-engine.js';
@@ -99,6 +101,7 @@ async function statsForOutcomes(
         eq(tasks.userId, userId),
         inArray(tasks.outcomeId, outcomeIds),
         inArray(tasks.status, ['todo', 'doing']),
+        isNull(tasks.habitId),
         isNull(tasks.deletedAt),
       ),
     )
@@ -128,6 +131,14 @@ async function statsForOutcomes(
       const rec = map.get(row.outcomeId);
       if (rec) rec.completedLast7d = row.n;
     }
+  }
+
+  const timezone = (await getUserEntity(userId)).timezone;
+  const habitFacts = await loadHabitHeadlineFacts(userId, timezone);
+  for (const fact of habitFacts) {
+    if (!fact.outcomeId || !fact.active) continue;
+    const rec = map.get(fact.outcomeId);
+    if (rec) rec.completedLast7d += fact.daysDoneLast7d;
   }
 
   const materialRows = await getDb()
@@ -265,6 +276,10 @@ export async function undoOutcome(userId: string, id: string): Promise<void> {
       .set({ outcomeId: null })
       .where(and(eq(inboxItems.userId, userId), eq(inboxItems.outcomeId, id)));
     await tx
+      .update(habits)
+      .set({ outcomeId: null, updatedAt: new Date() })
+      .where(and(eq(habits.userId, userId), eq(habits.outcomeId, id)));
+    await tx
       .update(agentActions)
       .set({ feedback: 'dismissed', feedbackAt: new Date() })
       .where(
@@ -294,11 +309,20 @@ export async function getOutcomeDetail(userId: string, id: string): Promise<Outc
   await refreshOutcomeRuleFields(userId, id);
   const row = await getOwnedOutcomeOr404(userId, id);
   const stats = await statsForOutcomes(userId, [id]);
+  const timezone = (await getUserEntity(userId)).timezone;
+  const linkedHabits = await listHabitsForOutcome(userId, id, timezone);
 
   const taskRows = await getDb()
     .select()
     .from(tasks)
-    .where(and(eq(tasks.userId, userId), eq(tasks.outcomeId, id), isNull(tasks.deletedAt)))
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        eq(tasks.outcomeId, id),
+        isNull(tasks.habitId),
+        isNull(tasks.deletedAt),
+      ),
+    )
     .orderBy(asc(tasks.sortOrder), asc(tasks.id));
   const tagRows =
     taskRows.length === 0
@@ -358,6 +382,17 @@ export async function getOutcomeDetail(userId: string, id: string): Promise<Outc
       and(eq(agentActions.targetType, 'task'), inArray(agentActions.targetId, taskIds)) as SQL,
     );
   }
+  if (linkedHabits.length > 0) {
+    actionConds.push(
+      and(
+        eq(agentActions.targetType, 'habit'),
+        inArray(
+          agentActions.targetId,
+          linkedHabits.map((habit) => habit.id),
+        ),
+      ) as SQL,
+    );
+  }
   const actionRows = await getDb()
     .select()
     .from(agentActions)
@@ -369,6 +404,7 @@ export async function getOutcomeDetail(userId: string, id: string): Promise<Outc
   return {
     outcome: toOutcomeDto(row, stats.get(id)),
     tasks: taskRows.map((r) => toTaskDto(r, tagsByTask.get(r.id) ?? [])),
+    habits: linkedHabits,
     materials,
     agentActions: actionRows.map((action) => ({
       ...toAgentActionDto(action),
@@ -437,21 +473,36 @@ export async function refreshOutcomeRuleFields(
         : lastDone
       : (lastTaskActivity ?? lastDone);
 
+  const linkedHabits = linkedHabitFacts(await loadHabitHeadlineFacts(userId, timezone, now), outcomeId);
+  const habitDaysLast7d = linkedHabits.reduce((sum, habit) => sum + habit.daysDoneLast7d, 0);
+  const habitDaysPrev7d = linkedHabits.reduce((sum, habit) => sum + habit.daysDonePrev7d, 0);
+  const habitLast = linkedHabits.reduce<Date | null>((acc, habit) => {
+    if (!habit.lastCompletedAt) return acc;
+    return acc === null || habit.lastCompletedAt > acc ? habit.lastCompletedAt : acc;
+  }, null);
+  const lastActivityWithHabits =
+    lastActivityAt && habitLast
+      ? lastActivityAt > habitLast
+        ? lastActivityAt
+        : habitLast
+      : (lastActivityAt ?? habitLast);
+  const incompleteHabit = linkedHabits.find((habit) => habit.todayDone < habit.todayTarget);
+
   const facts: OutcomeFacts = {
-    completedLast7d,
-    completedPrev7d,
+    completedLast7d: completedLast7d + habitDaysLast7d,
+    completedPrev7d: completedPrev7d + habitDaysPrev7d,
     openCount: openTasks.length,
     overdueCount: openTasks.filter((t) => isOverdue(t.dueAt, t.isAllDay, now, timezone)).length,
-    lastActivityAt,
+    lastActivityAt: lastActivityWithHabits,
   };
 
   await getDb()
     .update(outcomes)
     .set({
       ruleSignal: computeSignal(facts, now),
-      ruleNextStep: selectRuleNextStep(openTasks, now, timezone),
+      ruleNextStep: selectRuleNextStep(openTasks, now, timezone) ?? incompleteHabit?.name ?? null,
       ruleUpdatedAt: now,
-      lastActivityAt,
+      lastActivityAt: lastActivityWithHabits,
       updatedAt: now,
     })
     .where(eq(outcomes.id, outcomeId));

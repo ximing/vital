@@ -7,7 +7,7 @@ import { markOnboarding } from '@/features/onboarding/mark';
 import { humanError } from '@/lib/errors';
 import { AuthService } from '@/services/auth.service';
 import { QueryService } from '@/services/query.service';
-import { applyRemoteBody, isDirty, isRevisionConflict } from './model';
+import { isDirty, isRevisionConflict, remoteEditorAction } from './model';
 import { reportKeys } from './queries';
 import { ReportUiService } from './report-ui.service';
 
@@ -278,9 +278,25 @@ export class ReportsPageService extends Service {
   }
 
   applyRemoteBody(remote: Report): void {
-    const body = applyRemoteBody(this.dirty, this.session?.draftMd ?? '', remote.bodyMd);
-    if (body !== remote.bodyMd) return;
-    this.commitSession(sessionFrom(remote, this.session));
+    const live = this.session;
+    const action = remoteEditorAction(live, remote, this.dirty);
+    if (action === 'ignore') {
+      this.reportsUi.mergeEmbeds(remote.embeds);
+      return;
+    }
+    if (action === 'patch-meta' && live) {
+      this.commitSession({
+        ...live,
+        serverMd: remote.bodyMd,
+        serverTitle: remote.title,
+        revision: remote.revision,
+        remoteToast: false,
+        saveState: live.saveState === 'saving' ? 'saving' : 'saved',
+      });
+      this.reportsUi.setEmbeds(remote.embeds);
+      return;
+    }
+    this.commitSession(sessionFrom(remote, live));
     this.reportsUi.setEmbeds(remote.embeds);
   }
 

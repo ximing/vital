@@ -391,6 +391,7 @@ describe('today workspace', () => {
       active: true,
       createdBy: 'user',
       sortOrder: 0,
+      outcomeId: null,
       createdAt: '2026-09-09T00:00:00.000Z',
       updatedAt: '2026-09-09T00:00:00.000Z',
       todayDone: 0,
@@ -410,6 +411,50 @@ describe('today workspace', () => {
     });
   });
 
+  it('keeps habits on today after today instances are done, including completed ones', async () => {
+    vi.mocked(client.listHabits).mockResolvedValue([
+      {
+        id: 'h-water',
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+        active: true,
+        createdBy: 'user',
+        sortOrder: 0,
+        outcomeId: null,
+        createdAt: '2026-09-09T00:00:00.000Z',
+        updatedAt: '2026-09-09T00:00:00.000Z',
+        todayDone: 6,
+        todayTotal: 6,
+      },
+      {
+        id: 'h-exercise',
+        name: '锻炼',
+        kind: 'daily',
+        targetCount: null,
+        windowStart: null,
+        windowEnd: null,
+        active: true,
+        createdBy: 'user',
+        sortOrder: 1,
+        outcomeId: null,
+        createdAt: '2026-09-09T00:00:00.000Z',
+        updatedAt: '2026-09-09T00:00:00.000Z',
+        todayDone: 1,
+        todayTotal: 1,
+      },
+    ]);
+    renderToday();
+    expect(await screen.findByText('喝水')).toBeInTheDocument();
+    expect(screen.getByText('喝水 6/8')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '喝水' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText('锻炼')).toBeInTheDocument();
+    expect(screen.getByText(t.settings.habits.todayDone)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '锻炼' })).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('hides the habit empty card once a habit is active', async () => {
     vi.mocked(client.listHabits).mockResolvedValue([
       {
@@ -422,6 +467,7 @@ describe('today workspace', () => {
         active: true,
         createdBy: 'user',
         sortOrder: 0,
+        outcomeId: null,
         createdAt: '2026-09-09T00:00:00.000Z',
         updatedAt: '2026-09-09T00:00:00.000Z',
         todayDone: 0,

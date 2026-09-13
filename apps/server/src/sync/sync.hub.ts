@@ -58,6 +58,18 @@ export function unsubscribe(userId: string, socket: SyncSocket): void {
   if (set.size === 0) rooms.delete(userId);
 }
 
+export function publishNotification(
+  userId: string,
+  payload: { type: 'notify'; id: string; title: string; body: string; url: string },
+): void {
+  const set = rooms.get(userId);
+  if (!set) return;
+  const message = JSON.stringify(payload);
+  for (const socket of set) {
+    if (socket.readyState === socket.OPEN) socket.send(message);
+  }
+}
+
 export function publishInvalidation(userId: string): void {
   if (!rooms.has(userId)) return;
   const prev = pending.get(userId);

@@ -122,4 +122,121 @@ describe('habits', () => {
       );
     expect(third).toBeUndefined();
   });
+
+  it('ticks a count habit even after the window, until the target', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '喝水', kind: 'count', targetCount: 2, windowStart: '08:00', windowEnd: '22:00' },
+    });
+    const habitId = created.json().id as string;
+
+    const first = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/habits/${habitId}/tick`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({ id: habitId, todayDone: 1, todayTotal: 1 });
+
+    const second = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/habits/${habitId}/tick`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({ id: habitId, todayDone: 2, todayTotal: 2 });
+
+    const third = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/habits/${habitId}/tick`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(third.statusCode).toBe(200);
+    expect(third.json()).toMatchObject({ todayDone: 2, todayTotal: 2 });
+  });
+
+  it('links a habit to a thread and rejects a foreign outcome', async () => {
+    const alice = await registerUser(app);
+    const bob = await registerUser(app);
+    const outcome = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/outcomes',
+      token: alice.token,
+      payload: { name: '身体健康' },
+    });
+    expect(outcome.statusCode).toBe(200);
+    const outcomeId = outcome.json().id as string;
+    const foreign = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/outcomes',
+      token: bob.token,
+      payload: { name: '别人的线程' },
+    });
+    expect(foreign.statusCode).toBe(200);
+
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '锻炼', kind: 'daily', outcomeId },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({ name: '锻炼', outcomeId });
+
+    const rejected = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/habits/${created.json().id}`,
+      token: alice.token,
+      payload: { outcomeId: foreign.json().id },
+    });
+    expect(rejected.statusCode).toBe(404);
+
+    const noon = DateTime.now().setZone('Asia/Shanghai').set({
+      hour: 12,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+    }).toJSDate();
+    expect(await spawnDailyHabits(alice.id, 'Asia/Shanghai', noon)).toBe(1);
+    const today = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/today',
+      token: alice.token,
+    });
+    const instance = today.json().tasks.find((t: { habitId: string | null }) => t.habitId === created.json().id);
+    expect(instance).toBeTruthy();
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${instance.id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+
+    const board = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/today',
+      token: alice.token,
+    });
+    const thread = board.json().outcomes.find((row: { id: string }) => row.id === outcomeId);
+    expect(thread.completedLast7d).toBeGreaterThanOrEqual(1);
+
+    const detail = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/outcomes/${outcomeId}/detail`,
+      token: alice.token,
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().habits).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: created.json().id, name: '锻炼', outcomeId })]),
+    );
+    expect(detail.json().tasks.every((task: { habitId: string | null }) => task.habitId === null)).toBe(
+      true,
+    );
+  });
 });

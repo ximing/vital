@@ -1,6 +1,7 @@
 import { bindServices, useService } from '@rabjs/react';
 import { useEffect, type FC } from 'react';
 import { t } from '@/copy';
+import { BrowserNotifyService } from '@/features/notify/browser-notify.service';
 import { Banner } from '@/ui/banner';
 import { TimeField } from '@/ui/time-field';
 import { Button } from '@/ui/button';
@@ -9,6 +10,7 @@ import { NotificationsSectionService } from './notifications.service';
 
 function NotificationsSectionContent({ heading = true }: { heading?: boolean }) {
   const page = useService(NotificationsSectionService);
+  const browser = useService(BrowserNotifyService);
   const copy = t.settings.notify;
   const prefs = page.prefs;
   const meow = page.meow;
@@ -17,7 +19,8 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
 
   useEffect(() => {
     void page.load();
-  }, [page]);
+    browser.refreshPermission();
+  }, [page, browser]);
 
   return (
     <section className={heading ? 'mt-8' : undefined}>
@@ -31,6 +34,28 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
           </p>
         </>
       ) : null}
+
+      <div className="mb-6 rounded-xl bg-surface-muted px-4 py-3">
+        <p className="text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-fg">
+          {copy.browser}
+        </p>
+        <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+          {copy.browserHint}
+        </p>
+        <div className="mt-3">
+          {browser.permission === 'unsupported' ? (
+            <p className="text-[length:var(--text-caption)] text-muted">{copy.browserUnsupported}</p>
+          ) : browser.permission === 'granted' ? (
+            <p className="text-[length:var(--text-caption)] text-done">{copy.browserOn}</p>
+          ) : browser.permission === 'denied' ? (
+            <p className="text-[length:var(--text-caption)] text-danger">{copy.browserDenied}</p>
+          ) : (
+            <Button variant="ghost" onClick={() => void browser.requestPermission()}>
+              {copy.browserAsk}
+            </Button>
+          )}
+        </div>
+      </div>
 
       <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
         <input

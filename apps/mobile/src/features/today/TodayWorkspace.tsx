@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
@@ -34,7 +34,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
     return () => s.stop();
   }, [s]);
   useFocusReload(useCallback(() => s.reloadFromFocus(), [s]));
-  const [now] = useState(() => new Date());
+  const now = s.clock;
   const tz = s.auth.user?.timezone ?? 'UTC';
   const dashboard = s.dashboard;
   const outcomes = dashboard?.outcomes ?? [];
@@ -118,8 +118,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
 
         <HabitLane
           habits={habits}
-          tasks={tasks}
-          onToggle={(task) => void s.completeTask(task)}
+          onTick={(habit) => void s.tickHabit(habit)}
           onEnableHabit={(input) => s.enableHabit(input)}
         />
 

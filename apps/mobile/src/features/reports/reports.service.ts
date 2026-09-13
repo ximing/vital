@@ -3,7 +3,7 @@ import type { ReportOverview, ReportReview, ReportType } from '@vital/dto';
 import { client } from '../../lib/api';
 import { humanError, isNetworkError } from '../../lib/errors';
 import { markOnboarding } from '../../lib/onboarding';
-import { pullSync, subscribeSync } from '../../lib/sync';
+import { pullSync, subscribeSnapshot, subscribeSync } from '../../lib/sync';
 import { AuthService } from '../../services/auth.service';
 import type { ReportBarState } from './ReportBar';
 
@@ -30,6 +30,7 @@ export class ReportsService extends Service {
 
   private primed = false;
   private unsubSync: (() => void) | null = null;
+  private unsubSnapshot: (() => void) | null = null;
 
   get auth(): AuthService {
     return this.resolve(AuthService);
@@ -43,11 +44,17 @@ export class ReportsService extends Service {
       }
       void this.load(this.type);
     });
+    this.unsubSnapshot = subscribeSnapshot((reason) => {
+      if (reason === 'periodic') return;
+      void this.load(this.type);
+    });
   }
 
   stop(): void {
     this.unsubSync?.();
     this.unsubSync = null;
+    this.unsubSnapshot?.();
+    this.unsubSnapshot = null;
   }
 
   async load(nextType: ReportType, at?: string): Promise<void> {

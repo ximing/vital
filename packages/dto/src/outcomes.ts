@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AgentActionLogItem } from './agent.js';
+import type { Habit } from './habits.js';
 import type { InboxSource, InboxStatus } from './inbox.js';
 import { uuidSchema } from './lists.js';
 import type { Task } from './tasks.js';
@@ -118,6 +119,8 @@ export interface OutcomeDetail {
   outcome: Outcome;
   /** All non-deleted tasks of this thread; the client groups them open/done. */
   tasks: Task[];
+  /** Habits whose progress counts toward this thread. */
+  habits: Habit[];
   materials: OutcomeMaterial[];
   /** Agent ledger rows touching this thread or its tasks, newest first. */
   agentActions: AgentActionLogItem[];

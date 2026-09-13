@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router';
 import { App } from '@/App';
 import { t } from '@/copy';
 import { subscribeSystemTheme } from '@/lib/theme';
+import { browserNotify } from '@/features/notify/browser-notify.service';
 import { startSync, stopSync } from '@/features/sync/sync-engine';
 import { AuthService } from '@/services/auth.service';
 import { appQueryClient } from '@/services/query.service';
@@ -58,10 +59,15 @@ const Root = observer(function Root() {
   useEffect(() => {
     if (status !== 'ready' || userId === null) {
       stopSync();
+      browserNotify().stop();
       return;
     }
     startSync(appQueryClient);
-    return () => stopSync();
+    browserNotify().start();
+    return () => {
+      stopSync();
+      browserNotify().stop();
+    };
   }, [status, userId]);
 
   if (status === 'booting') return <BootScreen />;

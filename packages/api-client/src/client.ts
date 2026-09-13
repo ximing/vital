@@ -159,6 +159,7 @@ export interface VitalClient {
   listHabits(): Promise<Habit[]>;
   createHabit(input: CreateHabitInput): Promise<Habit>;
   patchHabit(id: string, input: PatchHabitInput): Promise<Habit>;
+  tickHabit(id: string): Promise<Habit>;
   deleteHabit(id: string): Promise<void>;
   getAgentUsage(days?: number): Promise<AgentUsageSummary>;
   listAgentExecutions(days?: number): Promise<AgentExecution[]>;
@@ -385,6 +386,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     createHabit: (input) => http.request('/api/v1/habits', { method: 'POST', body: input }),
     patchHabit: (id, input) =>
       http.request(`/api/v1/habits/${id}`, { method: 'PATCH', body: input }),
+    tickHabit: (id) => http.request(`/api/v1/habits/${id}/tick`, { method: 'POST' }),
     deleteHabit: async (id) => {
       await http.request(`/api/v1/habits/${id}`, { method: 'DELETE' });
     },

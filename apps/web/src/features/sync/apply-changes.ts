@@ -25,6 +25,10 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
       const memberIds = descendantListIds(lists, listId);
       qc.setQueryData(key, mergeTasksIntoList(data, changes.tasks, memberIds));
     }
+    for (const task of changes.tasks) {
+      if (task.deletedAt) qc.removeQueries({ queryKey: todoKeys.item(task.id) });
+      else qc.setQueryData(todoKeys.item(task.id), task);
+    }
     void qc.invalidateQueries({ queryKey: ['todos', 'calendar'] });
     void qc.invalidateQueries({ queryKey: todoKeys.counts });
     // Task moves shift outcome counts / signals on the today dashboard.
@@ -36,6 +40,7 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
   if (changes.inbox.length > 0) {
     const list = qc.getQueryData<InboxItem[]>(inboxKeys.list);
     if (list) qc.setQueryData(inboxKeys.list, mergeInboxItems(list, changes.inbox));
+    else void qc.invalidateQueries({ queryKey: inboxKeys.list });
     for (const item of changes.inbox) {
       if (item.deletedAt) qc.removeQueries({ queryKey: inboxKeys.item(item.id) });
       else qc.setQueryData(inboxKeys.item(item.id), item);

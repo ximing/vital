@@ -20,6 +20,7 @@ vi.mock('@/api/client', async (importOriginal) => {
     ...actual,
     client: {
       listHabits: vi.fn(),
+      listOutcomes: vi.fn(),
       createHabit: vi.fn(),
       patchHabit: vi.fn(),
       deleteHabit: vi.fn(),
@@ -53,6 +54,7 @@ function habit(input: Partial<Habit> & { id: string }): Habit {
     active: true,
     createdBy: 'user',
     sortOrder: 0,
+    outcomeId: null,
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
     todayDone: 3,
@@ -108,9 +110,23 @@ describe('habits page', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
     vi.mocked(client.listHabits).mockResolvedValue(items);
+    vi.mocked(client.listOutcomes).mockResolvedValue([]);
     vi.mocked(client.createHabit).mockResolvedValue(items[0]!);
     vi.mocked(client.patchHabit).mockResolvedValue(items[0]!);
     vi.mocked(client.deleteHabit).mockResolvedValue(undefined);
+  });
+
+  it('shows count progress against the daily target, not spawned instances', async () => {
+    vi.mocked(client.listHabits).mockResolvedValue([
+      habit({ id: 'h1', todayDone: 6, todayTotal: 6, targetCount: 8 }),
+    ]);
+    renderAt('/habits');
+    expect(
+      await screen.findByText(copy.todayProgress.replace('{done}', '6').replace('{total}', '8')),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(copy.todayProgress.replace('{done}', '6').replace('{total}', '6')),
+    ).not.toBeInTheDocument();
   });
 
   it('renders rows with kind/window/progress chips, agent badge and inactive state', async () => {
@@ -184,6 +200,7 @@ describe('habits page', () => {
         targetCount: 8,
         windowStart: '08:00',
         windowEnd: '22:00',
+        outcomeId: null,
       });
     });
   });

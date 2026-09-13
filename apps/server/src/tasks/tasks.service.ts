@@ -42,6 +42,7 @@ import {
   inboxItems,
   agentActions,
   agentJobs,
+  habits,
   taskCompletions,
   tasks,
   taskTags,
@@ -860,7 +861,11 @@ export async function restoreTask(userId: string, id: string): Promise<Task> {
   return dtoOf(await getOwnedTaskOr404(userId, id));
 }
 
-export async function completeTask(userId: string, id: string): Promise<CompleteTaskResponse> {
+export async function completeTask(
+  userId: string,
+  id: string,
+  opts: { skipHabitRelay?: boolean } = {},
+): Promise<CompleteTaskResponse> {
   const task = await getOwnedTaskOr404(userId, id);
   if (task.status === 'canceled') throw AppError.of(400, 'VALIDATION_ERROR');
   if (task.status === 'done' && !isRecurring(task)) throw AppError.of(409, 'VALIDATION_ERROR');
@@ -954,6 +959,14 @@ export async function completeTask(userId: string, id: string): Promise<Complete
         tx,
       );
       if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
+      if (task.habitId) {
+        const [habit] = await tx
+          .select({ outcomeId: habits.outcomeId })
+          .from(habits)
+          .where(eq(habits.id, task.habitId))
+          .limit(1);
+        if (habit?.outcomeId) await enqueueOutcomeRefresh(tx, userId, habit.outcomeId, now);
+      }
     });
   } catch (err) {
     if (isUniqueViolation(err)) throw AppError.of(409, 'VALIDATION_ERROR');
@@ -964,7 +977,9 @@ export async function completeTask(userId: string, id: string): Promise<Complete
   fireIndexTask(updated);
   const dto = await dtoOf(updated);
   // Habit relay: completing one count-habit instance spawns the next (rule layer).
-  await spawnNextOnComplete(userId, dto, now);
+  // The tick route opts out — it spawns lazily via ensureOpenTodayInstance so one
+  // tick consumes exactly one instance.
+  if (!opts.skipHabitRelay) await spawnNextOnComplete(userId, dto, now);
   return { task: dto, undo: { completionId } };
 }
 
@@ -1029,6 +1044,14 @@ export async function uncompleteTask(
       tx,
     );
     if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
+    if (task.habitId) {
+      const [habit] = await tx
+        .select({ outcomeId: habits.outcomeId })
+        .from(habits)
+        .where(eq(habits.id, task.habitId))
+        .limit(1);
+      if (habit?.outcomeId) await enqueueOutcomeRefresh(tx, userId, habit.outcomeId, now);
+    }
   });
   const restored = await getOwnedTaskOr404(userId, id);
   fireIndexTask(restored);
