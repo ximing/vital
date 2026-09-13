@@ -54,7 +54,9 @@ jobs:
         run: |
           tag="${{ github.event.release.tag_name }}"
           if [[ -z "$tag" ]]; then
-            tag="v0.0.0"
+            # workflow_dispatch has no tag; v0.0.0 would yield versionCode 0,
+            # which Gradle rejects. Use the current app version instead.
+            tag="v0.1.0"
           fi
           if [[ "$tag" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             major=${BASH_REMATCH[1]}; minor=${BASH_REMATCH[2]}; patch=${BASH_REMATCH[3]}
