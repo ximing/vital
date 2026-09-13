@@ -9,6 +9,7 @@ export {
 } from './http.js';
 export { createVitalClient, type VitalClient } from './client.js';
 export {
+  coalesceInboxBody,
   latestUpdatedAt,
   mergeInboxItems,
   mergeReportListItems,

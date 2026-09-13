@@ -3,7 +3,6 @@ import {
   boolean,
   char,
   check,
-  foreignKey,
   index,
   integer,
   pgTable,
@@ -11,15 +10,12 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
 
 export const lists = pgTable(
   'lists',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     kind: varchar('kind', { length: 16 }).notNull().default('user'),
     name: varchar('name', { length: 80 }).notNull(),
     color: varchar('color', { length: 16 }),
@@ -37,11 +33,6 @@ export const lists = pgTable(
       .where(sql`${t.kind} = 'inbox'`),
     index('idx_lists_user_sort').on(t.userId, t.sortOrder),
     index('idx_lists_user_parent_sort').on(t.userId, t.parentId, t.sortOrder),
-    foreignKey({
-      name: 'lists_parent_id_lists_id_fk',
-      columns: [t.parentId],
-      foreignColumns: [t.id],
-    }).onDelete('set null'),
     check('lists_kind_check', sql`${t.kind} IN ('user', 'inbox')`),
   ],
 );

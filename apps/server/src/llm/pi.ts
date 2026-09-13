@@ -25,7 +25,8 @@ import { zaiProvider } from '@earendil-works/pi-ai/providers/zai';
 import { xaiProvider } from '@earendil-works/pi-ai/providers/xai';
 import type { LlmCapability, LlmCatalogProvider, LlmParameters, LlmRouteTarget } from '@vital/dto';
 import { AppError } from '../errors.js';
-import type { StoredLlmProvider, User } from '../db/schema.js';
+import type { LlmStore, StoredLlmProvider, User } from '../db/schema.js';
+import { loadLlmStore } from './store.js';
 import { completeModel } from './model-transport.js';
 import { executionContext, skipExecution, withExecution } from '../agent/executions.service.js';
 import { decryptSecret } from './crypto.js';
@@ -145,11 +146,11 @@ export function setPiResolveOverride(next: PiResolveOverride | null): void {
 }
 
 /** Resolve the model for a capability from the user's providers + routing. null = not configured. */
-export function resolveModelFor(user: User, capability: LlmCapability): ResolvedModel | null {
-  const selectedRoute = user.llmRouting[capability] ?? user.llmRouting.default;
+export function resolveModelFor(store: LlmStore, capability: LlmCapability): ResolvedModel | null {
+  const selectedRoute = store.routing[capability] ?? store.routing.default;
   const route = selectedRoute ? { ...selectedRoute } : null;
   if (!route) return null;
-  const stored = user.llmProviders.find((item) => item.id === route.providerId);
+  const stored = store.providers.find((item) => item.id === route.providerId);
   if (!stored || !stored.models.includes(route.model)) return null;
   route.parameters = { ...stored.modelParameters?.[route.model], ...route.parameters };
   const apiKey = decryptSecret(stored.apiKeyEnc);
@@ -266,7 +267,7 @@ export async function completeText(
   if (!executionContext()) {
     return withExecution({ userId: user.id, capability }, () => completeText(user, capability, input));
   }
-  const resolved = resolveModelFor(user, capability);
+  const resolved = resolveModelFor(await loadLlmStore(user.id), capability);
   if (!resolved) {
     skipExecution('NO_MODEL');
     return null;

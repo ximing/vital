@@ -7,7 +7,6 @@ import {
   customType,
   index,
   integer,
-  type AnyPgColumn,
   pgTable,
   smallint,
   text,
@@ -16,8 +15,6 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
-import { lists } from './lists.js';
 
 const tsvector = customType<{ data: string }>({
   dataType() {
@@ -29,15 +26,9 @@ export const tasks = pgTable(
   'tasks',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    listId: char('list_id', { length: 36 })
-      .notNull()
-      .references(() => lists.id, { onDelete: 'restrict' }),
-    parentId: char('parent_id', { length: 36 }).references((): AnyPgColumn => tasks.id, {
-      onDelete: 'cascade',
-    }),
+    userId: char('user_id', { length: 36 }).notNull(),
+    listId: char('list_id', { length: 36 }).notNull(),
+    parentId: char('parent_id', { length: 36 }),
     /** Owning thread. No FK — ownership enforced in the service layer. */
     outcomeId: char('outcome_id', { length: 36 }),
     estimateMinutes: integer('estimate_minutes'),
@@ -83,6 +74,13 @@ export const tasks = pgTable(
     index('idx_tasks_user_status_due').on(t.userId, t.status, t.dueAt),
     index('idx_tasks_user_updated').on(t.userId, t.updatedAt),
     index('idx_tasks_user_outcome').on(t.userId, t.outcomeId),
+    index('idx_tasks_user_parent').on(t.userId, t.parentId),
+    index('idx_tasks_user_habit')
+      .on(t.userId, t.habitId)
+      .where(sql`${t.habitId} IS NOT NULL`),
+    index('idx_tasks_live_status_due')
+      .on(t.userId, t.status, t.dueAt)
+      .where(sql`${t.deletedAt} IS NULL`),
     uniqueIndex('idx_tasks_habit_key')
       .on(t.habitKey)
       .where(sql`${t.habitKey} IS NOT NULL`),
@@ -99,9 +97,7 @@ export const taskCompletions = pgTable(
   'task_completions',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    taskId: char('task_id', { length: 36 })
-      .notNull()
-      .references(() => tasks.id, { onDelete: 'cascade' }),
+    taskId: char('task_id', { length: 36 }).notNull(),
     occurrenceAt: timestamp('occurrence_at', { withTimezone: true, mode: 'date' }).notNull(),
     completedAt: timestamp('completed_at', { withTimezone: true, mode: 'date' }).notNull(),
     dueWasNull: boolean('due_was_null').notNull(),

@@ -1,16 +1,11 @@
 import { sql } from 'drizzle-orm';
-import { char, pgTable, primaryKey, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
-import { tasks } from './tasks.js';
-import { inboxItems } from './inbox.js';
+import { char, index, pgTable, primaryKey, timestamp, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
 export const tags = pgTable(
   'tags',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     name: varchar('name', { length: 40 }).notNull(),
     color: varchar('color', { length: 16 }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -21,27 +16,25 @@ export const tags = pgTable(
 export const taskTags = pgTable(
   'task_tags',
   {
-    taskId: char('task_id', { length: 36 })
-      .notNull()
-      .references(() => tasks.id, { onDelete: 'cascade' }),
-    tagId: char('tag_id', { length: 36 })
-      .notNull()
-      .references(() => tags.id, { onDelete: 'cascade' }),
+    taskId: char('task_id', { length: 36 }).notNull(),
+    tagId: char('tag_id', { length: 36 }).notNull(),
   },
-  (t) => [primaryKey({ columns: [t.taskId, t.tagId] })],
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.tagId] }),
+    index('idx_task_tags_tag').on(t.tagId),
+  ],
 );
 
 export const inboxItemTags = pgTable(
   'inbox_item_tags',
   {
-    inboxItemId: char('inbox_item_id', { length: 36 })
-      .notNull()
-      .references(() => inboxItems.id, { onDelete: 'cascade' }),
-    tagId: char('tag_id', { length: 36 })
-      .notNull()
-      .references(() => tags.id, { onDelete: 'cascade' }),
+    inboxItemId: char('inbox_item_id', { length: 36 }).notNull(),
+    tagId: char('tag_id', { length: 36 }).notNull(),
   },
-  (t) => [primaryKey({ columns: [t.inboxItemId, t.tagId] })],
+  (t) => [
+    primaryKey({ columns: [t.inboxItemId, t.tagId] }),
+    index('idx_inbox_item_tags_tag').on(t.tagId),
+  ],
 );
 
 export type TagRow = typeof tags.$inferSelect;

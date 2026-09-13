@@ -1,0 +1,16 @@
+# Vital — Claude Code notes
+
+Same product and layout as `AGENTS.md`. Read that file first.
+
+## Database: no foreign keys
+
+Tables have **no PostgreSQL foreign keys**. Do not add `.references()` in Drizzle schema. Service code owns:
+
+1. Cross-user / existence checks on every write that stores an id.
+2. Multi-table writes in **one transaction**. Cascades will not happen in the database.
+3. Explicit child cleanup on hard-delete (join tables, deliveries, habit instances, LLM routes, outcome links). Soft-delete does not require wiping children.
+4. `resetDb()` / eval fixture user wipe must list new tables; they will not disappear via `ON DELETE CASCADE`.
+
+After editing `apps/server/src/db/schema/**`, restart the **worker** as well as relying on API `tsx watch`. A live worker that still `SELECT`s dropped columns (`llm_providers`, …) will fail the agent scheduler and notification dispatch on every tick.
+
+Inbox article HTML/text lives in `inbox_item_bodies`, not on `inbox_items`. Sync payloads omit the body; merge with `coalesceInboxBody` so a list/sync row cannot blank the reader cache.

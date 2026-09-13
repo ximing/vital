@@ -12,7 +12,7 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+
 
 export type MeowChannelConfig = { nickname: string };
 
@@ -20,9 +20,7 @@ export const notificationChannels = pgTable(
   'notification_channels',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     type: varchar('type', { length: 16 }).notNull(),
     enabled: boolean('enabled').notNull().default(true),
     config: jsonb('config').$type<MeowChannelConfig>().notNull(),
@@ -55,9 +53,7 @@ export const notificationOutbox = pgTable(
   'notification_outbox',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     eventType: varchar('event_type', { length: 32 }).notNull(),
     entityType: varchar('entity_type', { length: 16 }).notNull(),
     entityId: char('entity_id', { length: 36 }).notNull(),
@@ -90,12 +86,8 @@ export const notificationDeliveries = pgTable(
   'notification_deliveries',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    outboxId: char('outbox_id', { length: 36 })
-      .notNull()
-      .references(() => notificationOutbox.id, { onDelete: 'cascade' }),
-    channelId: char('channel_id', { length: 36 })
-      .notNull()
-      .references(() => notificationChannels.id, { onDelete: 'cascade' }),
+    outboxId: char('outbox_id', { length: 36 }).notNull(),
+    channelId: char('channel_id', { length: 36 }).notNull(),
     status: varchar('status', { length: 16 }).notNull(),
     permanent: boolean('permanent').notNull().default(false),
     lastError: varchar('last_error', { length: 500 }),

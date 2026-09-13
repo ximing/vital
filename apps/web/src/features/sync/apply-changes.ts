@@ -1,5 +1,10 @@
 import type { InboxItem, List, ReportListItem, SyncChanges, Task } from '@vital/dto';
-import { mergeInboxItems, mergeReportListItems, mergeTasksIntoList } from '@vital/api-client';
+import {
+  coalesceInboxBody,
+  mergeInboxItems,
+  mergeReportListItems,
+  mergeTasksIntoList,
+} from '@vital/api-client';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import { inboxKeys } from '@/features/inbox/queries';
 import { reportKeys } from '@/features/reports/queries';
@@ -43,7 +48,10 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
     else void qc.invalidateQueries({ queryKey: inboxKeys.list });
     for (const item of changes.inbox) {
       if (item.deletedAt) qc.removeQueries({ queryKey: inboxKeys.item(item.id) });
-      else qc.setQueryData(inboxKeys.item(item.id), item);
+      else {
+        const prev = qc.getQueryData<InboxItem>(inboxKeys.item(item.id));
+        qc.setQueryData(inboxKeys.item(item.id), coalesceInboxBody(prev, item));
+      }
     }
     // Inbox moves shift the pulse strip and per-thread material counts.
     void qc.invalidateQueries({ queryKey: todayKeys.all });

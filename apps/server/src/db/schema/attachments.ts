@@ -11,15 +11,13 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { StorageMetadata } from '../../storage/base.adapter.js';
-import { users } from './users.js';
+
 
 export const attachments = pgTable(
   'attachments',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     ownerType: varchar('owner_type', { length: 16 }).notNull().default('tmp'),
     ownerId: char('owner_id', { length: 36 }),
     s3Key: varchar('s3_key', { length: 512 }).notNull(),
@@ -37,6 +35,7 @@ export const attachments = pgTable(
   (t) => [
     index('idx_attachments_user').on(t.userId),
     index('idx_attachments_owner').on(t.ownerType, t.ownerId),
+    index('idx_attachments_status_created').on(t.status, t.createdAt),
     check(
       'attachments_owner_type_check',
       sql`${t.ownerType} IN ('tmp', 'task', 'inbox', 'report', 'user', 'list')`,

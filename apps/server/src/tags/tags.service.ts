@@ -3,7 +3,7 @@ import type { CreateTagInput, PatchTagInput, Tag, TagCollection } from '@vital/d
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
-import { tags, type TagRow } from '../db/schema.js';
+import { inboxItemTags, tags, taskTags, type TagRow } from '../db/schema.js';
 import { AppError } from '../errors.js';
 
 function toTagDto(row: TagRow): Tag {
@@ -66,7 +66,11 @@ export async function patchTag(userId: string, id: string, input: PatchTagInput)
 
 export async function deleteTag(userId: string, id: string): Promise<void> {
   await getOwnedTagOr404(userId, id);
-  await getDb().delete(tags).where(eq(tags.id, id));
+  await getDb().transaction(async (tx) => {
+    await tx.delete(taskTags).where(eq(taskTags.tagId, id));
+    await tx.delete(inboxItemTags).where(eq(inboxItemTags.tagId, id));
+    await tx.delete(tags).where(and(eq(tags.id, id), eq(tags.userId, userId)));
+  });
 }
 
 export async function assertOwnedTagIds(userId: string, ids: string[]): Promise<void> {

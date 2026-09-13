@@ -1,13 +1,11 @@
 import { bigserial, char, index, pgTable, smallint, timestamp, varchar } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+
 
 export const apiTokens = pgTable(
   'api_tokens',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     name: varchar('name', { length: 50 }).notNull(),
     tokenPrefix: varchar('token_prefix', { length: 16 }).notNull(),
     tokenHash: char('token_hash', { length: 64 }).notNull().unique(),
@@ -24,12 +22,8 @@ export const apiTokenAccessLogs = pgTable(
   'api_token_access_logs',
   {
     id: bigserial('id', { mode: 'number' }).primaryKey(),
-    tokenId: char('token_id', { length: 36 })
-      .notNull()
-      .references(() => apiTokens.id, { onDelete: 'cascade' }),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenId: char('token_id', { length: 36 }).notNull(),
+    userId: char('user_id', { length: 36 }).notNull(),
     method: varchar('method', { length: 8 }).notNull(),
     path: varchar('path', { length: 512 }).notNull(),
     status: smallint('status').notNull(),

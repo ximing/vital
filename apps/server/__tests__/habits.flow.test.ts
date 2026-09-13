@@ -239,4 +239,56 @@ describe('habits', () => {
       true,
     );
   });
+
+  it('deletes a habit and soft-deletes open instances', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '冥想', kind: 'daily' },
+    });
+    expect(created.statusCode).toBe(200);
+    const habitId = created.json().id as string;
+    const noon = DateTime.now().setZone('Asia/Shanghai').set({
+      hour: 12,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+    }).toJSDate();
+    expect(await spawnDailyHabits(alice.id, 'Asia/Shanghai', noon)).toBe(1);
+    const before = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/today',
+      token: alice.token,
+    });
+    const instance = before.json().tasks.find((t: { habitId: string | null }) => t.habitId === habitId);
+    expect(instance).toBeTruthy();
+
+    const deleted = await injectJson(app, {
+      method: 'DELETE',
+      url: `/api/v1/habits/${habitId}`,
+      token: alice.token,
+    });
+    expect(deleted.statusCode).toBe(200);
+
+    const after = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/today',
+      token: alice.token,
+    });
+    expect(after.json().tasks.some((t: { id: string }) => t.id === instance.id)).toBe(false);
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/habits',
+      token: alice.token,
+    });
+    expect(listed.json().some((habit: { id: string }) => habit.id === habitId)).toBe(false);
+    const taskGet = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${instance.id}`,
+      token: alice.token,
+    });
+    expect(taskGet.statusCode).toBe(404);
+  });
 });

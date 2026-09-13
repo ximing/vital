@@ -12,7 +12,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+
 
 /**
  * Where a memory row may be injected. 'all' hits every capability; the other
@@ -46,9 +46,7 @@ export const agentJobs = pgTable(
   'agent_jobs',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     jobType: varchar('job_type', { length: 32 }).notNull(),
     payload: jsonb('payload').$type<AgentJobPayload>().notNull(),
     /** Unique; upsert on conflict re-arms scheduledAt (collapses mutation bursts). */
@@ -87,13 +85,9 @@ export const agentActions = pgTable(
   'agent_actions',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    jobId: char('job_id', { length: 36 }).references(() => agentJobs.id, { onDelete: 'set null' }),
-    executionId: char('execution_id', { length: 36 }).references(() => agentExecutions.id, {
-      onDelete: 'set null',
-    }),
+    userId: char('user_id', { length: 36 }).notNull(),
+    jobId: char('job_id', { length: 36 }),
+    executionId: char('execution_id', { length: 36 }),
     actionType: varchar('action_type', { length: 32 }).notNull(),
     targetType: varchar('target_type', { length: 16 }).notNull(),
     /** Plain column, no FK — the target may be undone or deleted. */
@@ -123,9 +117,7 @@ export const agentMemory = pgTable(
   'agent_memory',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     version: integer('version').notNull().default(1),
     kind: varchar('kind', { length: 16 }).notNull(),
     content: text('content').notNull(),
@@ -154,11 +146,9 @@ export const agentExecutions = pgTable(
   'agent_executions',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     parentId: char('parent_id', { length: 36 }),
-    jobId: char('job_id', { length: 36 }).references(() => agentJobs.id, { onDelete: 'set null' }),
+    jobId: char('job_id', { length: 36 }),
     leaseToken: char('lease_token', { length: 36 }),
     jobGeneration: integer('job_generation'),
     capability: varchar('capability', { length: 64 }).notNull(),
@@ -189,14 +179,10 @@ export const agentUsage = pgTable(
   'agent_usage',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     /** Synchronous task parsing has no background job. */
-    jobId: char('job_id', { length: 36 }).references(() => agentJobs.id, { onDelete: 'cascade' }),
-    executionId: char('execution_id', { length: 36 }).references(() => agentExecutions.id, {
-      onDelete: 'set null',
-    }),
+    jobId: char('job_id', { length: 36 }),
+    executionId: char('execution_id', { length: 36 }),
     provider: varchar('provider', { length: 120 }),
     /** Pre-migration rows counted whole passes, not individual model requests. */
     status: varchar('status', { length: 16 }).notNull().default('legacy'),

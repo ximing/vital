@@ -47,6 +47,9 @@ html,
 body,
 #root {
   height: 100%;
+  max-height: 100%;
+  max-height: 100dvh;
+  overflow: hidden;
 }
 
 body {
@@ -196,13 +199,20 @@ body {
   overflow-y: auto;
 }
 
-[data-region='search-canvas'],
-[data-region='settings-canvas'] {
+[data-region='search-canvas'] {
   box-sizing: border-box;
   min-width: 0;
   min-height: 0;
   height: 100%;
   overflow-y: auto;
+}
+
+[data-region='settings-canvas'] {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 [data-region='detail'] {

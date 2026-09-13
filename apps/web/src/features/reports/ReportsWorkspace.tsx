@@ -205,7 +205,7 @@ function ReportsWorkspaceContent() {
   const error = id === '' ? null : reportQuery.error;
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col lg:flex-row">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
       <main
         id="main"
         data-region="reflection-canvas"

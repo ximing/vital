@@ -38,6 +38,17 @@ export function latestUpdatedAt(
   return iso;
 }
 
+/** Sync/list payloads omit article HTML. Keep a cached body when the incoming row has none. */
+export function coalesceInboxBody(prev: InboxItem | undefined, incoming: InboxItem): InboxItem {
+  if (!prev) return incoming;
+  const incomingHasBody =
+    (incoming.extractedHtml != null && incoming.extractedHtml !== '') ||
+    (incoming.extractedText != null && incoming.extractedText !== '');
+  if (incomingHasBody) return incoming;
+  if (prev.extractedHtml == null && prev.extractedText == null) return incoming;
+  return { ...incoming, extractedHtml: prev.extractedHtml, extractedText: prev.extractedText };
+}
+
 function upsertById<T extends { id: string }>(items: T[], next: T): T[] {
   const idx = items.findIndex((row) => row.id === next.id);
   if (idx < 0) return [next, ...items];
@@ -83,7 +94,8 @@ export function mergeInboxItems(items: InboxItem[], changes: InboxItem[]): Inbox
       next = next.filter((row) => row.id !== item.id);
       continue;
     }
-    next = upsertById(next, item);
+    const prev = next.find((row) => row.id === item.id);
+    next = upsertById(next, coalesceInboxBody(prev, item));
   }
   return next;
 }

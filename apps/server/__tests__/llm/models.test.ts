@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { User } from '../../src/db/schema.js';
+import type { LlmStore } from '../../src/db/schema.js';
 import { encryptSecret } from '../../src/llm/crypto.js';
 import { llmCatalog, resolveModelFor } from '../../src/llm/pi.js';
 
@@ -14,8 +14,8 @@ describe('provider model resolution', () => {
   it.each(['zhipu', 'openai', 'anthropic', 'moonshot'])(
     'resolves manually entered models for %s',
     (providerId) => {
-      const user = {
-        llmProviders: [
+      const store: LlmStore = {
+        providers: [
           {
             id: 'saved-provider',
             providerId,
@@ -24,9 +24,9 @@ describe('provider model resolution', () => {
             models: ['future-model'],
           },
         ],
-        llmRouting: { default: { providerId: 'saved-provider', model: 'future-model' } },
-      } as unknown as User;
-      const resolved = resolveModelFor(user, 'default');
+        routing: { default: { providerId: 'saved-provider', model: 'future-model' } },
+      };
+      const resolved = resolveModelFor(store, 'default');
       expect(resolved?.model.id).toBe('future-model');
       expect(resolved?.model.baseUrl).toMatch(/^https:\/\//);
       if (providerId === 'zhipu')

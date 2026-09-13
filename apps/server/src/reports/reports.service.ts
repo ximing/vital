@@ -30,7 +30,7 @@ import {
 } from '@vital/dto';
 import { getUserEntity } from '../auth/auth.service.js';
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
-import { getDb } from '../db/index.js';
+import { getDb, type Database } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
 import {
   entityLinks,
@@ -188,7 +188,12 @@ export async function freezeIfNeeded(row: ReportRow): Promise<void> {
     .where(and(eq(reports.id, row.id), sql`${reports.snapshotAt} IS NULL`));
 }
 
-async function syncEmbedLinks(userId: string, reportId: string, bodyMd: string): Promise<void> {
+async function syncEmbedLinks(
+  userId: string,
+  reportId: string,
+  bodyMd: string,
+  db: Pick<Database, 'delete' | 'insert'> = getDb(),
+): Promise<void> {
   const tokens = extractTokens(bodyMd);
   const seen = new Set<string>();
   const values: {
@@ -214,7 +219,7 @@ async function syncEmbedLinks(userId: string, reportId: string, bodyMd: string):
       role: 'embeds',
     });
   }
-  await getDb()
+  await db
     .delete(entityLinks)
     .where(
       and(
@@ -224,7 +229,7 @@ async function syncEmbedLinks(userId: string, reportId: string, bodyMd: string):
       ),
     );
   if (values.length > 0) {
-    await getDb().insert(entityLinks).values(values).onConflictDoNothing();
+    await db.insert(entityLinks).values(values).onConflictDoNothing();
   }
 }
 
@@ -370,6 +375,7 @@ async function bumpOrConflict(
   id: string,
   revision: number,
   patch: { title?: string; bodyMd?: string },
+  db: Pick<Database, 'update' | 'select'> = getDb(),
 ): Promise<ReportRow> {
   const now = new Date();
   const set: { revision: number; updatedAt: Date; title?: string; bodyMd?: string } = {
@@ -378,7 +384,7 @@ async function bumpOrConflict(
   };
   if (patch.title !== undefined) set.title = patch.title;
   if (patch.bodyMd !== undefined) set.bodyMd = patch.bodyMd;
-  const [updated] = await getDb()
+  const [updated] = await db
     .update(reports)
     .set(set)
     .where(and(eq(reports.id, id), eq(reports.userId, userId), eq(reports.revision, revision)))
@@ -399,8 +405,11 @@ export async function patchReport(
   const patch: { title?: string; bodyMd?: string } = {};
   if (input.title !== undefined) patch.title = input.title;
   if (input.bodyMd !== undefined) patch.bodyMd = input.bodyMd;
-  const updated = await bumpOrConflict(userId, id, input.revision, patch);
-  if (input.bodyMd !== undefined) await syncEmbedLinks(userId, id, updated.bodyMd);
+  const updated = await getDb().transaction(async (tx) => {
+    const row = await bumpOrConflict(userId, id, input.revision, patch, tx);
+    if (input.bodyMd !== undefined) await syncEmbedLinks(userId, id, row.bodyMd, tx);
+    return row;
+  });
   return liveReport(updated);
 }
 
@@ -478,8 +487,11 @@ export async function fillReport(
 
   let bodyMd = ensureFillHeadings(row.bodyMd, headings);
   bodyMd = insertTokensIdempotent(bodyMd, tokens, headings);
-  const updated = await bumpOrConflict(user.id, id, input.revision, { bodyMd });
-  await syncEmbedLinks(user.id, id, updated.bodyMd);
+  const updated = await getDb().transaction(async (tx) => {
+    const row = await bumpOrConflict(user.id, id, input.revision, { bodyMd }, tx);
+    await syncEmbedLinks(user.id, id, row.bodyMd, tx);
+    return row;
+  });
   return liveReport(updated);
 }
 

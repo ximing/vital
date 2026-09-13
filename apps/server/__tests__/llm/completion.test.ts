@@ -4,7 +4,10 @@ import { registerUser } from '../helpers/session.js';
 import type { FastifyInstance } from 'fastify';
 import { createServer, type Server } from 'node:http';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { StoredLlmProvider, User } from '../../src/db/schema.js';
+import { eq } from 'drizzle-orm';
+import type { LlmStore, StoredLlmProvider, User } from '../../src/db/schema.js';
+import { getDb } from '../../src/db/index.js';
+import { userLlmProviders, userLlmRoutes } from '../../src/db/schema.js';
 import { encryptSecret } from '../../src/llm/crypto.js';
 import {
   completeText,
@@ -26,10 +29,36 @@ const stored: StoredLlmProvider = {
   apiKeyEnc: encryptSecret('test-key'),
   models: ['glm-5.3-flash'],
 };
-const user = {
-  llmProviders: [stored],
-  llmRouting: { default: { providerId: stored.id, model: stored.models[0] } },
-} as unknown as User;
+const store: LlmStore = {
+  providers: [stored],
+  routing: { default: { providerId: stored.id, model: 'glm-5.3-flash' } },
+};
+const user = {} as User;
+
+async function persistStore(): Promise<void> {
+  const db = getDb();
+  await db.delete(userLlmRoutes).where(eq(userLlmRoutes.userId, user.id));
+  await db.delete(userLlmProviders).where(eq(userLlmProviders.userId, user.id));
+  await db.insert(userLlmProviders).values({
+    id: stored.id,
+    userId: user.id,
+    providerId: stored.providerId,
+    label: stored.label,
+    apiKeyEnc: stored.apiKeyEnc,
+    models: stored.models,
+    modelParameters: stored.modelParameters ?? null,
+  });
+  for (const [capability, target] of Object.entries(store.routing)) {
+    if (!target) continue;
+    await db.insert(userLlmRoutes).values({
+      userId: user.id,
+      capability,
+      providerId: target.providerId,
+      model: target.model,
+      parameters: target.parameters ?? null,
+    });
+  }
+}
 
 beforeEach(async () => {
   await resetDb();
@@ -37,7 +66,8 @@ beforeEach(async () => {
   requests = [];
   reject = false;
   stored.modelParameters = {};
-  user.llmRouting.default = { providerId: stored.id, model: 'glm-5.3-flash' };
+  store.routing = { default: { providerId: stored.id, model: 'glm-5.3-flash' } };
+  await persistStore();
   server = createServer((req, res) => {
     void (async () => {
       let body = '';
@@ -66,7 +96,7 @@ beforeEach(async () => {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('No address');
-  const resolved = resolveModelFor(user, 'task.parse');
+  const resolved = resolveModelFor(store, 'task.parse');
   if (!resolved) throw new Error('No model');
   setPiResolveOverride((_stored, route) => ({
     ...resolved,
@@ -112,6 +142,7 @@ describe('always-thinking models', () => {
         top_p: 0.8,
       },
     };
+    await persistStore();
     await completeText(user, 'task.parse', { messages: [{ role: 'user', content: '测试' }] });
     await testProviderModel(user.id, stored, 'glm-5.3-flash');
     for (const request of requests)
@@ -125,14 +156,15 @@ describe('always-thinking models', () => {
   });
   it('lets capability parameters override model defaults', async () => {
     stored.modelParameters = { 'glm-5.3-flash': { reasoning_effort: 'high', temperature: 0.4 } };
-    user.llmRouting['task.parse'] = {
+    store.routing['task.parse'] = {
       providerId: stored.id,
       model: 'glm-5.3-flash',
       parameters: { reasoning_effort: 'low' },
     };
+    await persistStore();
     await completeText(user, 'task.parse', { messages: [{ role: 'user', content: '测试' }] });
     expect(requests[0]).toMatchObject({ reasoning_effort: 'low', temperature: 0.4 });
-    delete user.llmRouting['task.parse'];
+    delete store.routing['task.parse'];
   });
   it('does not report success when the provider returns an error', async () => {
     reject = true;

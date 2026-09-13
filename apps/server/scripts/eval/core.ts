@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { AgentMetricsResponse } from '@vital/dto';
 import { getDb } from '../../src/db/index.js';
-import { users } from '../../src/db/schema.js';
+import { agentActions, agentMemory, agentUsage, users } from '../../src/db/schema.js';
 import { agentAdoptionDaily } from '../../src/agent/metrics.service.js';
 import { FIXTURE_TZ, FIXTURE_USER_ID, seedFixture } from './fixture.js';
 
@@ -40,12 +40,15 @@ export interface AgentEvalSnapshot {
 }
 
 /**
- * Reseed the fixture user (cascade-clears their actions/usage/memory) and
+ * Reseed the fixture user (clears their actions/usage/memory) and
  * compute the snapshot. `tamper` flips one accepted feedback to dismissed —
  * the mutation `--check` must always catch.
  */
 export async function buildSnapshot(opts: { tamper?: boolean } = {}): Promise<AgentEvalSnapshot> {
   const db = getDb();
+  await db.delete(agentActions).where(eq(agentActions.userId, FIXTURE_USER_ID));
+  await db.delete(agentUsage).where(eq(agentUsage.userId, FIXTURE_USER_ID));
+  await db.delete(agentMemory).where(eq(agentMemory.userId, FIXTURE_USER_ID));
   await db.delete(users).where(eq(users.id, FIXTURE_USER_ID));
   await seedFixture(db, opts);
   const metrics = await agentAdoptionDaily(FIXTURE_USER_ID, EVAL_WINDOW_DAYS, FIXTURE_TZ);

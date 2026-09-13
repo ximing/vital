@@ -13,9 +13,6 @@ import {
   uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
-import { tasks } from './tasks.js';
-import { attachments } from './attachments.js';
 
 const tsvector = customType<{ data: string }>({
   dataType() {
@@ -32,16 +29,12 @@ export const inboxItems = pgTable(
   'inbox_items',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     title: varchar('title', { length: 500 }).notNull(),
-    /** Owning thread when filed as material. No FK — service layer checks ownership. */
+    /** Owning thread when filed as material. Ownership checked in the service layer. */
     outcomeId: char('outcome_id', { length: 36 }),
     originalUrl: text('original_url'),
     canonicalUrl: text('canonical_url'),
-    extractedText: text('extracted_text'),
-    extractedHtml: text('extracted_html'),
     excerpt: varchar('excerpt', { length: 500 }),
     byline: varchar('byline', { length: 200 }),
     siteName: varchar('site_name', { length: 200 }),
@@ -51,15 +44,13 @@ export const inboxItems = pgTable(
     readAt: timestamp('read_at', { withTimezone: true, mode: 'date' }),
     idempotencyKey: char('idempotency_key', { length: 64 }),
     idempotencyResponse: jsonb('idempotency_response').$type<InboxIdempotencyResponse>(),
-    convertedTaskId: char('converted_task_id', { length: 36 }).references(() => tasks.id, {
-      onDelete: 'set null',
-    }),
+    convertedTaskId: char('converted_task_id', { length: 36 }),
     deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'date' }),
     searchTsv: tsvector('search_tsv')
       .notNull()
       .generatedAlwaysAs(
         (): SQL =>
-          sql`setweight(to_tsvector('simple', coalesce(${inboxItems.title}, '')), 'A') || setweight(to_tsvector('simple', coalesce(${inboxItems.excerpt}, '')), 'B') || setweight(to_tsvector('simple', coalesce(${inboxItems.extractedText}, '')), 'C')`,
+          sql`setweight(to_tsvector('simple', coalesce(${inboxItems.title}, '')), 'A') || setweight(to_tsvector('simple', coalesce(${inboxItems.excerpt}, '')), 'B')`,
       ),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -70,6 +61,11 @@ export const inboxItems = pgTable(
       .where(sql`${t.idempotencyKey} IS NOT NULL`),
     index('idx_inbox_items_user_captured').on(t.userId, t.capturedAt),
     index('idx_inbox_items_user_updated').on(t.userId, t.updatedAt),
+    index('idx_inbox_items_user_status_captured').on(t.userId, t.status, t.capturedAt),
+    index('idx_inbox_items_user_outcome').on(t.userId, t.outcomeId),
+    index('idx_inbox_items_live_captured')
+      .on(t.userId, t.capturedAt)
+      .where(sql`${t.deletedAt} IS NULL`),
     index('idx_inbox_items_search_tsv').using('gin', t.searchTsv),
     index('idx_inbox_items_title_trgm').using('gin', sql`${t.title} gin_trgm_ops`),
     check(
@@ -83,23 +79,29 @@ export const inboxItems = pgTable(
   ],
 );
 
+export const inboxItemBodies = pgTable('inbox_item_bodies', {
+  inboxItemId: char('inbox_item_id', { length: 36 }).primaryKey(),
+  extractedText: text('extracted_text'),
+  extractedHtml: text('extracted_html'),
+});
+
 export const inboxAssets = pgTable(
   'inbox_assets',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    inboxItemId: char('inbox_item_id', { length: 36 })
-      .notNull()
-      .references(() => inboxItems.id, { onDelete: 'cascade' }),
-    attachmentId: char('attachment_id', { length: 36 })
-      .notNull()
-      .references(() => attachments.id, { onDelete: 'cascade' }),
+    inboxItemId: char('inbox_item_id', { length: 36 }).notNull(),
+    attachmentId: char('attachment_id', { length: 36 }).notNull(),
     originalSrc: text('original_src').notNull(),
     sortOrder: integer('sort_order').notNull().default(0),
   },
-  (t) => [unique('inbox_assets_item_attachment_uidx').on(t.inboxItemId, t.attachmentId)],
+  (t) => [
+    unique('inbox_assets_item_attachment_uidx').on(t.inboxItemId, t.attachmentId),
+    index('idx_inbox_assets_item').on(t.inboxItemId),
+  ],
 );
 
 export type InboxItemRow = typeof inboxItems.$inferSelect;
 export type NewInboxItem = typeof inboxItems.$inferInsert;
+export type InboxItemBodyRow = typeof inboxItemBodies.$inferSelect;
 export type InboxAssetRow = typeof inboxAssets.$inferSelect;
 export type NewInboxAsset = typeof inboxAssets.$inferInsert;

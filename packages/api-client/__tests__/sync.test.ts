@@ -1,6 +1,7 @@
 import type { InboxItem, ReportListItem, Task } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import {
+  coalesceInboxBody,
   latestUpdatedAt,
   mergeInboxItems,
   mergeReportListItems,
@@ -139,6 +140,21 @@ describe('mergeInboxItems + reports + latestUpdatedAt', () => {
     const archived = inbox({ id: 'a', status: 'archived' });
     const deleted = inbox({ id: 'b', deletedAt: '2026-09-02T00:00:00.000Z' });
     expect(mergeInboxItems([a, b], [archived, deleted])).toEqual([]);
+  });
+
+  it('keeps a cached article body when the incoming sync row omits it', () => {
+    const cached = inbox({ id: 'a', extractedHtml: '<p>hi</p>', extractedText: 'hi', title: 'old' });
+    const incoming = inbox({ id: 'a', title: 'new', status: 'later' });
+    expect(coalesceInboxBody(cached, incoming)).toMatchObject({
+      title: 'new',
+      status: 'later',
+      extractedHtml: '<p>hi</p>',
+      extractedText: 'hi',
+    });
+    expect(mergeInboxItems([cached], [incoming])[0]).toMatchObject({
+      title: 'new',
+      extractedHtml: '<p>hi</p>',
+    });
   });
 
   it('upserts report list items and picks the latest updatedAt', () => {

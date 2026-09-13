@@ -12,7 +12,9 @@ import { getDb } from '../db/index.js';
 import { habits, tasks, type HabitRow } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { enqueueOutcomeRefresh } from '../agent/jobs.js';
+import { getUserEntity } from '../auth/auth.service.js';
 import { getInboxList, SORT_GAP } from '../lists/lists.service.js';
+import { syncTaskNotifications } from '../notifications/outbox.js';
 import { assertOwnedOutcomeId } from '../outcomes/shared.js';
 import { allDayLocalMidnight } from '../tasks/recurrence.js';
 
@@ -172,7 +174,42 @@ export async function listHabitsForOutcome(
 
 export async function deleteHabit(userId: string, id: string): Promise<void> {
   await getOwnedHabitOr404(userId, id);
-  await getDb().delete(habits).where(eq(habits.id, id));
+  const user = await getUserEntity(userId);
+  const now = new Date();
+  await getDb().transaction(async (tx) => {
+    const open = await tx
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.userId, userId),
+          eq(tasks.habitId, id),
+          inArray(tasks.status, ['todo', 'doing']),
+          isNull(tasks.deletedAt),
+        ),
+      );
+    if (open.length > 0) {
+      await tx
+        .update(tasks)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(tasks.userId, userId),
+            eq(tasks.habitId, id),
+            inArray(tasks.status, ['todo', 'doing']),
+            isNull(tasks.deletedAt),
+          ),
+        );
+      for (const instance of open) {
+        await syncTaskNotifications({ ...instance, deletedAt: now }, user, now, tx);
+      }
+    }
+    await tx
+      .update(tasks)
+      .set({ habitId: null, habitSeq: null, habitKey: null, updatedAt: now })
+      .where(and(eq(tasks.userId, userId), eq(tasks.habitId, id)));
+    await tx.delete(habits).where(and(eq(habits.id, id), eq(habits.userId, userId)));
+  });
 }
 
 /** Is `now` inside the habit's local-time window? No window = always. */

@@ -3,7 +3,7 @@ import { DateTime } from 'luxon';
 import type { Database } from '../../src/db/index.js';
 import { agentActions, agentMemory, agentUsage, users } from '../../src/db/schema.js';
 
-/** Fixed identity for the eval fixture — a dedicated user, cascade-deleted before every run. */
+/** Fixed identity for the eval fixture — child rows are deleted before every run. */
 export const FIXTURE_USER_ID = '00000000-0000-4000-8000-0000000000e0';
 export const FIXTURE_TZ = 'Asia/Shanghai';
 

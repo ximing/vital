@@ -1,5 +1,13 @@
 # Vital 项目工程规范
 
+## 数据库（无外键）
+
+- 表之间 **不建 PostgreSQL 外键**。归属、存在性和级联删除都在服务层完成。
+- 一次业务写入如果动到两张及以上的表，必须包在同一个 `getDb().transaction` 里；库不会 `CASCADE` / `SET NULL`。
+- 硬删父行时，同一事务里显式删掉或置空子行（标签连接表、通知投递、习惯实例、`user_llm_routes`、线程上的 `outcome_id` 等）。软删（`deleted_at`）可以保留子行。
+- 新增表后更新 `apps/server/__tests__/helpers/db.ts` 的 `resetDb()`，以及 eval fixture 里按用户清理的路径。
+- 改 schema 之后必须重启 worker（`pnpm --filter @vital/server worker`）。API 的 `tsx watch` 不会重载 worker；旧进程继续查询已删除列会导致 Agent 调度和通知派发每轮失败。
+
 ## 测试数据库
 
 - 服务端测试直接连接共享的 `vital_test` 数据库；不依赖 Docker 或本机 Compose。

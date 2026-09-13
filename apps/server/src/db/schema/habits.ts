@@ -9,15 +9,13 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+
 
 export const habits = pgTable(
   'habits',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     name: varchar('name', { length: 120 }).notNull(),
     kind: varchar('kind', { length: 8 }).notNull(),
     /** Required when kind = 'count' (e.g. 8 glasses of water a day). */

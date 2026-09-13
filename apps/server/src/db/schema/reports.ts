@@ -14,7 +14,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { ReportSnapshot } from '@vital/dto';
-import { users } from './users.js';
+
 
 const tsvector = customType<{ data: string }>({
   dataType() {
@@ -26,9 +26,7 @@ export const reports = pgTable(
   'reports',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     type: varchar('type', { length: 16 }).notNull(),
     periodStart: date('period_start', { mode: 'string' }).notNull(),
     periodEnd: date('period_end', { mode: 'string' }).notNull(),

@@ -9,7 +9,7 @@ import {
   timestamp,
   varchar,
 } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+
 
 /** One tracked field change inside a single edit event. */
 export interface AgentEditFieldChange {
@@ -28,9 +28,7 @@ export const agentEditEvents = pgTable(
   'agent_edit_events',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     entityType: varchar('entity_type', { length: 16 }).notNull(),
     entityId: char('entity_id', { length: 36 }).notNull(),
     fields: jsonb('fields').$type<AgentEditFieldChange[]>().notNull(),
@@ -49,9 +47,7 @@ export const agentEditEvents = pgTable(
 export const agentEditFeedback = pgTable(
   'agent_edit_feedback',
   {
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     eventId: char('event_id', { length: 36 }).notNull(),
     jobId: char('job_id', { length: 36 }).notNull(),
     processedAt: timestamp('processed_at', { withTimezone: true, mode: 'date' }).notNull(),

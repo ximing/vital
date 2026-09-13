@@ -8,7 +8,7 @@ import {
 import { and, asc, eq } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
-import { notificationChannels, type NotificationChannelRow } from '../db/schema.js';
+import { notificationChannels, notificationDeliveries, type NotificationChannelRow } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { sendMeow } from './meow.js';
 
@@ -87,9 +87,12 @@ export async function patchChannel(
 
 export async function deleteChannel(userId: string, id: string): Promise<void> {
   const row = await owned(userId, id);
-  await getDb()
-    .delete(notificationChannels)
-    .where(and(eq(notificationChannels.id, row.id), eq(notificationChannels.userId, userId)));
+  await getDb().transaction(async (tx) => {
+    await tx.delete(notificationDeliveries).where(eq(notificationDeliveries.channelId, row.id));
+    await tx
+      .delete(notificationChannels)
+      .where(and(eq(notificationChannels.id, row.id), eq(notificationChannels.userId, userId)));
+  });
 }
 
 export async function testChannel(userId: string, id: string): Promise<void> {

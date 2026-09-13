@@ -1,8 +1,7 @@
 import { bigint, boolean, char, index, integer, pgTable, primaryKey, timestamp, varchar } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
 
 export const agentScheduling = pgTable('agent_scheduling', {
-  userId: char('user_id', { length: 36 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: char('user_id', { length: 36 }).notNull(),
   capability: varchar('capability', { length: 32 }).notNull(),
   generation: bigint('generation', { mode: 'number' }).notNull().default(0),
   processedGeneration: bigint('processed_generation', { mode: 'number' }).notNull().default(0),

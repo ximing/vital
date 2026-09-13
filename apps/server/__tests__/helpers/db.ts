@@ -1,9 +1,16 @@
 import { db, pool } from '../../src/db/index.js';
 import {
   agentActions,
+  agentEditEvents,
+  agentEditFeedback,
   agentExecutions,
   agentJobs,
   agentMemory,
+  agentMemoryFeedback,
+  agentMemoryHistory,
+  agentMemoryMaintenance,
+  agentModelBudgets,
+  agentScheduling,
   agentUsage,
   apiTokenAccessLogs,
   apiTokens,
@@ -13,6 +20,7 @@ import {
   habits,
   holidayCalendar,
   inboxAssets,
+  inboxItemBodies,
   inboxItemTags,
   inboxItems,
   lists,
@@ -26,6 +34,8 @@ import {
   taskCompletions,
   tasks,
   taskTags,
+  userLlmProviders,
+  userLlmRoutes,
   users,
 } from '../../src/db/schema.js';
 
@@ -63,9 +73,17 @@ export async function resetDb(): Promise<void> {
     await db.delete(agentActions);
     await db.delete(agentExecutions);
     await db.delete(agentMemory);
+    await db.delete(agentMemoryFeedback);
+    await db.delete(agentMemoryHistory);
+    await db.delete(agentMemoryMaintenance);
+    await db.delete(agentEditFeedback);
+    await db.delete(agentEditEvents);
     await db.delete(agentJobs);
+    await db.delete(agentScheduling);
+    await db.delete(agentModelBudgets);
     await db.delete(inboxAssets);
     await db.delete(inboxItemTags);
+    await db.delete(inboxItemBodies);
     await db.delete(entityLinks);
     await db.delete(inboxItems);
     await db.delete(taskTags);
@@ -82,6 +100,8 @@ export async function resetDb(): Promise<void> {
     await db.delete(apiTokenAccessLogs);
     await db.delete(apiTokens);
     await db.delete(extensionAuthCodes);
+    await db.delete(userLlmRoutes);
+    await db.delete(userLlmProviders);
     await db.delete(users);
   });
 }

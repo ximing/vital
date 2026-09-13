@@ -1,14 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { char, check, index, pgTable, timestamp, unique, varchar } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+
 
 export const entityLinks = pgTable(
   'entity_links',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     fromType: varchar('from_type', { length: 16 }).notNull(),
     fromId: char('from_id', { length: 36 }).notNull(),
     toType: varchar('to_type', { length: 16 }).notNull(),

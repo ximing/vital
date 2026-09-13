@@ -58,7 +58,7 @@ import {
   SORT_GAP,
 } from '../lists/lists.service.js';
 import { nextSortOrder } from './sort-order.js';
-import { llmPublicOf } from '../llm/settings.service.js';
+import { loadLlmPublic } from '../llm/settings.service.js';
 import {
   enqueueOutcomeRefresh,
   enqueueTaskDecompose,
@@ -477,7 +477,7 @@ export async function createTaskFromText(
     const zone = input.timezone ?? user.timezone;
     const now = new Date();
     let extracted: ExtractedTask | null = null;
-    if (llmReady(llmPublicOf(user), 'task.parse')) {
+    if (llmReady(await loadLlmPublic(userId), 'task.parse')) {
       extracted = await interpretTaskText({
         text: input.text,
         user,

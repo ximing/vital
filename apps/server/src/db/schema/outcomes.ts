@@ -1,14 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { char, check, index, integer, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
+
 
 export const outcomes = pgTable(
   'outcomes',
   {
     id: char('id', { length: 36 }).primaryKey(),
-    userId: char('user_id', { length: 36 })
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    userId: char('user_id', { length: 36 }).notNull(),
     name: varchar('name', { length: 120 }).notNull(),
     status: varchar('status', { length: 8 }).notNull().default('open'),
     createdBy: varchar('created_by', { length: 8 }).notNull().default('user'),

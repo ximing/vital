@@ -44,9 +44,13 @@ describe('web shell contract', () => {
 
   it('shell is a viewport-height flex row so rail and library span the window', () => {
     const shell = read('src/shell/Shell.tsx');
-    expect(shell).toContain('h-dvh');
+    expect(shell).toContain('h-full');
     expect(shell).toContain('overflow-hidden');
     expect(shell).not.toContain('fixed inset-y-0');
+    // Viewport height lives on the layout element in app.css (100dvh), not on Shell.
+    const css = read('src/styles/app.css');
+    expect(css).toMatch(/\[data-layout='mineral-garden'\][^}]*height:\s*100dvh/);
+    expect(css).toMatch(/\[data-layout='mineral-garden'\][^}]*overflow:\s*hidden/);
     const pane = read('src/shell/SecondaryPane.tsx');
     expect(pane).toContain('h-full');
     expect(pane).not.toContain('fixed inset-y-0');

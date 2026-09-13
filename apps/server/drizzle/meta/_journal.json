@@ -218,6 +218,20 @@
       "when": 1789606800013,
       "tag": "0030_simple_tarot",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1789606800014,
+      "tag": "0031_odd_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1789606800015,
+      "tag": "0032_flowery_ozymandias",
+      "breakpoints": true
     }
   ]
 }

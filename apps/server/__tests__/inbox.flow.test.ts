@@ -134,6 +134,15 @@ describe('inbox', () => {
     });
     expect(get.statusCode).toBe(200);
     expect(get.json().extractedHtml).toBeTruthy();
+    const listedAfter = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox',
+      token: alice.token,
+    });
+    expect(listedAfter.statusCode).toBe(200);
+    expect(listedAfter.json().items[0].extractedHtml).toBeNull();
+    expect(listedAfter.json().items[0].extractedText).toBeNull();
+    expect(listedAfter.json().items[0].title).toBe(created.json().title);
   });
 
   it('forever canonical URL idempotency returns stored response', async () => {

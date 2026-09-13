@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { agentMemory, type AgentJobRow, type AgentMemoryScope, type User } from '../db/schema.js';
 import { modelOptions, resolveModelFor, type LlmRunUsage } from '../llm/pi.js';
+import { loadLlmStore } from '../llm/store.js';
 import { streamModel } from '../llm/model-transport.js';
 import { skipExecution, withExecution } from './executions.service.js';
 import { AppError } from '../errors.js';
@@ -113,7 +114,7 @@ export async function runProposalPass<T>(input: {
   makeTool: (capture: (args: T) => void) => AgentTool;
 }): Promise<ProposalPassResult<T> | null> {
   return withExecution({ userId: input.user.id, capability: input.capability }, async () => {
-  const resolved = resolveModelFor(input.user, input.capability);
+  const resolved = resolveModelFor(await loadLlmStore(input.user.id), input.capability);
   if (!resolved) { skipExecution('NO_MODEL'); return null; }
 
   // Holder object: TS control-flow can't see closure assignments into a bare let.

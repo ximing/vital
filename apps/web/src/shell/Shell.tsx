@@ -63,10 +63,10 @@ function ShellContent() {
   }));
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-canvas text-fg" data-layout="mineral-garden">
+    <div className="flex h-full overflow-hidden bg-canvas text-fg" data-layout="mineral-garden">
       <aside
         data-region="rail"
-        className="flex h-full shrink-0 flex-col border-r border-border bg-surface"
+        className="flex h-full min-h-0 shrink-0 flex-col border-r border-border bg-surface"
         style={{ width: RAIL_WIDTH }}
         aria-label="主导航"
       >
@@ -153,7 +153,7 @@ function ShellContent() {
         />
       ) : null}
 
-      <div data-region="canvas" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
+      <div data-region="canvas" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Outlet />
       </div>
       <CommandPalette />

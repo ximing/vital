@@ -146,4 +146,16 @@ describe('applySyncChanges', () => {
     expect(qc.getQueryData<InboxItem[]>(inboxKeys.list)).toEqual([]);
     expect(qc.getQueryData(inboxKeys.item('i1'))).toBeUndefined();
   });
+
+  it('does not wipe a cached inbox body when sync omits extracted html', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const full = inbox({ id: 'i1', title: 'old', extractedHtml: '<p>body</p>', extractedText: 'body' });
+    qc.setQueryData(inboxKeys.item('i1'), full);
+    applySyncChanges(qc, changes({ inbox: [inbox({ id: 'i1', title: 'next', status: 'later' })] }));
+    const cached = qc.getQueryData<InboxItem>(inboxKeys.item('i1'));
+    expect(cached?.title).toBe('next');
+    expect(cached?.status).toBe('later');
+    expect(cached?.extractedHtml).toBe('<p>body</p>');
+    expect(cached?.extractedText).toBe('body');
+  });
 });

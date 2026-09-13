@@ -1,9 +1,8 @@
 import { char, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
-import { users } from './users.js';
 
 export interface MemoryFeedbackSource { actionId: string; feedbackAt: string; version: string }
 export const agentMemoryFeedback = pgTable('agent_memory_feedback', {
-  userId: char('user_id', { length: 36 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: char('user_id', { length: 36 }).notNull(),
   actionId: char('action_id', { length: 36 }).notNull(),
   version: text('version').notNull(),
   feedbackAt: timestamp('feedback_at', { withTimezone: true, mode: 'date' }).notNull(),
@@ -13,7 +12,7 @@ export const agentMemoryFeedback = pgTable('agent_memory_feedback', {
 
 export const agentMemoryHistory = pgTable('agent_memory_history', {
   id: char('id', { length: 36 }).primaryKey(),
-  userId: char('user_id', { length: 36 }).notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: char('user_id', { length: 36 }).notNull(),
   memoryId: char('memory_id', { length: 36 }).notNull(),
   revision: integer('revision').notNull(),
   operation: text('operation').notNull(),
@@ -25,7 +24,7 @@ export const agentMemoryHistory = pgTable('agent_memory_history', {
 }, t => [index('idx_agent_memory_history_user_memory').on(t.userId, t.memoryId)]);
 
 export const agentMemoryMaintenance = pgTable('agent_memory_maintenance', {
-  userId: char('user_id', { length: 36 }).primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  userId: char('user_id', { length: 36 }).primaryKey(),
   fingerprint: text('fingerprint').notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull(),
 });

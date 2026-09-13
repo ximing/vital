@@ -19,6 +19,7 @@ import {
   attachments,
   entityLinks,
   inboxAssets,
+  inboxItemBodies,
   inboxItemTags,
   inboxItems,
   type InboxIdempotencyResponse,
@@ -30,7 +31,7 @@ import { assertOwnedOutcomeId } from '../outcomes/shared.js';
 import { trackIndexJob } from '../retrieval/pipeline.js';
 import { indexInboxItem, removeInboxItemIndex } from '../retrieval/search.js';
 import { assertOwnedTagIds } from '../tags/tags.service.js';
-import { createTask, getTask } from '../tasks/tasks.service.js';
+import { createTask, deleteTask, getTask } from '../tasks/tasks.service.js';
 import { bindUpload } from '../uploads/uploads.service.js';
 import { getStorage, type StorageMetadata } from '../storage/factory.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
@@ -80,10 +81,13 @@ function htmlOnWrite(
   return null;
 }
 
+type InboxBody = { extractedText: string | null; extractedHtml: string | null };
+
 export function toInboxDto(
   row: InboxItemRow,
   assets: InboxAsset[],
   tagIds: string[] = [],
+  body: InboxBody | null = null,
 ): InboxItem {
   return {
     id: row.id,
@@ -91,8 +95,8 @@ export function toInboxDto(
     outcomeId: row.outcomeId,
     originalUrl: row.originalUrl,
     canonicalUrl: row.canonicalUrl,
-    extractedText: row.extractedText,
-    extractedHtml: row.extractedHtml,
+    extractedText: body?.extractedText ?? null,
+    extractedHtml: body?.extractedHtml ?? null,
     excerpt: row.excerpt,
     byline: row.byline,
     siteName: row.siteName,
@@ -182,12 +186,44 @@ export async function loadAssetsByItemIds(ids: string[]): Promise<Map<string, In
   return map;
 }
 
+async function loadBodiesByItemIds(ids: string[]): Promise<Map<string, InboxBody>> {
+  const map = new Map<string, InboxBody>();
+  if (ids.length === 0) return map;
+  const rows = await getDb()
+    .select()
+    .from(inboxItemBodies)
+    .where(inArray(inboxItemBodies.inboxItemId, ids));
+  for (const row of rows) {
+    map.set(row.inboxItemId, {
+      extractedText: row.extractedText,
+      extractedHtml: row.extractedHtml,
+    });
+  }
+  return map;
+}
+
+async function writeInboxBody(
+  inboxItemId: string,
+  extractedText: string | null,
+  extractedHtml: string | null,
+  db: Pick<ReturnType<typeof getDb>, 'insert'> = getDb(),
+): Promise<void> {
+  await db
+    .insert(inboxItemBodies)
+    .values({ inboxItemId, extractedText, extractedHtml })
+    .onConflictDoUpdate({
+      target: inboxItemBodies.inboxItemId,
+      set: { extractedText, extractedHtml },
+    });
+}
+
 async function dtoOf(row: InboxItemRow): Promise<InboxItem> {
-  const [assets, tags] = await Promise.all([
+  const [assets, tags, bodies] = await Promise.all([
     loadAssetsByItemIds([row.id]),
     tagIdsByInbox([row.id]),
+    loadBodiesByItemIds([row.id]),
   ]);
-  return toInboxDto(row, assets.get(row.id) ?? [], tags.get(row.id) ?? []);
+  return toInboxDto(row, assets.get(row.id) ?? [], tags.get(row.id) ?? [], bodies.get(row.id) ?? null);
 }
 
 export async function getOwnedInboxOr404(
@@ -290,8 +326,6 @@ export async function createInbox(
     title: input.title,
     originalUrl,
     canonicalUrl,
-    extractedText,
-    extractedHtml,
     excerpt,
     byline: clip(input.byline ?? null, 200),
     siteName: clip(input.siteName ?? null, 200),
@@ -308,8 +342,11 @@ export async function createInbox(
   };
 
   if (key === null) {
-    await getDb().insert(inboxItems).values(row);
-    if (input.tagIds !== undefined) await replaceInboxTags(id, input.tagIds);
+    await getDb().transaction(async (tx) => {
+      await tx.insert(inboxItems).values(row);
+      await writeInboxBody(id, extractedText, extractedHtml, tx);
+      if (input.tagIds !== undefined) await replaceInboxTags(id, input.tagIds, tx);
+    });
     const stored = await getOwnedInboxOr404(userId, id);
     trackIndexJob(indexInboxItem(stored), 'indexInboxItem');
     const created = await dtoOf(stored);
@@ -343,8 +380,9 @@ export async function createInbox(
       const current = await dtoOf(stored);
       return { status: 200 as const, item: current, createdRow: null };
     }
+    await writeInboxBody(stored.id, extractedText, extractedHtml, tx);
     if (input.tagIds !== undefined) await replaceInboxTags(stored.id, input.tagIds, tx);
-    const created = toInboxDto(stored, [], input.tagIds ?? []);
+    const created = toInboxDto(stored, [], input.tagIds ?? [], { extractedText, extractedHtml });
     const payload: InboxIdempotencyResponse = { status: 201, body: created };
     await tx
       .update(inboxItems)
@@ -371,19 +409,32 @@ export async function patchInbox(
   if (input.title !== undefined) patch.title = input.title;
   if (input.status !== undefined) patch.status = input.status;
   if (input.outcomeId !== undefined) patch.outcomeId = input.outcomeId;
-  if (input.extractedText !== undefined) patch.extractedText = input.extractedText;
-  if (input.extractedHtml !== undefined) {
-    patch.extractedHtml =
-      input.extractedHtml === null ? null : sanitizeExtractedHtml(input.extractedHtml);
-  }
   if (input.excerpt !== undefined) patch.excerpt = input.excerpt;
   if (input.byline !== undefined) patch.byline = input.byline;
   if (input.siteName !== undefined) patch.siteName = input.siteName;
   if (input.readAt !== undefined) {
     patch.readAt = input.readAt === null ? null : new Date(input.readAt);
   }
-  await getDb().update(inboxItems).set(patch).where(eq(inboxItems.id, row.id));
-  if (input.tagIds !== undefined) await replaceInboxTags(row.id, input.tagIds);
+  await getDb().transaction(async (tx) => {
+    await tx.update(inboxItems).set(patch).where(eq(inboxItems.id, row.id));
+    if (input.extractedText !== undefined || input.extractedHtml !== undefined) {
+      const [current] = await tx
+        .select()
+        .from(inboxItemBodies)
+        .where(eq(inboxItemBodies.inboxItemId, row.id))
+        .limit(1);
+      const extractedText =
+        input.extractedText !== undefined ? input.extractedText : (current?.extractedText ?? null);
+      const extractedHtml =
+        input.extractedHtml !== undefined
+          ? input.extractedHtml === null
+            ? null
+            : sanitizeExtractedHtml(input.extractedHtml)
+          : (current?.extractedHtml ?? null);
+      await writeInboxBody(row.id, extractedText, extractedHtml, tx);
+    }
+    if (input.tagIds !== undefined) await replaceInboxTags(row.id, input.tagIds, tx);
+  });
   const fresh = await getOwnedInboxOr404(userId, id);
   trackIndexJob(indexInboxItem(fresh), 'indexInboxItem');
   return dtoOf(fresh);
@@ -472,38 +523,43 @@ export async function convertInbox(
     ...(tagIds.length > 0 ? { tagIds } : {}),
   });
   const now = new Date();
-  await getDb().transaction(async (tx) => {
-    await tx.insert(entityLinks).values([
-      {
-        id: randomUUID(),
-        userId,
-        fromType: 'inbox',
-        fromId: item.id,
-        toType: 'task',
-        toId: task.id,
-        role: 'converted_from',
-        createdAt: now,
-      },
-      {
-        id: randomUUID(),
-        userId,
-        fromType: 'task',
-        fromId: task.id,
-        toType: 'inbox',
-        toId: item.id,
-        role: 'converted_from',
-        createdAt: now,
-      },
-    ]);
-    await tx
-      .update(inboxItems)
-      .set({
-        status: 'converted',
-        convertedTaskId: task.id,
-        updatedAt: now,
-      })
-      .where(eq(inboxItems.id, item.id));
-  });
+  try {
+    await getDb().transaction(async (tx) => {
+      await tx.insert(entityLinks).values([
+        {
+          id: randomUUID(),
+          userId,
+          fromType: 'inbox',
+          fromId: item.id,
+          toType: 'task',
+          toId: task.id,
+          role: 'converted_from',
+          createdAt: now,
+        },
+        {
+          id: randomUUID(),
+          userId,
+          fromType: 'task',
+          fromId: task.id,
+          toType: 'inbox',
+          toId: item.id,
+          role: 'converted_from',
+          createdAt: now,
+        },
+      ]);
+      await tx
+        .update(inboxItems)
+        .set({
+          status: 'converted',
+          convertedTaskId: task.id,
+          updatedAt: now,
+        })
+        .where(eq(inboxItems.id, item.id));
+    });
+  } catch (err) {
+    await deleteTask(userId, task.id);
+    throw err;
+  }
   const updated = await getOwnedInboxOr404(userId, id);
   trackIndexJob(indexInboxItem(updated), 'indexInboxItem');
   return { created: true, result: { inbox: await dtoOf(updated), task } };
