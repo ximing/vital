@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vital 图标系统设计稿</title>
+<style>
+  :root {
+    --ink: #0E1A24;
+    --pulse: #0F8F8A;
+    --pulse-deep: #0B6E6A;
+    --bg: #F3F4F6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 48px 40px 80px;
+  }
+  h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .sub { margin-top: 8px; font-size: 14px; color: #5B6770; }
+  .spec {
+    margin: 24px 0 40px;
+    display: flex; gap: 24px; flex-wrap: wrap;
+    font-size: 12px; color: #5B6770;
+  }
+  .spec div { background: #fff; border: 1px solid #E3E6E9; border-radius: 10px; padding: 10px 14px; }
+
+  .option {
+    background: #fff;
+    border: 1px solid #E3E6E9;
+    border-radius: 20px;
+    padding: 32px;
+    margin-bottom: 40px;
+  }
+  .option-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
+  .option-head h2 { font-size: 20px; font-weight: 700; }
+  .option-head .tag { font-size: 12px; color: #fff; background: var(--pulse); border-radius: 999px; padding: 3px 10px; }
+  .option-head .tag.alt { background: #8A939B; }
+  .option-head .colors { font-size: 12px; color: #5B6770; font-family: ui-monospace, monospace; }
+  .row { display: flex; gap: 40px; align-items: flex-end; flex-wrap: wrap; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .cell .label { font-size: 11px; color: #8A939B; }
+
+  /* iPhone 主屏上下文 */
+  .phone {
+    width: 220px; height: 220px; border-radius: 32px;
+    background: linear-gradient(160deg, #D9E2EC, #AFC3D6);
+    display: grid; place-items: center;
+  }
+  .phone-grid { display: grid; grid-template-columns: repeat(2, 56px); gap: 14px; }
+  .ios-icon { width: 56px; height: 56px; border-radius: 12.5px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .ios-icon.other { background: #fff; display: grid; place-items: center; font-size: 10px; color: #B6BFC7; }
+
+  /* macOS Dock 上下文 */
+  .dock {
+    height: 96px; border-radius: 22px; padding: 0 18px;
+    background: rgba(255,255,255,.55); backdrop-filter: blur(20px);
+    border: 1px solid rgba(0,0,0,.06);
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.10);
+  }
+  .dock-icon { width: 64px; height: 64px; }
+  .dock-icon svg { display: block; }
+  .dock-icon.other { border-radius: 14px; background: linear-gradient(160deg,#fff,#E8ECEF); border: 1px solid rgba(0,0,0,.05); display: grid; place-items: center; font-size: 10px; color: #B6BFC7; }
+
+  /* 浏览器标签页 + 扩展 */
+  .browser { display: flex; flex-direction: column; gap: 10px; }
+  .tab {
+    display: flex; align-items: center; gap: 8px;
+    background: #fff; border: 1px solid #E3E6E9; border-bottom: none;
+    border-radius: 10px 10px 0 0; padding: 8px 14px; width: 200px;
+    font-size: 12px; color: #3A4750;
+  }
+  .tab img, .tab svg { width: 16px; height: 16px; }
+  .toolbar {
+    display: flex; align-items: center; gap: 10px;
+    background: #ECEFF2; border-radius: 10px; padding: 8px 14px; width: 200px;
+  }
+  .toolbar svg { width: 20px; height: 20px; }
+  .toolbar .ext { width: 20px; height: 20px; border-radius: 5px; overflow: hidden; }
+
+  /* 菜单栏 */
+  .menubar {
+    display: flex; align-items: center; justify-content: flex-end; gap: 16px;
+    background: rgba(255,255,255,.7); border-bottom: 1px solid rgba(0,0,0,.08);
+    border-radius: 8px; padding: 5px 14px; width: 200px; height: 26px;
+  }
+  .menubar svg { width: 16px; height: 16px; }
+  .menubar .txt { font-size: 11px; color: #333; }
+
+  /* 大图标陈列 */
+  .showcase { display: flex; gap: 20px; align-items: flex-end; }
+  .showcase .big { width: 128px; height: 128px; }
+  .showcase .mid { width: 64px; height: 64px; }
+  .showcase .sml { width: 32px; height: 32px; }
+  .showcase .tiny { width: 16px; height: 16px; }
+  .checker { background: repeating-conic-gradient(#E9ECEF 0 25%, #fff 0 50%) 0 0/16px 16px; border-radius: 8px; padding: 8px; }
+</style>
+</head>
+<body>
+<h1>Vital 图标系统 · 白底圆角方案</h1>
+<p class="sub">统一各平台为标准圆角白底图标：iOS 由系统裁切圆角（素材满版白底）、macOS Dock / Windows / 扩展 / favicon 烘焙圆角透明底、菜单栏保留模板黑。</p>
+<div class="spec">
+  <div>圆角：连续曲率圆角 ≈ 22.37%（iOS squircle 近似）</div>
+  <div>安全边距：macOS 图标内容 824/1024；其余平台图标留 ~10% 外边距</div>
+  <div>主标占比：白底上约 56–60%（比现在 64% 收敛，更接近主流 app）</div>
+  <div>菜单栏：纯黑模板图标，系统自动适配深浅色</div>
+</div>
+
+<div id="root"></div>
+
+<script id="mark-src" type="text/template">
+  <path d="M21.5 6.48A11 11 0 1 1 6.48 10.5" stroke="__ARC__" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8 16.5L13 22.5L18.5 10.5L21.5 15.5L26 8" stroke="__PULSE__" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+</script>
+
+<script>
+const MARK = document.getElementById('mark-src').textContent;
+
+// squircle 近似路径（连续圆角），viewBox 100
+function squirclePath(size, inset, radiusPct) {
+  const s = size, i = inset, r = (size - inset * 2) * radiusPct;
+  const x0 = i, y0 = i, x1 = s - i, y1 = s - i;
+  return `M ${x0 + r} ${y0} H ${x1 - r} C ${x1 - r * 0.35} ${y0} ${x1} ${y0 + r * 0.35} ${x1} ${y0 + r} V ${y1 - r} C ${x1} ${y1 - r * 0.35} ${x1 - r * 0.35} ${y1} ${x1 - r} ${y1} H ${x0 + r} C ${x0 + r * 0.35} ${y1} ${x0} ${y1 - r * 0.35} ${x0} ${y1 - r} V ${y0 + r} C ${x0} ${y0 + r * 0.35} ${x0 + r * 0.35} ${y0} ${x0 + r} ${y0} Z`;
+}
+
+function markSvg(arc, pulse, extra = '') {
+  return `<svg viewBox="0 0 32 32" fill="none" ${extra}>${MARK.replaceAll('__ARC__', arc).replaceAll('__PULSE__', pulse)}</svg>`;
+}
+
+// 满版白底图标（iOS / PWA maskable：系统负责裁切）
+function fullBleedIcon(opt, size = 100, markRatio = 0.58) {
+  const inner = size * markRatio, off = (size - inner) / 2;
+  return `<svg viewBox="0 0 ${size} ${size}" width="100%" height="100%">
+    <rect width="${size}" height="${size}" fill="#FFFFFF"/>
+    <g fill="none" transform="translate(${off} ${off}) scale(${inner / 32})">${MARK.replaceAll('__ARC__', opt.arc).replaceAll('__PULSE__', opt.pulse)}</g>
+  </svg>`;
+}
+
+// 烘焙圆角透明底图标（macOS / Windows / 扩展 / favicon）
+function roundedIcon(opt, size = 100, insetPct = 0.06, markRatio = 0.56) {
+  const inset = size * insetPct;
+  const inner = size * markRatio, off = (size - inner) / 2;
+  return `<svg viewBox="0 0 ${size} ${size}" width="100%" height="100%">
+    <defs>
+      <linearGradient id="tile-${opt.id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#F6F7F8"/>
+      </linearGradient>
+    </defs>
+    <path d="${squirclePath(size, inset, 0.24)}" fill="url(#tile-${opt.id})" stroke="rgba(14,26,36,0.08)" stroke-width="${size * 0.006}"/>
+    <g fill="none" transform="translate(${off} ${off}) scale(${inner / 32})">${MARK.replaceAll('__ARC__', opt.arc).replaceAll('__PULSE__', opt.pulse)}</g>
+  </svg>`;
+}
+
+// 菜单栏模板黑
+function trayIcon() {
+  return markSvg('#000', '#000', 'width="16" height="16"');
+}
+
+const OPTIONS = [
+  { id: 'a', name: 'A · 品牌青（推荐）', tag: '推荐', arc: '#0F8F8A', pulse: '#0F8F8A', desc: 'arc #0F8F8A · pulse #0F8F8A' },
+  { id: 'b', name: 'B · 双色：墨环 + 青脉搏', tag: '品牌双色', arc: '#0E1A24', pulse: '#0F8F8A', desc: 'arc #0E1A24 · pulse #0F8F8A' },
+  { id: 'c', name: 'C · 深青', tag: '', arc: '#0B6E6A', pulse: '#0B6E6A', desc: 'arc #0B6E6A · pulse #0B6E6A' },
+  { id: 'd', name: 'D · 墨黑单色', tag: '', arc: '#0E1A24', pulse: '#0E1A24', desc: 'arc #0E1A24 · pulse #0E1A24' },
+];
+
+function optionBlock(opt) {
+  return `
+  <section class="option">
+    <div class="option-head">
+      <h2>${opt.name}</h2>
+      ${opt.tag ? `<span class="tag">${opt.tag}</span>` : ''}
+      <span class="colors">${opt.desc} · 白底 #FFFFFF</span>
+    </div>
+    <div class="row">
+      <div class="cell">
+        <div class="phone"><div class="phone-grid">
+          <div class="ios-icon other">App</div>
+          <div class="ios-icon">${fullBleedIcon(opt)}</div>
+          <div class="ios-icon other">App</div>
+          <div class="ios-icon other">App</div>
+        </div></div>
+        <span class="label">iOS 主屏（系统裁切）</span>
+      </div>
+      <div class="cell">
+        <div class="dock">
+          <div class="dock-icon">${roundedIcon(opt, 100, 0.10)}</div>
+          <div class="dock-icon other">App</div>
+          <div class="dock-icon other">App</div>
+        </div>
+        <span class="label">macOS Dock（烘焙圆角）</span>
+      </div>
+      <div class="cell">
+        <div class="browser">
+          <div class="tab">${roundedIcon(opt, 100, 0.06)} Vital</div>
+          <div class="toolbar">
+            <div class="ext">${roundedIcon(opt, 100, 0.06)}</div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9AA4AC" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#9AA4AC" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>
+          </div>
+        </div>
+        <span class="label">浏览器 favicon + 扩展</span>
+      </div>
+      <div class="cell">
+        <div class="menubar">
+          ${trayIcon()}
+          <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2"><path d="M4 12h16M4 6h16M4 18h10"/></svg>
+          <span class="txt">100%</span>
+        </div>
+        <span class="label">macOS 菜单栏（模板黑）</span>
+      </div>
+      <div class="cell">
+        <div class="showcase checker">
+          <span class="big">${roundedIcon(opt)}</span>
+          <span class="mid">${roundedIcon(opt)}</span>
+          <span class="sml">${roundedIcon(opt)}</span>
+          <span class="tiny">${roundedIcon(opt)}</span>
+        </div>
+        <span class="label">128 / 64 / 32 / 16</span>
+      </div>
+    </div>
+  </section>`;
+}
+
+document.getElementById('root').innerHTML = OPTIONS.map(optionBlock).join('');
+</script>
+</body>
+</html>

@@ -4,11 +4,13 @@ import { DEFAULT_NOTIFICATION_PREFS } from '@vital/dto';
 import { t } from '@/copy';
 import { AuthService } from '@/services/auth.service';
 import { appQueryClient } from '@/services/query.service';
+import { appPathFromNotifyUrl } from './app-path';
 import { notifyKey, planDueNow } from './plan';
 
 const SHOWN_KEY = 'vital.browser-notify.shown';
 const SHOWN_CAP = 200;
 const SCAN_MS = 20_000;
+const PERMISSION_PROBE_MS = 400;
 
 export type BrowserNotifyPermission = NotificationPermission | 'unsupported';
 
@@ -22,6 +24,16 @@ type PushPayload = {
 
 function notificationCtor(): typeof Notification | null {
   return typeof Notification === 'undefined' ? null : Notification;
+}
+
+function mapPermission(value: string): Exclude<BrowserNotifyPermission, 'unsupported'> {
+  if (value === 'granted' || value === 'denied') return value;
+  return 'default';
+}
+
+function openNotifyUrl(url: string): void {
+  window.focus();
+  window.location.assign(appPathFromNotifyUrl(url));
 }
 
 function loadShown(): string[] {
@@ -47,10 +59,16 @@ function taskUrl(task: Task): string {
   return `/todos/lists/${task.listId}?task=${task.id}`;
 }
 
+/**
+ * Local OS toasts for the isomorphic web shell.
+ * Browser: `window.Notification`. Tauri: plugin-notification patches that
+ * constructor onto native banners, so this service does not branch.
+ */
 export class BrowserNotifyService extends Service {
   permission: BrowserNotifyPermission = 'unsupported';
   private shown = new Set<string>(loadShown());
   private timer: ReturnType<typeof setInterval> | null = null;
+  private probe: ReturnType<typeof setTimeout> | null = null;
   private started = false;
 
   get auth(): AuthService {
@@ -59,7 +77,7 @@ export class BrowserNotifyService extends Service {
 
   refreshPermission(): void {
     const Ctor = notificationCtor();
-    this.permission = Ctor ? Ctor.permission : 'unsupported';
+    this.permission = Ctor ? mapPermission(Ctor.permission) : 'unsupported';
   }
 
   async requestPermission(): Promise<BrowserNotifyPermission> {
@@ -69,9 +87,9 @@ export class BrowserNotifyService extends Service {
       return this.permission;
     }
     try {
-      this.permission = await Ctor.requestPermission();
+      this.permission = mapPermission(await Ctor.requestPermission());
     } catch {
-      this.permission = Ctor.permission;
+      this.permission = mapPermission(Ctor.permission);
     }
     if (this.permission === 'granted') this.scan();
     return this.permission;
@@ -83,12 +101,21 @@ export class BrowserNotifyService extends Service {
     this.refreshPermission();
     this.scan();
     this.timer = setInterval(() => this.scan(), SCAN_MS);
+    // Tauri's plugin probes OS permission asynchronously after patching Notification.
+    this.probe = setTimeout(() => {
+      this.probe = null;
+      if (!this.started) return;
+      this.refreshPermission();
+      this.scan();
+    }, PERMISSION_PROBE_MS);
   }
 
   stop(): void {
     this.started = false;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.probe) clearTimeout(this.probe);
+    this.probe = null;
   }
 
   showPush(raw: unknown): void {
@@ -141,15 +168,24 @@ export class BrowserNotifyService extends Service {
     saveShown([...this.shown]);
     try {
       const popup = new Ctor(title, { body, tag: key });
-      popup.onclick = () => {
-        window.focus();
-        if (url.startsWith('http')) window.location.assign(url);
-        else window.location.assign(url);
-        popup.close();
-      };
+      // Tauri's patched constructor does not return a Notification instance.
+      if (popup && typeof popup.close === 'function') {
+        popup.onclick = () => {
+          openNotifyUrl(url);
+          popup.close();
+        };
+      }
     } catch {
       this.shown.delete(key);
+      saveShown([...this.shown]);
     }
+  }
+
+  resetForTest(): void {
+    this.stop();
+    this.permission = 'unsupported';
+    this.shown.clear();
+    saveShown([]);
   }
 }
 
@@ -158,5 +194,5 @@ export function browserNotify(): BrowserNotifyService {
 }
 
 export function resetBrowserNotify(): void {
-  browserNotify().stop();
+  browserNotify().resetForTest();
 }

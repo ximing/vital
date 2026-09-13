@@ -55,7 +55,7 @@ const config: ExpoConfig = {
     versionCode,
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#F3F5F2',
+      backgroundColor: '#FFFFFF',
     },
   },
   plugins: [

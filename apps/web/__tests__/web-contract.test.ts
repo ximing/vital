@@ -132,4 +132,13 @@ describe('web shell contract', () => {
     expect(client).toContain('VITE_TAURI_API_URL');
     expect(client).toContain('tauriFetch');
   });
+
+  it('local notify uses window.Notification so the Tauri plugin can patch it', () => {
+    const notify = read('src/features/notify/browser-notify.service.ts');
+    expect(notify).toContain('new Ctor(title');
+    expect(notify).not.toContain('@tauri-apps/plugin-notification');
+    const section = read('src/features/settings/NotificationsSection.tsx');
+    expect(section).toContain('isTauriRuntime');
+    expect(section).toContain('copy.desktop');
+  });
 });

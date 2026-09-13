@@ -3,10 +3,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { client } from '@/api/client';
+import { client, isTauriRuntime } from '@/api/client';
 import { t } from '@/copy';
 import { NotificationsSection } from '../../../src/features/settings/NotificationsSection';
 import { SettingsPage } from '../../../src/pages/settings';
+import { resetBrowserNotify } from '@/features/notify/browser-notify.service';
 import { setAuthForTest } from '@/services/auth.service';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -14,6 +15,7 @@ vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>();
   return {
     ...actual,
+    isTauriRuntime: vi.fn(() => false),
     client: {
       listNotificationChannels: vi.fn(),
       createNotificationChannel: vi.fn(),
@@ -53,6 +55,8 @@ const mockUser: UserProfile = {
 describe('NotificationsSection', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
+    vi.mocked(isTauriRuntime).mockReturnValue(false);
+    resetBrowserNotify();
     vi.mocked(client.listNotificationChannels).mockResolvedValue({ items: [] });
     vi.mocked(client.listApiTokens).mockResolvedValue({ items: [] });
     vi.mocked(client.llmCatalog).mockResolvedValue({
@@ -70,6 +74,40 @@ describe('NotificationsSection', () => {
       createdAt: mockUser.createdAt,
       updatedAt: mockUser.updatedAt,
     });
+  });
+
+  it('asks to enable browser notifications when the API is present', async () => {
+    const Ctor = function FakeNotification() {} as unknown as typeof Notification;
+    Object.defineProperty(Ctor, 'permission', { configurable: true, value: 'default' });
+    Ctor.requestPermission = vi.fn(async () => 'default' as NotificationPermission);
+    vi.stubGlobal('Notification', Ctor);
+    render(
+      <RabRoot>
+        <NotificationsSection />
+      </RabRoot>,
+    );
+    expect(await screen.findByRole('button', { name: t.settings.notify.browserAsk })).toBeInTheDocument();
+    expect(screen.getByText(t.settings.notify.browser)).toBeInTheDocument();
+    await waitFor(() => expect(client.listNotificationChannels).toHaveBeenCalled());
+    vi.unstubAllGlobals();
+  });
+
+  it('labels the local channel as system notifications in Tauri', async () => {
+    vi.mocked(isTauriRuntime).mockReturnValue(true);
+    const Ctor = function FakeNotification() {} as unknown as typeof Notification;
+    Object.defineProperty(Ctor, 'permission', { configurable: true, value: 'default' });
+    Ctor.requestPermission = vi.fn(async () => 'default' as NotificationPermission);
+    vi.stubGlobal('Notification', Ctor);
+    render(
+      <RabRoot>
+        <NotificationsSection />
+      </RabRoot>,
+    );
+    expect(await screen.findByRole('button', { name: t.settings.notify.desktopAsk })).toBeInTheDocument();
+    expect(screen.getByText(t.settings.notify.desktop)).toBeInTheDocument();
+    await waitFor(() => expect(client.listNotificationChannels).toHaveBeenCalled());
+    vi.mocked(isTauriRuntime).mockReturnValue(false);
+    vi.unstubAllGlobals();
   });
 
   it('lets the user opt out of proactive system reminders', async () => {

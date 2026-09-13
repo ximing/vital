@@ -1,5 +1,6 @@
 import { bindServices, useService } from '@rabjs/react';
 import { useEffect, type FC } from 'react';
+import { isTauriRuntime } from '@/api/client';
 import { t } from '@/copy';
 import { BrowserNotifyService } from '@/features/notify/browser-notify.service';
 import { Banner } from '@/ui/banner';
@@ -12,6 +13,12 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
   const page = useService(NotificationsSectionService);
   const browser = useService(BrowserNotifyService);
   const copy = t.settings.notify;
+  const desktop = isTauriRuntime();
+  const localTitle = desktop ? copy.desktop : copy.browser;
+  const localHint = desktop ? copy.desktopHint : copy.browserHint;
+  const localAsk = desktop ? copy.desktopAsk : copy.browserAsk;
+  const localDenied = desktop ? copy.desktopDenied : copy.browserDenied;
+  const localUnsupported = desktop ? copy.desktopUnsupported : copy.browserUnsupported;
   const prefs = page.prefs;
   const meow = page.meow;
   const saving = page.$model.saveChannel.loading;
@@ -37,21 +44,21 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
 
       <div className="mb-6 rounded-xl bg-surface-muted px-4 py-3">
         <p className="text-[length:var(--text-meta)] font-medium leading-[var(--text-meta-lh)] text-fg">
-          {copy.browser}
+          {localTitle}
         </p>
         <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
-          {copy.browserHint}
+          {localHint}
         </p>
         <div className="mt-3">
           {browser.permission === 'unsupported' ? (
-            <p className="text-[length:var(--text-caption)] text-muted">{copy.browserUnsupported}</p>
+            <p className="text-[length:var(--text-caption)] text-muted">{localUnsupported}</p>
           ) : browser.permission === 'granted' ? (
             <p className="text-[length:var(--text-caption)] text-done">{copy.browserOn}</p>
           ) : browser.permission === 'denied' ? (
-            <p className="text-[length:var(--text-caption)] text-danger">{copy.browserDenied}</p>
+            <p className="text-[length:var(--text-caption)] text-danger">{localDenied}</p>
           ) : (
             <Button variant="ghost" onClick={() => void browser.requestPermission()}>
-              {copy.browserAsk}
+              {localAsk}
             </Button>
           )}
         </div>

@@ -31,13 +31,15 @@ describe('Tauri desktop contract', () => {
     assert.equal(win.theme, 'Dark');
   });
 
-  it('registers plugin-http, plugin-store, and window-state', () => {
+  it('registers plugin-http, plugin-store, window-state, and notification', () => {
     assert.match(lib, /tauri_plugin_http::init/);
     assert.match(lib, /tauri_plugin_store::Builder/);
     assert.match(lib, /tauri_plugin_window_state::Builder/);
+    assert.match(lib, /tauri_plugin_notification::init/);
     assert.match(cargo, /tauri-plugin-http/);
     assert.match(cargo, /tauri-plugin-store/);
     assert.match(cargo, /tauri-plugin-window-state/);
+    assert.match(cargo, /tauri-plugin-notification/);
     assert.match(cargo, /unsafe-headers/);
     assert.doesNotMatch(cargo, /features = \[[^\]]*cookies/);
   });
@@ -62,6 +64,7 @@ describe('Tauri desktop contract', () => {
     assert.ok(urls.some((u) => u.startsWith('https://')));
     assert.ok(caps.permissions.includes('store:default'));
     assert.ok(caps.permissions.includes('window-state:default'));
+    assert.ok(caps.permissions.includes('notification:default'));
     assert.ok(caps.remote.urls.includes('http://localhost:5180/*'));
   });
 

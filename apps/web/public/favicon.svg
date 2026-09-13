@@ -1,6 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-  <rect width="32" height="32" fill="#0E1A24"/>
-  <svg x="5.76" y="5.76" width="20.48" height="20.48" viewBox="0 0 32 32" fill="none"><path
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F6F7F8"/>
+    </linearGradient>
+  </defs>
+  <path d="M 8.6784 1.92 H 23.321599999999997 C 27.71456 1.92 30.08 4.2854399999999995 30.08 8.6784 V 23.321599999999997 C 30.08 27.71456 27.71456 30.08 23.321599999999997 30.08 H 8.6784 C 4.2854399999999995 30.08 1.92 27.71456 1.92 23.321599999999997 V 8.6784 C 1.92 4.2854399999999995 4.2854399999999995 1.92 8.6784 1.92 Z" fill="url(#tile)" stroke="rgba(14,26,36,0.08)" stroke-width="0.192"/>
+  <g fill="none" transform="translate(6.720000000000001 6.720000000000001) scale(0.58)"><path
     d="M21.5 6.48A11 11 0 1 1 6.48 10.5"
     stroke="#0F8F8A"
     stroke-width="2.25"
@@ -13,5 +19,5 @@
     stroke-width="2.25"
     stroke-linecap="round"
     stroke-linejoin="round"
-  /></svg>
+  /></g>
 </svg>
