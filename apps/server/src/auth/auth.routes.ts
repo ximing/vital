@@ -36,7 +36,7 @@ import {
   readRefreshCookie,
   setRefreshCookie,
 } from './cookies.js';
-import { rotateRefreshToken, revokeRefreshToken, signAccessToken } from './token.service.js';
+import { redeemRefreshToken, revokeRefreshToken, signAccessToken } from './token.service.js';
 
 function modeOf(req: FastifyRequest): AuthMode {
   return isCookieMode(req) ? 'cookie' : 'bearer';
@@ -75,11 +75,11 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     const resolved = resolveRefreshRaw(req);
     if (!resolved) throw AppError.of(401, 'INVALID_TOKEN');
     try {
-      const rotated = await rotateRefreshToken(resolved.raw, resolved.expectedMode);
-      const user = await getProfile(rotated.userId);
-      const accessToken = signAccessToken(rotated.userId);
+      const redeemed = await redeemRefreshToken(resolved.raw, resolved.expectedMode);
+      const user = await getProfile(redeemed.userId);
+      const accessToken = signAccessToken(redeemed.userId);
       if (resolved.expectedMode === 'cookie') {
-        setRefreshCookie(reply, rotated.refreshToken);
+        setRefreshCookie(reply, redeemed.refreshToken);
         return await reply.send({
           user,
           tokens: { accessToken, expiresIn: config.ACCESS_TOKEN_TTL_SECONDS },
@@ -89,12 +89,14 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         user,
         tokens: {
           accessToken,
-          refreshToken: rotated.refreshToken,
+          refreshToken: redeemed.refreshToken,
           expiresIn: config.ACCESS_TOKEN_TTL_SECONDS,
         },
       });
     } catch (err) {
-      clearRefreshCookie(reply);
+      if (err instanceof AppError && err.code === 'INVALID_TOKEN') {
+        clearRefreshCookie(reply);
+      }
       throw err;
     }
   });

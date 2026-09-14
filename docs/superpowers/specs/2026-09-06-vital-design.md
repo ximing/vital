@@ -490,7 +490,7 @@ No TypeDI. Tests inject `buildFastify({ db, storage })`.
 | Password | argon2id, `memoryCost: 19456`, `timeCost: 2`, `parallelism: 1` |
 | Policy | min 8, max 128; email lowercased max 255 |
 | Access JWT | HS256 `{ sub, type:'access' }`, TTL 900s, `JWT_SECRET` **distinct per env**, min 32 chars |
-| Refresh | 48-byte base64url; store sha256 hex; TTL 30d; rotate; reuse of revoked hash → revoke **all** for user (Moment `TokenService.rotateRefreshToken`) |
+| Refresh | 48-byte base64url; store sha256 hex; TTL 30d sliding on redeem. **Do not rotate** on `/auth/refresh` (tabs/windows/devices share a session and refresh concurrently). Login issues a distinct token per client. Logout revokes only that token. Reuse of a revoked hash is 401 for that token only — never revoke all. `change-password` still `revokeAllForUser`. |
 | `passwordChangedAt` | change-password sets it; `iat * 1000 < passwordChangedAt` dies |
 | `auth_mode` | stored on `refresh_tokens` at **issue** time (`cookie` \| `bearer`) |
 
@@ -510,7 +510,7 @@ sequenceDiagram
   S-->>W: Set-Cookie vital_rt signed HttpOnly SameSite=Lax
   S-->>W: body { user, tokens: { accessToken, expiresIn } }
   W->>S: POST /auth/refresh Cookie vital_rt empty body
-  S-->>W: rotate cookie + new accessToken
+  S-->>W: same cookie (sliding max-age) + new accessToken
   N->>S: POST /auth/login
   Note over S: Origin ≠ WEB_ORIGIN or absent
   S-->>N: no Set-Cookie; { accessToken, refreshToken, expiresIn }
@@ -528,7 +528,7 @@ sequenceDiagram
 
 **Cookie flags:** `HttpOnly; Path=/api/v1/auth; SameSite=Lax; Max-Age=2592000; signed`. **`Secure` iff `COOKIE_SECURE=true`** — that env var is the **only** switch (prod `.env` sets true; do not also key off `NODE_ENV`).
 
-**Clear cookie** (`Set-Cookie vital_rt=; Max-Age=0; Path=/api/v1/auth; SameSite=Lax` + Secure if COOKIE_SECURE) on logout, change-password (all sessions), and refresh-reuse revoke.
+**Clear cookie** (`Set-Cookie vital_rt=; Max-Age=0; Path=/api/v1/auth; SameSite=Lax` + Secure if COOKIE_SECURE) on logout, change-password (all sessions), and a failed refresh of **that** cookie (`INVALID_TOKEN` only — do not clear on 5xx).
 
 **api-client:** `authMode: 'cookie' | 'bearer'` chosen at **runtime**, not a compile flag:
 
@@ -1570,7 +1570,7 @@ Two loggers is worse. **Decision: Fastify `logger: false`, copy `logger.ts`.**
 | Secrets in git | critical | spec has placeholders only; leaked draft v1 values rotated/not reused |
 | Password dump | high | argon2id |
 | Web XSS → refresh | high | httpOnly signed cookie; memory access; CORS allowlist |
-| Refresh reuse | high | hash; rotate; reuse ⇒ revoke all + clear cookie |
+| Refresh reuse | high | hash; no rotate; revoked/expired token 401s that session only |
 | IDOR | high | `user_id = req.user.id`; 404 |
 | SSRF | high | pinned dispatcher, mapped-IPv6, rebinding, hop re-check |
 | SVG XSS | high | MIME whitelist |
@@ -1585,7 +1585,7 @@ Two loggers is worse. **Decision: Fastify `logger: false`, copy `logger.ts`.**
 
 ## Observability
 
-JSON logs (`logger.ts`): `{ time, level, msg, meta }`. Fastify logger off. Auth `auth.login.ok|fail`, `auth.refresh.reuse`. Extract: host + ms, never HTML. S3: id + key.
+JSON logs (`logger.ts`): `{ time, level, msg, meta }`. Fastify logger off. Auth `auth.login.ok|fail`. Extract: host + ms, never HTML. S3: id + key.
 
 Metrics (logs): `http_request`, `auth_fail_total`, `rate_limited_total`, `upload_complete_ms`, `extract_ms`, `rrule_expand_count`.
 
@@ -1621,7 +1621,7 @@ None. Remaining items are decided in Key Decisions (`WEB_ORIGIN` is deploy-time 
 1. **Fastify 5, not Express/TypeDI** — frozen.
 2. **PostgreSQL, not Moment MySQL** — `C.UTF-8`, NOSUPERUSER roles, REVOKE PUBLIC, extensions as superuser, `pg` + `drizzle-orm/node-postgres`, tunnel 15432, assume 5432 until `ss`.
 3. **S3 bucket `vital`, prefix split** — keys only in ignored `.env`; draft v1 leak → rotate PG passwords; S3 shared-with-Moment risk documented, values not reprinted.
-4. **Distinct JWT/COOKIE secrets per env**; access 15m; refresh 30d; reuse revoke + **clear cookie**.
+4. **Distinct JWT/COOKIE secrets per env**; access 15m; refresh 30d sliding, no rotate; each client keeps its own session; change-password revokes all.
 5. **argon2id** OWASP params.
 6. **Cookie only for same-origin web browser.** Bearer for Tauri, extension, mobile. Cookie iff `Origin=WEB_ORIGIN` from a **browser**; Tauri uses `@tauri-apps/plugin-http` (no Origin) + runtime `__TAURI_INTERNALS__` + `@tauri-apps/plugin-store` + **absolute `baseUrl`** (`http://127.0.0.1:3010` dev, `VITE_TAURI_API_URL` prod). Nginx web keeps `baseUrl: ''`. CORS = `WEB_ORIGIN` only. Cookie-mode Http refreshes on 401 with `{}` + credentials; boot tries refresh once.
 7. **Ports 3010 / 5180.**

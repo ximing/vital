@@ -109,7 +109,7 @@ describe('auth flow', () => {
     expect(reuse.json().error.code).toBe('AUTH_CODE_INVALID');
   });
 
-  it('refresh rotates; reuse revokes all and clears cookie', async () => {
+  it('cookie refresh is reusable concurrently and does not rotate', async () => {
     const first = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/auth/register',
@@ -117,72 +117,101 @@ describe('auth flow', () => {
       payload: alice,
     });
     expect(first.statusCode).toBe(201);
-    const oldCookie = requireCookie(first, REFRESH_COOKIE_NAME);
+    const cookie = requireCookie(first, REFRESH_COOKIE_NAME);
 
-    const rotated = await injectJson(app, {
+    const [a, b] = await Promise.all([
+      injectJson(app, {
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        origin: WEB_ORIGIN,
+        cookie,
+        payload: {},
+      }),
+      injectJson(app, {
+        method: 'POST',
+        url: '/api/v1/auth/refresh',
+        origin: WEB_ORIGIN,
+        cookie,
+        payload: {},
+      }),
+    ]);
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+    expect(requireCookie(a, REFRESH_COOKIE_NAME)).toBe(cookie);
+    expect(requireCookie(b, REFRESH_COOKIE_NAME)).toBe(cookie);
+    expect(a.json().tokens.refreshToken).toBeUndefined();
+    expect(a.json().tokens.accessToken).toBeTruthy();
+    expect(b.json().tokens.accessToken).toBeTruthy();
+
+    const again = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/auth/refresh',
       origin: WEB_ORIGIN,
-      cookie: oldCookie,
+      cookie,
       payload: {},
     });
-    expect(rotated.statusCode).toBe(200);
-    const newCookie = requireCookie(rotated, REFRESH_COOKIE_NAME);
-    expect(newCookie).not.toBe(oldCookie);
-    expect(rotated.json().tokens.accessToken).toBeTruthy();
-    expect(rotated.json().tokens.refreshToken).toBeUndefined();
-
-    const reuse = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/auth/refresh',
-      origin: WEB_ORIGIN,
-      cookie: oldCookie,
-      payload: {},
-    });
-    expect(reuse.statusCode).toBe(401);
-    expect(reuse.json().error.code).toBe('INVALID_TOKEN');
-    expect(cookieCleared(reuse, REFRESH_COOKIE_NAME)).toBe(true);
-
-    const afterReuse = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/auth/refresh',
-      origin: WEB_ORIGIN,
-      cookie: newCookie,
-      payload: {},
-    });
-    expect(afterReuse.statusCode).toBe(401);
+    expect(again.statusCode).toBe(200);
   });
 
-  it('bearer refresh rotates and reuse revokes', async () => {
-    const reg = await injectJson(app, {
+  it('bearer refresh is reusable and does not revoke other sessions', async () => {
+    const cookieReg = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/auth/register',
+      origin: WEB_ORIGIN,
       payload: alice,
     });
-    const refreshToken = reg.json().tokens.refreshToken;
+    const cookie = requireCookie(cookieReg, REFRESH_COOKIE_NAME);
 
-    const rotated = await injectJson(app, {
+    const bearerLogin = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: alice.email, password: alice.password },
+    });
+    const refreshToken = bearerLogin.json().tokens.refreshToken as string;
+
+    const [first, second] = await Promise.all([
+      injectJson(app, { method: 'POST', url: '/api/v1/auth/refresh', payload: { refreshToken } }),
+      injectJson(app, { method: 'POST', url: '/api/v1/auth/refresh', payload: { refreshToken } }),
+    ]);
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(first.json().tokens.refreshToken).toBe(refreshToken);
+    expect(second.json().tokens.refreshToken).toBe(refreshToken);
+
+    const cookieRefresh = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      origin: WEB_ORIGIN,
+      cookie,
+      payload: {},
+    });
+    expect(cookieRefresh.statusCode).toBe(200);
+
+    const out = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/logout',
+      origin: WEB_ORIGIN,
+      cookie,
+      payload: {},
+    });
+    expect(out.statusCode).toBe(204);
+
+    const cookieAfterLogout = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      origin: WEB_ORIGIN,
+      cookie,
+      payload: {},
+    });
+    expect(cookieAfterLogout.statusCode).toBe(401);
+    expect(cookieCleared(cookieAfterLogout, REFRESH_COOKIE_NAME)).toBe(true);
+
+    const bearerAfter = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/auth/refresh',
       payload: { refreshToken },
     });
-    expect(rotated.statusCode).toBe(200);
-    const next = rotated.json().tokens.refreshToken;
-    expect(next).not.toBe(refreshToken);
-
-    const reuse = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/auth/refresh',
-      payload: { refreshToken },
-    });
-    expect(reuse.statusCode).toBe(401);
-
-    const after = await injectJson(app, {
-      method: 'POST',
-      url: '/api/v1/auth/refresh',
-      payload: { refreshToken: next },
-    });
-    expect(after.statusCode).toBe(401);
+    expect(bearerAfter.statusCode).toBe(200);
   });
 
   it('change-password: invalid old is 400 not 401; success clears cookie and logs out', async () => {
