@@ -44,6 +44,18 @@ describe('Tauri desktop contract', () => {
     assert.doesNotMatch(cargo, /features = \[[^\]]*cookies/);
   });
 
+  it('registers a native menu with Cmd/Ctrl+R reload and edit shortcuts', () => {
+    assert.match(lib, /\.menu\(build_menu\)/);
+    assert.match(lib, /CmdOrCtrl\+R/);
+    assert.match(lib, /重新加载/);
+    assert.match(lib, /window\.reload\(\)/);
+    assert.match(lib, /PredefinedMenuItem::copy/);
+    assert.match(lib, /PredefinedMenuItem::paste/);
+    assert.match(lib, /PredefinedMenuItem::undo/);
+    assert.match(lib, /PredefinedMenuItem::select_all/);
+    assert.match(lib, /PredefinedMenuItem::quit/);
+  });
+
   it('on macOS, the red close button hides instead of quitting', () => {
     assert.match(lib, /CloseRequested/);
     assert.match(lib, /prevent_close/);
