@@ -461,6 +461,8 @@ export const copy = {
     overdueGroup: '已过期',
     openGroup: '未完成',
     doneGroup: '已完成',
+    listScope: '分类',
+    thisList: '本集合',
     more: '更多',
     showDone: '显示已完成',
     manageLists: '清单管理',

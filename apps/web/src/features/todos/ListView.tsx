@@ -35,21 +35,13 @@ function GroupHeading({
   action?: { label: string; onClick: () => void };
 }) {
   return (
-    <div
-      className={`group/heading flex items-center gap-1 px-2 pb-2 ${
-        first ? 'pt-2' : 'pt-6'
-      }`}
-    >
+    <div className={`group/heading flex items-center gap-1 px-2 pb-2 ${first ? 'pt-2' : 'pt-6'}`}>
       <button
         type="button"
         aria-expanded={!collapsed}
         onClick={onToggle}
         className={`eyebrow eyebrow-rule min-w-0 flex-1 rounded text-left ${
-          tone === 'overdue'
-            ? 'eyebrow-danger'
-            : tone === 'pinned'
-              ? 'eyebrow-accent'
-              : ''
+          tone === 'overdue' ? 'eyebrow-danger' : tone === 'pinned' ? 'eyebrow-accent' : ''
         }`}
       >
         <Icon
@@ -94,6 +86,7 @@ export const ListView: FC<{
   tags: Tag[];
   lists: List[];
   timeZone: string;
+  doneScope?: boolean;
   onComplete: (task: Task) => void;
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
   onPostpone?: (tasks: Task[]) => void;
@@ -104,6 +97,7 @@ export const ListView: FC<{
   tags,
   lists,
   timeZone,
+  doneScope = false,
   onComplete,
   onReorder,
   onPostpone,
@@ -114,6 +108,7 @@ export const ListView: FC<{
   tags: Tag[];
   lists: List[];
   timeZone: string;
+  doneScope?: boolean;
   onComplete: (task: Task) => void;
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
   onPostpone?: (tasks: Task[]) => void;
@@ -186,7 +181,7 @@ export const ListView: FC<{
     ));
   }
 
-  if (tasks.length === 0) return <EmptyTasks listId={listId} kind="list" />;
+  if (tasks.length === 0) return <EmptyTasks listId={listId} kind="list" done={doneScope} />;
 
   const sections = listSections(listId, tasks, timeZone, undefined, lists);
   const boxLabel =

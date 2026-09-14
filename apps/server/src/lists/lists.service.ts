@@ -37,7 +37,11 @@ function sameParent(row: ListRow, parentId: string | null): boolean {
 
 async function iconUrlOf(userId: string, attachmentId: string | null): Promise<string | null> {
   if (attachmentId === null) return null;
-  const [row] = await getDb().select().from(attachments).where(eq(attachments.id, attachmentId)).limit(1);
+  const [row] = await getDb()
+    .select()
+    .from(attachments)
+    .where(eq(attachments.id, attachmentId))
+    .limit(1);
   if (!row || row.userId !== userId || row.status !== 'ready') return null;
   try {
     return await getStorage().generateAccessUrl(row.s3Key, row.storageMeta, 21_600);
@@ -57,6 +61,7 @@ export async function toListDto(row: ListRow): Promise<List> {
     iconUrl: await iconUrlOf(row.userId, row.iconAttachmentId),
     parentId: row.parentId,
     sortOrder: row.sortOrder,
+    pinned: row.pinned,
     isArchived: row.isArchived,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -74,6 +79,7 @@ function smartLists(): List[] {
     iconUrl: null,
     parentId: null,
     sortOrder: i - SMART_LIST_IDS.length,
+    pinned: false,
     isArchived: false,
     createdAt: EPOCH,
     updatedAt: EPOCH,
@@ -91,6 +97,7 @@ export function inboxListValues(userId: string, now = new Date()): ListRow {
     iconAttachmentId: null,
     parentId: null,
     sortOrder: 0,
+    pinned: false,
     isArchived: false,
     createdAt: now,
     updatedAt: now,
@@ -137,7 +144,10 @@ async function nextSiblingSort(userId: string, parentId: string | null): Promise
     parentId === null
       ? and(eq(lists.userId, userId), isNull(lists.parentId))
       : and(eq(lists.userId, userId), eq(lists.parentId, parentId));
-  const [agg] = await getDb().select({ m: max(lists.sortOrder) }).from(lists).where(cond);
+  const [agg] = await getDb()
+    .select({ m: max(lists.sortOrder) })
+    .from(lists)
+    .where(cond);
   return (agg?.m ?? 0) + SORT_GAP;
 }
 
@@ -206,6 +216,7 @@ export async function createList(userId: string, input: CreateListInput): Promis
     iconAttachmentId: input.iconAttachmentId ?? null,
     parentId,
     sortOrder: await nextSiblingSort(userId, parentId),
+    pinned: false,
     isArchived: false,
     createdAt: now,
     updatedAt: now,
@@ -225,6 +236,10 @@ export async function patchList(userId: string, id: string, input: PatchListInpu
       throw AppError.of(400, 'VALIDATION_ERROR');
     }
     patch.isArchived = input.isArchived;
+  }
+  if (input.pinned !== undefined) {
+    if (row.kind !== 'user') throw AppError.of(400, 'VALIDATION_ERROR');
+    patch.pinned = input.pinned;
   }
   if (input.parentId !== undefined) {
     if (row.kind !== 'user') throw AppError.of(400, 'VALIDATION_ERROR');
@@ -258,7 +273,10 @@ export async function deleteList(userId: string, id: string): Promise<void> {
         row.parentId === null
           ? and(eq(lists.userId, userId), isNull(lists.parentId))
           : and(eq(lists.userId, userId), eq(lists.parentId, row.parentId));
-      const [agg] = await tx.select({ m: max(lists.sortOrder) }).from(lists).where(cond);
+      const [agg] = await tx
+        .select({ m: max(lists.sortOrder) })
+        .from(lists)
+        .where(cond);
       let sort = agg?.m ?? 0;
       for (const child of children) {
         sort += SORT_GAP;
@@ -276,7 +294,10 @@ export async function deleteList(userId: string, id: string): Promise<void> {
   });
 }
 
-export async function reorderLists(userId: string, input: ReorderListsInput): Promise<ListCollection> {
+export async function reorderLists(
+  userId: string,
+  input: ReorderListsInput,
+): Promise<ListCollection> {
   const owned = await getDb().select().from(lists).where(eq(lists.userId, userId));
   const byId = new Map(owned.map((r) => [r.id, r]));
   if (input.parentId !== null) {

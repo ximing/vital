@@ -44,11 +44,14 @@ describe('patchListInputSchema', () => {
   it('rejects empty patch; null clears color, icon, parent, and attachment', () => {
     expect(patchListInputSchema.safeParse({}).success).toBe(false);
     expect(patchListInputSchema.parse({ color: null })).toEqual({ color: null });
-    expect(patchListInputSchema.parse({ parentId: null, icon: null, iconAttachmentId: null })).toEqual({
+    expect(
+      patchListInputSchema.parse({ parentId: null, icon: null, iconAttachmentId: null }),
+    ).toEqual({
       parentId: null,
       icon: null,
       iconAttachmentId: null,
     });
+    expect(patchListInputSchema.parse({ pinned: true })).toEqual({ pinned: true });
   });
 });
 
@@ -66,6 +69,8 @@ describe('reorderListsInputSchema', () => {
 
   it('rejects a missing parentId or empty orderedIds', () => {
     expect(reorderListsInputSchema.safeParse({ orderedIds: [UUID] }).success).toBe(false);
-    expect(reorderListsInputSchema.safeParse({ parentId: null, orderedIds: [] }).success).toBe(false);
+    expect(reorderListsInputSchema.safeParse({ parentId: null, orderedIds: [] }).success).toBe(
+      false,
+    );
   });
 });

@@ -1,6 +1,6 @@
 import type { List } from '@vital/dto';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronDown, ChevronRight, Folder, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, Pin, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router';
 import { t } from '@/copy';
@@ -10,7 +10,7 @@ import { pointAnchor, type MenuAnchor } from '@/ui/anchor-menu';
 import { Icon } from '@/ui/icon';
 import { ListContextMenu } from './ListContextMenu';
 import { ListIconPopover } from './ListIconPopover';
-import { countWithDescendants, listChildren, listRoots, userLists } from './model';
+import { countWithDescendants, listChildren, listRoots } from './model';
 import { useCountsQuery, useListsQuery, useTodoActions } from './queries';
 
 const FOLD_KEY = 'vital:list-folded';
@@ -209,6 +209,9 @@ export function UserListsNav({
             className="flex min-w-0 flex-1 items-center self-stretch"
           >
             <span className="min-w-0 flex-1 truncate">{badge.name}</span>
+            {list.pinned ? (
+              <Icon icon={Pin} size={11} className="shrink-0 text-accent" fill="currentColor" />
+            ) : null}
             <CountBadge value={countWithDescendants(counts, lists, list.id)} />
           </NavLink>
         </div>
@@ -280,6 +283,12 @@ export function UserListsNav({
           }}
           onIcon={() => setIconFor({ list: menu.list, anchor: pointAnchor(menu.x, menu.y) })}
           onNewChild={() => startChild(menu.list.id)}
+          onPin={() => {
+            void patchList.mutateAsync({
+              id: menu.list.id,
+              input: { pinned: !menu.list.pinned },
+            });
+          }}
           onMove={(parentId) => {
             void patchList.mutateAsync({ id: menu.list.id, input: { parentId } });
           }}
@@ -310,9 +319,7 @@ export function UserListsNav({
 export function ListShortcuts() {
   const { data } = useListsQuery();
   const location = useLocation();
-  const lists = userLists(data ?? [])
-    .filter((item) => item.parentId === null)
-    .slice(0, 8);
+  const lists = listRoots(data ?? []).slice(0, 8);
   if (lists.length < 2) return null;
   const current = listIdFrom(location.pathname, location.search);
   return (

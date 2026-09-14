@@ -32,6 +32,7 @@ export interface List {
   iconUrl: string | null;
   parentId: string | null;
   sortOrder: number;
+  pinned: boolean;
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -54,6 +55,7 @@ export const patchListInputSchema = z
     iconAttachmentId: uuidSchema.nullable().optional(),
     parentId: uuidSchema.nullable().optional(),
     isArchived: z.boolean().optional(),
+    pinned: z.boolean().optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',

@@ -3,7 +3,17 @@ import { Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { Task } from '@vital/dto';
-import { CalendarDays, CheckSquare, Columns3, Ellipsis, FolderCog, List as ListIcon, Menu, Plus } from 'lucide-react-native';
+import {
+  CalendarDays,
+  CheckSquare,
+  Columns3,
+  Ellipsis,
+  FolderCog,
+  List as ListIcon,
+  Menu,
+  Pin,
+  Plus,
+} from 'lucide-react-native';
 import type { Theme } from '@vital/tokens';
 import { Banner } from '../../components/Banner';
 import { IconButton } from '../../components/IconButton';
@@ -130,6 +140,18 @@ const TodosHomeContent = observer(function TodosHomeContent() {
           label={copy.todos.showDone}
           onPress={() => s.selectList('smart:done')}
         />
+        {s.current?.kind === 'user' ? (
+          <PickerOption
+            icon={Pin}
+            label={s.current.pinned ? copy.todos.unpin : copy.todos.pin}
+            onPress={() => {
+              const list = s.current;
+              if (!list) return;
+              s.closeMore();
+              void s.pinList(list);
+            }}
+          />
+        ) : null}
         {s.overdueCount > 0 ? (
           <PickerOption
             label={copy.today.postponeAll}

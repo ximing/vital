@@ -7,6 +7,8 @@ import {
   FolderPlus,
   ImagePlus,
   Pencil,
+  Pin,
+  PinOff,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -56,6 +58,7 @@ export function ListContextMenu({
   onIcon,
   onNewChild,
   onMove,
+  onPin,
   onArchive,
   onDelete,
 }: {
@@ -68,6 +71,7 @@ export function ListContextMenu({
   onIcon: () => void;
   onNewChild: () => void;
   onMove: (parentId: string | null) => void;
+  onPin: () => void;
   onArchive: () => void;
   onDelete: () => void;
 }) {
@@ -123,6 +127,11 @@ export function ListContextMenu({
       >
         <Item icon={Pencil} label={t.todos.renameList} onSelect={act(onRename)} />
         <Item icon={ImagePlus} label={t.todos.setListIcon} onSelect={act(onIcon)} />
+        <Item
+          icon={list.pinned ? PinOff : Pin}
+          label={list.pinned ? t.todos.unpin : t.todos.pin}
+          onSelect={act(onPin)}
+        />
         {list.parentId === null ? (
           <Item icon={FolderPlus} label={t.todos.newChildList} onSelect={act(onNewChild)} />
         ) : null}
@@ -134,7 +143,11 @@ export function ListContextMenu({
               {t.todos.moveListTo}
             </p>
             {list.parentId !== null ? (
-              <Item icon={Folder} label={t.todos.moveListToRoot} onSelect={act(() => onMove(null))} />
+              <Item
+                icon={Folder}
+                label={t.todos.moveListToRoot}
+                onSelect={act(() => onMove(null))}
+              />
             ) : null}
             {canNestUnder
               ? roots.map((item) => (

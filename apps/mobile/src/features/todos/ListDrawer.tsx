@@ -47,7 +47,14 @@ export const ListDrawer = observer(function ListDrawer() {
   const smartRows = SMART_ORDER.map((id) => lists.find((row) => row.id === id)).filter(
     (row): row is List => row !== undefined,
   );
-  const userLists = lists.filter((row) => row.kind === 'user' && !row.isArchived);
+  const userLists = lists
+    .filter((row) => row.kind === 'user' && !row.isArchived)
+    .sort(
+      (a, b) =>
+        Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+        a.sortOrder - b.sortOrder ||
+        a.id.localeCompare(b.id),
+    );
 
   useEffect(() => {
     if (!s.drawer) return;
@@ -74,9 +81,15 @@ export const ListDrawer = observer(function ListDrawer() {
         onPress={() => s.selectList(list.id)}
         onLongPress={manageable ? () => s.openManage(list) : undefined}
         delayLongPress={320}
-        style={({ pressed }) => [styles.row, active && styles.rowActive, pressed && styles.rowPressed]}
+        style={({ pressed }) => [
+          styles.row,
+          active && styles.rowActive,
+          pressed && styles.rowPressed,
+        ]}
       >
-        {Glyph ? <Icon icon={Glyph} size={20} color={active ? t.accentPrimary : t.fgMuted} /> : (
+        {Glyph ? (
+          <Icon icon={Glyph} size={20} color={active ? t.accentPrimary : t.fgMuted} />
+        ) : (
           <View style={styles.dot} />
         )}
         <Text style={[styles.name, active && styles.nameActive]} numberOfLines={1}>
@@ -92,7 +105,10 @@ export const ListDrawer = observer(function ListDrawer() {
   return (
     <Modal visible transparent animationType="none" onRequestClose={() => s.closeDrawer()}>
       <View style={styles.root}>
-        <Pressable style={[styles.scrim, { backgroundColor: t.scrim }]} onPress={() => s.closeDrawer()} />
+        <Pressable
+          style={[styles.scrim, { backgroundColor: t.scrim }]}
+          onPress={() => s.closeDrawer()}
+        />
         <Animated.View style={[styles.drawer, { width: drawerW, transform: [{ translateX }] }]}>
           <SafeAreaView style={styles.drawerInner} edges={['top', 'left']}>
             <Text style={styles.kicker}>{copy.todos.smartLists}</Text>
@@ -125,6 +141,14 @@ export const ListDrawer = observer(function ListDrawer() {
       >
         {manageTarget ? (
           <View>
+            <PickerOption
+              label={manageTarget.pinned ? copy.todos.unpin : copy.todos.pin}
+              onPress={() => {
+                const target = manageTarget;
+                s.closeManage();
+                void s.pinList(target);
+              }}
+            />
             <PickerOption
               label={copy.todos.renameList}
               onPress={() => s.openListRename(manageTarget)}

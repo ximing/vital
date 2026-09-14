@@ -9,12 +9,15 @@ import { QUICK_ADD_ID, focusById } from './keyboard';
 export const EmptyTasks: FC<{
   listId: string;
   kind: 'list' | 'board' | 'week';
+  done?: boolean;
 }> = observer(function EmptyTasks({
   listId,
   kind,
+  done = false,
 }: {
   listId: string;
   kind: 'list' | 'board' | 'week';
+  done?: boolean;
 }) {
   const todos = useService(TodosUiService);
   const copy =
@@ -22,8 +25,10 @@ export const EmptyTasks: FC<{
       ? t.empty.board
       : kind === 'week'
         ? t.empty.calendar
-        : t.empty[emptyCopyKey(listId)];
-  const showAction = !(kind === 'list' && listId === 'smart:done');
+        : done
+          ? t.empty.done
+          : t.empty[emptyCopyKey(listId)];
+  const showAction = !(kind === 'list' && (listId === 'smart:done' || done));
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center">

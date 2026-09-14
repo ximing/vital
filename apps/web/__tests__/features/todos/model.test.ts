@@ -15,6 +15,8 @@ import {
   listSections,
   listVisibleIds,
   nestTasks,
+  parseListScope,
+  visibleListTasks,
   orderedAfterDrop,
   partitionToday,
   startOfWeekYmd,
@@ -35,6 +37,7 @@ function makeList(over: Partial<List> & Pick<List, 'id' | 'name'>): List {
     iconUrl: null,
     parentId: null,
     sortOrder: 0,
+    pinned: false,
     isArchived: false,
     createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt: '2026-09-01T00:00:00.000Z',
@@ -210,6 +213,12 @@ describe('todo model', () => {
     expect(countWithDescendants({ p: 2, c: 3, o: 1 }, lists, 'p')).toBe(5);
   });
 
+  it('floats pinned lists above siblings', () => {
+    const later = makeList({ id: 'a', name: '后', sortOrder: 1 });
+    const pinned = makeList({ id: 'b', name: '钉', sortOrder: 2, pinned: true });
+    expect(listRoots([later, pinned]).map((item) => item.id)).toEqual(['b', 'a']);
+  });
+
   it('sections a parent list by own tasks then children', () => {
     const parent = makeList({ id: 'p', name: '父' });
     const child = makeList({ id: 'c', name: '子', parentId: 'p' });
@@ -223,7 +232,10 @@ describe('todo model', () => {
       NOW,
       [parent, child],
     );
-    expect(sections.map((section) => section.listName ?? section.heading)).toEqual(['本集合', '子']);
+    expect(sections.map((section) => section.listName ?? section.heading)).toEqual([
+      '本集合',
+      '子',
+    ]);
     expect(sections[0]?.nodes[0]?.task.id).toBe('t1');
     expect(sections[1]?.nodes[0]?.task.id).toBe('t2');
   });
@@ -275,5 +287,55 @@ describe('todo model', () => {
     );
     expect(parentSections[0]?.heading).toBe('pinned');
     expect(parentSections[0]?.nodes[0]?.task.id).toBe('t2');
+  });
+
+  it('parses list scope from the filter query', () => {
+    expect(parseListScope(null)).toBe('open');
+    expect(parseListScope('done')).toBe('done');
+    expect(parseListScope('other')).toBe('open');
+  });
+
+  it('keeps only matching tasks for a user-list scope', () => {
+    const open = makeTask({ id: 'a', title: '未完成', listId: 'wish' });
+    const done = makeTask({ id: 'b', title: '完成了', listId: 'wish', status: 'done' });
+    expect(
+      visibleListTasks([open, done], 'wish', 'list', 'open', true).map((item) => item.id),
+    ).toEqual(['a']);
+    expect(
+      visibleListTasks([open, done], 'wish', 'list', 'done', true).map((item) => item.id),
+    ).toEqual(['b']);
+  });
+
+  it('sections completed tasks in a parent list by child category', () => {
+    const parent = makeList({ id: 'p', name: '心愿清单' });
+    const travel = makeList({ id: 'c', name: '旅行', parentId: 'p' });
+    const sections = listSections(
+      'p',
+      [
+        makeTask({
+          id: 't1',
+          title: '去京都',
+          listId: 'c',
+          status: 'done',
+          completedAt: '2026-09-01T00:00:00.000Z',
+        }),
+        makeTask({
+          id: 't2',
+          title: '买相机',
+          listId: 'p',
+          status: 'done',
+          completedAt: '2026-09-02T00:00:00.000Z',
+        }),
+      ],
+      TZ,
+      NOW,
+      [parent, travel],
+    );
+    expect(sections.map((section) => section.listName ?? section.heading)).toEqual([
+      '本集合',
+      '旅行',
+    ]);
+    expect(sections[0]?.nodes[0]?.task.id).toBe('t2');
+    expect(sections[1]?.nodes[0]?.task.id).toBe('t1');
   });
 });

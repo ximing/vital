@@ -167,6 +167,15 @@ export class TodosService extends Service {
     }
   }
 
+  async pinList(list: List): Promise<void> {
+    try {
+      await client.patchList(list.id, { pinned: !list.pinned });
+      await this.load();
+    } catch (err) {
+      toast(humanError(err));
+    }
+  }
+
   async archiveList(list: List): Promise<void> {
     try {
       await client.patchList(list.id, { isArchived: true });

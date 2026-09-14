@@ -28,6 +28,7 @@ export class TaskListService extends Service {
   instances: CalendarInstance[] = [];
   primed = false;
   doneOpen = false;
+  scope: 'open' | 'done' = 'open';
   contextTask: Task | null = null;
   movingTask: Task | null = null;
 
@@ -50,6 +51,7 @@ export class TaskListService extends Service {
     const listChanged = listId !== this.listId;
     this.listId = listId;
     this.createFromInbox = createFromInbox;
+    if (listChanged) this.scope = 'open';
     if (this.weekAnchor === '') {
       const today = localDateStamp(this.tz);
       this.weekAnchor = today;
@@ -90,7 +92,8 @@ export class TaskListService extends Service {
 
   applyTask(next: Task): void {
     const idx = this.items.findIndex((row) => row.id === next.id);
-    this.items = idx < 0 ? [next, ...this.items] : this.items.map((row, i) => (i === idx ? next : row));
+    this.items =
+      idx < 0 ? [next, ...this.items] : this.items.map((row, i) => (i === idx ? next : row));
   }
 
   async load(refresh: boolean): Promise<void> {
@@ -201,6 +204,10 @@ export class TaskListService extends Service {
 
   toggleDoneOpen(): void {
     this.doneOpen = !this.doneOpen;
+  }
+
+  setScope(scope: 'open' | 'done'): void {
+    this.scope = scope;
   }
 
   openContext(task: Task): void {
