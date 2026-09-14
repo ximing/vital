@@ -44,6 +44,15 @@ describe('Tauri desktop contract', () => {
     assert.doesNotMatch(cargo, /features = \[[^\]]*cookies/);
   });
 
+  it('on macOS, the red close button hides instead of quitting', () => {
+    assert.match(lib, /CloseRequested/);
+    assert.match(lib, /prevent_close/);
+    assert.match(lib, /window\.hide\(\)/);
+    assert.match(lib, /RunEvent::Reopen/);
+    assert.match(lib, /target_os = "macos"/);
+    assert.match(lib, /StateFlags::VISIBLE/);
+  });
+
   it('puts a template tray icon in the macOS menu bar', () => {
     assert.match(lib, /TrayIconBuilder/);
     assert.match(lib, /icon_as_template\(true\)/);
