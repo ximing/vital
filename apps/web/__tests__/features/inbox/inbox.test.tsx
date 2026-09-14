@@ -270,8 +270,10 @@ describe('inbox workspace', () => {
     expect(await screen.findByText('未读文章')).toBeInTheDocument();
     expect(screen.queryByText('归档文章')).not.toBeInTheDocument();
     await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: /归档/ }));
-    expect(await screen.findByText('归档文章')).toBeInTheDocument();
-    expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('归档文章')).toBeInTheDocument();
+      expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
+    });
   });
 
   it('filters favorite saves through the library filter nav', async () => {
@@ -286,8 +288,10 @@ describe('inbox workspace', () => {
     renderAt('/inbox');
     expect(await screen.findByText('未读文章')).toBeInTheDocument();
     await user.click(within(screen.getByRole('navigation')).getByRole('link', { name: /收藏/ }));
-    expect(await screen.findByText('收藏文章')).toBeInTheDocument();
-    expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('收藏文章')).toBeInTheDocument();
+      expect(screen.queryByText('未读文章')).not.toBeInTheDocument();
+    });
   });
 
   it('filters the canvas list by a library tag', async () => {
