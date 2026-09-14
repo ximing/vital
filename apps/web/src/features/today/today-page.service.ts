@@ -64,6 +64,7 @@ export class TodayPageService extends Service {
         ...(extras.priority !== undefined ? { priority: extras.priority } : {}),
       });
       this.query.setQueryData(todoKeys.item(task.id), task);
+      this.todos.noteSimilarOpen(task.similarOpenTasks);
       await markOnboarding({ createdTask: true });
       this.todos.setSelected(task.id);
       this.todos.openDetail(task.id);
@@ -77,6 +78,7 @@ export class TodayPageService extends Service {
     if (extras.status) next.status = extras.status;
     const task = await client.createTask(next);
     this.query.setQueryData(todoKeys.item(task.id), task);
+    this.todos.noteSimilarOpen(task.similarOpenTasks);
     await markOnboarding({ createdTask: true });
     this.todos.setSelected(task.id);
     await this.refresh();

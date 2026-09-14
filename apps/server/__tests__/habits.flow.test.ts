@@ -48,6 +48,16 @@ describe('habits', () => {
       token: alice.token,
     });
     expect(list.json()[0]).toMatchObject({ id: habitId, todayTotal: 1, todayDone: 0 });
+    const today = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/today',
+      token: alice.token,
+    });
+    const habitTasks = (today.json().tasks as { title: string; similarOpenTasks?: unknown }[]).filter(
+      (task) => task.title === '喝水',
+    );
+    expect(habitTasks.length).toBeGreaterThan(0);
+    expect(habitTasks.every((task) => task.similarOpenTasks === undefined)).toBe(true);
   });
 
   it('does not spawn outside the window', async () => {

@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import { limitLlm } from '../plugins/rate-limit.js';
+import { withSimilarOpenTasks } from '../retrieval/duplicates.js';
 import {
   calendar,
   completeTask,
@@ -62,14 +63,14 @@ export function registerTaskRoutes(app: FastifyInstance): void {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const created = await createTaskFromText(user.id, createTaskFromTextInputSchema.parse(req.body));
-    return reply.code(201).send(created);
+    return reply.code(201).send(await withSimilarOpenTasks(user.id, created));
   });
 
   app.post('/api/v1/tasks', { preHandler: [requireAuth] }, async (req, reply) => {
     const user = req.user;
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const created = await createTask(user.id, createTaskInputSchema.parse(req.body));
-    return reply.code(201).send(created);
+    return reply.code(201).send(await withSimilarOpenTasks(user.id, created));
   });
 
   app.get('/api/v1/tasks/:id', { preHandler: [requireAuth] }, async (req) => {

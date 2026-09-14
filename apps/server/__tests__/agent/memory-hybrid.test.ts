@@ -251,6 +251,54 @@ describe('loadAgentMemory hybrid retrieval', () => {
       Array.from({ length: MEMORY_INJECT_LIMIT }, (_, i) => `命中 ${String(i)}`),
     );
   });
+
+  it('updates lastRetrievedAt on hybrid hits and does not re-index', async () => {
+    const alice = await registerUser(app, 'alice');
+    const hitId = await insertMemory(alice.id, '检索命中');
+    const missId = await insertMemory(alice.id, '未被检索');
+    const qdrant = fakeQdrant([scoredPoint(hitId, '检索命中')]);
+    setRetrievalClientsForTest({
+      embedding: fakeEmbedding(),
+      qdrant,
+      meili: fakeMeili(),
+      rerank: identityRerank(),
+    });
+
+    const memory = await loadAgentMemory(alice.id, 'draft', '季度总结');
+    expect(memory.map((row) => row.content)).toEqual(['检索命中']);
+    expect(memory[0]).toEqual({ kind: 'preference', content: '检索命中' });
+
+    const rows = await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id));
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.get(hitId)?.lastRetrievedAt).toBeInstanceOf(Date);
+    expect(byId.get(missId)?.lastRetrievedAt).toBeNull();
+    expect(qdrant.upsertPoints).not.toHaveBeenCalled();
+  });
+
+  it('updates lastRetrievedAt on the PG fallback path when a query was provided', async () => {
+    const alice = await registerUser(app, 'alice');
+    const t0 = Date.now();
+    const older = await insertMemory(alice.id, '较早的记忆', { createdAt: new Date(t0 - 1_000) });
+    const newer = await insertMemory(alice.id, '较新的记忆', { createdAt: new Date(t0) });
+    setRetrievalClientsForTest({ embedding: null, qdrant: null, meili: null, rerank: null });
+
+    const memory = await loadAgentMemory(alice.id, 'draft', '季度总结');
+    expect(memory.map((row) => row.content)).toEqual(['较新的记忆', '较早的记忆']);
+    expect(memory[0]).toEqual({ kind: 'preference', content: '较新的记忆' });
+
+    const rows = await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id));
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.get(older)?.lastRetrievedAt).toBeInstanceOf(Date);
+    expect(byId.get(newer)?.lastRetrievedAt).toBeInstanceOf(Date);
+  });
+
+  it('does not touch lastRetrievedAt on the no-query recency path', async () => {
+    const alice = await registerUser(app, 'alice');
+    const id = await insertMemory(alice.id, '仅按新近注入');
+    await loadAgentMemory(alice.id, 'cluster');
+    const [row] = await getDb().select().from(agentMemory).where(eq(agentMemory.id, id));
+    expect(row?.lastRetrievedAt).toBeNull();
+  });
 });
 
 describe('processors pass a query into memory retrieval', () => {

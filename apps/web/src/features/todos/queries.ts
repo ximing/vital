@@ -140,6 +140,7 @@ export function useTodoActions() {
     mutationFn: (input: CreateTaskInput) => client.createTask(input),
     onSuccess: async (task) => {
       qc.setQueryData(todoKeys.item(task.id), task);
+      todos.noteSimilarOpen(task.similarOpenTasks);
       await invalidate();
       await markOnboarding({ createdTask: true });
       todos.setSelected(task.id);
@@ -150,6 +151,7 @@ export function useTodoActions() {
     mutationFn: (input: CreateTaskFromTextInput) => client.createTaskFromText(input),
     onSuccess: async (task) => {
       qc.setQueryData(todoKeys.item(task.id), task);
+      todos.noteSimilarOpen(task.similarOpenTasks);
       await invalidate();
       await markOnboarding({ createdTask: true });
       todos.setSelected(task.id);

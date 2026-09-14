@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { uuidSchema } from './lists.js';
 import { tagIdsSchema } from './tags.js';
-import type { Task } from './tasks.js';
+import type { SimilarTaskHit, Task } from './tasks.js';
 
 /** Request-thread extract HTML cap (v1). */
 export const MAX_EXTRACT_HTML_BYTES = 2 * 1024 * 1024;
@@ -132,6 +132,8 @@ export type ConvertInboxInput = z.infer<typeof convertInboxInputSchema>;
 export interface ConvertInboxResponse {
   inbox: InboxItem;
   task: Task;
+  /** Same hits as `task.similarOpenTasks` when convert created a new task. */
+  similarOpenTasks?: SimilarTaskHit[];
 }
 
 export const listInboxQuerySchema = z.object({

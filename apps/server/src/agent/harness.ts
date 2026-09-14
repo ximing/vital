@@ -1,7 +1,7 @@
 import { Agent, type AgentTool } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { LlmCapability } from '@vital/dto';
-import { and, arrayContains, desc, eq, or } from 'drizzle-orm';
+import { and, arrayContains, desc, eq, inArray, or } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { agentMemory, type AgentJobRow, type AgentMemoryScope, type User } from '../db/schema.js';
@@ -21,6 +21,23 @@ export const MEMORY_INJECT_LIMIT = 20;
 export interface MemoryItem {
   kind: string;
   content: string;
+}
+
+/**
+ * Touch lastRetrievedAt for injected ids. Write amplification is acceptable at
+ * this scale (tens of rows per inject). lastRetrievedAt is not part of the
+ * Qdrant/Meili payload — do not re-index on touch.
+ */
+async function touchLastRetrievedAt(userId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  try {
+    await getDb()
+      .update(agentMemory)
+      .set({ lastRetrievedAt: new Date() })
+      .where(and(eq(agentMemory.userId, userId), inArray(agentMemory.id, ids)));
+  } catch (error) {
+    console.error('[retrieval] lastRetrievedAt update failed', error);
+  }
 }
 
 /**
@@ -49,6 +66,10 @@ export async function loadAgentMemory(
         limit: MEMORY_INJECT_LIMIT,
       });
       if (hits !== null) {
+        await touchLastRetrievedAt(
+          userId,
+          hits.map((hit) => hit.id),
+        );
         const manualRows = await getDb()
           .select({ id: agentMemory.id, kind: agentMemory.kind, content: agentMemory.content })
           .from(agentMemory)
@@ -77,7 +98,7 @@ export async function loadAgentMemory(
     }
   }
   const rows = await getDb()
-    .select({ kind: agentMemory.kind, content: agentMemory.content })
+    .select({ id: agentMemory.id, kind: agentMemory.kind, content: agentMemory.content })
     .from(agentMemory)
     .where(
       capability === undefined
@@ -92,7 +113,13 @@ export async function loadAgentMemory(
     )
     .orderBy(desc(agentMemory.createdAt))
     .limit(MEMORY_INJECT_LIMIT);
-  return rows;
+  if (query !== undefined && query.trim() !== '') {
+    await touchLastRetrievedAt(
+      userId,
+      rows.map((row) => row.id),
+    );
+  }
+  return rows.map(({ kind, content }) => ({ kind, content }));
 }
 
 export interface ProposalPassResult<T> {

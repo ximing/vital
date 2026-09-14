@@ -232,6 +232,13 @@
       "when": 1789606800015,
       "tag": "0032_flowery_ozymandias",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1789606800016,
+      "tag": "0033_silky_tempest",
+      "breakpoints": true
     }
   ]
 }

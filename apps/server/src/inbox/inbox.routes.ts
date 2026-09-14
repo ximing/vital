@@ -15,6 +15,7 @@ import { extractUrl } from '../extract/extract.js';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import { limitInbox } from '../plugins/rate-limit.js';
+import { withSimilarOpenTasks } from '../retrieval/duplicates.js';
 import {
   convertInbox,
   createInbox,
@@ -105,6 +106,12 @@ export function registerInboxRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = idParams.parse(req.params);
     const converted = await convertInbox(user.id, id, convertInboxInputSchema.parse(req.body ?? {}));
-    return reply.code(converted.created ? 201 : 200).send(converted.result);
+    if (!converted.created) return reply.code(200).send(converted.result);
+    const task = await withSimilarOpenTasks(user.id, converted.result.task);
+    return reply.code(201).send({
+      ...converted.result,
+      task,
+      ...(task.similarOpenTasks ? { similarOpenTasks: task.similarOpenTasks } : {}),
+    });
   });
 }

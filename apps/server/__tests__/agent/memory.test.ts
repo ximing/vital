@@ -19,7 +19,13 @@ import {
 import { buildDistillPrompt } from '../../src/agent/prompts.js';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
-import { agentActions, agentJobs, agentMemory, agentMemoryHistory } from '../../src/db/schema.js';
+import {
+  agentActions,
+  agentExecutions,
+  agentJobs,
+  agentMemory,
+  agentMemoryHistory,
+} from '../../src/db/schema.js';
 import { setPiResolveOverride } from '../../src/llm/pi.js';
 import { resetDb } from '../helpers/db.js';
 import { injectJson } from '../helpers/http.js';
@@ -82,7 +88,14 @@ async function setupFauxUser(name: string): Promise<{ id: string; token: string 
 
 async function insertMemory(
   userId: string,
-  opts: { kind?: string; content: string; manual?: boolean; scope?: string[]; createdAt?: Date },
+  opts: {
+    kind?: string;
+    content: string;
+    manual?: boolean;
+    scope?: string[];
+    createdAt?: Date;
+    lastRetrievedAt?: Date;
+  },
 ): Promise<string> {
   const id = randomUUID();
   const createdAt = opts.createdAt ?? new Date();
@@ -95,6 +108,7 @@ async function insertMemory(
     scope: opts.scope ?? ['all'],
     createdAt,
     updatedAt: createdAt,
+    ...(opts.lastRetrievedAt ? { lastRetrievedAt: opts.lastRetrievedAt } : {}),
   });
   return id;
 }
@@ -203,14 +217,14 @@ describe('memory distill governance', () => {
     expect(bobRows[0]!.id).toBe(bobId);
   });
 
-  it('caps the total at 30 by evicting the oldest non-manual rows', async () => {
+  it('caps the total at 30 by evicting the oldest non-manual rows outside the grace window', async () => {
     const alice = await setupFauxUser('alice');
     const faux = installFaux();
     await seedFeedback(alice.id);
 
-    // Oldest row is manual: it must survive the cap. 29 non-manual rows follow,
-    // each a minute apart, oldest first.
-    const base = Date.now() - 60 * 60_000;
+    // All seeded rows are older than the 7-day grace, so COALESCE(lastRetrievedAt,
+    // createdAt) oldest-first still applies. Oldest row is manual: it must survive.
+    const base = Date.now() - 10 * 24 * 3600 * 1000;
     const manualId = await insertMemory(alice.id, {
       content: '手写最老',
       manual: true,
@@ -240,17 +254,91 @@ describe('memory distill governance', () => {
     const rows = await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id));
     expect(rows).toHaveLength(30);
     const ids = new Set(rows.map((r) => r.id));
-    // Manual oldest survives even though it predates every evicted row.
     expect(ids.has(manualId)).toBe(true);
-    // The two oldest non-manual rows were evicted.
     expect(ids.has(oldestIds[0]!)).toBe(false);
     expect(ids.has(oldestIds[1]!)).toBe(false);
     expect(ids.has(oldestIds[2]!)).toBe(true);
     expect(ids.has(oldestIds[28]!)).toBe(true);
-    // Both new rows landed.
     const contents = rows.map((r) => r.content);
     expect(contents).toContain('新增一');
     expect(contents).toContain('新增二');
+
+    const history = await getDb()
+      .select()
+      .from(agentMemoryHistory)
+      .where(eq(agentMemoryHistory.userId, alice.id));
+    expect(history.filter((row) => row.operation === 'evict')).toHaveLength(2);
+    const executions = await getDb()
+      .select()
+      .from(agentExecutions)
+      .where(eq(agentExecutions.userId, alice.id));
+    const distill = executions.find((row) => row.capability === 'memory.distill');
+    expect(distill?.resultSummary).toContain('按检索价值淘汰 2 条');
+    expect(distill?.resultSummary).toContain(oldestIds[0]!);
+  });
+
+  it('does not evict memories inside the 7-day grace window even when over the cap', async () => {
+    const alice = await setupFauxUser('alice');
+    const faux = installFaux();
+    await seedFeedback(alice.id);
+    const ids: string[] = [];
+    for (let i = 0; i < 30; i++) {
+      ids.push(await insertMemory(alice.id, { content: `新记忆 ${String(i)}` }));
+    }
+    faux.setResponses([
+      fauxAssistantMessage(
+        fauxToolCall('submit_memories', {
+          add: [
+            { kind: 'preference', content: '新增一' },
+            { kind: 'pattern', content: '新增二' },
+          ],
+        }),
+      ),
+    ]);
+    await runDistill(alice.id);
+    const rows = await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id));
+    expect(rows).toHaveLength(32);
+    const remaining = new Set(rows.map((row) => row.id));
+    for (const id of ids) expect(remaining.has(id)).toBe(true);
+  });
+
+  it('evicts never-retrieved old memories before recently retrieved old ones', async () => {
+    const alice = await setupFauxUser('alice');
+    const faux = installFaux();
+    await seedFeedback(alice.id);
+    const old = Date.now() - 20 * 24 * 3600 * 1000;
+    const retrievedId = await insertMemory(alice.id, {
+      content: '很老但刚被召回',
+      createdAt: new Date(old),
+      lastRetrievedAt: new Date(),
+    });
+    const staleIds: string[] = [];
+    for (let i = 0; i < 29; i++) {
+      staleIds.push(
+        await insertMemory(alice.id, {
+          content: `从未召回 ${String(i).padStart(2, '0')}`,
+          createdAt: new Date(old + (i + 1) * 60_000),
+        }),
+      );
+    }
+    faux.setResponses([
+      fauxAssistantMessage(
+        fauxToolCall('submit_memories', {
+          add: [
+            { kind: 'preference', content: '新增一' },
+            { kind: 'pattern', content: '新增二' },
+          ],
+        }),
+      ),
+    ]);
+    await runDistill(alice.id);
+    const rows = await getDb().select().from(agentMemory).where(eq(agentMemory.userId, alice.id));
+    const ids = new Set(rows.map((row) => row.id));
+    expect(rows).toHaveLength(30);
+    expect(ids.has(retrievedId)).toBe(true);
+    expect(ids.has(staleIds[0]!)).toBe(false);
+    expect(ids.has(staleIds[1]!)).toBe(false);
+    expect(ids.has(staleIds[28]!)).toBe(true);
   });
 
   it('returns done without touching memory when the model proposes no operations', async () => {

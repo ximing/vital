@@ -19,6 +19,8 @@ import { setAuthForTest } from '@/services/auth.service';
 import { InboxReader } from '../../../src/features/inbox/InboxReader';
 import { InboxWorkspace } from '../../../src/features/inbox/InboxWorkspace';
 import { resetInboxUi } from '../../../src/features/inbox/inbox-ui.service';
+import { SimilarOpenToast } from '../../../src/features/todos/SimilarOpenToast';
+import { resetTodosUi } from '../../../src/features/todos/todos-ui.service';
 import { CapturePane } from '../../../src/shell/CapturePane';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -176,6 +178,7 @@ function renderAt(path: string) {
               <Route path="/inbox/:id" element={<InboxReader />} />
             </Route>
           </Routes>
+          <SimilarOpenToast />
         </MemoryRouter>
       </QueryClientProvider>
     </RabRoot>,
@@ -203,6 +206,7 @@ describe('inbox workspace', () => {
   afterEach(() => {
     vi.clearAllMocks();
     resetInboxUi();
+    resetTodosUi();
   });
 
   it('marks the selected reader as a constrained reading canvas', async () => {
@@ -439,6 +443,7 @@ describe('inbox reader', () => {
   afterEach(() => {
     vi.clearAllMocks();
     resetInboxUi();
+    resetTodosUi();
   });
 
   it('purifies html, keeps original URL, and converts without dropping it', async () => {
@@ -458,7 +463,9 @@ describe('inbox reader', () => {
           id: 'task-1',
           title: item.title,
           notes: item.originalUrl ?? '',
+          similarOpenTasks: [{ id: 'old-task', title: 'Example Domain' }],
         }),
+        similarOpenTasks: [{ id: 'old-task', title: 'Example Domain' }],
       };
     });
     const user = userEvent.setup();
@@ -477,6 +484,11 @@ describe('inbox reader', () => {
     });
     expect(screen.getByText(t.inbox.convertKeptUrl)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'https://example.com/a' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: t.todos.similarOpenPrefix })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Example Domain' })).toHaveAttribute(
+      'href',
+      '/todos/lists/smart:inbox?task=old-task',
+    );
   });
 
   it('archives, favorites, changes font size, and stubs add-to-report', async () => {

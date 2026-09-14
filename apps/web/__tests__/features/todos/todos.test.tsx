@@ -15,6 +15,7 @@ import { client } from '@/api/client';
 import { t } from '@/copy';
 import { setAuthForTest } from '@/services/auth.service';
 import { TodayWorkspace } from '../../../src/features/today/TodayWorkspace';
+import { SimilarOpenToast } from '../../../src/features/todos/SimilarOpenToast';
 import { TodosWorkspace } from '../../../src/features/todos/TodosWorkspace';
 import { zonedLocalMidnightIso } from '../../../src/features/todos/model';
 import { resetTodosUi } from '../../../src/features/todos/todos-ui.service';
@@ -159,6 +160,7 @@ function renderAt(path: string) {
             <Route path="/todos/board" element={<TodosWorkspace view="board" />} />
             <Route path="/todos/calendar" element={<TodosWorkspace view="week" />} />
           </Routes>
+          <SimilarOpenToast />
         </MemoryRouter>
       </QueryClientProvider>
     </RabRoot>,
@@ -538,6 +540,29 @@ describe('todos workspace', () => {
       }),
     );
     expect(client.createTask).not.toHaveBeenCalled();
+  });
+
+  it('shows a dismissible similar-open hint after creating a task', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    vi.mocked(client.createTask).mockResolvedValue(
+      makeTask({
+        id: 'n1',
+        title: '提交季度报告',
+        similarOpenTasks: [{ id: 'old-1', title: '已有季度报告' }],
+      }),
+    );
+    renderAt('/todos/lists/smart:inbox');
+    const input = await screen.findByLabelText(t.todos.quickAddPlaceholder);
+    await user.type(input, '提交季度报告');
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(client.createTask).toHaveBeenCalled());
+    expect(screen.getByRole('status', { name: t.todos.similarOpenPrefix })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '已有季度报告' })).toHaveAttribute(
+      'href',
+      '/todos/lists/smart:inbox?task=old-1',
+    );
+    await user.click(screen.getByRole('button', { name: t.todos.similarOpenDismiss }));
+    expect(screen.queryByRole('status', { name: t.todos.similarOpenPrefix })).not.toBeInTheDocument();
   });
 
   it('keeps the detail pane open when opening a subtask that is not in the current list', async () => {

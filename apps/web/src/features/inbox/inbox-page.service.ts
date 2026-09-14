@@ -53,6 +53,7 @@ export class InboxPageService extends Service {
   async convertKeepUrl(id: string): Promise<ConvertInboxResponse> {
     this.actionError = null;
     const res = await client.convertInbox(id, {});
+    this.todos.noteSimilarOpen(res.similarOpenTasks ?? res.task.similarOpenTasks);
     await this.refresh();
     await this.query.invalidate(todoKeys.all);
     return res;

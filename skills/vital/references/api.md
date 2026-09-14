@@ -376,6 +376,8 @@ export interface InboxCollection {
 export interface ConvertInboxResponse {
   inbox: InboxItem;
   task: Task;
+  /** Same hits as `task.similarOpenTasks` when convert created a new task. */
+  similarOpenTasks?: SimilarTaskHit[];
 }
 ```
 
@@ -881,6 +883,13 @@ export interface TagCollection {
 ```
 
 ```ts
+export interface SimilarTaskHit {
+  id: string;
+  title: string;
+}
+```
+
+```ts
 export interface Task {
   id: string;
   listId: string;
@@ -918,6 +927,8 @@ export interface Task {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Present on create responses when open-task duplicate detection found hits. */
+  similarOpenTasks?: SimilarTaskHit[];
 }
 ```
 
@@ -1688,6 +1699,7 @@ Convert Inbox
 
 - Auth: Bearer required
 - Client: `convertInbox`
+- Status: 200
 - Response: `ConvertInboxResponse`
 
 Path params:

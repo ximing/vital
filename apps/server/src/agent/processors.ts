@@ -77,8 +77,13 @@ export type AgentJobResult = 'done' | 'skipped:no-llm';
 
 /** Outcomes whose agent fields are older than this get re-run by reflect.daily. */
 const REFRESH_STALE_MS = 24 * 3600 * 1000;
-/** Governance budget: distill evicts oldest non-manual rows beyond this total. */
+/** Governance budget: distill evicts stale non-manual rows beyond this total. */
 const MEMORY_TOTAL_LIMIT = 30;
+/**
+ * New memories are never evicted during this window, even if the total exceeds
+ * the cap — a productive distill may briefly go over 30.
+ */
+const MEMORY_EVICT_GRACE_MS = 7 * 24 * 3600 * 1000;
 
 /** Model-provided scope lists are untrusted: keep known values only. */
 function sanitizeScope(scope: string[] | undefined): AgentMemoryScope[] | null {
@@ -841,6 +846,7 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
   // reindexed fire-and-forget after commit (never inside, never blocking).
   const indexUpserts: AgentMemoryRow[] = [];
   const indexRemovals: string[] = [];
+  const evictedIds: string[] = [];
   const counts = await withAgentJobEffects(job, async tx => {
     // Serialize governance against other runs and user memory edits; abort stale
     // proposals instead of overwriting changes made during model latency.
@@ -884,13 +890,29 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
       const [after] = await tx.insert(agentMemory).values({ id: randomUUID(), userId: user.id, kind: a.kind, content: a.content, sourceCount: sources.length, scope: a.scope ?? ['all'], createdAt: now, updatedAt: now }).returning();
       if (after) { counts.added++; await history('add', null, after); current.push(after); indexUpserts.push(after); }
     }
-    const all = await tx.select().from(agentMemory).where(eq(agentMemory.userId, user.id)).orderBy(asc(agentMemory.createdAt), asc(agentMemory.id));
+    const all = await tx.select().from(agentMemory).where(eq(agentMemory.userId, user.id));
     let over = all.length - MEMORY_TOTAL_LIMIT;
-    for (const before of all) {
-      if (over <= 0) break;
-      if (before.manual) continue;
-      const removed = await tx.delete(agentMemory).where(and(eq(agentMemory.userId, user.id), eq(agentMemory.id, before.id), eq(agentMemory.manual, false))).returning();
-      if (removed.length) { over--; counts.deleted++; await history('evict', before, null); indexRemovals.push(before.id); }
+    if (over > 0) {
+      const graceBefore = new Date(now.getTime() - MEMORY_EVICT_GRACE_MS);
+      const evictable = all
+        .filter((row) => !row.manual && row.createdAt < graceBefore)
+        .sort((a, b) => {
+          const aKey = (a.lastRetrievedAt ?? a.createdAt).getTime();
+          const bKey = (b.lastRetrievedAt ?? b.createdAt).getTime();
+          if (aKey !== bKey) return aKey - bKey;
+          return a.id.localeCompare(b.id);
+        });
+      for (const before of evictable) {
+        if (over <= 0) break;
+        const removed = await tx.delete(agentMemory).where(and(eq(agentMemory.userId, user.id), eq(agentMemory.id, before.id), eq(agentMemory.manual, false))).returning();
+        if (removed.length) {
+          over--;
+          counts.deleted++;
+          evictedIds.push(before.id);
+          await history('evict', before, null);
+          indexRemovals.push(before.id);
+        }
+      }
     }
     const final = await tx.select().from(agentMemory).where(eq(agentMemory.userId, user.id));
     if (maintenance) await tx.insert(agentMemoryMaintenance).values({ userId: user.id, fingerprint: memoryFingerprint(final), updatedAt: now }).onConflictDoUpdate({ target: agentMemoryMaintenance.userId, set: { fingerprint: memoryFingerprint(final), updatedAt: now } });
@@ -917,7 +939,11 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
       'memory.distill reindex',
     );
   }
-  executionResult({ resultSummary: `记忆整理：新增 ${String(counts.added)}，更新 ${String(counts.updated)}，删除 ${String(counts.deleted)}` });
+  const evictionNote =
+    evictedIds.length > 0
+      ? `；按检索价值淘汰 ${String(evictedIds.length)} 条（${evictedIds.join('、')}）`
+      : '';
+  executionResult({ resultSummary: `记忆整理：新增 ${String(counts.added)}，更新 ${String(counts.updated)}，删除 ${String(counts.deleted)}${evictionNote}` });
   if (counts.added + counts.updated + counts.deleted === 0) skipExecution('NO_CHANGES');
   return 'done';
 }
