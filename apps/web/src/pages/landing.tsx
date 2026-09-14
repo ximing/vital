@@ -277,6 +277,14 @@ function LandingContent() {
             <TocLink href="#download">{t.landing.downloads}</TocLink>
           </nav>
           <div className="ml-auto flex items-center gap-1">
+            <a
+              href={GITHUB}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center rounded-md px-3 text-[length:var(--text-meta)] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+            >
+              {t.landing.github}
+            </a>
             <ThemeSwitch variant="rail" />
             {signedIn ? (
               <Link

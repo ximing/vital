@@ -93,6 +93,10 @@ describe('LandingPage', () => {
   it('is readable without login and lists platform downloads', async () => {
     renderLanding();
     expect(screen.getByRole('heading', { name: t.landing.hero })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: t.landing.github })[0]).toHaveAttribute(
+      'href',
+      'https://github.com/ximing/vital',
+    );
     expect(screen.getAllByRole('link', { name: t.nav.login })[0]).toHaveAttribute('href', '/login');
     expect(screen.getAllByRole('link', { name: t.landing.start })[0]).toHaveAttribute('href', '/register');
     await waitFor(() => {
