@@ -6,7 +6,6 @@ import { config } from '../config.js';
 import { getDb, type Database } from '../db/index.js';
 import { refreshTokens } from '../db/schema.js';
 import { AppError } from '../errors.js';
-import { logger } from '../utils/logger.js';
 
 const ACCESS_TYPE = 'access';
 
@@ -14,6 +13,10 @@ type TokenStore = Pick<Database, 'insert' | 'update' | 'select'>;
 
 function sha256(input: string): string {
   return createHash('sha256').update(input).digest('hex');
+}
+
+function refreshExpiryFrom(now: Date): Date {
+  return new Date(now.getTime() + config.REFRESH_TOKEN_TTL_DAYS * 86_400_000);
 }
 
 export function signAccessToken(userId: string): string {
@@ -51,58 +54,33 @@ export async function issueRefreshToken(
     tokenHash: sha256(raw),
     authMode,
     deviceInfo: deviceInfo ?? null,
-    expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL_DAYS * 86_400_000),
+    expiresAt: refreshExpiryFrom(new Date()),
   });
   return raw;
 }
 
-export async function rotateRefreshToken(
+/** Redeem without rotating so concurrent tabs/clients keep the same session. */
+export async function redeemRefreshToken(
   raw: string,
   expectedMode: AuthMode,
 ): Promise<{ userId: string; refreshToken: string }> {
   const hash = sha256(raw);
   const now = new Date();
-  const outcome = await getDb().transaction(async (tx) => {
-    const claimed = await tx
-      .update(refreshTokens)
-      .set({ revokedAt: now })
-      .where(
-        and(
-          eq(refreshTokens.tokenHash, hash),
-          isNull(refreshTokens.revokedAt),
-          gt(refreshTokens.expiresAt, now),
-          eq(refreshTokens.authMode, expectedMode),
-        ),
-      )
-      .returning({
-        userId: refreshTokens.userId,
-        deviceInfo: refreshTokens.deviceInfo,
-      });
-    const claimedRow = claimed[0];
-    if (claimedRow) {
-      const refreshToken = await issueRefreshToken(
-        claimedRow.userId,
-        expectedMode,
-        claimedRow.deviceInfo ?? undefined,
-        tx,
-      );
-      return { ok: true as const, userId: claimedRow.userId, refreshToken };
-    }
-
-    const [row] = await tx
-      .select()
-      .from(refreshTokens)
-      .where(eq(refreshTokens.tokenHash, hash))
-      .limit(1);
-    if (row?.revokedAt) {
-      logger.warn('auth.refresh.reuse', { userId: row.userId });
-      await revokeAllForUser(row.userId, tx);
-    }
-    return { ok: false as const };
-  });
-  // Throw after commit so reuse revoke-all is not rolled back with AppError.
-  if (!outcome.ok) throw AppError.of(401, 'INVALID_TOKEN');
-  return { userId: outcome.userId, refreshToken: outcome.refreshToken };
+  const claimed = await getDb()
+    .update(refreshTokens)
+    .set({ expiresAt: refreshExpiryFrom(now) })
+    .where(
+      and(
+        eq(refreshTokens.tokenHash, hash),
+        isNull(refreshTokens.revokedAt),
+        gt(refreshTokens.expiresAt, now),
+        eq(refreshTokens.authMode, expectedMode),
+      ),
+    )
+    .returning({ userId: refreshTokens.userId });
+  const row = claimed[0];
+  if (!row) throw AppError.of(401, 'INVALID_TOKEN');
+  return { userId: row.userId, refreshToken: raw };
 }
 
 export async function revokeRefreshToken(raw: string): Promise<void> {
