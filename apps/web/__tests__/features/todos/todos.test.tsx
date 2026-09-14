@@ -42,6 +42,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       reorderTasks: vi.fn(),
       getTask: vi.fn(),
       createList: vi.fn(),
+      patchList: vi.fn(),
       createTag: vi.fn(),
       listOutcomes: vi.fn(),
       getToday: vi.fn(),
@@ -84,6 +85,7 @@ const inbox: List = {
   iconUrl: null,
   parentId: null,
   sortOrder: 0,
+  pinned: false,
   isArchived: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -458,8 +460,12 @@ describe('todos workspace', () => {
 
   it('board empty shows column composers instead of a dead empty state', async () => {
     renderAt('/todos/board?list=smart:today');
-    expect(await screen.findByRole('heading', { name: new RegExp(t.todos.status.todo) })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: new RegExp(t.todos.status.doing) })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: new RegExp(t.todos.status.todo) }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: new RegExp(t.todos.status.doing) }),
+    ).toBeInTheDocument();
     expect(screen.getAllByPlaceholderText(t.todos.composeWhat).length).toBeGreaterThan(0);
     expect(screen.queryByText(t.empty.board)).not.toBeInTheDocument();
   });
@@ -479,7 +485,9 @@ describe('todos workspace', () => {
     await user.click(within(menu).getByText(t.todos.pin));
     expect(client.patchTask).toHaveBeenCalledWith('t1', { pinned: true });
     fireEvent.contextMenu(row);
-    await user.click(within(screen.getByRole('menu', { name: '写周报' })).getByText(t.todos.scheduleToday));
+    await user.click(
+      within(screen.getByRole('menu', { name: '写周报' })).getByText(t.todos.scheduleToday),
+    );
     expect(client.patchTask).toHaveBeenCalledWith(
       't1',
       expect.objectContaining({ startAt: null, isAllDay: true, dueAt: expect.any(String) }),
@@ -523,7 +531,12 @@ describe('todos workspace', () => {
       },
     });
     vi.mocked(client.createTaskFromText).mockResolvedValue(
-      makeTask({ id: 'n1', title: '和设计组开会', dueAt: '2026-09-09T07:00:00.000Z', isAllDay: false }),
+      makeTask({
+        id: 'n1',
+        title: '和设计组开会',
+        dueAt: '2026-09-09T07:00:00.000Z',
+        isAllDay: false,
+      }),
     );
     renderAt('/todos/lists/smart:today');
     expect(await screen.findByPlaceholderText(t.todos.composeIntent)).toBeInTheDocument();
@@ -562,7 +575,9 @@ describe('todos workspace', () => {
       '/todos/lists/smart:inbox?task=old-1',
     );
     await user.click(screen.getByRole('button', { name: t.todos.similarOpenDismiss }));
-    expect(screen.queryByRole('status', { name: t.todos.similarOpenPrefix })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('status', { name: t.todos.similarOpenPrefix }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps the detail pane open when opening a subtask that is not in the current list', async () => {
@@ -580,8 +595,7 @@ describe('todos workspace', () => {
       dueAt: null,
     });
     vi.mocked(client.listTasks).mockImplementation(async ({ listId }) => ({
-      items:
-        listId === 'smart:today' ? [parent] : listId === inbox.id ? [parent, child] : [],
+      items: listId === 'smart:today' ? [parent] : listId === inbox.id ? [parent, child] : [],
       nextCursor: null,
     }));
     vi.mocked(client.getTask).mockImplementation(async (id) => {
@@ -598,5 +612,62 @@ describe('todos workspace', () => {
     expect(await screen.findByRole('complementary', { name: child.title })).toBeInTheDocument();
     expect(screen.getByLabelText(t.todos.title)).toHaveValue(child.title);
     expect(screen.getByLabelText(t.todos.closeDetail)).toBeInTheDocument();
+  });
+
+  it('does not show open/done tabs on smart lists', async () => {
+    renderAt('/todos/lists/smart:today');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: t.lists.today }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: t.todos.listScope })).not.toBeInTheDocument();
+  });
+
+  it('lets a user list switch to completed tasks grouped by child list', async () => {
+    const wish = { ...project, id: 'wish-1', name: '心愿清单' };
+    const travel = {
+      ...project,
+      id: 'wish-travel',
+      name: '旅行',
+      parentId: 'wish-1',
+      sortOrder: 1,
+    };
+    vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox, wish, travel] });
+    vi.mocked(client.listTasks).mockResolvedValue({
+      items: [
+        makeTask({ id: 'open-1', title: '去冰岛', listId: 'wish-travel' }),
+        makeTask({
+          id: 'done-1',
+          title: '去京都',
+          listId: 'wish-travel',
+          status: 'done',
+          completedAt: '2026-09-01T00:00:00.000Z',
+        }),
+      ],
+      nextCursor: null,
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/todos/lists/wish-1');
+    expect(await screen.findByText('去冰岛')).toBeInTheDocument();
+    expect(screen.queryByText('去京都')).not.toBeInTheDocument();
+    const tabs = screen.getByRole('tablist', { name: t.todos.listScope });
+    expect(within(tabs).getByRole('tab', { name: t.todos.openGroup })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await user.click(within(tabs).getByRole('tab', { name: t.lists.done }));
+    expect(await screen.findByText('去京都')).toBeInTheDocument();
+    expect(screen.queryByText('去冰岛')).not.toBeInTheDocument();
+    expect(screen.getByText('旅行')).toBeInTheDocument();
+  });
+
+  it('pins the current user list from the more menu', async () => {
+    vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox, project] });
+    vi.mocked(client.patchList).mockResolvedValue({ ...project, pinned: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/todos/lists/project-1');
+    expect(await screen.findByRole('heading', { level: 1, name: '产品重构' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: t.todos.viewMenu }));
+    await user.click(screen.getByRole('menuitem', { name: t.todos.pin }));
+    expect(client.patchList).toHaveBeenCalledWith('project-1', { pinned: true });
   });
 });

@@ -28,6 +28,28 @@ export function isSmartListId(id: string): boolean {
   return (SMART_LIST_IDS as readonly string[]).includes(id);
 }
 
+export type ListScope = 'open' | 'done';
+
+export function parseListScope(raw: string | null | undefined): ListScope {
+  return raw === 'done' ? 'done' : 'open';
+}
+
+export function visibleListTasks(
+  tasks: Task[],
+  listId: string,
+  view: TodoView,
+  listScope: ListScope,
+  hideCompleted: boolean,
+): Task[] {
+  if (listId === 'smart:done') return tasks;
+  if (view === 'list' && !isSmartListId(listId)) {
+    return listScope === 'done'
+      ? tasks.filter((task) => task.status === 'done')
+      : tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled');
+  }
+  return hideCompleted ? tasks.filter((task) => task.status !== 'done') : tasks;
+}
+
 export function inboxList(lists: List[]): List | undefined {
   return lists.find((item) => item.kind === 'inbox');
 }
@@ -37,7 +59,11 @@ export function userLists(lists: List[]): List[] {
 }
 
 function bySort(a: List, b: List): number {
-  return a.sortOrder - b.sortOrder || a.id.localeCompare(b.id);
+  return (
+    Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
+    a.sortOrder - b.sortOrder ||
+    a.id.localeCompare(b.id)
+  );
 }
 
 export function listRoots(lists: List[]): List[] {
@@ -192,7 +218,9 @@ function reminderFireAt(task: Task): string | null {
   }
   if (mode === 'due') return task.dueAt;
   if (mode === 'offset' && task.reminderOffsetMinutes) {
-    return new Date(new Date(task.dueAt).getTime() - task.reminderOffsetMinutes * 60_000).toISOString();
+    return new Date(
+      new Date(task.dueAt).getTime() - task.reminderOffsetMinutes * 60_000,
+    ).toISOString();
   }
   if (mode === 'custom') return task.reminderAt;
   return null;
@@ -361,6 +389,33 @@ function nestPinnedFirst(tasks: Task[]): TaskNode[] {
   return [...nestTasks(pinned), ...nestTasks(rest)];
 }
 
+function categorySections(
+  listId: string,
+  rest: Task[],
+  lists: List[],
+  keyPrefix: string,
+): ListSection[] {
+  const children = listChildren(lists, listId);
+  const of = (id: string) => nestTasks(rest.filter((task) => task.listId === id));
+  if (children.length === 0) {
+    return [{ key: `${keyPrefix}items`, heading: null, nodes: nestTasks(rest) }];
+  }
+  return [
+    {
+      key: `${keyPrefix}own`,
+      heading: 'list',
+      listName: t.todos.thisList,
+      nodes: of(listId),
+    },
+    ...children.map((child) => ({
+      key: `${keyPrefix}${child.id}`,
+      heading: 'list' as const,
+      listName: child.name,
+      nodes: of(child.id),
+    })),
+  ];
+}
+
 export function listSections(
   listId: string,
   tasks: Task[],
@@ -407,26 +462,14 @@ export function listSections(
   if (listId.startsWith('smart:')) {
     return nonempty([pinnedSection, { key: 'open', heading: null, nodes: openNodes }]);
   }
-  const children = listChildren(lists, listId);
-  if (children.length > 0) {
-    const openOf = (id: string) =>
-      nestTasks(restOpen.filter((task) => task.listId === id));
-    return nonempty([
-      pinnedSection,
-      { key: 'own', heading: 'list', listName: t.todos.thisList, nodes: openOf(listId) },
-      ...children.map((child) => ({
-        key: child.id,
-        heading: 'list' as const,
-        listName: child.name,
-        nodes: openOf(child.id),
-      })),
-      { key: 'done', heading: 'done', nodes: doneNodes },
-    ]);
-  }
+  const doneOnly = open.length === 0 && done.length > 0;
+  const { pinned: sourcePinned, rest: sourceRest } = doneOnly
+    ? splitPinned(done)
+    : { pinned: pinnedOpen, rest: restOpen };
   return nonempty([
-    pinnedSection,
-    { key: 'open', heading: null, nodes: nestTasks(restOpen) },
-    { key: 'done', heading: 'done', nodes: doneNodes },
+    { key: 'pinned', heading: 'pinned', nodes: nestTasks(sourcePinned) },
+    ...categorySections(listId, sourceRest, lists, doneOnly ? 'done-' : ''),
+    ...(doneOnly ? [] : [{ key: 'done', heading: 'done' as const, nodes: doneNodes }]),
   ]);
 }
 
@@ -590,7 +633,8 @@ export function dueMeta(task: Task, timeZone: string, now = new Date()): string 
 }
 
 export function recurrenceMeta(task: Task): string | null {
-  const kind: RecurrenceKind | 'none' | 'custom' = task.recurrenceKind ?? recurrenceKind(task.recurrence);
+  const kind: RecurrenceKind | 'none' | 'custom' =
+    task.recurrenceKind ?? recurrenceKind(task.recurrence);
   if (kind === 'none') return null;
   if (kind === 'daily') return t.todos.recurrenceDaily;
   if (kind === 'weekly') return t.todos.recurrenceWeekly;

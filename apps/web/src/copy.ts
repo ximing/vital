@@ -357,6 +357,8 @@ export const t = {
     clearSchedule: '清除',
     hideCompleted: '隐藏已完成',
     showCompleted: '显示已完成',
+    listScope: '分类',
+    openGroup: '未完成',
     hideDetail: '隐藏详情',
     viewMenu: '视图',
     composeTo: '添加任务至',
@@ -1003,7 +1005,10 @@ export const t = {
       reports: { title: '复盘', body: '日周月年同一本编辑器。做完的事会自己进来。' },
     },
     agentIn: { title: '对内 Agent', body: '调度落在数据库里。提议要你点头才改数据。' },
-    agentOut: { title: '对外 skill', body: '签发令牌，Claude 或 Codex 就能建任务、抓稍后读、写日报。' },
+    agentOut: {
+      title: '对外 skill',
+      body: '签发令牌，Claude 或 Codex 就能建任务、抓稍后读、写日报。',
+    },
     footer: '单用户，自托管。数据在你自己的 Postgres 里。',
   },
 } as const;

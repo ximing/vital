@@ -393,6 +393,7 @@ export interface List {
   iconUrl: string | null;
   parentId: string | null;
   sortOrder: number;
+  pinned: boolean;
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -1297,6 +1298,7 @@ Request body (`patchListInputSchema`):
 - `iconAttachmentId`: uuid (optional, nullable)
 - `parentId`: uuid (optional, nullable)
 - `isArchived`: boolean (optional)
+- `pinned`: boolean (optional)
 
 #### `PUT /api/v1/lists/reorder`
 

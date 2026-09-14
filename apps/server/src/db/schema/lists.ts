@@ -23,6 +23,7 @@ export const lists = pgTable(
     iconAttachmentId: char('icon_attachment_id', { length: 36 }),
     parentId: char('parent_id', { length: 36 }),
     sortOrder: integer('sort_order').notNull().default(0),
+    pinned: boolean('pinned').notNull().default(false),
     isArchived: boolean('is_archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),

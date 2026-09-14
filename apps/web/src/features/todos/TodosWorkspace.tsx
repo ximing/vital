@@ -1,6 +1,15 @@
 import { llmReady, type Task, type TaskPriority } from '@vital/dto';
 import { bindServices, useService } from '@rabjs/react';
-import { CalendarDays, Columns3, Ellipsis, EyeOff, List, PanelRightClose } from 'lucide-react';
+import {
+  CalendarDays,
+  Columns3,
+  Ellipsis,
+  EyeOff,
+  List,
+  PanelRightClose,
+  Pin,
+  PinOff,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import { NavLink, useParams, useSearchParams } from 'react-router';
 import { t } from '@/copy';
@@ -20,10 +29,14 @@ import {
   filterTasks,
   formatHumanDay,
   inboxList,
+  isSmartListId,
   listTitle,
   listVisibleIds,
+  parseListScope,
   todayYmd,
+  visibleListTasks,
   weekRangeIso,
+  type ListScope,
   type TodoView,
 } from './model';
 import { QuickAdd } from './QuickAdd';
@@ -68,6 +81,17 @@ function viewHref(view: TodoView, listId: string): string {
   return `/todos/calendar?list=${encodeURIComponent(listId)}`;
 }
 
+function setListScope(
+  setSearch: (next: URLSearchParams, opts?: { replace?: boolean }) => void,
+  search: URLSearchParams,
+  scope: ListScope,
+): void {
+  const next = new URLSearchParams(search);
+  if (scope === 'done') next.set('filter', 'done');
+  else next.delete('filter');
+  setSearch(next, { replace: true });
+}
+
 const DETAIL_COL =
   'flex h-full min-h-0 w-[clamp(24rem,40%,40rem)] shrink-0 border-l border-border/60';
 
@@ -76,8 +100,10 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
   const todos = useService(TodosUiService);
   const auth = useService(AuthService);
   const params = useParams();
-  const [search] = useSearchParams();
+  const [search, setSearch] = useSearchParams();
   const listId = params.listId ?? search.get('list') ?? 'smart:today';
+  const listScope = parseListScope(search.get('filter'));
+  const showScopeTabs = view === 'list' && !isSmartListId(listId);
   const user = auth.user;
   const timeZone = page.timeZone;
   const weekStartsOn = page.weekStartsOn;
@@ -120,16 +146,17 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
 
   const lists = listsQuery.data ?? [];
   const tags = tagsQuery.data ?? [];
+  const currentList = lists.find((item) => item.id === listId);
+  const canPinList = currentList?.kind === 'user';
   const inbox = inboxList(lists);
   const showId = completeUndo?.wantUndo ? completeUndo.taskId : null;
   const rawTasks = applyOptimisticComplete(tasksQuery.data ?? [], new Set(completingIds), showId);
   const filtered = filterTasks(rawTasks, listFilter);
-  const tasks =
-    hideCompleted && listId !== 'smart:done'
-      ? filtered.filter((task) => task.status !== 'done')
-      : filtered;
+  const tasks = visibleListTasks(filtered, listId, view, listScope, hideCompleted);
   const visibleIds =
-    view === 'board' ? boardVisibleIds(tasks, boardMode) : listVisibleIds(listId, tasks, timeZone);
+    view === 'board'
+      ? boardVisibleIds(tasks, boardMode)
+      : listVisibleIds(listId, tasks, timeZone, undefined, lists);
   const selected =
     tasks.find((task) => task.id === selectedId) ??
     (tasksQuery.data ?? []).find((task) => task.id === selectedId);
@@ -222,16 +249,49 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
 
   return (
     <div className="flex h-full min-h-0 bg-canvas">
-      <main id="main" data-region="focus-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col px-6 md:px-8">
-          <header className="flex items-baseline justify-between gap-3 px-2 pb-4 pt-5">
-            <div className="flex min-w-0 items-baseline gap-3">
-              <h1 className="font-display truncate text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
-                {title}
-              </h1>
-              <span className="shrink-0 font-mono text-[length:var(--text-caption)] uppercase tracking-wide text-tertiary">
-                {todayYmd(timeZone)} · {new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone }).format(new Date())}
-              </span>
-            </div>
+      <main
+        id="main"
+        data-region="focus-canvas"
+        className="flex h-full min-h-0 min-w-0 flex-1 flex-col px-6 md:px-8"
+      >
+        <header className="flex items-center justify-between gap-3 px-2 pb-4 pt-5">
+          <div className="flex min-w-0 items-baseline gap-3">
+            <h1 className="font-display truncate text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
+              {title}
+            </h1>
+            <span className="shrink-0 font-mono text-[length:var(--text-caption)] uppercase tracking-wide text-tertiary">
+              {todayYmd(timeZone)} ·{' '}
+              {new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone }).format(new Date())}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {showScopeTabs ? (
+              <div
+                className="inline-flex shrink-0 gap-1 rounded-full bg-surface-muted p-1"
+                role="tablist"
+                aria-label={t.todos.listScope}
+              >
+                {(['open', 'done'] as const).map((scope) => {
+                  const active = listScope === scope;
+                  return (
+                    <button
+                      key={scope}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setListScope(setSearch, search, scope)}
+                      className={`inline-flex h-7 items-center rounded-full px-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] transition-[color,background-color,box-shadow] duration-[var(--ease-out)] ${
+                        active
+                          ? 'bg-elevated font-medium text-fg shadow-[var(--shadow-xs)]'
+                          : 'text-muted hover:text-fg'
+                      }`}
+                    >
+                      {scope === 'open' ? t.todos.openGroup : t.lists.done}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             <div ref={viewMenuRef} className="relative">
               <button
                 type="button"
@@ -283,18 +343,41 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
                       ))}
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
-                    onClick={() => {
-                      todos.setHideCompleted(!hideCompleted);
-                      viewMenu.close();
-                    }}
-                  >
-                    <Icon icon={EyeOff} size={14} className="text-muted" />
-                    {hideCompleted ? t.todos.showCompleted : t.todos.hideCompleted}
-                  </button>
+                  {view === 'board' ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                      onClick={() => {
+                        todos.setHideCompleted(!hideCompleted);
+                        viewMenu.close();
+                      }}
+                    >
+                      <Icon icon={EyeOff} size={14} className="text-muted" />
+                      {hideCompleted ? t.todos.showCompleted : t.todos.hideCompleted}
+                    </button>
+                  ) : null}
+                  {canPinList && currentList ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                      onClick={() => {
+                        void actions.patchList.mutateAsync({
+                          id: currentList.id,
+                          input: { pinned: !currentList.pinned },
+                        });
+                        viewMenu.close();
+                      }}
+                    >
+                      <Icon
+                        icon={currentList.pinned ? PinOff : Pin}
+                        size={14}
+                        className="text-muted"
+                      />
+                      {currentList.pinned ? t.todos.unpin : t.todos.pin}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     role="menuitem"
@@ -310,115 +393,115 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
                 </div>
               ) : null}
             </div>
-            <input
-              id={LIST_FILTER_ID}
-              type="search"
-              value={listFilter}
-              onChange={(e) => todos.setListFilter(e.target.value)}
-              className="sr-only"
-              aria-label={t.todos.filterPlaceholder}
-            />
-          </header>
-
-          {!online ? (
-            <div className="pt-2">
-              <Banner>{t.todos.offline}</Banner>
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="flex items-center gap-3 py-2">
-              <Banner>{humanError(error)}</Banner>
-              <Button variant="ghost" onClick={() => void tasksQuery.refetch()}>
-                {t.todos.retry}
-              </Button>
-            </div>
-          ) : null}
-
-          {view !== 'board' ? (
-            <QuickAdd
-              variant="bar"
-              onSubmit={(name, draft, extras) =>
-                inboxId ? page.create(name, draft, extras, listId, inboxId) : undefined
-              }
-              disabled={!online || !inboxId || defaultListId === ''}
-              listName={title}
-              lists={lists}
-              defaultListId={defaultListId}
-              zone={timeZone}
-              weekStartsOn={weekStartsOn}
-              intent={intent}
-              hint={
-                composeDay
-                  ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}`
-                  : undefined
-              }
-            />
-          ) : null}
-
-          <div
-            className={`flex min-h-0 flex-1 flex-col ${
-              view === 'list' ? 'overflow-y-auto pb-16' : 'pb-6'
-            }`}
-          >
-            {loading ? (
-              <TaskSkeleton />
-            ) : view === 'list' ? (
-              <ListView
-                listId={listId}
-                tasks={tasks}
-                tags={tags}
-                lists={lists}
-                timeZone={timeZone}
-                onComplete={(task) => void actions.complete(task)}
-                onReorder={(input) => actions.reorder.mutate(input)}
-                onPostpone={(overdue) => page.postponeOverdue(overdue)}
-                onTaskMenu={(task, x, y) => page.openTaskMenu(task, x, y)}
-              />
-            ) : view === 'board' ? (
-              <BoardView
-                listId={listId}
-                tasks={tasks}
-                tags={tags}
-                lists={lists}
-                timeZone={timeZone}
-                weekStartsOn={weekStartsOn}
-                defaultListId={defaultListId}
-                listName={title}
-                disabled={!online || defaultListId === ''}
-                onComplete={(task) => void actions.complete(task)}
-                onStatus={(task, status) => void actions.setStatus(task, status)}
-                onPriority={(task, priority: TaskPriority) =>
-                  void actions.setPriority(task, priority)
-                }
-                onCreate={(name, draft, extras) => {
-                  if (inboxId) void page.create(name, draft, extras, listId, inboxId);
-                }}
-                intent={intent}
-                onTaskMenu={(task, x, y) => page.openTaskMenu(task, x, y)}
-              />
-            ) : calendarQuery.isLoading ? (
-              <TaskSkeleton />
-            ) : calendarQuery.error ? (
-              <div className="px-4">
-                <Banner>{humanError(calendarQuery.error)}</Banner>
-              </div>
-            ) : (
-              <WeekView
-                listId={listId}
-                days={range.days}
-                instances={instances}
-                timeZone={timeZone}
-                composeDay={composeDay}
-                onSelectDay={(ymd) => page.setWeekAnchor(ymd)}
-                onAddDay={(ymd) => {
-                  page.setComposeDay(ymd);
-                  todos.requestQuickAdd();
-                }}
-                onOpen={(taskId) => todos.openDetail(taskId)}
-              />
-            )}
           </div>
+          <input
+            id={LIST_FILTER_ID}
+            type="search"
+            value={listFilter}
+            onChange={(e) => todos.setListFilter(e.target.value)}
+            className="sr-only"
+            aria-label={t.todos.filterPlaceholder}
+          />
+        </header>
+
+        {!online ? (
+          <div className="pt-2">
+            <Banner>{t.todos.offline}</Banner>
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="flex items-center gap-3 py-2">
+            <Banner>{humanError(error)}</Banner>
+            <Button variant="ghost" onClick={() => void tasksQuery.refetch()}>
+              {t.todos.retry}
+            </Button>
+          </div>
+        ) : null}
+
+        {view !== 'board' ? (
+          <QuickAdd
+            variant="bar"
+            onSubmit={(name, draft, extras) =>
+              inboxId ? page.create(name, draft, extras, listId, inboxId) : undefined
+            }
+            disabled={!online || !inboxId || defaultListId === ''}
+            listName={title}
+            lists={lists}
+            defaultListId={defaultListId}
+            zone={timeZone}
+            weekStartsOn={weekStartsOn}
+            intent={intent}
+            hint={
+              composeDay ? `${t.todos.addOnDay} ${formatHumanDay(composeDay, timeZone)}` : undefined
+            }
+          />
+        ) : null}
+
+        <div
+          className={`flex min-h-0 flex-1 flex-col ${
+            view === 'list' ? 'overflow-y-auto pb-16' : 'pb-6'
+          }`}
+        >
+          {loading ? (
+            <TaskSkeleton />
+          ) : view === 'list' ? (
+            <ListView
+              listId={listId}
+              tasks={tasks}
+              tags={tags}
+              lists={lists}
+              timeZone={timeZone}
+              doneScope={showScopeTabs && listScope === 'done'}
+              onComplete={(task) => void actions.complete(task)}
+              onReorder={(input) => actions.reorder.mutate(input)}
+              onPostpone={(overdue) => page.postponeOverdue(overdue)}
+              onTaskMenu={(task, x, y) => page.openTaskMenu(task, x, y)}
+            />
+          ) : view === 'board' ? (
+            <BoardView
+              listId={listId}
+              tasks={tasks}
+              tags={tags}
+              lists={lists}
+              timeZone={timeZone}
+              weekStartsOn={weekStartsOn}
+              defaultListId={defaultListId}
+              listName={title}
+              disabled={!online || defaultListId === ''}
+              onComplete={(task) => void actions.complete(task)}
+              onStatus={(task, status) => void actions.setStatus(task, status)}
+              onPriority={(task, priority: TaskPriority) =>
+                void actions.setPriority(task, priority)
+              }
+              onCreate={(name, draft, extras) => {
+                if (inboxId) void page.create(name, draft, extras, listId, inboxId);
+              }}
+              intent={intent}
+              onTaskMenu={(task, x, y) => page.openTaskMenu(task, x, y)}
+            />
+          ) : calendarQuery.isLoading ? (
+            <TaskSkeleton />
+          ) : calendarQuery.error ? (
+            <div className="px-4">
+              <Banner>{humanError(calendarQuery.error)}</Banner>
+            </div>
+          ) : (
+            <WeekView
+              listId={listId}
+              days={range.days}
+              instances={instances}
+              timeZone={timeZone}
+              composeDay={composeDay}
+              onSelectDay={(ymd) => page.setWeekAnchor(ymd)}
+              onAddDay={(ymd) => {
+                page.setComposeDay(ymd);
+                todos.requestQuickAdd();
+              }}
+              onOpen={(taskId) => todos.openDetail(taskId)}
+            />
+          )}
+        </div>
       </main>
 
       {view === 'list' ? (
@@ -462,10 +545,7 @@ function TaskDetailHost({
 }) {
   if (view === 'list') return children;
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-overlay)] flex justify-end bg-fg/25"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[var(--z-overlay)] flex justify-end bg-fg/25" onClick={onClose}>
       <div
         className="h-full w-full max-w-[40rem] bg-surface shadow-[var(--shadow)]"
         onClick={(event) => event.stopPropagation()}

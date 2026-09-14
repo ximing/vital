@@ -1,8 +1,23 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Columns3, List as ListIcon } from 'lucide-react-native';
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Columns3,
+  List as ListIcon,
+} from 'lucide-react-native';
 import type { ListId, Task, TaskPriority } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Icon } from '../../ui/icon';
@@ -97,33 +112,67 @@ function TaskListContent({
   const days = useMemo(() => weekDays(weekAnchor, weekStartsOn), [weekAnchor, weekStartsOn]);
   const today = localDateStamp(tz);
 
-  useFocusReload(useCallback(async () => {
-    await s.reloadFromFocus(view);
-  }, [s, view]));
+  useFocusReload(
+    useCallback(async () => {
+      await s.reloadFromFocus(view);
+    }, [s, view]),
+  );
 
   const isSmart = String(listId).startsWith('smart:');
   const isDoneList = listId === 'smart:done';
   const isTodayList = listId === 'smart:today';
+  const scope = s.scope;
+  const showScopeTabs = !isSmart && view === 'list';
+  const doneScope = showScopeTabs && scope === 'done';
   const nested = useMemo(() => nestTasks(items.filter((row) => row.deletedAt === null)), [items]);
   const pinnedRoots = grouped
-    ? nested.filter((row) => row.task.pinned && row.task.status !== 'done')
+    ? nested.filter((row) => {
+        if (!row.task.pinned) return false;
+        return doneScope ? row.task.status === 'done' : row.task.status !== 'done';
+      })
     : [];
-  const overdueRoots = grouped
-    ? nested.filter(
-        (row) =>
-          !row.task.pinned && row.task.status !== 'done' && isOverdue(row.task),
-      )
-    : [];
+  const overdueRoots =
+    grouped && !doneScope
+      ? nested.filter(
+          (row) => !row.task.pinned && row.task.status !== 'done' && isOverdue(row.task),
+        )
+      : [];
   const doneRoots =
-    grouped && !isDoneList ? nested.filter((row) => row.task.status === 'done') : [];
+    grouped && !isDoneList && !showScopeTabs
+      ? nested.filter((row) => row.task.status === 'done')
+      : [];
   const restNested = grouped
     ? nested.filter((row) => {
+        if (doneScope) return row.task.status === 'done' && !row.task.pinned;
         if (row.task.status === 'done') return isDoneList;
         if (row.task.pinned) return false;
         if (isOverdue(row.task)) return false;
         return true;
       })
     : nested;
+  const childLists = useMemo(
+    () =>
+      lists
+        .filter((row) => row.kind === 'user' && !row.isArchived && row.parentId === listId)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id)),
+    [lists, listId],
+  );
+  const categoryGroups =
+    !isSmart && childLists.length > 0
+      ? [
+          {
+            id: String(listId),
+            title: copy.todos.thisList,
+            nodes: restNested.filter((row) => row.task.listId === listId),
+          },
+          ...childLists.map((child) => ({
+            id: child.id,
+            title: child.name,
+            nodes: restNested.filter((row) => row.task.listId === child.id),
+          })),
+        ].filter((group) => group.nodes.length > 0)
+      : [];
+  const useCategories = categoryGroups.length > 0;
   const resolvedCreateId = createListId ?? inboxCreateId;
   const live = items.filter((row) => row.deletedAt === null);
   const dayInstances = instances.filter((inst) => {
@@ -205,34 +254,61 @@ function TaskListContent({
     <View style={styles.flex}>
       {offline ? <Banner tone="info">{copy.offline}</Banner> : null}
       {error ? (
-        <Banner tone="error" action={{ label: copy.actions.retry, onPress: () => void s.load(true) }}>
+        <Banner
+          tone="error"
+          action={{ label: copy.actions.retry, onPress: () => void s.load(true) }}
+        >
           {error}
         </Banner>
       ) : null}
+      {showScopeTabs ? (
+        <View
+          style={styles.scopeTabs}
+          accessibilityRole="tablist"
+          accessibilityLabel={copy.todos.listScope}
+        >
+          {(['open', 'done'] as const).map((id) => {
+            const active = scope === id;
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => s.setScope(id)}
+                style={[styles.scopeTab, active && styles.scopeTabActive]}
+              >
+                <Text style={[styles.scopeLabel, active && styles.scopeLabelActive]}>
+                  {id === 'open' ? copy.todos.openGroup : copy.todos.doneGroup}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       {showViews ? (
-      <View style={styles.views} accessibilityRole="tablist">
-        {(
-          [
-            ['list', ListIcon, copy.todos.views.list],
-            ['board', Columns3, copy.todos.views.board],
-            ['week', CalendarDays, copy.todos.views.week],
-          ] as const
-        ).map(([id, glyph, label]) => {
-          const active = view === id;
-          return (
-            <Pressable
-              key={id}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              onPress={() => setView(id)}
-              style={[styles.viewTab, active && styles.viewTabActive]}
-            >
-              <Icon icon={glyph} size={16} color={active ? t.fgPrimary : t.fgMuted} />
-              <Text style={[styles.viewLabel, active && styles.viewLabelActive]}>{label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+        <View style={styles.views} accessibilityRole="tablist">
+          {(
+            [
+              ['list', ListIcon, copy.todos.views.list],
+              ['board', Columns3, copy.todos.views.board],
+              ['week', CalendarDays, copy.todos.views.week],
+            ] as const
+          ).map(([id, glyph, label]) => {
+            const active = view === id;
+            return (
+              <Pressable
+                key={id}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                onPress={() => setView(id)}
+                style={[styles.viewTab, active && styles.viewTabActive]}
+              >
+                <Icon icon={glyph} size={16} color={active ? t.fgPrimary : t.fgMuted} />
+                <Text style={[styles.viewLabel, active && styles.viewLabelActive]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       ) : null}
       {view === 'board' ? (
         <ScrollView horizontal contentContainerStyle={styles.board}>
@@ -246,7 +322,9 @@ function TaskListContent({
                     : copy.empty.done}
               </Text>
               {live
-                .filter((row) => (status === 'done' ? row.status === 'done' : row.status === status))
+                .filter((row) =>
+                  status === 'done' ? row.status === 'done' : row.status === status,
+                )
                 .map((row) => (
                   <View key={row.id}>{renderRow(row)}</View>
                 ))}
@@ -256,10 +334,7 @@ function TaskListContent({
       ) : view === 'week' ? (
         <View style={styles.flex}>
           <View style={styles.weekNav}>
-            <Pressable
-              onPress={() => s.shiftWeek(-7, today)}
-              hitSlop={8}
-            >
+            <Pressable onPress={() => s.shiftWeek(-7, today)} hitSlop={8}>
               <Icon icon={ChevronLeft} size={18} color={t.fgMuted} />
             </Pressable>
             <Pressable
@@ -269,10 +344,7 @@ function TaskListContent({
             >
               <Text style={styles.weekHead}>{weekHeading}</Text>
             </Pressable>
-            <Pressable
-              onPress={() => s.shiftWeek(7, today)}
-              hitSlop={8}
-            >
+            <Pressable onPress={() => s.shiftWeek(7, today)} hitSlop={8}>
               <Icon icon={ChevronRight} size={18} color={t.fgMuted} />
             </Pressable>
           </View>
@@ -285,11 +357,7 @@ function TaskListContent({
                 (inst) => localDateStamp(tz, new Date(inst.occurrenceAt)) === ymd,
               );
               return (
-                <Pressable
-                  key={ymd}
-                  onPress={() => s.setSelectedDay(ymd)}
-                  style={styles.weekDay}
-                >
+                <Pressable key={ymd} onPress={() => s.setSelectedDay(ymd)} style={styles.weekDay}>
                   <Text style={styles.weekDow}>{copy.todos.weekday[dow]}</Text>
                   <View
                     style={[
@@ -298,12 +366,7 @@ function TaskListContent({
                       sel && !isToday && styles.weekNumSel,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.weekNumText,
-                        (isToday || sel) && styles.weekNumTextOn,
-                      ]}
-                    >
+                    <Text style={[styles.weekNumText, (isToday || sel) && styles.weekNumTextOn]}>
                       {Number(ymd.slice(8))}
                     </Text>
                   </View>
@@ -320,90 +383,117 @@ function TaskListContent({
           />
         </View>
       ) : (
-      <FlatList
-        data={restNested}
-        keyExtractor={(row) => row.task.id}
-        contentContainerStyle={{ paddingBottom: 48 + Math.max(insets.bottom, 20) + 56 + 24 }}
-        refreshControl={
-          <RefreshControl
-            tintColor={t.accentPrimary}
-            refreshing={refreshing}
-            onRefresh={() => void s.load(true)}
-          />
-        }
-        ListHeaderComponent={
-          grouped ? (
+        <FlatList
+          data={useCategories ? [] : restNested}
+          keyExtractor={(row) => row.task.id}
+          contentContainerStyle={{ paddingBottom: 48 + Math.max(insets.bottom, 20) + 56 + 24 }}
+          refreshControl={
+            <RefreshControl
+              tintColor={t.accentPrimary}
+              refreshing={refreshing}
+              onRefresh={() => void s.load(true)}
+            />
+          }
+          ListHeaderComponent={
+            grouped ? (
+              <View>
+                {pinnedRoots.length > 0 ? (
+                  <View>
+                    <SectionHead
+                      first
+                      title={copy.todos.pinned}
+                      count={pinnedRoots.length}
+                      tone="accent"
+                    />
+                    {pinnedRoots.map(renderNode)}
+                  </View>
+                ) : null}
+                {overdueRoots.length > 0 ? (
+                  <View>
+                    <SectionHead
+                      first={pinnedRoots.length === 0}
+                      title={copy.todos.overdueGroup}
+                      count={overdueRoots.length}
+                      tone="danger"
+                      right={
+                        onPostponeOverdue ? (
+                          <Pressable
+                            onPress={onPostponeOverdue}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.groupAction}>{copy.today.postponeAll}</Text>
+                          </Pressable>
+                        ) : null
+                      }
+                    />
+                    {overdueRoots.map(renderNode)}
+                  </View>
+                ) : null}
+                {!isDoneList &&
+                !useCategories &&
+                !doneScope &&
+                (isTodayList || pinnedRoots.length > 0 || overdueRoots.length > 0) ? (
+                  <SectionHead
+                    first={pinnedRoots.length === 0 && overdueRoots.length === 0}
+                    title={isTodayList ? copy.lists.today : copy.todos.openGroup}
+                    right={isTodayList ? <Text style={styles.groupMeta}>{todayMeta}</Text> : null}
+                  />
+                ) : null}
+                {useCategories
+                  ? categoryGroups.map((group, index) => (
+                      <View key={group.id}>
+                        <SectionHead
+                          first={
+                            pinnedRoots.length === 0 && overdueRoots.length === 0 && index === 0
+                          }
+                          title={group.title}
+                          count={group.nodes.length}
+                        />
+                        {group.nodes.map(renderNode)}
+                      </View>
+                    ))
+                  : null}
+              </View>
+            ) : null
+          }
+          ListEmptyComponent={
+            grouped &&
+            (pinnedRoots.length > 0 || overdueRoots.length > 0 || useCategories) ? null : (
+              <EmptyState title={doneScope ? copy.empty.done : empty} icon={CheckCircle2} />
+            )
+          }
+          renderItem={({ item }) => renderNode(item)}
+          ListFooterComponent={
             <View>
-              {pinnedRoots.length > 0 ? (
-                <View>
-                  <SectionHead first title={copy.todos.pinned} count={pinnedRoots.length} tone="accent" />
-                  {pinnedRoots.map(renderNode)}
+              {cursor ? (
+                <View style={styles.more}>
+                  <Banner
+                    tone="info"
+                    action={{
+                      label: copy.actions.loadMore,
+                      onPress: () => void s.loadMore(),
+                    }}
+                  >
+                    {copy.actions.loadMore}
+                  </Banner>
                 </View>
               ) : null}
-              {overdueRoots.length > 0 ? (
+              {doneRoots.length > 0 ? (
                 <View>
                   <SectionHead
-                    first={pinnedRoots.length === 0}
-                    title={copy.todos.overdueGroup}
-                    count={overdueRoots.length}
-                    tone="danger"
-                    right={
-                      onPostponeOverdue ? (
-                        <Pressable onPress={onPostponeOverdue} hitSlop={8} accessibilityRole="button">
-                          <Text style={styles.groupAction}>{copy.today.postponeAll}</Text>
-                        </Pressable>
-                      ) : null
-                    }
+                    title={copy.todos.doneGroup}
+                    count={doneRoots.length}
+                    collapsible
+                    collapsed={!doneOpen}
+                    onToggle={() => s.toggleDoneOpen()}
                   />
-                  {overdueRoots.map(renderNode)}
+                  {doneOpen ? doneRoots.map(renderNode) : null}
                 </View>
               ) : null}
-              {!isDoneList && (isTodayList || pinnedRoots.length > 0 || overdueRoots.length > 0) ? (
-                <SectionHead
-                  first={pinnedRoots.length === 0 && overdueRoots.length === 0}
-                  title={isTodayList ? copy.lists.today : copy.todos.openGroup}
-                  right={isTodayList ? <Text style={styles.groupMeta}>{todayMeta}</Text> : null}
-                />
-              ) : null}
             </View>
-          ) : null
-        }
-        ListEmptyComponent={
-          grouped && (pinnedRoots.length > 0 || overdueRoots.length > 0) ? null : (
-            <EmptyState title={empty} icon={CheckCircle2} />
-          )
-        }
-        renderItem={({ item }) => renderNode(item)}
-        ListFooterComponent={
-          <View>
-            {cursor ? (
-              <View style={styles.more}>
-                <Banner
-                  tone="info"
-                  action={{
-                    label: copy.actions.loadMore,
-                    onPress: () => void s.loadMore(),
-                  }}
-                >
-                  {copy.actions.loadMore}
-                </Banner>
-              </View>
-            ) : null}
-            {doneRoots.length > 0 ? (
-              <View>
-                <SectionHead
-                  title={copy.todos.doneGroup}
-                  count={doneRoots.length}
-                  collapsible
-                  collapsed={!doneOpen}
-                  onToggle={() => s.toggleDoneOpen()}
-                />
-                {doneOpen ? doneRoots.map(renderNode) : null}
-              </View>
-            ) : null}
-          </View>
-        }
-      />
+          }
+        />
       )}
       {resolvedCreateId && !hideComposer ? (
         <NewTaskBar
@@ -466,7 +556,11 @@ function TaskListContent({
               onPress={() => {
                 const task = contextTask;
                 s.closeContext();
-                void s.patchContext(task, { dueAt: startOfLocalDayIso(tz), isAllDay: true, timezone: tz });
+                void s.patchContext(task, {
+                  dueAt: startOfLocalDayIso(tz),
+                  isAllDay: true,
+                  timezone: tz,
+                });
               }}
             />
             <PickerOption
@@ -570,6 +664,26 @@ const createStyles = (t: Theme) =>
       marginBottom: t.space[2],
       gap: t.space[2],
     },
+    scopeTabs: {
+      flexDirection: 'row',
+      alignSelf: 'flex-start',
+      marginHorizontal: t.space[4],
+      marginBottom: t.space[2],
+      padding: 3,
+      gap: 2,
+      borderRadius: t.radius.pill,
+      backgroundColor: t.bgSurfaceMuted,
+    },
+    scopeTab: {
+      height: 28,
+      paddingHorizontal: t.space[3],
+      borderRadius: t.radius.pill,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    scopeTabActive: { backgroundColor: t.bgElevated },
+    scopeLabel: { fontSize: t.type.caption.fontSize, color: t.fgMuted, fontWeight: '500' },
+    scopeLabelActive: { color: t.fgPrimary, fontWeight: '600' },
     viewTab: {
       height: 28,
       flex: 1,

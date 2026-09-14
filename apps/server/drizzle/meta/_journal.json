@@ -239,6 +239,13 @@
       "when": 1789606800016,
       "tag": "0033_silky_tempest",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1789606800017,
+      "tag": "0034_list_pinned",
+      "breakpoints": true
     }
   ]
 }

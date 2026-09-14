@@ -31,13 +31,15 @@ describe('lists', () => {
     expect(inbox).toHaveLength(1);
     expect(inbox[0]?.name).toBe(INBOX_LIST_NAME);
     const smart = items.map((l) => l.id);
-    expect(smart).toEqual(expect.arrayContaining([
-      'smart:inbox',
-      'smart:today',
-      'smart:upcoming',
-      'smart:someday',
-      'smart:done',
-    ]));
+    expect(smart).toEqual(
+      expect.arrayContaining([
+        'smart:inbox',
+        'smart:today',
+        'smart:upcoming',
+        'smart:someday',
+        'smart:done',
+      ]),
+    );
     expect(smart).not.toContain('smart:anytime');
   });
 
@@ -62,10 +64,7 @@ describe('lists', () => {
     expect(before).toHaveLength(0);
     const n = await backfillInboxLists();
     expect(n).toBeGreaterThanOrEqual(1);
-    const after = await db
-      .select()
-      .from(lists)
-      .where(eq(lists.userId, user.id));
+    const after = await db.select().from(lists).where(eq(lists.userId, user.id));
     expect(after.some((l) => l.kind === 'inbox' && l.name === INBOX_LIST_NAME)).toBe(true);
   });
 
@@ -106,6 +105,44 @@ describe('lists', () => {
       token: alice.token,
     });
     expect(moved.json().listId).toBe(inbox);
+  });
+
+  it('pins a user list and rejects pinning 收集箱', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '心愿清单' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().pinned).toBe(false);
+    const pinned = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/lists/${created.json().id}`,
+      token: alice.token,
+      payload: { pinned: true },
+    });
+    expect(pinned.statusCode).toBe(200);
+    expect(pinned.json().pinned).toBe(true);
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/lists',
+      token: alice.token,
+    });
+    expect(
+      (listed.json().items as { name: string; pinned: boolean }[]).find(
+        (row) => row.name === '心愿清单',
+      )?.pinned,
+    ).toBe(true);
+    const inboxPin = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/lists/${inbox}`,
+      token: alice.token,
+      payload: { pinned: true },
+    });
+    expect(inboxPin.statusCode).toBe(400);
   });
 
   it('mutations on smart:* are 400', async () => {
@@ -200,7 +237,11 @@ describe('lists', () => {
       token: alice.token,
     });
     expect(gone.statusCode).toBe(204);
-    const lists = await injectJson(app, { method: 'GET', url: '/api/v1/lists', token: alice.token });
+    const lists = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/lists',
+      token: alice.token,
+    });
     const childRow = lists.json().items.find((item: { id: string }) => item.id === child.json().id);
     expect(childRow.parentId).toBeNull();
     const movedParent = await injectJson(app, {
