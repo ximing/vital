@@ -281,6 +281,34 @@ describe('searchSimilarTasks', () => {
     const [, , filter] = vi.mocked(qdrant.queryPoints).mock.calls[0]!;
     expect(filter).toEqual({ must: [{ key: 'userId', match: { value: 'u1' } }] });
   });
+
+  it('filters open statuses with match.any / Meili IN', async () => {
+    const embedding = fakeEmbedding([[1, 0]]);
+    const qdrant = fakeQdrant({
+      queryPoints: vi.fn<QdrantClient['queryPoints']>().mockResolvedValue([]),
+    });
+    const meili = fakeMeili({
+      search: vi.fn<MeiliClient['search']>().mockResolvedValue([]),
+    });
+    const rerank = fakeRerank([]);
+    setRetrievalClientsForTest({ embedding, qdrant, meili, rerank });
+
+    await searchSimilarTasks({
+      userId: 'u1',
+      query: '报告',
+      status: ['todo', 'doing'],
+      limit: 3,
+    });
+    const [, , filter] = vi.mocked(qdrant.queryPoints).mock.calls[0]!;
+    expect(filter).toEqual({
+      must: [
+        { key: 'userId', match: { value: 'u1' } },
+        { key: 'status', match: { any: ['todo', 'doing'] } },
+      ],
+    });
+    const [, searchQuery] = vi.mocked(meili.search).mock.calls[0]!;
+    expect(searchQuery.filter).toBe("userId = 'u1' AND status IN ['todo', 'doing']");
+  });
 });
 
 describe('groupTasksBySimilarity', () => {

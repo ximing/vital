@@ -365,6 +365,8 @@ export const t = {
     interpreting: '正在解析任务…',
     creating: '正在创建任务…',
     creatingWait: '仍在处理，请稍候，无需重复提交。',
+    similarOpenPrefix: '可能已有：',
+    similarOpenDismiss: '关闭',
     add: '添加',
     clearDate: '清除日期',
     clearTime: '清除时间',

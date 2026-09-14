@@ -1,0 +1,1 @@
+ALTER TABLE "agent_memory" ADD COLUMN "last_retrieved_at" timestamp with time zone;

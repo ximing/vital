@@ -670,6 +670,7 @@ describe('task.draft feedback', () => {
     expect(children.map((row) => row.title)).toEqual(['列大纲', '填数据']);
     expect(children.map((row) => row.estimateMinutes)).toEqual([15, 30]);
     expect(children.every((row) => row.listId === parentRow.listId)).toBe(true);
+    expect(res.json().similarOpenTasks).toBeUndefined();
   });
 
   it('accepted on a nested task writes notes but does not nest further', async () => {

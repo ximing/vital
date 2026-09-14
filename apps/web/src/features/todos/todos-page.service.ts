@@ -89,6 +89,7 @@ export class TodosPageService extends Service {
         ...(this.composeDay ? { dueYmd: this.composeDay } : {}),
       });
       this.query.setQueryData(todoKeys.item(task.id), task);
+      this.todos.noteSimilarOpen(task.similarOpenTasks);
       await this.invalidateTasks();
       await markOnboarding({ createdTask: true });
       this.todos.setSelected(task.id);
@@ -103,6 +104,7 @@ export class TodosPageService extends Service {
     if (extras.status) next.status = extras.status;
     const task = await client.createTask(next);
     this.query.setQueryData(todoKeys.item(task.id), task);
+    this.todos.noteSimilarOpen(task.similarOpenTasks);
     await this.invalidateTasks();
     await markOnboarding({ createdTask: true });
     this.todos.setSelected(task.id);

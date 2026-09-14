@@ -12,7 +12,7 @@ import {
   Sun,
   Target,
 } from 'lucide-react';
-import { bindServices } from '@rabjs/react';
+import { bindServices, useService } from '@rabjs/react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { HOME_PATH, TODOS_HOME_PATH, t } from '@/copy';
 import { ActivationChecklist } from '@/features/onboarding';
@@ -20,6 +20,7 @@ import { CommandPalette } from '@/features/palette/CommandPalette';
 import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
 import { InboxUiService } from '@/features/inbox/inbox-ui.service';
 import { ReportUiService } from '@/features/reports/report-ui.service';
+import { SimilarOpenToast } from '@/features/todos/SimilarOpenToast';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { AccountMenu } from '@/shell/AccountMenu';
 import { loadPaneWidth, RAIL_WIDTH, savePaneWidth, type PaneSection } from '@/shell/chrome';
@@ -53,6 +54,7 @@ function railItemClass(active: boolean): string {
 }
 
 function ShellContent() {
+  const todos = useService(TodosUiService);
   const location = useLocation();
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
@@ -156,6 +158,7 @@ function ShellContent() {
       <div data-region="canvas" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <Outlet />
       </div>
+      {todos.similarOpen.length > 0 ? <SimilarOpenToast /> : null}
       <CommandPalette />
       <ActivationChecklist />
     </div>

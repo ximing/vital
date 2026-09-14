@@ -29,6 +29,7 @@ function memoryRow(overrides: Partial<AgentMemoryRow> = {}): AgentMemoryRow {
     scope: ['all'],
     createdAt: new Date('2026-09-01T00:00:00Z'),
     updatedAt: new Date('2026-09-01T00:00:00Z'),
+    lastRetrievedAt: null,
     ...overrides,
   };
 }

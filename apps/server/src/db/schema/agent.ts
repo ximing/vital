@@ -131,6 +131,8 @@ export const agentMemory = pgTable(
       .default(sql`'{all}'`),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    /** Last time this row was injected via retrieval (hybrid hits or PG fallback). */
+    lastRetrievedAt: timestamp('last_retrieved_at', { withTimezone: true, mode: 'date' }),
   },
   (t) => [
     index('idx_agent_memory_user_kind').on(t.userId, t.kind),

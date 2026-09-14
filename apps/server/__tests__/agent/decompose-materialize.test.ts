@@ -126,6 +126,7 @@ describe('POST /api/v1/agent/actions/:id/feedback — task.decompose materializa
     expect(children[0]?.estimateMinutes).toBe(15);
     expect(children[1]?.title).toBe('填数据');
     expect(children[1]?.estimateMinutes).toBe(30);
+    expect(res.json().similarOpenTasks).toBeUndefined();
 
     const [row] = await getDb().select().from(agentActions).where(eq(agentActions.id, actionId));
     expect(row!.feedback).toBe('accepted');

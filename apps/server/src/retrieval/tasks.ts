@@ -1,7 +1,10 @@
+import type { SimilarTaskHit } from '@vital/dto';
 import type { TaskRow } from '../db/schema.js';
 import { RetrievalError } from './http.js';
 import { getRetrievalClients } from './registry.js';
 import { rrfMerge } from './rrf.js';
+
+export type { SimilarTaskHit };
 
 export const TASKS_COLLECTION = 'tasks';
 export const TASKS_INDEX = 'tasks';
@@ -122,13 +125,24 @@ export async function removeTaskIndex(taskId: string): Promise<void> {
   });
 }
 
-export interface SimilarTaskHit {
-  id: string;
-  title: string;
-}
-
 function escapeMeili(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function qdrantStatusMatch(status: string | readonly string[]): unknown {
+  if (typeof status === 'string') return { key: 'status', match: { value: status } };
+  if (status.length === 1) return { key: 'status', match: { value: status[0] } };
+  return { key: 'status', match: { any: [...status] } };
+}
+
+function meiliStatusClause(status: string | readonly string[]): string {
+  if (typeof status === 'string') return ` AND status = '${escapeMeili(status)}'`;
+  if (status.length === 1) {
+    const only = status[0];
+    return only === undefined ? '' : ` AND status = '${escapeMeili(only)}'`;
+  }
+  const list = status.map((value) => `'${escapeMeili(value)}'`).join(', ');
+  return ` AND status IN [${list}]`;
 }
 
 /**
@@ -141,7 +155,7 @@ export async function searchSimilarTasks(input: {
   userId: string;
   query: string;
   excludeId?: string;
-  status?: string;
+  status?: string | readonly string[];
   limit: number;
 }): Promise<SimilarTaskHit[] | null> {
   const { embedding, qdrant, rerank, meili } = getRetrievalClients();
@@ -151,7 +165,7 @@ export async function searchSimilarTasks(input: {
   if (!vector) throw new RetrievalError('BAD_RESPONSE', 'embedding returned no vector for query');
 
   const must: unknown[] = [{ key: 'userId', match: { value: input.userId } }];
-  if (input.status !== undefined) must.push({ key: 'status', match: { value: input.status } });
+  if (input.status !== undefined) must.push(qdrantStatusMatch(input.status));
   const filter: Record<string, unknown> = { must };
   if (input.excludeId !== undefined) {
     filter['must_not'] = [{ has_id: [input.excludeId] }];
@@ -171,9 +185,7 @@ export async function searchSimilarTasks(input: {
 
   if (meili) {
     let meiliFilter = `userId = '${escapeMeili(input.userId)}'`;
-    if (input.status !== undefined) {
-      meiliFilter += ` AND status = '${escapeMeili(input.status)}'`;
-    }
+    if (input.status !== undefined) meiliFilter += meiliStatusClause(input.status);
     const sparseHits = await meili.search(TASKS_INDEX, {
       q: input.query,
       filter: meiliFilter,

@@ -1,5 +1,5 @@
 import { resolve, Service } from '@rabjs/react';
-import type { AgentAction, Task } from '@vital/dto';
+import type { AgentAction, SimilarTaskHit, Task } from '@vital/dto';
 import { UNDO_COMPLETE_MS, type BoardMode } from './model';
 
 export type DraftJobStatus = 'idle' | 'queued' | 'failed';
@@ -30,6 +30,8 @@ export class TodosUiService extends Service {
   draftStatus: Record<string, DraftJobStatus> = {};
   draftPolled: Record<string, AgentAction | null> = {};
   draftError: Record<string, string | null> = {};
+  /** Non-blocking duplicate hint after a user-facing create/convert. */
+  similarOpen: SimilarTaskHit[] = [];
   private undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   setSelected(id: string | null): void {
@@ -126,6 +128,14 @@ export class TodosUiService extends Service {
     return this.draftError[taskId] ?? null;
   }
 
+  noteSimilarOpen(hits: SimilarTaskHit[] | undefined): void {
+    this.similarOpen = hits && hits.length > 0 ? hits : [];
+  }
+
+  dismissSimilarOpen(): void {
+    this.similarOpen = [];
+  }
+
   setDraftJob(
     taskId: string,
     patch: { status?: DraftJobStatus; polled?: AgentAction | null; error?: string | null },
@@ -150,6 +160,7 @@ export class TodosUiService extends Service {
     this.draftStatus = {};
     this.draftPolled = {};
     this.draftError = {};
+    this.similarOpen = [];
   }
 
   private clearTimer(): void {

@@ -40,6 +40,12 @@ export type RecurrenceKind = z.infer<typeof recurrenceKindSchema>;
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
 
+/** Open-task duplicate hint, attached only on create/convert responses. */
+export interface SimilarTaskHit {
+  id: string;
+  title: string;
+}
+
 export interface Task {
   id: string;
   listId: string;
@@ -77,6 +83,8 @@ export interface Task {
   deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Present on create responses when open-task duplicate detection found hits. */
+  similarOpenTasks?: SimilarTaskHit[];
 }
 
 export interface TaskCollection {
