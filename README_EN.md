@@ -30,23 +30,8 @@ Vital treats the agent as part of the product, not a chat overlay.
 1. **Internal.** A worker-process agent watches tasks, habits, and feedback, runs on a persistent schedule, and emits proposals you can accept.
 2. **External.** The [skills/vital](skills/vital/SKILL.md) skill lets other agents call the same HTTP API with a personal access token.
 
-```mermaid
-flowchart LR
-  subgraph inside [Internal · Vital agent]
-    Events[Task / feedback / habit changes] --> PG[(PostgreSQL schedule and queue)]
-    PG --> Worker[worker scheduler]
-    Worker --> Caps[cluster · decompose · draft · report · memory · notify]
-    Caps --> Propose[Proposals on Today and Activity]
-    Propose --> You[Accept / correct / dismiss]
-    You --> Memory[Agent memory]
-    Memory --> Caps
-  end
-  subgraph outside [External · other agents]
-    Skill[skills/vital] --> Token["vt_ access token"]
-    Token --> API["/api/v1"]
-    API --> Data[Same inbox / tasks / reports]
-  end
-```
+![Internal Vital agent and external skill meeting on the same data](docs/diagrams/ai-first-paths.en.svg#gh-light-mode-only)
+![Internal Vital agent and external skill meeting on the same data](docs/diagrams/ai-first-paths.en-dark.svg#gh-dark-mode-only)
 
 ### Internal: how the agent works
 
