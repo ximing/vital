@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router';
-import { HOME_PATH, TODOS_HOME_PATH } from '@/copy';
+import { TODOS_HOME_PATH } from '@/copy';
 import { InboxReader, InboxWorkspace } from '@/features/inbox';
 import { OnboardingPage } from '@/features/onboarding';
 import { ReportsWorkspace } from '@/features/reports';
@@ -8,6 +8,7 @@ import { ThreadWorkspace, TodayWorkspace } from '@/features/today';
 import { TodosWorkspace } from '@/features/todos';
 import { ExtensionAuthPage } from '@/pages/extension-auth';
 import { ActivityPage, HabitsPage, MemoryPage, ThreadsPage, UsagePage } from '@/pages/ai';
+import { LandingPage } from '@/pages/landing';
 import { LoginPage } from '@/pages/login';
 import { NotFoundPage } from '@/pages/empty';
 import { RegisterPage } from '@/pages/register';
@@ -18,6 +19,7 @@ import { Shell } from '@/shell/Shell';
 export function App() {
   return (
     <Routes>
+      <Route path="/" element={<LandingPage />} />
       <Route
         path="/login"
         element={
@@ -57,7 +59,6 @@ export function App() {
           </RequireAuth>
         }
       >
-        <Route path="/" element={<Navigate to={HOME_PATH} replace />} />
         <Route path="/today" element={<TodayWorkspace />} />
         <Route path="/today/threads/:id" element={<ThreadWorkspace />} />
         <Route path="/todos" element={<Navigate to={TODOS_HOME_PATH} replace />} />

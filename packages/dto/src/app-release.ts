@@ -106,3 +106,97 @@ export function androidReleaseFromGitHubRelease(input: unknown): AndroidRelease 
     releaseNotes: notes === '' ? undefined : notes,
   });
 }
+
+export const desktopAssetIdSchema = z.enum([
+  'macos-arm',
+  'macos-intel',
+  'windows-exe',
+  'windows-msi',
+  'linux-deb',
+  'linux-appimage',
+  'linux-rpm',
+]);
+export type DesktopAssetId = z.infer<typeof desktopAssetIdSchema>;
+
+export const desktopAssetSchema = z.object({
+  id: desktopAssetIdSchema,
+  url: z.string().url().max(2048),
+  name: z.string().trim().min(1).max(200),
+  sizeBytes: emptyToUndef(z.coerce.number().int().positive()),
+});
+export type DesktopAsset = z.infer<typeof desktopAssetSchema>;
+
+export const appLatestReleaseSchema = z.object({
+  versionName: z.string().trim().min(1).max(32),
+  tag: z.string().trim().min(1).max(32),
+  htmlUrl: z.string().url().max(2048).nullable(),
+  publishedAt: z.string().min(1).max(40).nullable(),
+  android: androidReleaseSchema.nullable(),
+  desktop: z.array(desktopAssetSchema).max(16),
+});
+export type AppLatestRelease = z.infer<typeof appLatestReleaseSchema>;
+
+export const appLatestReleaseResponseSchema = z.object({
+  latest: appLatestReleaseSchema.nullable(),
+});
+export type AppLatestReleaseResponse = z.infer<typeof appLatestReleaseResponseSchema>;
+
+/** Classify a GitHub asset filename into a desktop installer id. Skip updater tarballs. */
+export function classifyDesktopAsset(name: string): DesktopAssetId | null {
+  const n = name.toLowerCase();
+  if (n.endsWith('.tar.gz') || n.endsWith('.tgz')) return null;
+  if (n.endsWith('.dmg')) {
+    if (n.includes('aarch64') || n.includes('arm64')) return 'macos-arm';
+    return 'macos-intel';
+  }
+  if (n.endsWith('.msi')) return 'windows-msi';
+  if (n.endsWith('.exe')) return 'windows-exe';
+  if (n.endsWith('.deb')) return 'linux-deb';
+  if (n.endsWith('.appimage')) return 'linux-appimage';
+  if (n.endsWith('.rpm')) return 'linux-rpm';
+  return null;
+}
+
+function pickDesktopAssets(assets: unknown): DesktopAsset[] {
+  if (!Array.isArray(assets)) return [];
+  const found = new Map<DesktopAssetId, DesktopAsset>();
+  for (const item of assets) {
+    if (!isRecord(item)) continue;
+    const name = typeof item.name === 'string' ? item.name : '';
+    const url = typeof item.browser_download_url === 'string' ? item.browser_download_url : '';
+    const id = classifyDesktopAsset(name);
+    if (!id || url === '') continue;
+    const size =
+      typeof item.size === 'number' && Number.isFinite(item.size) && item.size > 0
+        ? item.size
+        : undefined;
+    if (found.has(id)) continue;
+    found.set(id, size === undefined ? { id, url, name } : { id, url, name, sizeBytes: size });
+  }
+  return [...found.values()];
+}
+
+/** Map a GitHub release to the public download catalog (Android + desktop). */
+export function appLatestFromGitHubRelease(input: unknown): AppLatestRelease | null {
+  if (!isRecord(input)) return null;
+  if (input.draft === true || input.prerelease === true) return null;
+  const tag = typeof input.tag_name === 'string' ? input.tag_name : '';
+  const version = androidVersionFromTag(tag);
+  if (!version) return null;
+  const android = androidReleaseFromGitHubRelease(input);
+  const desktop = pickDesktopAssets(input.assets);
+  if (android === null && desktop.length === 0) return null;
+  const htmlUrl = typeof input.html_url === 'string' && input.html_url.startsWith('https://') ? input.html_url : null;
+  const publishedRaw = typeof input.published_at === 'string' ? input.published_at : null;
+  const publishedAt =
+    publishedRaw && Number.isFinite(Date.parse(publishedRaw)) ? new Date(publishedRaw).toISOString() : null;
+  const parsed = appLatestReleaseSchema.safeParse({
+    versionName: version.versionName,
+    tag: tag.startsWith('v') ? tag : `v${version.versionName}`,
+    htmlUrl,
+    publishedAt,
+    android,
+    desktop,
+  });
+  return parsed.success ? parsed.data : null;
+}

@@ -56,6 +56,16 @@ describe('web shell contract', () => {
     expect(pane).not.toContain('fixed inset-y-0');
   });
 
+  it('public landing lives at / without wrapping RequireAuth', () => {
+    const app = read('src/App.tsx');
+    expect(app).toContain('LandingPage');
+    expect(app).toMatch(/path="\/"\s+element=\{<LandingPage \/>\}/);
+    expect(app).not.toContain('Navigate to={HOME_PATH}');
+    const copy = read('src/copy.ts');
+    expect(copy).toContain('打开后，先看到');
+    expect(copy).toContain('下载最新版本');
+  });
+
   it('todos live under features/todos with smart:today and keyboard keys', () => {
     const app = read('src/App.tsx');
     expect(app).toContain('/todos/lists/:listId');

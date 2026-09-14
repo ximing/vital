@@ -4,6 +4,7 @@ import { buildFastify } from '../src/app.js';
 import {
   fetchAndroidReleaseFromGitHub,
   githubReleasesRepo,
+  resolveAppLatest,
   setGitHubReleaseFetchForTest,
 } from '../src/app-release/app-release.service.js';
 
@@ -87,5 +88,46 @@ describe('android release', () => {
   it('returns null when GitHub has no APK', async () => {
     setGitHubReleaseFetchForTest(() => Promise.resolve({ status: 404, body: { message: 'Not Found' } }));
     await expect(fetchAndroidReleaseFromGitHub({ repo: 'ximing/vital' })).resolves.toBeNull();
+  });
+});
+
+describe('app latest catalog', () => {
+  it('GET /api/v1/app is public and returns null without a GitHub release', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/app' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ latest: null });
+  });
+
+  it('maps desktop installers from the latest GitHub release', async () => {
+    setGitHubReleaseFetchForTest((url) => {
+      if (url.endsWith('/releases/latest')) {
+        return Promise.resolve({
+          status: 200,
+          body: {
+            ...githubRelease,
+            tag_name: 'v0.3.1',
+            html_url: 'https://github.com/ximing/vital/releases/tag/v0.3.1',
+            published_at: '2026-09-14T00:00:00Z',
+            assets: [
+              ...githubRelease.assets,
+              {
+                name: 'Vital_0.3.1_aarch64.dmg',
+                browser_download_url:
+                  'https://github.com/ximing/vital/releases/download/v0.3.1/Vital_0.3.1_aarch64.dmg',
+                size: 4458956,
+              },
+            ],
+          },
+        });
+      }
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    const latest = await resolveAppLatest({
+      NODE_ENV: 'development',
+      GITHUB_RELEASES_REPO: 'ximing/vital',
+    });
+    expect(latest?.versionName).toBe('0.3.1');
+    expect(latest?.desktop.map((item) => item.id)).toContain('macos-arm');
+    expect(latest?.android).not.toBeNull();
   });
 });

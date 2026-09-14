@@ -1,9 +1,9 @@
 import { loginInputSchema } from '@vital/dto';
 import { Service } from '@rabjs/react';
-import { HOME_PATH, t } from '@/copy';
-import { needsOnboarding } from '@/features/onboarding';
+import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { AuthService } from '@/services/auth.service';
+import { afterAuthPath } from '@/shell/require-auth';
 
 export type LoginFieldErrors = { email?: string; password?: string };
 
@@ -50,7 +50,6 @@ export class LoginPageService extends Service {
       this.formError = humanError(err);
       return null;
     }
-    if (from && from !== '/login' && from !== '/register') return from;
-    return needsOnboarding(this.auth.user) ? '/onboarding' : HOME_PATH;
+    return afterAuthPath(from, this.auth.user);
   }
 }

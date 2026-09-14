@@ -3,6 +3,7 @@ import type {
   AgentAction,
   AgentActionLogItem,
   AppAndroidReleaseResponse,
+  AppLatestReleaseResponse,
   AgentActionsQuery,
   AgentMemoryItem,
   AgentScheduleCapability,
@@ -104,6 +105,7 @@ export interface VitalClient {
   readonly authMode: AuthMode;
   boot(): Promise<BootResult>;
   getAndroidRelease(): Promise<AppAndroidReleaseResponse>;
+  getAppLatest(): Promise<AppLatestReleaseResponse>;
   register(input: RegisterInput): Promise<AuthResponse>;
   login(input: LoginInput): Promise<AuthResponse>;
   createExtensionAuthCode(): Promise<ExtensionAuthCodeResponse>;
@@ -270,6 +272,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     boot: () => http.boot(),
     getAndroidRelease: () =>
       http.request('/api/v1/app/android', { skipAuth: true, skipAuthRefresh: true }),
+    getAppLatest: () => http.request('/api/v1/app', { skipAuth: true, skipAuthRefresh: true }),
     register: async (input) =>
       persistAuth(
         options,

@@ -356,4 +356,21 @@ describe('createVitalClient android release', () => {
     expect(res).toEqual({ android: null });
     expect(calls).toEqual([{ url: 'http://x/api/v1/app/android', auth: '' }]);
   });
+
+  it('GET /api/v1/app skips auth', async () => {
+    const store = memoryStore({ accessToken: 'secret', expiresIn: 900 });
+    const calls: { url: string; auth: string }[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        calls.push({ url: urlOf(url), auth: authorizationOf(init) });
+        return respond(200, { latest: null });
+      },
+    });
+    const res = await client.getAppLatest();
+    expect(res).toEqual({ latest: null });
+    expect(calls).toEqual([{ url: 'http://x/api/v1/app', auth: '' }]);
+  });
 });

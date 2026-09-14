@@ -3,6 +3,8 @@ import {
   androidReleaseFromGitHubRelease,
   androidReleaseSchema,
   androidVersionFromTag,
+  appLatestFromGitHubRelease,
+  classifyDesktopAsset,
   parseAndroidRelease,
   pickGitHubApkAsset,
 } from '../src/app-release.js';
@@ -97,5 +99,56 @@ describe('android release dto', () => {
     expect(androidReleaseFromGitHubRelease({ ...payload, draft: true })).toBeNull();
     expect(androidReleaseFromGitHubRelease({ ...payload, prerelease: true })).toBeNull();
     expect(androidReleaseFromGitHubRelease({ ...payload, assets: [] })).toBeNull();
+  });
+});
+
+describe('desktop release assets', () => {
+  it('classifies Tauri installer names and skips updater tarballs', () => {
+    expect(classifyDesktopAsset('Vital_0.3.1_aarch64.dmg')).toBe('macos-arm');
+    expect(classifyDesktopAsset('Vital_0.3.1_x64.dmg')).toBe('macos-intel');
+    expect(classifyDesktopAsset('Vital_0.3.1_x64-setup.exe')).toBe('windows-exe');
+    expect(classifyDesktopAsset('Vital_0.3.1_x64_en-US.msi')).toBe('windows-msi');
+    expect(classifyDesktopAsset('Vital_0.3.1_amd64.deb')).toBe('linux-deb');
+    expect(classifyDesktopAsset('Vital_0.3.1_amd64.AppImage')).toBe('linux-appimage');
+    expect(classifyDesktopAsset('Vital-0.3.1-1.x86_64.rpm')).toBe('linux-rpm');
+    expect(classifyDesktopAsset('Vital_0.3.1_aarch64.app.tar.gz')).toBeNull();
+    expect(classifyDesktopAsset('app-release.apk')).toBeNull();
+  });
+
+  it('maps a mixed GitHub release into the public catalog', () => {
+    const catalog = appLatestFromGitHubRelease({
+      tag_name: 'v0.3.1',
+      html_url: 'https://github.com/ximing/vital/releases/tag/v0.3.1',
+      published_at: '2026-09-14T00:00:00Z',
+      draft: false,
+      prerelease: false,
+      body: 'desktop + apk',
+      assets: [
+        {
+          name: 'app-release.apk',
+          browser_download_url: 'https://github.com/ximing/vital/releases/download/v0.3.1/app-release.apk',
+          size: 10,
+        },
+        {
+          name: 'Vital_0.3.1_aarch64.dmg',
+          browser_download_url: 'https://github.com/ximing/vital/releases/download/v0.3.1/Vital_0.3.1_aarch64.dmg',
+          size: 20,
+        },
+        {
+          name: 'Vital_0.3.1_x64-setup.exe',
+          browser_download_url: 'https://github.com/ximing/vital/releases/download/v0.3.1/Vital_0.3.1_x64-setup.exe',
+          size: 30,
+        },
+        {
+          name: 'Vital_0.3.1_aarch64.app.tar.gz',
+          browser_download_url: 'https://github.com/ximing/vital/releases/download/v0.3.1/Vital_0.3.1_aarch64.app.tar.gz',
+          size: 40,
+        },
+      ],
+    });
+    expect(catalog?.versionName).toBe('0.3.1');
+    expect(catalog?.android?.apkUrl).toContain('app-release.apk');
+    expect(catalog?.desktop.map((item) => item.id)).toEqual(['macos-arm', 'windows-exe']);
+    expect(catalog?.htmlUrl).toContain('/tag/v0.3.1');
   });
 });

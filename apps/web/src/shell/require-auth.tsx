@@ -5,8 +5,8 @@ import { HOME_PATH } from '@/copy';
 import { needsOnboarding } from '@/features/onboarding';
 import { AuthService } from '@/services/auth.service';
 
-function afterAuthPath(from: string | undefined, user: Parameters<typeof needsOnboarding>[0]): string {
-  if (from && from !== '/login' && from !== '/register') return from;
+export function afterAuthPath(from: string | undefined, user: Parameters<typeof needsOnboarding>[0]): string {
+  if (from && from !== '/login' && from !== '/register' && from !== '/') return from;
   return needsOnboarding(user) ? '/onboarding' : HOME_PATH;
 }
 

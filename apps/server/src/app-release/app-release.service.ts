@@ -1,5 +1,10 @@
 import { request } from 'undici';
-import { androidReleaseFromGitHubRelease, type AndroidRelease } from '@vital/dto';
+import {
+  androidReleaseFromGitHubRelease,
+  appLatestFromGitHubRelease,
+  type AndroidRelease,
+  type AppLatestRelease,
+} from '@vital/dto';
 import { config, type Config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
@@ -37,10 +42,12 @@ async function defaultFetch(
 
 let fetchJson: GitHubFetchJson = defaultFetch;
 let cache: { repo: string; at: number; value: AndroidRelease | null } | null = null;
+let latestCache: { repo: string; at: number; value: AppLatestRelease | null } | null = null;
 
 export function setGitHubReleaseFetchForTest(fn: GitHubFetchJson | undefined): void {
   fetchJson = fn ?? defaultFetch;
   cache = null;
+  latestCache = null;
 }
 
 export function githubReleasesRepo(env: {
@@ -113,6 +120,47 @@ export async function resolveAndroidRelease(env: ReleaseEnv = config): Promise<A
   } catch (err) {
     logger.warn('android_release.github_error', err);
     if (cache && cache.repo === repo) return cache.value;
+    return null;
+  }
+}
+
+async function firstMappedRelease(
+  repo: string,
+  token: string | undefined,
+  map: (body: unknown) => AppLatestRelease | AndroidRelease | null,
+): Promise<unknown> {
+  const headers = githubHeaders(token);
+  const latestUrl = `${GITHUB_API}/repos/${repo}/releases/latest`;
+  const latest = await fetchJson(latestUrl, headers);
+  const fromLatest = map(latest.body);
+  if (fromLatest) return latest.body;
+  const list = await fetchJson(`${GITHUB_API}/repos/${repo}/releases?per_page=10`, headers);
+  if (list.status === 200 && Array.isArray(list.body)) {
+    for (const item of list.body) {
+      if (map(item)) return item;
+    }
+  }
+  if (latest.status >= 400 && latest.status !== 404) {
+    logger.warn('app_release.github_failed', { status: latest.status, repo });
+  }
+  return null;
+}
+
+export async function resolveAppLatest(env: ReleaseEnv = config): Promise<AppLatestRelease | null> {
+  const repo = githubReleasesRepo(env);
+  if (!repo) return null;
+  const now = Date.now();
+  if (latestCache && latestCache.repo === repo && now - latestCache.at < CACHE_MS) {
+    return latestCache.value;
+  }
+  try {
+    const body = await firstMappedRelease(repo, env.GITHUB_RELEASES_TOKEN, appLatestFromGitHubRelease);
+    const value = body ? appLatestFromGitHubRelease(body) : null;
+    latestCache = { repo, at: now, value };
+    return value;
+  } catch (err) {
+    logger.warn('app_release.github_error', err);
+    if (latestCache && latestCache.repo === repo) return latestCache.value;
     return null;
   }
 }

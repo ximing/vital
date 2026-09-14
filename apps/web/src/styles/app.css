@@ -52,6 +52,19 @@ body,
   overflow: hidden;
 }
 
+/* Marketing page is a long magazine scroll, not the app shell. */
+html:has([data-page='landing']),
+html:has([data-page='landing']) body,
+html:has([data-page='landing']) #root {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+html:has([data-page='landing']) {
+  overflow-y: auto;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);

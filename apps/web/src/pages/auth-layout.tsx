@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
 import { t } from '@/copy';
 import { VitalMark } from '@/shell/VitalMark';
 
@@ -28,12 +29,12 @@ export function AuthLayout({
           style={{ background: 'linear-gradient(to top, var(--pulse-500), transparent)' }}
         />
         <div className="relative px-10 pt-12">
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2" aria-label={t.brand.wordmark}>
             <VitalMark className="h-8 w-8" style={{ color: 'var(--pulse-400)' }} />
             <span className="text-[length:var(--text-display)] font-semibold leading-[var(--text-display-lh)] tracking-[-0.03em]">
               {t.brand.wordmark}
             </span>
-          </div>
+          </Link>
         </div>
         <div className="relative px-10 pb-12">
           <p
@@ -53,12 +54,12 @@ export function AuthLayout({
 
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-[400px]">
-          <div className="mb-8 flex items-center gap-2 lg:hidden">
+          <Link to="/" className="mb-8 flex items-center gap-2 lg:hidden" aria-label={t.brand.wordmark}>
             <VitalMark className="h-8 w-8 text-accent" />
             <span className="text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
               {t.brand.wordmark}
             </span>
-          </div>
+          </Link>
           <h1 className="mb-6 text-[length:var(--text-title)] font-semibold leading-[var(--text-title-lh)] tracking-[-0.03em]">
             {title}
           </h1>
