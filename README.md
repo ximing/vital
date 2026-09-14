@@ -30,23 +30,8 @@ Vital 把 Agent 当成产品的一部分，而不是外挂聊天窗。
 1. **对内**：worker 里的后台 Agent 观察你的任务、习惯、反馈，按调度策略自己跑，产出可采纳的提议。
 2. **对外**：仓库里的 [skills/vital](skills/vital/SKILL.md) 让其他 Agent 用个人访问令牌调用同一套 HTTP API。
 
-```mermaid
-flowchart LR
-  subgraph inside [对内 · Vital Agent]
-    Events[任务 / 反馈 / 习惯变化] --> PG[(PostgreSQL 调度与队列)]
-    PG --> Worker[worker 调度器]
-    Worker --> Caps[线程整理 · 拆解 · 起草 · 日报 · 记忆 · 通知]
-    Caps --> Propose[提议出现在今天 / 系统行为]
-    Propose --> You[你采纳 / 纠正 / 忽略]
-    You --> Memory[Agent 记忆]
-    Memory --> Caps
-  end
-  subgraph outside [对外 · 其他 Agent]
-    Skill[skills/vital] --> Token["vt_ 访问令牌"]
-    Token --> API["/api/v1"]
-    API --> Data[同一份 inbox / tasks / reports]
-  end
-```
+![对内 Vital Agent 与对外 skill 汇入同一份数据](docs/diagrams/ai-first-paths.zh.svg#gh-light-mode-only)
+![对内 Vital Agent 与对外 skill 汇入同一份数据](docs/diagrams/ai-first-paths.zh-dark.svg#gh-dark-mode-only)
 
 ### 对内：Agent 怎么工作
 
