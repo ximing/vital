@@ -3,14 +3,48 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             install_tray(app)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Vital");
+        .on_window_event(on_window_event)
+        .build(tauri::generate_context!())
+        .expect("error while running Vital")
+        .run(on_run_event);
+}
+
+fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    #[cfg(target_os = "macos")]
+    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        api.prevent_close();
+        let _ = window.hide();
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (window, event);
+}
+
+fn on_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
+    #[cfg(target_os = "macos")]
+    if let tauri::RunEvent::Reopen {
+        has_visible_windows,
+        ..
+    } = event
+    {
+        if !has_visible_windows {
+            show_main(app);
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, event);
 }
 
 fn show_main(app: &tauri::AppHandle) {
