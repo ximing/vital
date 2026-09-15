@@ -5,12 +5,17 @@ import { HOME_PATH } from '@/copy';
 import { needsOnboarding } from '@/features/onboarding';
 import { AuthService } from '@/services/auth.service';
 
-export function afterAuthPath(from: string | undefined, user: Parameters<typeof needsOnboarding>[0]): string {
+export function afterAuthPath(
+  from: string | undefined,
+  user: Parameters<typeof needsOnboarding>[0],
+): string {
   if (from && from !== '/login' && from !== '/register' && from !== '/') return from;
   return needsOnboarding(user) ? '/onboarding' : HOME_PATH;
 }
 
-export const RequireAuth: FC<{ children: ReactNode }> = observer(function RequireAuth({ children }) {
+export const RequireAuth: FC<{ children: ReactNode }> = observer(function RequireAuth({
+  children,
+}) {
   const user = useService(AuthService).user;
   const location = useLocation();
   if (!user) {
@@ -26,4 +31,13 @@ export const GuestOnly: FC<{ children: ReactNode }> = observer(function GuestOnl
     return <Navigate to={afterAuthPath(location.state?.from, user)} replace />;
   }
   return <>{children}</>;
+});
+
+/** `/` : signed-in → today (or onboarding); guest → login. */
+export const RootEntry: FC = observer(function RootEntry() {
+  return (
+    <GuestOnly>
+      <Navigate to="/login" replace />
+    </GuestOnly>
+  );
 });

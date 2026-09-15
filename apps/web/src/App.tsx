@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router';
-import { TODOS_HOME_PATH } from '@/copy';
+import { LANDING_PATH, TODOS_HOME_PATH } from '@/copy';
 import { InboxReader, InboxWorkspace } from '@/features/inbox';
 import { OnboardingPage } from '@/features/onboarding';
 import { ReportsWorkspace } from '@/features/reports';
@@ -13,13 +13,14 @@ import { LoginPage } from '@/pages/login';
 import { NotFoundPage } from '@/pages/empty';
 import { RegisterPage } from '@/pages/register';
 import { SettingsPage } from '@/pages/settings';
-import { GuestOnly, RequireAuth } from '@/shell/require-auth';
+import { GuestOnly, RequireAuth, RootEntry } from '@/shell/require-auth';
 import { Shell } from '@/shell/Shell';
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<RootEntry />} />
+      <Route path={LANDING_PATH} element={<LandingPage />} />
       <Route
         path="/login"
         element={
