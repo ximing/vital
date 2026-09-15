@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
-import { HOME_PATH, t } from '@/copy';
+import { HOME_PATH, LANDING_PATH, t } from '@/copy';
 import { LandingPage } from '@/pages/landing';
 import { setAuthForTest } from '@/services/auth.service';
 import { RabRoot } from '../helpers/rab-root';
@@ -73,9 +73,9 @@ function mockMatchMedia(dark: boolean) {
 function renderLanding() {
   return render(
     <RabRoot>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={[LANDING_PATH]}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path={LANDING_PATH} element={<LandingPage />} />
         </Routes>
       </MemoryRouter>
     </RabRoot>,
@@ -98,7 +98,10 @@ describe('LandingPage', () => {
       'https://github.com/ximing/vital',
     );
     expect(screen.getAllByRole('link', { name: t.nav.login })[0]).toHaveAttribute('href', '/login');
-    expect(screen.getAllByRole('link', { name: t.landing.start })[0]).toHaveAttribute('href', '/register');
+    expect(screen.getAllByRole('link', { name: t.landing.start })[0]).toHaveAttribute(
+      'href',
+      '/register',
+    );
     await waitFor(() => {
       expect(screen.getByText(t.landing.version.replace('{v}', '0.3.1'))).toBeInTheDocument();
     });

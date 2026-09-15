@@ -2,7 +2,7 @@ import { bindServices, useService } from '@rabjs/react';
 import type { AppLatestRelease, DesktopAsset, DesktopAssetId } from '@vital/dto';
 import { useEffect, type FC, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { HOME_PATH, t } from '@/copy';
+import { HOME_PATH, LANDING_PATH, t } from '@/copy';
 import { resolveTheme } from '@/lib/theme';
 import { LandingPageService } from '@/pages/landing.service';
 import { AuthService } from '@/services/auth.service';
@@ -172,7 +172,9 @@ function DownloadRow({
       <p className="px-1 font-display text-[length:var(--text-body)] font-semibold leading-[var(--text-body-lh)] sm:px-0">
         {title}
         {preferred ? (
-          <span className="ml-2 align-middle text-[11px] font-medium text-accent">{t.landing.recommended}</span>
+          <span className="ml-2 align-middle text-[11px] font-medium text-accent">
+            {t.landing.recommended}
+          </span>
         ) : null}
       </p>
       <p className="col-start-1 px-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted sm:col-start-2 sm:px-0">
@@ -263,7 +265,11 @@ function LandingContent() {
     <div className="landing" data-page="landing">
       <header className="sticky top-0 z-20 border-b border-border bg-canvas/90 backdrop-blur-md">
         <div className="landing-frame flex h-14 items-center gap-3">
-          <Link to="/" className="flex items-center gap-2 text-fg" aria-label={t.brand.wordmark}>
+          <Link
+            to={LANDING_PATH}
+            className="flex items-center gap-2 text-fg"
+            aria-label={t.brand.wordmark}
+          >
             <VitalMark className="h-7 w-7 text-accent" />
             <span className="font-display text-[length:var(--text-title)] font-semibold tracking-[-0.03em]">
               {t.brand.wordmark}
@@ -328,7 +334,11 @@ function LandingContent() {
             <div className="landing-collage">
               <Plate src={todaySrc} alt={t.landing.screenshotAlt} className="is-main" />
               <Plate src={readerSrc} alt={t.landing.plates.reader} className="is-offset" />
-              <Plate src="/marketing/mobile-today.png" alt={t.landing.plates.mobile} className="is-phone" />
+              <Plate
+                src="/marketing/mobile-today.png"
+                alt={t.landing.plates.mobile}
+                className="is-phone"
+              />
             </div>
           </div>
         </section>
@@ -341,11 +351,15 @@ function LandingContent() {
 
         <section id="today" className="landing-frame landing-spread">
           <div className="landing-spread-copy">
-            <p className="text-[length:var(--text-meta)] text-accent">{t.landing.spread.today.kicker}</p>
+            <p className="text-[length:var(--text-meta)] text-accent">
+              {t.landing.spread.today.kicker}
+            </p>
             <h2 className="mt-2 font-display text-[clamp(1.6rem,3vw,2.15rem)] font-semibold leading-[1.2] tracking-[-0.03em]">
               {t.landing.spread.today.title}
             </h2>
-            <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">{t.landing.spread.today.body}</p>
+            <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">
+              {t.landing.spread.today.body}
+            </p>
           </div>
           <Plate src={todaySrc} alt={t.landing.screenshotAlt} caption={t.landing.plates.today} />
         </section>
@@ -353,11 +367,15 @@ function LandingContent() {
         <section id="todos" className="border-y border-border">
           <div className="landing-frame landing-spread is-flip">
             <div className="landing-spread-copy">
-              <p className="text-[length:var(--text-meta)] text-accent">{t.landing.spread.todos.kicker}</p>
+              <p className="text-[length:var(--text-meta)] text-accent">
+                {t.landing.spread.todos.kicker}
+              </p>
               <h2 className="mt-2 font-display text-[clamp(1.6rem,3vw,2.15rem)] font-semibold leading-[1.2] tracking-[-0.03em]">
                 {t.landing.spread.todos.title}
               </h2>
-              <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">{t.landing.spread.todos.body}</p>
+              <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">
+                {t.landing.spread.todos.body}
+              </p>
             </div>
             <Plate src={todosSrc} alt={t.landing.plates.todos} caption={t.landing.plates.todos} />
           </div>
@@ -365,24 +383,56 @@ function LandingContent() {
 
         <section id="inbox" className="landing-frame landing-spread">
           <div className="landing-spread-copy">
-            <p className="text-[length:var(--text-meta)] text-accent">{t.landing.spread.inbox.kicker}</p>
+            <p className="text-[length:var(--text-meta)] text-accent">
+              {t.landing.spread.inbox.kicker}
+            </p>
             <h2 className="mt-2 font-display text-[clamp(1.6rem,3vw,2.15rem)] font-semibold leading-[1.2] tracking-[-0.03em]">
               {t.landing.spread.inbox.title}
             </h2>
-            <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">{t.landing.spread.inbox.body}</p>
+            <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">
+              {t.landing.spread.inbox.body}
+            </p>
           </div>
           <Plate src={readerSrc} alt={t.landing.plates.reader} caption={t.landing.plates.reader} />
         </section>
 
         <Folio
           slides={[
-            { src: '/marketing/reports.png', alt: t.landing.plates.reports, caption: t.landing.plates.reports },
-            { src: '/marketing/thread.png', alt: t.landing.plates.thread, caption: t.landing.plates.thread },
-            { src: '/marketing/habits.png', alt: t.landing.plates.habits, caption: t.landing.plates.habits },
-            { src: '/marketing/search.png', alt: t.landing.plates.search, caption: t.landing.plates.search },
-            { src: '/marketing/todos-board.png', alt: t.landing.plates.board, caption: t.landing.plates.board },
-            { src: '/marketing/todos-week.png', alt: t.landing.plates.week, caption: t.landing.plates.week },
-            { src: '/marketing/memory.png', alt: t.landing.plates.memory, caption: t.landing.plates.memory },
+            {
+              src: '/marketing/reports.png',
+              alt: t.landing.plates.reports,
+              caption: t.landing.plates.reports,
+            },
+            {
+              src: '/marketing/thread.png',
+              alt: t.landing.plates.thread,
+              caption: t.landing.plates.thread,
+            },
+            {
+              src: '/marketing/habits.png',
+              alt: t.landing.plates.habits,
+              caption: t.landing.plates.habits,
+            },
+            {
+              src: '/marketing/search.png',
+              alt: t.landing.plates.search,
+              caption: t.landing.plates.search,
+            },
+            {
+              src: '/marketing/todos-board.png',
+              alt: t.landing.plates.board,
+              caption: t.landing.plates.board,
+            },
+            {
+              src: '/marketing/todos-week.png',
+              alt: t.landing.plates.week,
+              caption: t.landing.plates.week,
+            },
+            {
+              src: '/marketing/memory.png',
+              alt: t.landing.plates.memory,
+              caption: t.landing.plates.memory,
+            },
             {
               src: '/marketing/mobile-inbox.png',
               alt: t.landing.plates.mobile,
@@ -394,23 +444,39 @@ function LandingContent() {
 
         <section id="agent" className="landing-frame landing-spread">
           <div className="landing-spread-copy">
-            <p className="text-[length:var(--text-meta)] text-accent">{t.landing.spread.agent.kicker}</p>
+            <p className="text-[length:var(--text-meta)] text-accent">
+              {t.landing.spread.agent.kicker}
+            </p>
             <h2 className="mt-2 font-display text-[clamp(1.6rem,3vw,2.15rem)] font-semibold leading-[1.2] tracking-[-0.03em]">
               {t.landing.spread.agent.title}
             </h2>
-            <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">{t.landing.spread.agent.body}</p>
+            <p className="mt-4 text-[length:var(--text-body)] leading-[1.7] text-muted">
+              {t.landing.spread.agent.body}
+            </p>
             <dl className="mt-8 grid gap-6">
               <div>
-                <dt className="font-display text-[length:var(--text-body)] font-semibold">{t.landing.agentIn.title}</dt>
-                <dd className="mt-1 text-[length:var(--text-meta)] leading-[1.65] text-muted">{t.landing.agentIn.body}</dd>
+                <dt className="font-display text-[length:var(--text-body)] font-semibold">
+                  {t.landing.agentIn.title}
+                </dt>
+                <dd className="mt-1 text-[length:var(--text-meta)] leading-[1.65] text-muted">
+                  {t.landing.agentIn.body}
+                </dd>
               </div>
               <div>
-                <dt className="font-display text-[length:var(--text-body)] font-semibold">{t.landing.agentOut.title}</dt>
-                <dd className="mt-1 text-[length:var(--text-meta)] leading-[1.65] text-muted">{t.landing.agentOut.body}</dd>
+                <dt className="font-display text-[length:var(--text-body)] font-semibold">
+                  {t.landing.agentOut.title}
+                </dt>
+                <dd className="mt-1 text-[length:var(--text-meta)] leading-[1.65] text-muted">
+                  {t.landing.agentOut.body}
+                </dd>
               </div>
             </dl>
           </div>
-          <Plate src="/marketing/memory.png" alt={t.landing.plates.memory} caption={t.landing.plates.memory} />
+          <Plate
+            src="/marketing/memory.png"
+            alt={t.landing.plates.memory}
+            caption={t.landing.plates.memory}
+          />
         </section>
 
         <section id="download" className="border-t border-border">
@@ -432,7 +498,12 @@ function LandingContent() {
             {page.error || (!page.loading && catalog === null) ? (
               <p className="mt-6 text-[length:var(--text-meta)] text-muted">
                 {t.landing.unavailable}{' '}
-                <a href={`${GITHUB}/releases`} target="_blank" rel="noreferrer" className={TEXT_LINK}>
+                <a
+                  href={`${GITHUB}/releases`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={TEXT_LINK}
+                >
                   {t.landing.githubReleases}
                 </a>
               </p>
@@ -476,7 +547,11 @@ function LandingContent() {
               <DownloadRow
                 family="linux"
                 title={t.landing.linux}
-                hint={[deb ? t.landing.deb : null, appimage ? t.landing.appimage : null, rpm ? t.landing.rpm : null]
+                hint={[
+                  deb ? t.landing.deb : null,
+                  appimage ? t.landing.appimage : null,
+                  rpm ? t.landing.rpm : null,
+                ]
                   .filter(Boolean)
                   .join(' / ')}
                 href={deb?.url ?? appimage?.url ?? rpm?.url ?? null}
