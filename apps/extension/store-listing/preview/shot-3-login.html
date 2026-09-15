@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <link rel="stylesheet" href="./popup-mock.css" />
     <style>
       html,
       body {
@@ -9,56 +10,37 @@
         width: 1280px;
         height: 800px;
         overflow: hidden;
-        font-family: system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
-        background: #cfc9be;
+        background: #d8d2c6;
       }
       .stage {
         width: 1280px;
         height: 800px;
         display: grid;
         place-items: center;
-        background: #d8d2c6;
-      }
-      .panel {
-        width: 380px;
-        min-height: 420px;
-        background: #14110c;
-        color: #fff6ea;
-        border-radius: 12px;
-        box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
-        padding: 16px;
-        box-sizing: border-box;
-        font: 15px/1.5 system-ui, 'PingFang SC', sans-serif;
-      }
-      h1 {
-        margin: 0 0 12px;
-        font-size: 16px;
-        font-weight: 650;
-      }
-      .muted {
-        color: #a39888;
-        font-size: 13px;
-        line-height: 1.45;
       }
       .primary {
-        margin-top: 14px;
         width: 100%;
-        padding: 9px 12px;
-        background: #f5c84b;
-        color: #1c1914;
-        font-weight: 600;
-        border: 0;
-        border-radius: 8px;
-        font: inherit;
+        min-height: 40px;
       }
     </style>
   </head>
   <body>
     <div class="stage">
-      <div class="panel">
-        <h1>Vital</h1>
-        <p class="muted">在网页登录后，点工具栏即可把当前页收到稍后读。快捷键 Alt+Shift+V。</p>
-        <button class="primary" type="button">在网页登录</button>
+      <div class="popup">
+        <div class="brand-bar">
+          <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M21.5 6.48A11 11 0 1 1 6.48 10.5" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M8 16.5L13 22.5L18.5 10.5L21.5 15.5L26 8" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand-name">Vital</span>
+          <span class="brand-caption">留住此刻，稍后继续</span>
+        </div>
+        <section class="state">
+          <div class="state-icon" aria-hidden="true">↗</div>
+          <h1>连接你的 Vital</h1>
+          <p class="muted">在网页登录后，点工具栏即可把当前页收进来。快捷键 Alt+Shift+V。</p>
+          <span class="primary">在网页登录</span>
+        </section>
       </div>
     </div>
   </body>

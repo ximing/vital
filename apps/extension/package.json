@@ -1,11 +1,13 @@
 {
   "name": "@vital/extension",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
+    "zip": "wxt zip",
+    "zip:store": "node scripts/zip-store.mjs",
     "postinstall": "wxt prepare",
     "lint": "wxt prepare && eslint .",
     "typecheck": "wxt prepare && tsc --noEmit",

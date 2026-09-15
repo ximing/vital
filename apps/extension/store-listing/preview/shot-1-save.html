@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <link rel="stylesheet" href="./popup-mock.css" />
     <style>
       html,
       body {
@@ -9,7 +10,7 @@
         width: 1280px;
         height: 800px;
         overflow: hidden;
-        font-family: system-ui, 'PingFang SC', 'Noto Sans SC', sans-serif;
+        font-family: Inter, 'PingFang SC', 'Noto Sans SC', sans-serif;
         background: #d8d4cc;
       }
       .chrome {
@@ -18,6 +19,7 @@
         background: #eceae4;
         display: flex;
         flex-direction: column;
+        position: relative;
       }
       .bar {
         height: 44px;
@@ -27,6 +29,7 @@
         gap: 8px;
         padding: 0 12px;
         border-bottom: 1px solid #d0ccc3;
+        box-sizing: border-box;
       }
       .dots span {
         display: inline-block;
@@ -51,20 +54,19 @@
         width: 28px;
         height: 28px;
         border-radius: 6px;
-        background: #0d1a1c;
-        display: grid;
-        place-items: center;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 0 0 2px rgb(28 122 79 / 35%);
       }
-      .tb svg {
-        width: 18px;
-        height: 18px;
-        color: #3d9b94;
+      .tb img {
+        width: 28px;
+        height: 28px;
+        display: block;
       }
       .page {
         flex: 1;
         background: #faf8f3;
         padding: 56px 120px 80px;
-        position: relative;
       }
       .page h1 {
         margin: 0 0 12px;
@@ -77,32 +79,10 @@
         line-height: 1.7;
         font-size: 16px;
       }
-      .toast {
+      .popup {
         position: absolute;
-        right: 24px;
-        bottom: 24px;
-        max-width: 360px;
-        padding: 10px 14px;
-        border-radius: 10px;
-        background: #1c1914;
-        color: #fffbf5;
-        font: 13px/1.4 system-ui, 'PingFang SC', sans-serif;
-        box-shadow: 0 8px 24px rgb(28 25 20 / 28%);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 99px;
-        background: #e8a317;
-        flex: none;
-      }
-      .toast a {
-        color: #e8a317;
-        font-weight: 600;
-        text-decoration: none;
+        top: 52px;
+        right: 16px;
       }
     </style>
   </head>
@@ -111,22 +91,41 @@
       <div class="bar">
         <div class="dots"><span></span><span></span><span></span></div>
         <div class="omni">example.com/essay</div>
-        <div class="tb" title="保存到 Vital">
-          <svg viewBox="0 0 32 32" fill="none">
-            <path d="M21.5 6.48A11 11 0 1 1 6.48 10.5" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" />
-            <path d="M8 16.5L13 22.5L18.5 10.5L21.5 15.5L26 8" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" />
-          </svg>
+        <div class="tb" title="Save to Vital">
+          <img src="../../assets/icon-128.png" alt="" />
         </div>
       </div>
       <div class="page">
-        <h1>一篇正在读的长文</h1>
-        <p>点击工具栏上的 Vital，或按下 Alt+Shift+V，当前页会收到稍后读。同一网址不会重复保存。</p>
-        <p>扩展只在你主动保存时读取这一页，不会在后台扫描其它标签。</p>
-        <div class="toast">
-          <span class="dot"></span>
-          <span>已保存到 Vital</span>
-          <a>打开</a>
+        <h1>A long article you are reading</h1>
+        <p>Click the Vital toolbar icon to preview the title, add a note, then save to read later or as a task. The same URL is not saved twice.</p>
+        <p>The extension reads this tab only when you choose to save. It does not scan other tabs.</p>
+      </div>
+      <div class="popup">
+        <div class="brand-bar">
+          <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M21.5 6.48A11 11 0 1 1 6.48 10.5" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M8 16.5L13 22.5L18.5 10.5L21.5 15.5L26 8" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="brand-name">Vital</span>
+          <span class="brand-caption">留住此刻，稍后继续</span>
         </div>
+        <section>
+          <div class="modes">
+            <span class="active">文章</span>
+            <span>选区</span>
+            <span>待办</span>
+            <span>文件</span>
+          </div>
+          <label>标题</label>
+          <div class="field">A long article you are reading</div>
+          <p class="meta">example.com · 128 字</p>
+          <label>备注 <span class="optional">选填</span></label>
+          <div class="field note" style="color: #98a098">记下想法，留给稍后的自己</div>
+        </section>
+        <footer class="bar">
+          <span class="primary">保存</span>
+          <span class="ghost">最近保存</span>
+        </footer>
       </div>
     </div>
   </body>

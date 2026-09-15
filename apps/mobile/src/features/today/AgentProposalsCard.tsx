@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { observer, useService } from '@rabjs/react';
 import { router } from 'expo-router';
 import { Sparkles } from 'lucide-react-native';
-import type { AgentActionLogItem } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { SectionHead } from '../../components/SectionHead';
 import { copy } from '../../lib/copy';
@@ -11,15 +10,8 @@ import { useTheme } from '../../theme/use-theme';
 import { rnShadow } from '../../ui/card';
 import { Icon } from '../../ui/icon';
 import { pendingProposals } from './model';
+import { ExpandableProposalText } from './ExpandableProposalText';
 import { TodayService } from './today.service';
-
-function detailText(item: AgentActionLogItem): string {
-  const summary = item.payloadSummary.trim();
-  if (item.targetName !== null) {
-    return summary === '' ? item.targetName : `${item.targetName}：${summary}`;
-  }
-  return summary === '' ? copy.settings.activity.deletedTarget : summary;
-}
 
 /**
  * spec §f.6 Agent 提案卡：eyebrow「AGENT 提案」accent + 计数，右侧「全部」→ /activity。
@@ -53,14 +45,9 @@ export const AgentProposalsCard = observer(function AgentProposalsCard() {
       />
       <View style={[styles.card, rnShadow(t)]}>
         {shown.map((item, index) => (
-          <View
-            key={item.id}
-            style={[styles.row, index < shown.length - 1 && styles.rowBorder]}
-          >
+          <View key={item.id} style={[styles.row, index < shown.length - 1 && styles.rowBorder]}>
             <Icon icon={Sparkles} size={16} strokeWidth={1.7} color={t.fgMuted} />
-            <Text style={styles.title} numberOfLines={2}>
-              {detailText(item)}
-            </Text>
+            <ExpandableProposalText item={item} />
             <Pressable
               accessibilityRole="button"
               disabled={busyId !== null}
@@ -96,7 +83,7 @@ const createStyles = (t: Theme) =>
     },
     row: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       gap: 10,
       paddingVertical: t.space[2],
     },
@@ -104,13 +91,7 @@ const createStyles = (t: Theme) =>
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: t.borderSubtle,
     },
-    title: {
-      flex: 1,
-      minWidth: 0,
-      fontSize: 14,
-      lineHeight: 21,
-      color: t.fgPrimary,
-    },
+
     accept: { fontSize: t.type.meta.fontSize, fontWeight: '600', color: t.accentPrimary },
     dismiss: { fontSize: t.type.meta.fontSize, color: t.textTertiary },
   });

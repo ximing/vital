@@ -784,6 +784,8 @@ export const t = {
       noSummary: '—',
       accept: '采纳',
       dismiss: '忽略',
+      expand: '展开',
+      collapse: '收起',
       metrics: {
         proposedUnit: '条',
         flat: '持平',
@@ -816,6 +818,7 @@ export const t = {
         'outcome.headline': '线程状态',
         'outcome.suggestion': '线程建议',
         'task.decompose': '任务拆解',
+        'task.draft': '方案起草',
         'report.generate': '日报生成',
         'habit.create': '新建习惯',
         'habit.adjust': '调整习惯',

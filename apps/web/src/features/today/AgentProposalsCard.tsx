@@ -3,7 +3,11 @@ import { Link } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { ACTIVITY_CARD } from '@/features/settings/ActivitySectionHead';
-import { actionLabel, detailText, timeLabel } from '@/features/settings/AgentActivitySection';
+import {
+  actionLabel,
+  ExpandableProposalText,
+  timeLabel,
+} from '@/features/settings/AgentActivitySection';
 import { TODAY_HEAD_LINK, TodaySectionHead } from './SectionHead';
 
 const copy = t.today.agentProposals;
@@ -51,9 +55,7 @@ export function AgentProposalsCard() {
               {actionLabel(item.actionType)}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-medium text-fg">
-                {detailText(item)}
-              </p>
+              <ExpandableProposalText item={item} />
               <p className="font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
                 {timeLabel(item.createdAt)}
               </p>

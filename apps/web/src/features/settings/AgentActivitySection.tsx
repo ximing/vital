@@ -2,7 +2,7 @@ import { AgentExecutionSection } from './AgentExecutionSection';
 import { AgentScheduleSection } from './AgentScheduleSection';
 import { ACTIVITY_CARD, ActivitySectionHead } from './ActivitySectionHead';
 import { formatCost } from './UsageSection';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { AgentActionLogItem, AgentMetricsResponse } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
@@ -49,7 +49,11 @@ function Overview({ data }: { data: AgentMetricsResponse | undefined }) {
   const totalCostMicros = summary.perCapability.reduce((sum, row) => sum + row.costMicros, 0);
   return (
     <div>
-      <div data-region="adoption-summary" data-trend={trend.dir} className="grid gap-3 sm:grid-cols-3">
+      <div
+        data-region="adoption-summary"
+        data-trend={trend.dir}
+        className="grid gap-3 sm:grid-cols-3"
+      >
         <div className={`${ACTIVITY_CARD} px-5 py-4`}>
           <p className={STAT_NUM}>
             {summary.proposed}
@@ -181,6 +185,97 @@ export function detailText(item: AgentActionLogItem): string {
   return summary === '' ? copy.deletedTarget : summary;
 }
 
+function payloadString(payload: Record<string, unknown>, key: string): string {
+  const value = payload[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Full readable body for an expanded proposal — not the one-line digest. */
+export function proposalFullText(item: AgentActionLogItem): string {
+  const payload = item.payload ?? {};
+  const str = (key: string) => payloadString(payload, key);
+  let body = '';
+  switch (item.actionType) {
+    case 'task.draft':
+      body = str('draft');
+      break;
+    case 'report.generate':
+      body = str('notes');
+      break;
+    case 'outcome.headline':
+      body = str('headline');
+      break;
+    case 'outcome.suggestion':
+      body = str('suggestion');
+      break;
+    case 'outcome.create':
+      body = str('name');
+      break;
+    case 'task.decompose': {
+      const subtasks = Array.isArray(payload['subtasks']) ? payload['subtasks'] : [];
+      body = subtasks
+        .map((entry) =>
+          entry && typeof entry === 'object'
+            ? payloadString(entry as Record<string, unknown>, 'title')
+            : '',
+        )
+        .filter((title) => title !== '')
+        .map((title, index) => `${index + 1}. ${title}`)
+        .join('\n');
+      break;
+    }
+    default:
+      body = str('content') || str('hint') || str('name');
+  }
+  if (body === '') return detailText(item);
+  if (item.targetName !== null && item.targetName !== body) {
+    return `${item.targetName}\n${body}`;
+  }
+  return body;
+}
+
+export function proposalCanExpand(item: AgentActionLogItem): boolean {
+  const full = proposalFullText(item);
+  const preview = detailText(item);
+  return full !== preview || full.includes('\n') || full.length > 72;
+}
+
+export function ExpandableProposalText({
+  item,
+  tone = 'fg',
+}: {
+  item: AgentActionLogItem;
+  tone?: 'fg' | 'muted';
+}) {
+  const [open, setOpen] = useState(false);
+  const canExpand = proposalCanExpand(item);
+  const text = open ? proposalFullText(item) : detailText(item);
+  const color = tone === 'muted' ? 'text-muted' : 'text-fg';
+  const weight = tone === 'muted' ? 'font-normal' : 'font-medium';
+
+  return (
+    <div className="min-w-0 flex-1">
+      <p
+        className={`text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${weight} ${color} ${
+          open ? 'whitespace-pre-wrap' : 'line-clamp-2'
+        }`}
+      >
+        {text}
+      </p>
+      {canExpand ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((value) => !value)}
+          className="mt-0.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] font-medium text-accent hover:text-accent-hover"
+        >
+          {open ? copy.collapse : copy.expand}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** Actionable proposals awaiting the user's call, lifted out of the timeline. */
 function PendingProposals({
   items,
@@ -210,9 +305,7 @@ function PendingProposals({
               {actionLabel(item.actionType)}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-medium text-fg">
-                {detailText(item)}
-              </p>
+              <ExpandableProposalText item={item} />
               <p className="font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
                 {timeLabel(item.createdAt)}
               </p>
@@ -271,9 +364,7 @@ function ProposalHistory({ groups, today }: { groups: DayGroup[]; today: string 
                     <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] font-medium text-fg">
                       {actionLabel(item.actionType)}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-                      {detailText(item)}
-                    </span>
+                    <ExpandableProposalText item={item} tone="muted" />
                     <span
                       className={`inline-flex shrink-0 items-center gap-1.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] ${
                         positive ? 'text-muted' : 'text-tertiary'

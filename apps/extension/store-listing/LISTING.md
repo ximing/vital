@@ -1,238 +1,278 @@
-# Chrome 网上应用店 · 填写稿
+# Chrome Web Store · first listing (English)
 
-按开发者后台从左到右抄。文案与当前插件行为一致（保存网页 / 选区 / 图片到 Vital 稍后读或待办），不要再加商店里做不到的功能。
+Fill the developer dashboard **in English**. Reviewers are not Chinese speakers. Product UI stays Chinese; that is expected and noted below.
 
-上架前先打 **生产包**（现成 `dist` 里是 localhost，审不过）：
+Do not claim features the **0.1.0** package does not have (toolbar popup: article / selection / task / file; context menus; Alt+Shift+V).
+
+This is a **new item** (Add new item), not an update.
+
+---
+
+## 0. Package
+
+```
+apps/extension/store-listing/vital-0.1.0-chrome.zip
+```
+
+`manifest.json` is at the zip root. Version `0.1.0`. Manifest strings are English.
+
+Rebuild the store package (does not overwrite local `dist/`):
 
 ```bash
 cd /Users/ximing/project/mygithub/vital
-WXT_API_URL=https://vital.aimo.plus \
-WXT_WEB_URL=https://vital.aimo.plus \
-WXT_S3_ENDPOINT=https://s3.aimo.plus \
-pnpm --filter @vital/extension build
+pnpm --filter @vital/extension zip:store
 ```
 
-把 `apps/extension/dist/chrome-mv3/` **打成 zip**（zip 根目录要能直接看到 `manifest.json`，不要多套一层文件夹）。`package.json` 的 `version` 现在是 `0.0.0`，上架前改成 `0.1.0`（或你准备对外的版本号）再 build。
+Local `build` / `dev` still target localhost. Store build writes `dist-store/` and copies the zip here.
 
-本目录资源：
-
-| 文件 | 用途 |
-| --- | --- |
-| `assets/icon-128.png` | 商店图标（与扩展图标相同） |
-| `assets/icon-512.png` | 高清备用 |
-| `assets/promo-small-440x280.png` | 小宣传图（必填） |
-| `assets/promo-marquee-1400x560.png` | 横幅宣传图（选填，建议传） |
-| `assets/promo-large-920x680.png` | 大宣传图（选填） |
-| `assets/screenshot-1-save.png` | 截图 1：一键保存 |
-| `assets/screenshot-2-menu.png` | 截图 2：右键菜单 |
-| `assets/screenshot-3-login.png` | 截图 3：登录面板 |
-| `assets/screenshot-4-recent.png` | 截图 4：最近保存 |
-| `assets/screenshot-5-edit.png` | 截图 5：保存并编辑 |
-| `privacy.html` | 隐私政策，部署后作为商店「隐私权政策」链接 |
-
-隐私政策建议 URL（把 `privacy.html` 放到网站根目录即可）：
-
-`https://vital.aimo.plus/privacy.html`
+Dashboard: [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole) → **Add new item**.
 
 ---
 
-## 1. 商品信息 / Store listing
+## 1. Store listing
 
-**语言：** 中文（中国）`zh-CN`  
-只建这一个语言。插件 UI 全是中文，不要勾选你没做的语言。
+**Language:** English (United States)  
+One language only. Do **not** add Chinese as a store locale (the in-product UI is Chinese; the listing is English for review).
 
-### 商品名称（最多 45 个字符）
-
-```
-Vital
-```
-
-若希望搜索更清楚，可用（41 字）：
+### Name (max 45 characters) — 31
 
 ```
-Vital：把网页收到稍后读
+Vital: Save pages to read later
 ```
 
-与 manifest `name` 保持「Vital」即可，后台名称可以更完整。
+Plain `Vital` also matches the manifest name.
 
-### 摘要 Summary（最多 132 个字符）
-
-```
-一键把网页、选区和图片存进 Vital 稍后读，也可存为待办。工具栏或 Alt+Shift+V。
-```
-
-字数：44。不要堆关键词。
-
-### 详细说明 Description
+### Summary (max 132 characters) — 118
 
 ```
-Vital 扩展用来把正在看的网页收进你的 Vital 稍后读，需要时也可以存成待办。
-
-怎么用
-• 点击工具栏图标，保存当前页
-• 快捷键 Alt+Shift+V，同样保存当前页
-• 在页面、链接、选中文字或图片上右键：保存到稍后读、保存为待办、保存并编辑
-• 右键扩展图标 →「最近保存」，打开最近收进来的条目
-
-保存时会抽出标题和正文，方便回 Vital 网页版阅读。同一网址不会重复建两条。图片会存到你的账号，不经过无关第三方。
-
-登录
-首次使用请点扩展里的「在网页登录」，在 vital.aimo.plus 登录后会自动连上扩展。登录状态只存在你的 Chrome 配置里。
-
-这不是广告拦截、也不是全站爬虫。只在你主动点保存时读取当前标签页。
+Save the current page, selection, image, or file to your Vital read-later inbox, or as a task. Toolbar or Alt+Shift+V.
 ```
 
-### 类别 Category
+### Detailed description
 
-主类别：**效率工具** / Productivity  
-不要选「新闻」「社交」。
+```
+Vital saves the page you are reading into your Vital read-later inbox. You can also save it as a task, or capture a PDF / audio / video file from the current page into your account.
 
-### 官方网址
+The in-product UI is Chinese.
+
+How to use
+• Click the toolbar icon to preview the title and text, edit the title, add a note, and choose Article, Selection, Task, or File
+• Press Alt+Shift+V to save the current page immediately
+• Right-click a page, link, selection, or image: save to read later, save as a task, or save and edit
+• Open Recent in the popup to see items you just saved
+
+Saves extract a title and readable text so you can finish reading on the Vital website. The same URL is not created twice. Images and files you choose to save are stored in your account. They are not sent to unrelated third parties.
+
+Sign in
+The first time, click “Sign in on the web” in the extension, sign in at vital.aimo.plus, and the extension connects automatically. Session tokens stay in your Chrome profile.
+
+This is not an ad blocker and not a crawler. It reads the current tab only when you choose to save.
+```
+
+### Category
+
+**Productivity**
+
+### Official URL
+
+Verify `aimo.plus` (or `vital.aimo.plus`) in Google Search Console first. Then:
 
 ```
 https://vital.aimo.plus
 ```
 
-### 支持网址（可与上者相同）
+### Homepage URL
 
 ```
 https://vital.aimo.plus
 ```
 
-### 首页网址
+### Support URL
 
 ```
 https://vital.aimo.plus
 ```
+
+### YouTube promo video
+
+Leave empty.
+
+### Mature content
+
+Do **not** enable. Suitable for all ages.
 
 ---
 
-## 2. 隐私权实务 / Privacy practices
+## 2. Graphic assets (`assets/`)
 
-### 单一用途 Single purpose
+| Field | File | Size | Required |
+| --- | --- | --- | --- |
+| Store icon | `assets/icon-128.png` | 128 × 128 PNG | Yes |
+| Screenshot 1 | `assets/screenshot-1-save.png` | 1280 × 800 | Yes (upload first) |
+| Screenshot 2 | `assets/screenshot-2-menu.png` | 1280 × 800 | Recommended |
+| Screenshot 3 | `assets/screenshot-3-login.png` | 1280 × 800 | Recommended |
+| Screenshot 4 | `assets/screenshot-4-recent.png` | 1280 × 800 | Recommended |
+| Screenshot 5 | `assets/screenshot-5-edit.png` | 1280 × 800 | Recommended |
+| Small promo | `assets/promo-small-440x280.png` | 440 × 280 | Yes |
+| Marquee | `assets/promo-marquee-1400x560.png` | 1400 × 560 | Optional, recommended |
+| Large promo | `assets/promo-large-920x680.png` | 920 × 680 | Optional |
 
-英文后台常见字段，中英都备着。填**一句**，不要写产品全家桶。
+Spare: `assets/icon-512.png`
 
-中文：
+Screenshots (popup chrome is the real Chinese UI):
+
+1. Toolbar popup, article mode  
+2. Context menu  
+3. Sign-in prompt  
+4. Recent saves  
+5. In-page toast after Alt+Shift+V  
+
+Promo tiles are English brand banners, not product screenshots.
+
+---
+
+## 3. Privacy practices
+
+### Single purpose
 
 ```
-在用户主动操作时，把当前网页、链接、选中文字或图片保存到该用户的 Vital 稍后读或待办。
+When the user chooses, save the current page, link, selected text, image, or file to their Vital read-later inbox or tasks.
 ```
 
-English：
+### Does this extension collect user data?
+
+**Yes.** Only to complete the single purpose above (write into the user’s own Vital account).
+
+Check:
+
+- [x] Personally identifiable information (email, used to sign in)
+- [x] Website content (title, article text, selection, images, files, and URL the user chose to save)
+- [x] Authentication information (access / refresh tokens in `chrome.storage`)
+- [ ] Location
+- [ ] Health
+- [ ] Financial
+- [ ] Personal communications
+- [ ] Web history (pages the user did not save are not recorded)
+- [ ] User activity (do not extra-check; we do not log unsaved browsing)
+
+### Certifications
+
+- [x] App functionality (save to read later / tasks)
+- [ ] Advertising
+- [ ] Analytics (no third-party analytics)
+- [ ] Selling to third parties → **No**
+
+Also certify:
+
+- [x] I do not sell or transfer user data to third parties, except as necessary to provide the service (Vital API and object storage)
+- [x] I do not use or transfer user data for purposes unrelated to this item’s single purpose
+- [x] I do not use or transfer user data to determine creditworthiness or for lending
+
+### Sell user data?
+
+**No.**
+
+### Use for purposes unrelated to the single purpose?
+
+**No.**
+
+### Remote hosted code?
+
+**No.** All scripts ship in the package. Select “No, I am not using remote code.”
+
+### Privacy policy URL
+
+Must be public HTTPS, no login wall:
 
 ```
-When the user chooses, save the current page, link, selected text, or image to their Vital read-later inbox or tasks.
+https://vital.aimo.plus/privacy.html
 ```
 
-### 是否会收集用户数据？
+Source: `apps/web/public/privacy.html` (kept in sync with `store-listing/privacy.html`). **Deploy the English privacy page before you submit.**
 
-**是。**
+### Permission justifications
 
-收集的数据仅用于完成上述单一用途（写入用户自己的 Vital 账号）。
-
-勾选（按实际）：
-
-- [x] 个人身份信息（邮箱，用于登录）
-- [x] 网站内容（用户主动保存的页面标题、正文、选区、图片、网址）
-- [x] 身份验证信息（访问令牌 / 刷新令牌，存在 `chrome.storage`）
-- [ ] 位置
-- [ ] 健康
-- [ ] 财务
-- [ ] 通讯录
-- [ ] 浏览历史（我们不记录用户没保存的页面）
-
-### 使用目的
-
-- [x] 应用功能（保存到稍后读 / 待办）
-- [ ] 广告
-- [ ] 分析（若你没接第三方统计，不要勾）
-- [ ] 出售给第三方 → **否**
-
-### 是否出售用户数据？
-
-**否。**
-
-### 是否用于与单一用途无关的目的？
-
-**否。**
-
-### 是否使用远程托管代码？
-
-**否。** 所有脚本都打进扩展包。
-
-### 权限说明 Permission justification
-
-逐条粘贴，不要空着。
+Paste one box per permission.
 
 **storage**  
-保存登录令牌、用户资料缓存，以及「保存并编辑」时的草稿。不用于跨站跟踪。
+Stores the user’s sign-in tokens and a short profile cache. Not used for cross-site tracking.
 
 **activeTab**  
-用户点击工具栏或使用快捷键时，读取当前标签页的标题、网址和正文以便保存。不会在后台持续读取其它标签。
+When the user clicks the toolbar or uses the shortcut, read the current tab’s title, URL, and article text so it can be saved. Other tabs are not read in the background.
 
 **scripting**  
-在用户主动保存时，向当前页注入脚本以抽取可读正文和用户选中的图片。仅作用于当前次操作的标签页。
+On a user-initiated save, inject a script into the current tab to extract readable text and user-selected images. Only that tab, only for that action.
 
 **contextMenus**  
-提供右键菜单：保存页面、链接、选区、图片，以及存为待办、保存并编辑、最近保存。
+Adds right-click items to save a page, link, selection, or image, save as a task, or save and edit.
 
 **offscreen**  
-在扩展的隐藏文档里用 Readability 解析正文、转换不适合直传的图片格式。解析发生在本地扩展进程，不发往第三方解析服务。
+Parse article HTML with Readability and convert image formats that cannot be uploaded as-is, inside a hidden extension document. Parsing stays in the local extension process. No third-party parser.
 
-**主机权限 `https://vital.aimo.plus/*`**  
-Vital 的 API 与网页版同源。用于登录、创建稍后读 / 待办、列出最近保存。
+**Host permission `https://vital.aimo.plus/*`**  
+Same origin as the Vital API and website. Used to sign in, create read-later items and tasks, and list recent saves.
 
-**主机权限 `https://s3.aimo.plus/*`**  
-用户保存的图片上传到 Vital 使用的对象存储。仅上传用户主动保存的图片。
+**Host permission `https://s3.aimo.plus/*`**  
+Uploads images and files the user chose to save to the object storage Vital uses. Nothing else is uploaded.
 
-（若生产包里还有其它 host，按同样句式写「只用于 Vital 后端」。不要带 `localhost` 上架。）
-
----
-
-## 3. 发布范围
-
-- 可见性：**公开**
-- 地区：全部（或你实际服务的地区）
-- 价格：**免费**
-- 成熟度：未满 18 岁可用（不涉及成人内容）→ 选适合所有年龄
-
-首次发布需 Google 开发者注册费（一次性）。
+No `localhost` in the store package.
 
 ---
 
-## 4. 审核时可能被问到的话术
+## 4. Distribution
 
-**为什么要 scripting + activeTab？**  
-保存网页必须读 DOM 才能抽出正文。只在用户点击或快捷键时注入，不用 `tabs` 权限扫全部标签。
+- Visibility: **Public**
+- Regions: **All regions**
+- Price: **Free**
+- Mature: off
 
-**为什么不用 `<all_urls>`？**  
-故意不用。只申请 API / 存储域名；当前页靠 activeTab。
-
-**和 Vital App 是什么关系？**  
-同一产品的浏览器入口。扩展只负责「从网页收进来」；阅读、待办、复盘在 vital.aimo.plus。
+Uncheck “publish automatically after review” so you can confirm the assigned extension ID and sign-in handoff first.
 
 ---
 
-## 5. 图形资源规格（已导出到 `assets/`）
+## 5. Test instructions
 
-| 资源 | 尺寸 | 必填 |
-| --- | --- | --- |
-| 商店图标 | 128 × 128 PNG | 是 |
-| 截图 | 1280 × 800 PNG，最多 5 张 | 至少 1 |
-| 小宣传图 | 440 × 280 PNG | 是 |
-| 大宣传图 | 920 × 680 PNG | 否 |
-| 横幅 | 1400 × 560 PNG | 否 |
+Reviewers must be able to sign in. Public registration: https://vital.aimo.plus/register  
 
-截图不要纯营销海报，必须能看出扩展界面。本目录截图按真实文案和面板样式制作。
+If you have a dedicated test account, paste it only in the dashboard (not in git):
+
+```
+Test email:
+Test password:
+
+Steps:
+1. Install the extension. Click the toolbar icon. You should see a sign-in prompt (Chinese UI: “连接你的 Vital”).
+2. Click the primary button (“在网页登录”) and sign in at vital.aimo.plus with the account above, or register.
+3. Open any ordinary http(s) page (not chrome://). Click the toolbar again. You should see title / note and Article · Selection · Task · File.
+4. Click Save (保存). You should see a saved state; “在 Vital 中打开” opens the item.
+5. Right-click the page. You should see “保存到 Vital” and “保存为待办到 Vital”.
+6. Alt+Shift+V saves the current page immediately (check chrome://extensions/shortcuts if the key is taken).
+```
 
 ---
 
-## 6. 自检
+## 6. Reviewer Q&A
 
-- [ ] 生产 `host_permissions` 只有 `vital.aimo.plus` 与 `s3.aimo.plus`，没有 localhost
-- [ ] `version` 不是 `0.0.0`
-- [ ] zip 根上就是 `manifest.json`
-- [ ] 隐私政策 URL 已公网可打开 HTTPS
-- [ ] 摘要 / 说明没有写插件做不到的功能
-- [ ] 截图里的文案与插件一致（中文）
+**Why scripting + activeTab?**  
+Saving an article requires reading the DOM. Injection happens only on click or shortcut. The extension does not request `tabs` to scan every tab.
+
+**Why not `<all_urls>`?**  
+By design. Host permissions cover only the Vital API and storage. The current page uses activeTab.
+
+**How does this relate to the Vital app?**  
+Same product, browser capture entry. The extension only brings content in. Reading, tasks, and reviews live at vital.aimo.plus.
+
+**Why does sign-in open the website?**  
+The extension has no email/password form. After website login, a one-time code is handed to the extension via `externally_connectable`.
+
+---
+
+## 7. Checklist
+
+- [ ] Zip root is `manifest.json`, version `0.1.0`
+- [ ] Store `host_permissions` are only `https://vital.aimo.plus/*` and `https://s3.aimo.plus/*`
+- [ ] `externally_connectable` is only `https://vital.aimo.plus/*`
+- [ ] Privacy policy URL opens in Incognito and is **English**
+- [ ] Listing language is English; summary/description match the package
+- [ ] Screenshots show the current popup (article / selection / task / file)
+- [ ] Store icon matches extension `icon-128.png`

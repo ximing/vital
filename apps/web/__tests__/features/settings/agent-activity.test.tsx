@@ -198,6 +198,28 @@ describe('activity page', () => {
     expect(rows).toHaveLength(4);
   });
 
+  it('expands a truncated draft proposal to the full body', async () => {
+    vi.mocked(client.listAgentActions).mockResolvedValue([
+      item({
+        id: 'draft-1',
+        actionType: 'task.draft',
+        feedback: 'pending',
+        targetName: '写方案',
+        payloadSummary: '先列提纲',
+        payload: { draft: '先列提纲\n第二段：完整执行步骤不应该被省略。' },
+      }),
+    ]);
+    renderAt('/activity');
+    expect(await screen.findByText(/先列提纲/)).toBeInTheDocument();
+    expect(screen.queryByText(/完整执行步骤/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: t.settings.activity.expand }));
+    expect(screen.getByText(/完整执行步骤不应该被省略/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.settings.activity.collapse })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
   it('settles pending actions with the quick buttons and refreshes', async () => {
     let items = [...baseItems];
     vi.mocked(client.listAgentActions).mockImplementation(async () => items);
@@ -418,7 +440,9 @@ describe('schedule visibility', () => {
     vi.mocked(client.getAgentMetrics).mockResolvedValue(metrics());
     vi.mocked(client.organizeAgentTasks).mockResolvedValue({ status: 'queued', jobId: 'j1' });
     vi.mocked(client.distillAgentMemory).mockResolvedValue({ status: 'queued', jobId: 'j2' });
-    vi.mocked(client.cancelAgentSchedule).mockResolvedValue(scheduleItem({ capability: 'memory.distill' }));
+    vi.mocked(client.cancelAgentSchedule).mockResolvedValue(
+      scheduleItem({ capability: 'memory.distill' }),
+    );
   });
 
   function scheduleFixture(): AgentScheduleItem[] {
@@ -490,7 +514,9 @@ describe('schedule visibility', () => {
     const items = scheduleFixture();
     vi.mocked(client.listAgentSchedule).mockImplementation(async () => {
       calls += 1;
-      return { items: calls === 1 ? items : items.map((i) => ({ ...i, status: 'idle', pendingCount: 0 })) };
+      return {
+        items: calls === 1 ? items : items.map((i) => ({ ...i, status: 'idle', pendingCount: 0 })),
+      };
     });
     renderAt('/activity');
 

@@ -1,5 +1,6 @@
 import { defineConfig } from 'wxt';
 import { fileURLToPath } from 'node:url';
+import { resolveExtensionOrigins } from './origins';
 
 function originPattern(raw: string): string {
   const url = new URL(raw);
@@ -17,13 +18,24 @@ function withLocalhostAlias(origin: string): string[] {
   return out;
 }
 
+const origins = resolveExtensionOrigins();
+
 export default defineConfig({
   srcDir: '.',
   publicDir: 'assets',
-  outDir: 'dist',
+  outDir: origins.outDir,
   imports: false,
   browser: 'chrome',
+  zip: {
+    name: 'vital',
+    artifactTemplate: '{{name}}-{{version}}-{{browser}}.zip',
+  },
   vite: () => ({
+    define: {
+      'import.meta.env.WXT_API_URL': JSON.stringify(origins.apiUrl),
+      'import.meta.env.WXT_WEB_URL': JSON.stringify(origins.webUrl),
+      'import.meta.env.WXT_S3_ENDPOINT': JSON.stringify(origins.s3),
+    },
     resolve: {
       alias: {
         '/fonts/sora-latin-wght-normal.woff2': fileURLToPath(
@@ -36,14 +48,12 @@ export default defineConfig({
     server: { port: 5181 },
   },
   manifest: () => {
-    const apiUrl = process.env.WXT_API_URL ?? 'http://localhost:3010';
-    const webUrl = process.env.WXT_WEB_URL ?? 'http://localhost:5180';
-    const s3 = process.env.WXT_S3_ENDPOINT ?? 'https://s3.aimo.plus';
+    const { apiUrl, webUrl, s3 } = origins;
     const webMatches = withLocalhostAlias(originPattern(webUrl));
     const hostPermissions = [...withLocalhostAlias(originPattern(apiUrl)), originPattern(s3)];
     return {
       name: 'Vital',
-      description: '把网页、选区和图片收到稍后读',
+      description: 'Save pages, selections, and images to read later',
       minimum_chrome_version: '127',
       permissions: ['storage', 'activeTab', 'scripting', 'contextMenus', 'offscreen'],
       host_permissions: hostPermissions,
@@ -54,15 +64,15 @@ export default defineConfig({
       commands: {
         'save-page': {
           suggested_key: { default: 'Alt+Shift+V' },
-          description: '保存当前页到 Vital',
+          description: 'Save the current page to Vital',
         },
         'save-and-edit': {
-          description: '保存并编辑',
+          description: 'Save and edit',
         },
       },
       action: {
         default_popup: 'popup.html',
-        default_title: '保存到 Vital',
+        default_title: 'Save to Vital',
         default_icon: {
           16: '/icon-16.png',
           32: '/icon-32.png',

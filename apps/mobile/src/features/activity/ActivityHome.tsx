@@ -4,11 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Stack, router } from 'expo-router';
 import { Activity, ChevronLeft } from 'lucide-react-native';
-import type {
-  AgentActionLogItem,
-  AgentExecution,
-  AgentScheduleStatus,
-} from '@vital/dto';
+import type { AgentExecution, AgentScheduleStatus } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Banner } from '../../components/Banner';
 import { EmptyState } from '../../components/EmptyState';
@@ -23,6 +19,7 @@ import { useTheme } from '../../theme/use-theme';
 import { cardStyle, rnShadow } from '../../ui/card';
 import { withAlpha } from '../../ui/color';
 import { ActivityService } from './activity.service';
+import { ExpandableProposalText } from '../today/ExpandableProposalText';
 
 function actionLabel(actionType: string): string {
   const labels: Record<string, string> = copy.activity.actions;
@@ -32,14 +29,6 @@ function actionLabel(actionType: string): string {
 function capabilityLabel(capability: string): string {
   const labels: Record<string, string> = copy.activity.capabilities;
   return labels[capability] ?? capability;
-}
-
-function detailText(item: AgentActionLogItem): string {
-  const summary = item.payloadSummary.trim();
-  if (item.targetName !== null) {
-    return summary === '' ? item.targetName : `${item.targetName}：${summary}`;
-  }
-  return summary === '' ? copy.activity.deletedTarget : summary;
 }
 
 function executionColor(status: AgentExecution['status'], t: Theme): string {
@@ -84,9 +73,7 @@ const ActivityHomeContent = observer(function ActivityHomeContent() {
       <Stack.Screen options={{ headerShown: false }} />
       <PageHeader
         title={copy.activity.title}
-        leading={
-          <IconButton icon={ChevronLeft} label={copy.back} onPress={() => router.back()} />
-        }
+        leading={<IconButton icon={ChevronLeft} label={copy.back} onPress={() => router.back()} />}
       />
       <ScrollView
         contentContainerStyle={styles.content}
@@ -99,7 +86,9 @@ const ActivityHomeContent = observer(function ActivityHomeContent() {
         }
       >
         {s.error !== null && actions.length === 0 && executions.length === 0 ? (
-          <Banner action={{ label: copy.actions.retry, onPress: () => void s.load(false) }}>{s.error}</Banner>
+          <Banner action={{ label: copy.actions.retry, onPress: () => void s.load(false) }}>
+            {s.error}
+          </Banner>
         ) : emptyAll ? (
           <EmptyState icon={Activity} title={copy.activity.emptyProposals} />
         ) : (
@@ -118,9 +107,7 @@ const ActivityHomeContent = observer(function ActivityHomeContent() {
                       <Text style={styles.pillLabel}>{actionLabel(item.actionType)}</Text>
                     </View>
                     <View style={styles.rowBody}>
-                      <Text style={styles.rowTitle} numberOfLines={2}>
-                        {detailText(item)}
-                      </Text>
+                      <ExpandableProposalText item={item} />
                       <Text style={styles.rowTime}>{formatHm(item.createdAt, tz)}</Text>
                     </View>
                     {item.feedback === 'pending' ? (

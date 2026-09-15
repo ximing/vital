@@ -5,5 +5,13 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "skipLibCheck": true
   },
-  "include": ["src", "__tests__", "entrypoints", "wxt.config.ts", "vitest.config.ts", "eslint.config.js"]
+  "include": [
+    "src",
+    "__tests__",
+    "entrypoints",
+    "origins.ts",
+    "wxt.config.ts",
+    "vitest.config.ts",
+    "eslint.config.js"
+  ]
 }

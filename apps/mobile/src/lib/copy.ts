@@ -579,6 +579,8 @@ export const copy = {
     schedule: '调度',
     accept: '采纳',
     dismiss: '忽略',
+    expand: '展开',
+    collapse: '收起',
     deletedTarget: '（目标已删除）',
     emptyProposals: '近 7 天没有产出提议。',
     emptyExecutions: '近 7 天没有执行记录。',
