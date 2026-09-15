@@ -1,11 +1,12 @@
 import { Navigate, Route, Routes } from 'react-router';
-import { LANDING_PATH, TODOS_HOME_PATH } from '@/copy';
+import { TODOS_HOME_PATH } from '@/copy';
 import { InboxReader, InboxWorkspace } from '@/features/inbox';
 import { OnboardingPage } from '@/features/onboarding';
 import { ReportsWorkspace } from '@/features/reports';
 import { SearchPage } from '@/features/search';
 import { ThreadWorkspace, TodayWorkspace } from '@/features/today';
 import { TodosWorkspace } from '@/features/todos';
+import { isTauriRuntime } from '@/api/client';
 import { ExtensionAuthPage } from '@/pages/extension-auth';
 import { ActivityPage, HabitsPage, MemoryPage, ThreadsPage, UsagePage } from '@/pages/ai';
 import { LandingPage } from '@/pages/landing';
@@ -19,8 +20,8 @@ import { Shell } from '@/shell/Shell';
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<RootEntry />} />
-      <Route path={LANDING_PATH} element={<LandingPage />} />
+      <Route path="/" element={isTauriRuntime() ? <RootEntry /> : <LandingPage />} />
+      <Route path="/home" element={<Navigate to="/" replace />} />
       <Route
         path="/login"
         element={

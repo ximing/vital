@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
-import { HOME_PATH, LANDING_PATH, t } from '@/copy';
+import { HOME_PATH, t } from '@/copy';
 import { LandingPage } from '@/pages/landing';
 import { setAuthForTest } from '@/services/auth.service';
 import { RabRoot } from '../helpers/rab-root';
@@ -73,9 +73,9 @@ function mockMatchMedia(dark: boolean) {
 function renderLanding() {
   return render(
     <RabRoot>
-      <MemoryRouter initialEntries={[LANDING_PATH]}>
+      <MemoryRouter initialEntries={['/']}>
         <Routes>
-          <Route path={LANDING_PATH} element={<LandingPage />} />
+          <Route path="/" element={<LandingPage />} />
         </Routes>
       </MemoryRouter>
     </RabRoot>,

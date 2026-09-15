@@ -38,7 +38,7 @@ function renderRoot() {
   );
 }
 
-describe('RootEntry', () => {
+describe('RootEntry (desktop)', () => {
   beforeEach(() => {
     setAuthForTest(null);
   });
