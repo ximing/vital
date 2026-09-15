@@ -33,7 +33,7 @@ export const GuestOnly: FC<{ children: ReactNode }> = observer(function GuestOnl
   return <>{children}</>;
 });
 
-/** `/` : signed-in → today (or onboarding); guest → login. */
+/** Desktop `/`: signed-in → today (or onboarding); guest → login. Browser `/` stays the marketing page. */
 export const RootEntry: FC = observer(function RootEntry() {
   return (
     <GuestOnly>

@@ -1014,5 +1014,4 @@ export const t = {
 } as const;
 
 export const HOME_PATH = '/today';
-export const LANDING_PATH = '/home';
 export const TODOS_HOME_PATH = '/todos/lists/smart:today';

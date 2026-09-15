@@ -2,7 +2,7 @@ import { bindServices, useService } from '@rabjs/react';
 import type { AppLatestRelease, DesktopAsset, DesktopAssetId } from '@vital/dto';
 import { useEffect, type FC, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { HOME_PATH, LANDING_PATH, t } from '@/copy';
+import { HOME_PATH, t } from '@/copy';
 import { resolveTheme } from '@/lib/theme';
 import { LandingPageService } from '@/pages/landing.service';
 import { AuthService } from '@/services/auth.service';
@@ -265,11 +265,7 @@ function LandingContent() {
     <div className="landing" data-page="landing">
       <header className="sticky top-0 z-20 border-b border-border bg-canvas/90 backdrop-blur-md">
         <div className="landing-frame flex h-14 items-center gap-3">
-          <Link
-            to={LANDING_PATH}
-            className="flex items-center gap-2 text-fg"
-            aria-label={t.brand.wordmark}
-          >
+          <Link to="/" className="flex items-center gap-2 text-fg" aria-label={t.brand.wordmark}>
             <VitalMark className="h-7 w-7 text-accent" />
             <span className="font-display text-[length:var(--text-title)] font-semibold tracking-[-0.03em]">
               {t.brand.wordmark}

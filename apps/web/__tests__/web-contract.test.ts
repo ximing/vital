@@ -56,18 +56,18 @@ describe('web shell contract', () => {
     expect(pane).not.toContain('fixed inset-y-0');
   });
 
-  it('app root sends guests to login and signed-in users into today', () => {
+  it('browser / is the marketing page; desktop / goes to login or today', () => {
     const app = read('src/App.tsx');
+    expect(app).toContain('isTauriRuntime()');
     expect(app).toContain('RootEntry');
-    expect(app).toContain('path="/"');
-    expect(app).toContain('LANDING_PATH');
     expect(app).toContain('LandingPage');
+    expect(app).toMatch(/path="\/"/);
     const auth = read('src/shell/require-auth.tsx');
     expect(auth).toContain('Navigate to="/login"');
     expect(auth).toContain('HOME_PATH');
     const copy = read('src/copy.ts');
     expect(copy).toContain("HOME_PATH = '/today'");
-    expect(copy).toContain("LANDING_PATH = '/home'");
+    expect(copy).not.toContain('LANDING_PATH');
     expect(copy).toContain('打开后，先看到');
     expect(copy).toContain('下载最新版本');
   });
