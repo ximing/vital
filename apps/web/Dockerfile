@@ -32,6 +32,7 @@ COPY apps/web apps/web
 ENV VITE_API_BASE_URL=
 RUN pnpm --filter @vital/dto build \
  && pnpm --filter @vital/markdown build \
+ && pnpm --filter @vital/article-html build \
  && pnpm --filter @vital/tokens build \
  && pnpm --filter @vital/api-client build \
  && pnpm --filter @vital/web build

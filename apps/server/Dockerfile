@@ -28,7 +28,7 @@ COPY packages/eslint-config packages/eslint-config
 COPY packages/dto packages/dto
 COPY packages/markdown packages/markdown
 COPY apps/server apps/server
-RUN pnpm --filter @vital/dto build && pnpm --filter @vital/markdown build && pnpm --filter @vital/server build
+RUN pnpm --filter @vital/dto build && pnpm --filter @vital/markdown build && pnpm --filter @vital/article-html build && pnpm --filter @vital/server build
 
 FROM base AS prod-deps
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
