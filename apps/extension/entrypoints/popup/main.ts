@@ -20,7 +20,10 @@ import {
   type PanelResponse,
   type PopupMode,
 } from '../../src/messages.js';
+import type { ParsedArticle } from '../../src/parse-article.js';
 import {
+  createPageParseCache,
+  ensurePageParsed,
   fileMetaLine,
   initialMode,
   metaLine,
@@ -61,6 +64,8 @@ let capture: CapturePayload | null = null;
 let mode: PopupMode = 'article';
 let lists: List[] | null = null;
 let savedKind: 'created' | 'existing' | 'task' = 'created';
+let pageParse = createPageParseCache();
+let pageLoading = false;
 // One-shot: this popup was opened as the `?code=` login-fallback tab. The
 // exchange-code RPC makes the background broadcast `session-changed`, whose
 // handler would re-boot us — but a re-boot has no code and the active tab is
@@ -82,6 +87,27 @@ function applyModeLabels(): void {
   }
 }
 
+function setCaptureMeta(): void {
+  if (capture === null) return;
+  const el = $('capture-meta');
+  if (pageLoading && mode === 'page') {
+    el.classList.add('loading');
+    el.setAttribute('aria-busy', 'true');
+    el.replaceChildren();
+    const spinner = document.createElement('span');
+    spinner.className = 'spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    el.append(spinner, document.createTextNode('正在解析页面…'));
+    return;
+  }
+  el.classList.remove('loading');
+  el.removeAttribute('aria-busy');
+  el.textContent =
+    mode === 'file' && capture.file !== null
+      ? fileMetaLine(capture.file)
+      : metaLine(capture, mode, pageParse.parsed);
+}
+
 function renderCapture(): void {
   if (capture === null) return;
   for (const m of MODES) {
@@ -90,15 +116,37 @@ function renderCapture(): void {
     show(btn, !(mode === 'file' && (m === 'selection' || m === 'task')));
     btn.classList.toggle('active', m === mode);
     btn.setAttribute('aria-pressed', String(m === mode));
-    btn.disabled = m === 'file' ? capture.file === null : modeDisabled(m, capture.selection);
+    btn.disabled = m === 'file' ? capture.file === null : modeDisabled(m, capture);
   }
-  $<HTMLInputElement>('capture-title').value = titleForMode(capture, mode);
-  $('capture-meta').textContent =
-    mode === 'file' && capture.file !== null
-      ? fileMetaLine(capture.file)
-      : metaLine(capture, mode);
+  $<HTMLInputElement>('capture-title').value = titleForMode(capture, mode, pageParse.parsed);
+  setCaptureMeta();
   show($('capture-list-wrap'), mode === 'task');
   if (mode === 'task' && lists === null) void loadLists();
+}
+
+async function requestPageParse(html: string, url: string): Promise<ParsedArticle> {
+  const res = await rpc({ type: 'parse-page', html, url });
+  if (!res.ok || !('parsed' in res)) {
+    throw new Error(res.ok ? copy.toastFailed : res.error);
+  }
+  return res.parsed;
+}
+
+async function loadPageParse(): Promise<void> {
+  if (capture === null) return;
+  const needParse = pageParse.parsed === null && capture.rawHtml !== null;
+  if (needParse) {
+    pageLoading = true;
+    setCaptureMeta();
+  }
+  try {
+    await ensurePageParsed(pageParse, capture.rawHtml, capture.originalUrl, requestPageParse);
+  } catch {
+    // Meta falls back to site-only; commit can still parse in the SW.
+  } finally {
+    pageLoading = false;
+    if (mode === 'page') renderCapture();
+  }
 }
 
 async function loadLists(): Promise<void> {
@@ -128,6 +176,7 @@ function commit(): void {
       mode === 'task' && $<HTMLSelectElement>('capture-list').value !== ''
         ? $<HTMLSelectElement>('capture-list').value
         : undefined,
+    pageParsed: mode === 'page' ? (pageParse.parsed ?? undefined) : undefined,
   };
   $<HTMLButtonElement>('save').disabled = true;
   const port = chrome.runtime.connect({ name: COMMIT_PORT_NAME });
@@ -223,6 +272,8 @@ async function boot(): Promise<void> {
     return;
   }
   capture = cap.capture;
+  pageParse = createPageParseCache();
+  pageLoading = false;
   mode = initialMode(capture);
   renderCapture();
   setView('capture');
@@ -233,6 +284,7 @@ for (const m of MODES) {
   $(`mode-${m}`).addEventListener('click', () => {
     mode = m;
     renderCapture();
+    if (m === 'page') void loadPageParse();
   });
 }
 $('save').addEventListener('click', () => {

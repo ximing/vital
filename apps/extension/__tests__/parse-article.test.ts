@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from 'vitest';
 import {
+  emptyParsedArticle,
   extractSemanticRoot,
   MIN_USEFUL_TEXT_CHARS,
   parseArticle,
@@ -119,6 +120,22 @@ describe('Readability short-text fallback', () => {
     expect((parsed.extractedText ?? '').length).toBeGreaterThan(MIN_USEFUL_TEXT_CHARS);
     expect(parsed.extractedText).toContain('Nav link number');
     expect(parsed.extractedHtml).toContain('Nav link number');
+  });
+});
+
+describe('parseCapture removal', () => {
+  it('no longer exports a dual-parse bundle helper', async () => {
+    const parseMod = await import('../src/parse-article.js');
+    expect(parseMod).not.toHaveProperty('parseCapture');
+    expect(emptyParsedArticle('t')).toEqual({
+      title: 't',
+      extractedHtml: null,
+      extractedText: null,
+      excerpt: null,
+      byline: null,
+      siteName: null,
+      imageSrcs: [],
+    });
   });
 });
 

@@ -5,6 +5,7 @@ import { extensionLoginUrl, isTrustedWebOrigin } from './capture-helpers.js';
 import { API_URL, WEB_URL } from './config.js';
 import { copy } from './i18n.js';
 import { isExternalAuthMessage, type PanelRequest, type PanelResponse } from './messages.js';
+import { parseInOffscreen } from './offscreen.js';
 import { chromeTokenStore, readProfileJson, storeProfileJson } from './token-store.js';
 
 let client: VitalClient | null = null;
@@ -156,6 +157,16 @@ export async function handlePanelMessage(message: PanelRequest): Promise<PanelRe
         return { ok: true, capture: await captureActiveTabPayload() };
       } catch {
         return { ok: true, capture: null };
+      }
+    }
+    case 'parse-page': {
+      try {
+        return {
+          ok: true,
+          parsed: await parseInOffscreen(message.html, message.url, 'page'),
+        };
+      } catch (err) {
+        return { ok: false, error: errorMessage(err) };
       }
     }
   }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CapturePayload } from '../src/messages.js';
+import type { ParsedArticle } from '../src/parse-article.js';
 import {
   badgeText,
   feedbackView,
@@ -21,12 +22,20 @@ const capture: CapturePayload = {
   byline: '作者',
   siteName: 'Example',
   imageSrcs: ['https://ex.com/1.png'],
-  pageText: '整页正文',
-  pageHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
-  pageImageSrcs: ['https://ex.com/p.png'],
+  rawHtml: '<html><body>整页</body></html>',
   selection: '一段<script>选区',
   tabId: 7,
   file: null,
+};
+
+const pageParsed: ParsedArticle = {
+  title: '整页标题',
+  extractedText: '整页正文',
+  extractedHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
+  excerpt: '整页正文',
+  byline: null,
+  siteName: null,
+  imageSrcs: ['https://ex.com/p.png'],
 };
 
 describe('inboxReaderUrl', () => {
@@ -101,8 +110,8 @@ describe('inboxInputFromCapture', () => {
     expect(inboxInputFromCapture(capture, '新标题', '').excerpt).toBe('旧摘');
   });
 
-  it('uses page html/text in page mode', () => {
-    expect(inboxInputFromCapture(capture, '新标题', '', 'page')).toEqual({
+  it('uses page html/text when a page parse is supplied', () => {
+    expect(inboxInputFromCapture(capture, '新标题', '', pageParsed)).toEqual({
       title: '新标题',
       originalUrl: 'https://ex.com/a',
       extractedText: '整页正文',

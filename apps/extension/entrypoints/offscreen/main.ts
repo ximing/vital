@@ -1,28 +1,14 @@
 import { base64ToBytes, blobToBase64, convertRasterToJpeg } from '../../src/images.js';
 import { isOffscreenConvert, isOffscreenParse } from '../../src/messages.js';
-import { parseCapture } from '../../src/parse-article.js';
-
-function emptyParsed(title: string) {
-  return {
-    title,
-    extractedHtml: null,
-    extractedText: null,
-    excerpt: null,
-    byline: null,
-    siteName: null,
-    imageSrcs: [] as string[],
-  };
-}
+import { emptyParsedArticle, parseArticle } from '../../src/parse-article.js';
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (isOffscreenParse(message)) {
     try {
-      sendResponse(parseCapture(message.html, message.url));
+      sendResponse(parseArticle(message.html, message.url, message.mode));
     } catch (err) {
-      const empty = emptyParsed(message.url);
       sendResponse({
-        article: empty,
-        page: empty,
+        ...emptyParsedArticle(message.url),
         error: err instanceof Error ? err.message : 'parse failed',
       });
     }
