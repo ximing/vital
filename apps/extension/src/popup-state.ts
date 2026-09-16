@@ -1,6 +1,7 @@
 import { clip, hostnameOf } from './html.js';
 import { copy } from './i18n.js';
 import type { CapturePayload, PopupMode } from './messages.js';
+import type { ParsedArticle } from './parse-article.js';
 import { savedAfterImagesToast, type SaveKind } from './capture-helpers.js';
 
 export function initialMode(capture: CapturePayload): PopupMode {
@@ -8,27 +9,69 @@ export function initialMode(capture: CapturePayload): PopupMode {
   return capture.selection.trim() !== '' ? 'selection' : 'article';
 }
 
-export function modeDisabled(mode: PopupMode, selection: string): boolean {
-  return mode === 'selection' && selection.trim() === '';
+export function modeDisabled(mode: PopupMode, capture: CapturePayload): boolean {
+  if (mode === 'selection') return capture.selection.trim() === '';
+  if (mode === 'page') return capture.rawHtml === null;
+  return false;
 }
 
-export function titleForMode(capture: CapturePayload, mode: PopupMode): string {
+export function titleForMode(
+  capture: CapturePayload,
+  mode: PopupMode,
+  pageParsed?: ParsedArticle | null,
+): string {
   if (mode === 'selection') return clip(capture.selection, 80) ?? capture.originalUrl;
   if (mode === 'task') return clip(capture.selection, 80) ?? capture.title;
+  if (mode === 'page') return pageParsed?.title ?? capture.title;
   return capture.title;
 }
 
-export function metaLine(capture: CapturePayload, mode: PopupMode): string {
+export function metaLine(
+  capture: CapturePayload,
+  mode: PopupMode,
+  pageParsed?: ParsedArticle | null,
+): string {
   if (mode === 'selection') return `${capture.selection.trim().length} 字`;
   const parts: string[] = [];
   const site = capture.siteName ?? hostnameOf(capture.originalUrl);
   if (site !== null && site !== '') parts.push(site);
-  const text = mode === 'page' ? capture.pageText : capture.extractedText;
-  const images = mode === 'page' ? capture.pageImageSrcs : capture.imageSrcs;
+  const text = mode === 'page' ? (pageParsed?.extractedText ?? null) : capture.extractedText;
+  const images = mode === 'page' ? (pageParsed?.imageSrcs ?? []) : capture.imageSrcs;
   const words = text?.trim().length ?? 0;
   if (words > 0) parts.push(`${words} 字`);
   if (images.length > 0) parts.push(`${images.length} 张图`);
   return parts.join(' · ');
+}
+
+export type PageParseCache = {
+  parsed: ParsedArticle | null;
+  inFlight: Promise<ParsedArticle | null> | null;
+};
+
+export function createPageParseCache(): PageParseCache {
+  return { parsed: null, inFlight: null };
+}
+
+/** Request page parse once; later callers reuse the cache or the in-flight promise. */
+export function ensurePageParsed(
+  cache: PageParseCache,
+  rawHtml: string | null,
+  url: string,
+  request: (html: string, url: string) => Promise<ParsedArticle>,
+): Promise<ParsedArticle | null> {
+  if (cache.parsed !== null) return Promise.resolve(cache.parsed);
+  if (rawHtml === null) return Promise.resolve(null);
+  if (cache.inFlight !== null) return cache.inFlight;
+  const pending = request(rawHtml, url)
+    .then((parsed) => {
+      cache.parsed = parsed;
+      return parsed;
+    })
+    .finally(() => {
+      if (cache.inFlight === pending) cache.inFlight = null;
+    });
+  cache.inFlight = pending;
+  return pending;
 }
 
 function round1(n: number): number {

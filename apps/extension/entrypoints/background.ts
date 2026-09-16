@@ -74,6 +74,7 @@ export default defineBackground({
               note: message.note,
               mode: message.mode,
               listId: message.listId,
+              pageParsed: message.pageParsed,
               onCreated: (outcome) =>
                 send({ type: 'created', kind: outcome.kind, id: outcome.id }),
               onProgress: (done, total) => send({ type: 'progress', done, total }),

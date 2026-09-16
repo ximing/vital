@@ -1,6 +1,7 @@
 import type { InboxItem, List, UserProfile } from '@vital/dto';
 import type { SaveKind } from './capture-helpers.js';
 import type { DirectFile } from './file-kind.js';
+import type { ParsedArticle, ParseMode } from './parse-article.js';
 
 export type PopupMode = 'article' | 'page' | 'selection' | 'task' | 'file';
 
@@ -13,10 +14,8 @@ export interface CapturePayload {
   byline: string | null;
   siteName: string | null;
   imageSrcs: string[];
-  /** Whole-page extract (no Readability); used when popup mode is `page`. */
-  pageText: string | null;
-  pageHtml: string | null;
-  pageImageSrcs: string[];
+  /** Clipped page outerHTML for on-demand page parse. Null for direct-file. */
+  rawHtml: string | null;
   selection: string;
   tabId: number | null;
   file: DirectFile | null;
@@ -31,6 +30,8 @@ export interface CommitPortMessage {
   note: string;
   mode: PopupMode;
   listId?: string;
+  /** Popup-cached page parse. SW re-parses from `capture.rawHtml` when omitted. */
+  pageParsed?: ParsedArticle;
 }
 
 export type CommitPortEvent =
@@ -47,13 +48,15 @@ export type PanelRequest =
   | { type: 'open-login' }
   | { type: 'exchange-code'; code: string }
   | { type: 'lists' }
-  | { type: 'capture-active-tab' };
+  | { type: 'capture-active-tab' }
+  | { type: 'parse-page'; html: string; url: string };
 
 export type PanelResponse =
   | { ok: true; session: { loggedIn: false } | { loggedIn: true; profile: UserProfile } }
   | { ok: true; items: InboxItem[] }
   | { ok: true; lists: List[] }
   | { ok: true; capture: CapturePayload | null }
+  | { ok: true; parsed: ParsedArticle }
   | { ok: true }
   | { ok: false; error: string };
 
@@ -62,6 +65,7 @@ export interface OffscreenParseRequest {
   target: 'offscreen';
   html: string;
   url: string;
+  mode: ParseMode;
 }
 
 export interface OffscreenConvertRequest {
@@ -82,7 +86,8 @@ export function isPanelRequest(value: unknown): value is PanelRequest {
     value.type === 'open-login' ||
     value.type === 'exchange-code' ||
     value.type === 'lists' ||
-    value.type === 'capture-active-tab'
+    value.type === 'capture-active-tab' ||
+    value.type === 'parse-page'
   );
 }
 
@@ -93,7 +98,8 @@ export function isOffscreenParse(value: unknown): value is OffscreenParseRequest
     rec.type === 'parse' &&
     rec.target === 'offscreen' &&
     typeof rec.html === 'string' &&
-    typeof rec.url === 'string'
+    typeof rec.url === 'string' &&
+    (rec.mode === 'article' || rec.mode === 'page')
   );
 }
 
@@ -135,10 +141,17 @@ export function isCommitPortMessage(value: unknown): value is CommitPortMessage 
   if (rec.listId !== undefined && typeof rec.listId !== 'string') return false;
   if (typeof rec.capture !== 'object' || rec.capture === null) return false;
   const cap = rec.capture as Record<string, unknown>;
-  return (
-    typeof cap.title === 'string' &&
-    typeof cap.originalUrl === 'string' &&
-    Array.isArray(cap.imageSrcs) &&
-    typeof cap.selection === 'string'
-  );
+  if (
+    typeof cap.title !== 'string' ||
+    typeof cap.originalUrl !== 'string' ||
+    !Array.isArray(cap.imageSrcs) ||
+    typeof cap.selection !== 'string' ||
+    !(cap.rawHtml === null || typeof cap.rawHtml === 'string')
+  ) {
+    return false;
+  }
+  if (rec.pageParsed === undefined) return true;
+  if (typeof rec.pageParsed !== 'object' || rec.pageParsed === null) return false;
+  const parsed = rec.pageParsed as Record<string, unknown>;
+  return typeof parsed.title === 'string' && Array.isArray(parsed.imageSrcs);
 }

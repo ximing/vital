@@ -6,7 +6,7 @@ import {
   type OffscreenConvertRequest,
   type OffscreenParseRequest,
 } from './messages.js';
-import type { ParsedArticle } from './parse-article.js';
+import type { ParsedArticle, ParseMode } from './parse-article.js';
 
 let creating: Promise<void> | null = null;
 
@@ -43,22 +43,15 @@ function isParsedArticle(value: unknown): value is ParsedArticle {
   return typeof rec.title === 'string' && Array.isArray(rec.imageSrcs);
 }
 
-function isParseBundle(
-  value: unknown,
-): value is { article: ParsedArticle; page: ParsedArticle } {
-  if (typeof value !== 'object' || value === null) return false;
-  const rec = value as Record<string, unknown>;
-  return isParsedArticle(rec.article) && isParsedArticle(rec.page);
-}
-
 export async function parseInOffscreen(
   html: string,
   url: string,
-): Promise<{ article: ParsedArticle; page: ParsedArticle }> {
+  mode: ParseMode,
+): Promise<ParsedArticle> {
   await ensureOffscreen();
-  const request: OffscreenParseRequest = { type: 'parse', target: 'offscreen', html, url };
+  const request: OffscreenParseRequest = { type: 'parse', target: 'offscreen', html, url, mode };
   const result: unknown = await chrome.runtime.sendMessage(request);
-  if (!isParseBundle(result)) {
+  if (!isParsedArticle(result)) {
     throw new Error('offscreen parse failed');
   }
   return result;

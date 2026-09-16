@@ -15,12 +15,20 @@ const payload: CapturePayload = {
   byline: null,
   siteName: null,
   imageSrcs: [],
-  pageText: null,
-  pageHtml: null,
-  pageImageSrcs: [],
+  rawHtml: '<html></html>',
   selection: '',
   tabId: null,
   file: null,
+};
+
+const pageParsed = {
+  title: '整页',
+  extractedHtml: '<p>整页</p>',
+  extractedText: '整页',
+  excerpt: '整页',
+  byline: null,
+  siteName: null,
+  imageSrcs: ['https://ex.com/p.png'],
 };
 
 describe('message guards', () => {
@@ -29,9 +37,28 @@ describe('message guards', () => {
     expect(isPanelRequest({ type: 'exchange-code', code: 'abc' })).toBe(true);
     expect(isPanelRequest({ type: 'login', email: 'a@b.c', password: 'x' })).toBe(false);
     expect(isPanelRequest({ type: 'nope' })).toBe(false);
+    expect(isPanelRequest({ type: 'parse-page', html: '<p>', url: 'https://x' })).toBe(true);
+    expect(
+      isOffscreenParse({
+        type: 'parse',
+        target: 'offscreen',
+        html: '<p>',
+        url: 'https://x',
+        mode: 'article',
+      }),
+    ).toBe(true);
+    expect(
+      isOffscreenParse({
+        type: 'parse',
+        target: 'offscreen',
+        html: '<p>',
+        url: 'https://x',
+        mode: 'page',
+      }),
+    ).toBe(true);
     expect(
       isOffscreenParse({ type: 'parse', target: 'offscreen', html: '<p>', url: 'https://x' }),
-    ).toBe(true);
+    ).toBe(false);
     expect(isOffscreenParse({ type: 'parse', html: '<p>', url: 'https://x' })).toBe(false);
   });
 
@@ -64,6 +91,35 @@ describe('message guards', () => {
         mode: 'page',
       }),
     ).toBe(true);
+    expect(
+      isCommitPortMessage({
+        type: 'commit-capture',
+        capture: payload,
+        title: 't',
+        note: '',
+        mode: 'page',
+        pageParsed,
+      }),
+    ).toBe(true);
+    expect(
+      isCommitPortMessage({
+        type: 'commit-capture',
+        capture: payload,
+        title: 't',
+        note: '',
+        mode: 'page',
+        pageParsed: { title: 1, imageSrcs: [] },
+      }),
+    ).toBe(false);
+    expect(
+      isCommitPortMessage({
+        type: 'commit-capture',
+        capture: { ...payload, rawHtml: undefined },
+        title: 't',
+        note: '',
+        mode: 'article',
+      }),
+    ).toBe(false);
     expect(
       isCommitPortMessage({
         type: 'commit-capture',

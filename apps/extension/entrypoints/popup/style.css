@@ -60,6 +60,8 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .modes button:hover:not(:disabled) { color: var(--fg-primary); background: var(--bg-surface); }
 .modes button.active { color: var(--accent-primary); background: var(--bg-elevated); box-shadow: var(--shadow-xs); font-weight: 600; }
 .meta { margin: 8px 0 0; color: var(--fg-muted); font-size: var(--text-caption); line-height: var(--text-caption-lh); overflow-wrap: anywhere; }
+.meta.loading { display: inline-flex; align-items: center; gap: 8px; }
+.meta.loading .spinner { width: 12px; height: 12px; flex: none; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
 .row h1 { margin: 0; font-size: var(--text-section); }
 .state-actions { display: flex; align-items: center; gap: 8px; margin-top: 20px; }

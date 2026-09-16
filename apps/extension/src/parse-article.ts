@@ -37,6 +37,18 @@ export interface ParsedArticle {
   imageSrcs: string[];
 }
 
+export function emptyParsedArticle(title: string): ParsedArticle {
+  return {
+    title,
+    extractedHtml: null,
+    extractedText: null,
+    excerpt: null,
+    byline: null,
+    siteName: null,
+    imageSrcs: [],
+  };
+}
+
 interface ParsedFields {
   title: string;
   extractedHtml: string | null;
@@ -247,14 +259,4 @@ export function parseArticle(
   doc.head.prepend(base);
   const fallbackTitle = clip(doc.title, 500) ?? hostnameOf(url) ?? url;
   return parsePreparedDoc(doc, url, fallbackTitle, html, mode);
-}
-
-export function parseCapture(
-  html: string,
-  url: string,
-): { article: ParsedArticle; page: ParsedArticle } {
-  return {
-    article: parseArticle(html, url, 'article'),
-    page: parseArticle(html, url, 'page'),
-  };
 }

@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CapturePayload } from '../src/messages.js';
+import type { ParsedArticle } from '../src/parse-article.js';
 import { modeLabels } from '../src/i18n.js';
 import {
+  createPageParseCache,
+  ensurePageParsed,
   fileMetaLine,
   initialMode,
   metaLine,
@@ -20,12 +23,20 @@ const capture: CapturePayload = {
   byline: '作者',
   siteName: 'Example',
   imageSrcs: ['https://ex.com/1.png', 'https://ex.com/2.png'],
-  pageText: '页'.repeat(80),
-  pageHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
-  pageImageSrcs: ['https://ex.com/p.png'],
+  rawHtml: '<html><body>整页</body></html>',
   selection: '一段选区',
   tabId: 7,
   file: null,
+};
+
+const pageParsed: ParsedArticle = {
+  title: '整页标题',
+  extractedHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
+  extractedText: '页'.repeat(80),
+  excerpt: null,
+  byline: null,
+  siteName: 'Example',
+  imageSrcs: ['https://ex.com/p.png'],
 };
 
 const file = { url: 'https://ex.com/v/clip.mp4', mime: 'video/mp4', size: 123 };
@@ -46,12 +57,13 @@ describe('initialMode / modeDisabled', () => {
     expect(initialMode({ ...capture, selection: '   ' })).toBe('article');
     expect(initialMode({ ...capture, file })).toBe('file');
     expect(initialMode({ ...capture, selection: '   ', file })).toBe('file');
-    expect(modeDisabled('selection', '')).toBe(true);
-    expect(modeDisabled('selection', '   ')).toBe(true);
-    expect(modeDisabled('selection', '有字')).toBe(false);
-    expect(modeDisabled('article', '')).toBe(false);
-    expect(modeDisabled('page', '')).toBe(false);
-    expect(modeDisabled('task', '')).toBe(false);
+    expect(modeDisabled('selection', { ...capture, selection: '' })).toBe(true);
+    expect(modeDisabled('selection', { ...capture, selection: '   ' })).toBe(true);
+    expect(modeDisabled('selection', { ...capture, selection: '有字' })).toBe(false);
+    expect(modeDisabled('article', { ...capture, selection: '' })).toBe(false);
+    expect(modeDisabled('page', capture)).toBe(false);
+    expect(modeDisabled('page', { ...capture, rawHtml: null })).toBe(true);
+    expect(modeDisabled('task', { ...capture, selection: '' })).toBe(false);
   });
 });
 
@@ -69,6 +81,7 @@ describe('titleForMode', () => {
   it('uses the parsed title for articles and clips the selection otherwise', () => {
     expect(titleForMode(capture, 'article')).toBe('文章标题');
     expect(titleForMode(capture, 'page')).toBe('文章标题');
+    expect(titleForMode(capture, 'page', pageParsed)).toBe('整页标题');
     expect(titleForMode(capture, 'selection')).toBe('一段选区');
     expect(titleForMode({ ...capture, selection: '' }, 'task')).toBe('文章标题');
   });
@@ -79,14 +92,56 @@ describe('metaLine', () => {
     expect(metaLine(capture, 'article')).toBe('Example · 2000 字 · 2 张图');
   });
 
-  it('uses page text and images for page mode', () => {
-    expect(metaLine(capture, 'page')).toBe('Example · 80 字 · 1 张图');
+  it('uses page text and images for page mode once parsed', () => {
+    expect(metaLine(capture, 'page')).toBe('Example');
+    expect(metaLine(capture, 'page', pageParsed)).toBe('Example · 80 字 · 1 张图');
   });
 
   it('falls back to hostname and hides empty parts', () => {
     const bare = { ...capture, siteName: null, extractedText: null, imageSrcs: [] };
     expect(metaLine(bare, 'article')).toBe('ex.com');
     expect(metaLine(capture, 'selection')).toBe('4 字');
+  });
+});
+
+describe('ensurePageParsed', () => {
+  it('requests once, reuses in-flight, then serves the cache', async () => {
+    let resolve!: (value: ParsedArticle) => void;
+    const request = vi.fn(
+      () =>
+        new Promise<ParsedArticle>((r) => {
+          resolve = r;
+        }),
+    );
+    const cache = createPageParseCache();
+    const first = ensurePageParsed(cache, capture.rawHtml, capture.originalUrl, request);
+    const second = ensurePageParsed(cache, capture.rawHtml, capture.originalUrl, request);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(capture.rawHtml, capture.originalUrl);
+    resolve(pageParsed);
+    expect(await first).toBe(pageParsed);
+    expect(await second).toBe(pageParsed);
+    expect(await ensurePageParsed(cache, capture.rawHtml, capture.originalUrl, request)).toBe(
+      pageParsed,
+    );
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips the request when rawHtml is null and retries after failure', async () => {
+    const cache = createPageParseCache();
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('fail'))
+      .mockResolvedValueOnce(pageParsed);
+    expect(await ensurePageParsed(cache, null, capture.originalUrl, request)).toBeNull();
+    expect(request).not.toHaveBeenCalled();
+    await expect(
+      ensurePageParsed(cache, capture.rawHtml, capture.originalUrl, request),
+    ).rejects.toThrow('fail');
+    expect(await ensurePageParsed(cache, capture.rawHtml, capture.originalUrl, request)).toBe(
+      pageParsed,
+    );
+    expect(request).toHaveBeenCalledTimes(2);
   });
 });
 
