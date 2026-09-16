@@ -40,6 +40,7 @@ COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
 COPY packages/markdown/package.json packages/markdown/
+COPY packages/article-html/package.json packages/article-html/
 COPY packages/tokens/package.json packages/tokens/
 COPY packages/api-client/package.json packages/api-client/
 COPY apps/server/package.json apps/server/
@@ -56,9 +57,11 @@ COPY --from=prod-deps /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=prod-deps /app/packages/dto ./packages/dto
 COPY --from=prod-deps /app/packages/markdown ./packages/markdown
+COPY --from=prod-deps /app/packages/article-html ./packages/article-html
 COPY --from=prod-deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/packages/dto/dist ./packages/dto/dist
 COPY --from=build /app/packages/markdown/dist ./packages/markdown/dist
+COPY --from=build /app/packages/article-html/dist ./packages/article-html/dist
 COPY --from=build /app/apps/server/dist ./apps/server/dist
 COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/server/package.json ./apps/server/package.json
