@@ -13,6 +13,7 @@ COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/dto/package.json packages/dto/
 COPY packages/markdown/package.json packages/markdown/
+COPY packages/article-html/package.json packages/article-html/
 COPY packages/tokens/package.json packages/tokens/
 COPY packages/api-client/package.json packages/api-client/
 COPY apps/server/package.json apps/server/
@@ -27,6 +28,7 @@ COPY packages/tsconfig packages/tsconfig
 COPY packages/eslint-config packages/eslint-config
 COPY packages/dto packages/dto
 COPY packages/markdown packages/markdown
+COPY packages/article-html packages/article-html
 COPY apps/server apps/server
 RUN pnpm --filter @vital/dto build && pnpm --filter @vital/markdown build && pnpm --filter @vital/article-html build && pnpm --filter @vital/server build
 
