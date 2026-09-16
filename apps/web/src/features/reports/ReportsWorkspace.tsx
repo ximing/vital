@@ -6,7 +6,7 @@ import { useEffect, useRef, type FC } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useOnline } from '@/features/inbox/online';
+import { useOnline } from '@/features/inbox';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';

@@ -81,6 +81,12 @@ export const tasks = pgTable(
     index('idx_tasks_live_status_due')
       .on(t.userId, t.status, t.dueAt)
       .where(sql`${t.deletedAt} IS NULL`),
+    /** Worker heal scan: open tasks that may need a remind/due outbox row. */
+    index('idx_tasks_open_notify')
+      .on(t.id)
+      .where(
+        sql`${t.deletedAt} IS NULL AND ${t.status} IN ('todo', 'doing') AND (${t.dueAt} IS NOT NULL OR ${t.reminderAt} IS NOT NULL OR ${t.reminderMode} IN ('due', 'offset', 'custom'))`,
+      ),
     uniqueIndex('idx_tasks_habit_key')
       .on(t.habitKey)
       .where(sql`${t.habitKey} IS NOT NULL`),

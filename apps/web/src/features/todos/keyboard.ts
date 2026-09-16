@@ -2,7 +2,7 @@ import type { Task, TaskPriority } from '@vital/dto';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { useService } from '@rabjs/react';
-import { HOME_PATH } from '@/copy';
+import { HOME_PATH } from '@/routes';
 import { TodosUiService } from './todos-ui.service';
 
 export const QUICK_ADD_ID = 'todo-quick-add';

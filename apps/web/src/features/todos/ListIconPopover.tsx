@@ -14,6 +14,7 @@ import { client } from '@/api/client';
 import { t } from '@/copy';
 import { clampAnchorMenu, type MenuAnchor } from '@/ui/anchor-menu';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
+import { Overlay } from '@/ui/overlay';
 import { useTodoActions } from './queries';
 
 const EmojiGrid = lazy(async () => {
@@ -97,18 +98,13 @@ export function ListIconPopover({
   }, [anchor, tab]);
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
     const onScroll = (event: Event) => {
       if (event.target instanceof Node && panelRef.current?.contains(event.target)) return;
       onClose();
     };
-    window.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onClose);
     return () => {
-      window.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onClose);
     };
@@ -138,7 +134,7 @@ export function ListIconPopover({
   }
 
   return (
-    <div className="fixed inset-0 z-[var(--z-overlay)]" onClick={onClose}>
+    <Overlay onClose={onClose} closeOnBackdrop closeOnEscape>
       <div
         ref={panelRef}
         role="dialog"
@@ -203,6 +199,6 @@ export function ListIconPopover({
           </div>
         )}
       </div>
-    </div>
+    </Overlay>
   );
 }

@@ -2,9 +2,10 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
-import { db } from '../src/db/index.js';
+import { db, getDb, setDb } from '../src/db/index.js';
 import { attachments } from '../src/db/schema.js';
 import { setStorageAdapter } from '../src/storage/factory.js';
+import { bindUpload } from '../src/uploads/uploads.service.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { installMockStorage, type MockStorage } from './helpers/storage.js';
@@ -438,6 +439,140 @@ describe('uploads (multipart)', () => {
     expect(patch.json().icon).toBeNull();
     expect(patch.json().iconAttachmentId).toBe(id);
     expect(patch.json().iconUrl).toBe('https://fake.local/presigned-get');
+  });
+
+  it('GET /uploads/:id/url for an orphaned attachment is 404', async () => {
+    const alice = await register('alice');
+    const { id } = (await initUploadFor(alice)).json();
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/abort`,
+      token: alice.token,
+      payload: {},
+    });
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/uploads/${id}/url`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('bind copies to dest, updates DB, then deletes tmp', async () => {
+    const alice = await register('alice');
+    const list = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: 'bind-ok' },
+    });
+    const { id, totalParts } = (await initUploadFor(alice, { mime: 'image/png', size: PART })).json();
+    storage.headObject.mockResolvedValueOnce({
+      size: PART,
+      contentType: 'image/png',
+      lastModified: new Date(),
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
+    });
+    const [before] = await db.select().from(attachments).where(eq(attachments.id, id));
+    const tmpKey = before?.s3Key ?? '';
+    const bind = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/bind`,
+      token: alice.token,
+      payload: { ownerType: 'list', ownerId: list.json().id },
+    });
+    expect(bind.statusCode).toBe(200);
+    const [after] = await db.select().from(attachments).where(eq(attachments.id, id));
+    expect(after?.s3Key).toMatch(new RegExp(`^list/${alice.id}/`));
+    expect(after?.s3Key).not.toBe(tmpKey);
+    expect(after?.ownerType).toBe('list');
+    expect(storage.copyObject).toHaveBeenCalledWith(tmpKey, after?.s3Key, expect.anything());
+    expect(storage.deleteFile).toHaveBeenCalledWith(tmpKey, expect.anything());
+    const destDelete = storage.deleteFile.mock.calls.some((c) => c[0] === after?.s3Key);
+    expect(destDelete).toBe(false);
+  });
+
+  it('bind copy+DB-fail keeps tmp retryable and cleans dest', async () => {
+    const alice = await register('alice');
+    const list = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: 'bind-fail' },
+    });
+    const { id, totalParts } = (await initUploadFor(alice, { mime: 'image/png', size: PART })).json();
+    storage.headObject.mockResolvedValueOnce({
+      size: PART,
+      contentType: 'image/png',
+      lastModified: new Date(),
+    });
+    await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/complete`,
+      token: alice.token,
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
+    });
+    const [before] = await db.select().from(attachments).where(eq(attachments.id, id));
+    const tmpKey = before?.s3Key ?? '';
+    const ownerId = list.json().id as string;
+
+    const real = getDb();
+    const originalUpdate = real.update.bind(real);
+    let failOnce = true;
+    setDb(
+      new Proxy(real, {
+        get(target, prop, receiver) {
+          if (prop === 'update') {
+            return (...args: Parameters<typeof originalUpdate>) => {
+              if (failOnce) {
+                failOnce = false;
+                throw new Error('simulated db failure');
+              }
+              return originalUpdate(...args);
+            };
+          }
+          const value = Reflect.get(target, prop, receiver) as unknown;
+          if (typeof value === 'function') {
+            return (value as (...fnArgs: unknown[]) => unknown).bind(target);
+          }
+          return value;
+        },
+      }) as typeof real,
+    );
+
+    try {
+      await expect(
+        bindUpload(alice.id, id, { ownerType: 'list', ownerId }),
+      ).rejects.toThrow('simulated db failure');
+    } finally {
+      setDb(null);
+    }
+
+    const destKey = storage.copyObject.mock.calls[0]?.[1] as string;
+    expect(destKey).toMatch(new RegExp(`^list/${alice.id}/`));
+    expect(storage.deleteFile).toHaveBeenCalledWith(destKey, expect.anything());
+    expect(storage.deleteFile).not.toHaveBeenCalledWith(tmpKey, expect.anything());
+
+    const [stuck] = await db.select().from(attachments).where(eq(attachments.id, id));
+    expect(stuck).toMatchObject({ s3Key: tmpKey, ownerType: 'tmp', status: 'ready' });
+
+    storage.deleteFile.mockClear();
+    storage.copyObject.mockClear();
+    const retry = await bindUpload(alice.id, id, { ownerType: 'list', ownerId });
+    expect(retry).toMatchObject({ id, status: 'ready', ownerType: 'list', ownerId });
+    const [after] = await db.select().from(attachments).where(eq(attachments.id, id));
+    expect(after?.s3Key).toBe(destKey);
+    expect(storage.deleteFile).toHaveBeenCalledWith(tmpKey, expect.anything());
+    expect(storage.deleteFile).not.toHaveBeenCalledWith(destKey, expect.anything());
   });
 
   it('old presign and 302 GET routes are gone', async () => {

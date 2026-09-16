@@ -4,7 +4,7 @@ import {
   type OnboardingState,
   type UserProfile,
 } from '@vital/dto';
-import { HOME_PATH } from '@/copy';
+import { HOME_PATH } from '@/routes';
 
 export const ONBOARDING_HREFS = ['/inbox', HOME_PATH, '/reports?type=weekly'] as const;
 

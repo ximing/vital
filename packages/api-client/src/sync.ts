@@ -23,6 +23,7 @@ export function syncHeadMoved(prev: SyncHead | null, next: SyncHead): boolean {
   );
 }
 
+/** Max `updatedAt` across a page. Do not use as a sync cursor — same-ms rows are skipped. */
 export function latestUpdatedAt(
   changes: Pick<SyncChanges, 'tasks' | 'inbox' | 'reports'>,
 ): string | null {
@@ -36,6 +37,14 @@ export function latestUpdatedAt(
     }
   }
   return iso;
+}
+
+/** Server-issued cursor. Falls back to the old timestamp heuristic for mixed-version deploys. */
+export function nextSyncSince(
+  page: Pick<SyncChanges, 'nextSince' | 'truncated' | 'serverTime' | 'tasks' | 'inbox' | 'reports'>,
+): string {
+  if (typeof page.nextSince === 'string' && page.nextSince.length > 0) return page.nextSince;
+  return page.truncated ? (latestUpdatedAt(page) ?? page.serverTime) : page.serverTime;
 }
 
 /** Sync/list payloads omit article HTML. Keep a cached body when the incoming row has none. */

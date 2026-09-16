@@ -858,6 +858,21 @@ export interface SyncHead {
 ```
 
 ```ts
+export interface SyncKeyset {
+  ts: string;
+  id: string;
+}
+```
+
+```ts
+export interface SyncCursor {
+  tasks: SyncKeyset;
+  inbox: SyncKeyset;
+  reports: SyncKeyset;
+}
+```
+
+```ts
 export interface SyncChanges {
   serverTime: string;
   head: SyncHead;
@@ -865,6 +880,8 @@ export interface SyncChanges {
   inbox: InboxItem[];
   reports: ReportListItem[];
   truncated: boolean;
+  /** Opaque cursor to pass as the next `since`. Always set. */
+  nextSince: string;
 }
 ```
 
@@ -2162,7 +2179,7 @@ Sync Changes
 
 Query (`syncChangesQuerySchema`):
 
-- `since`: string 1–…
+- `since`: string 1–2048
 - `limit`: number int min 1 max 500
 
 #### `GET /api/v1/sync/head`

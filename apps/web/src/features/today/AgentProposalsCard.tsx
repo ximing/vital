@@ -8,7 +8,9 @@ import {
   ExpandableProposalText,
   timeLabel,
 } from '@/features/settings/AgentActivitySection';
+import { settingsKeys } from '@/features/settings/query-keys';
 import { TODAY_HEAD_LINK, TodaySectionHead } from './SectionHead';
+import { todayKeys } from './query-keys';
 
 const copy = t.today.agentProposals;
 const activityCopy = t.settings.activity;
@@ -20,16 +22,16 @@ const activityCopy = t.settings.activity;
 export function AgentProposalsCard() {
   const qc = useQueryClient();
   const query = useQuery({
-    queryKey: ['today', 'agent-pending'],
+    queryKey: todayKeys.agentPending,
     queryFn: () => client.listAgentActions({ days: 7 }),
   });
   const settle = useMutation({
     mutationFn: ({ id, feedback }: { id: string; feedback: 'accepted' | 'dismissed' }) =>
       client.sendAgentActionFeedback(id, { feedback }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['today', 'agent-pending'] });
-      void qc.invalidateQueries({ queryKey: ['settings', 'agent-activity'] });
-      void qc.invalidateQueries({ queryKey: ['settings', 'agent-metrics'] });
+      void qc.invalidateQueries({ queryKey: todayKeys.agentPending });
+      void qc.invalidateQueries({ queryKey: settingsKeys.agentActivityRoot });
+      void qc.invalidateQueries({ queryKey: settingsKeys.agentMetricsRoot });
     },
   });
 

@@ -2,6 +2,7 @@ import { resolve, Service } from '@rabjs/react';
 import type { NotificationPrefs, Task } from '@vital/dto';
 import { DEFAULT_NOTIFICATION_PREFS } from '@vital/dto';
 import { t } from '@/copy';
+import { todoKeys } from '@/features/todos/query-keys';
 import { AuthService } from '@/services/auth.service';
 import { appQueryClient } from '@/services/query.service';
 import { appPathFromNotifyUrl } from './app-path';
@@ -151,7 +152,7 @@ export class BrowserNotifyService extends Service {
 
   private cachedTasks(): Task[] {
     const byId = new Map<string, Task>();
-    for (const [, data] of appQueryClient.getQueriesData<Task[]>({ queryKey: ['todos'] })) {
+    for (const [, data] of appQueryClient.getQueriesData<Task[]>({ queryKey: todoKeys.all })) {
       if (!Array.isArray(data)) continue;
       for (const task of data) {
         if (task && typeof task.id === 'string') byId.set(task.id, task);

@@ -28,3 +28,4 @@ apps/desktop/src-tauri/gen/
 
 # Eval runner output — only baseline.json is committed
 apps/server/scripts/eval/__snapshots__/latest.json
+deploy/info.md

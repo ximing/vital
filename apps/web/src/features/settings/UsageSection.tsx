@@ -2,6 +2,7 @@ import type { AgentUsageDaily } from '@vital/dto';
 import { useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { settingsKeys } from './query-keys';
 
 const copy = t.settings.usage;
 
@@ -55,7 +56,7 @@ function groupByDay(items: AgentUsageDaily[]): DayGroup[] {
 
 export function UsageSection() {
   const query = useQuery({
-    queryKey: ['settings', 'agent-usage', 30],
+    queryKey: settingsKeys.agentUsage(30),
     queryFn: () => client.getAgentUsage(30),
   });
 

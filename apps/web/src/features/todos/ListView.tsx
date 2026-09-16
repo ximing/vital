@@ -1,9 +1,10 @@
 import type { List, Tag, Task } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
 import { ChevronDown, ChevronRight, Pin } from 'lucide-react';
-import { useState, type DragEvent, type FC } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type FC } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { useScrollVirtualizer, virtualItemStyle } from '@/ui/use-scroll-virtualizer';
 import { EmptyTasks } from './EmptyTasks';
 import {
   flattenNodes,
@@ -80,6 +81,53 @@ function sectionTitle(section: ListSection, timeZone: string): string | null {
   return null;
 }
 
+type ListVirtualRow =
+  | {
+      key: string;
+      kind: 'heading';
+      section: ListSection;
+      heading: string;
+      count: number;
+      first: boolean;
+      collapsed: boolean;
+    }
+  | { key: string; kind: 'task'; task: Task; depth: 0 | 1 };
+
+function flattenListRows(
+  sections: ListSection[],
+  collapsed: ReadonlySet<string>,
+  timeZone: string,
+): ListVirtualRow[] {
+  const rows: ListVirtualRow[] = [];
+  sections.forEach((section, index) => {
+    const heading = sectionTitle(section, timeZone);
+    const flat = flattenNodes(section.nodes);
+    const isCollapsed = collapsed.has(section.key);
+    if (heading) {
+      rows.push({
+        key: `h:${section.key}`,
+        kind: 'heading',
+        section,
+        heading,
+        count: flat.length,
+        first: index === 0,
+        collapsed: isCollapsed,
+      });
+    }
+    if (!isCollapsed) {
+      for (const node of flat) {
+        rows.push({ key: `t:${node.task.id}`, kind: 'task', task: node.task, depth: node.depth });
+      }
+    }
+  });
+  return rows;
+}
+
+function estimateListRow(row: ListVirtualRow): number {
+  if (row.kind === 'heading') return row.first ? 40 : 56;
+  return 52;
+}
+
 export const ListView: FC<{
   listId: string;
   tasks: Task[];
@@ -116,6 +164,24 @@ export const ListView: FC<{
 }) {
   const todos = useService(TodosUiService);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const sections = useMemo(
+    () => listSections(listId, tasks, timeZone, undefined, lists, todos.taskSort),
+    [listId, tasks, timeZone, lists, todos.taskSort],
+  );
+  const rows = useMemo(
+    () => flattenListRows(sections, collapsed, timeZone),
+    [sections, collapsed, timeZone],
+  );
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const { listRef, virtualizer } = useScrollVirtualizer({ rows, estimateSize: estimateListRow });
+
+  useEffect(() => {
+    const id = todos.selectedId;
+    if (!id) return;
+    const index = rowsRef.current.findIndex((row) => row.kind === 'task' && row.task.id === id);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'auto' });
+  }, [todos.selectedId, virtualizer]);
 
   function toggleSection(key: string) {
     setCollapsed((prev) => {
@@ -149,41 +215,8 @@ export const ListView: FC<{
     onReorder({ listId: target.listId, parentId: target.parentId, orderedIds: next });
   }
 
-  function renderNodeList(list: ListSection['nodes']) {
-    return flattenNodes(list).map(({ task, depth }) => (
-      <TaskRow
-        key={task.id}
-        task={task}
-        depth={depth}
-        selected={todos.selectedId === task.id}
-        timeZone={timeZone}
-        tags={tags}
-        listName={
-          listId.startsWith('smart:') && listId !== 'smart:inbox'
-            ? listTitle(task.listId, lists, '')
-            : undefined
-        }
-        onSelect={() => todos.openDetail(task.id)}
-        onOpen={() => todos.openDetail(task.id)}
-        onComplete={() => onComplete(task)}
-        onDragStart={manualSort ? (event) => handleDragStart(event, task) : undefined}
-        onDragOver={manualSort ? handleDragOver : undefined}
-        onDrop={manualSort ? (event) => handleDrop(event, task) : undefined}
-        onContextMenu={
-          onTaskMenu
-            ? (event) => {
-                event.preventDefault();
-                onTaskMenu(task, event.clientX, event.clientY);
-              }
-            : undefined
-        }
-      />
-    ));
-  }
-
   if (tasks.length === 0) return <EmptyTasks listId={listId} kind="list" done={doneScope} />;
 
-  const sections = listSections(listId, tasks, timeZone, undefined, lists, todos.taskSort);
   const manualSort = todos.taskSort.key === 'manual';
   const boxLabel =
     listId === 'smart:today'
@@ -191,44 +224,86 @@ export const ListView: FC<{
       : listId === 'smart:upcoming'
         ? t.lists.upcoming
         : t.nav.todos;
+  const scrollMargin = virtualizer.options.scrollMargin;
 
   return (
-    <div role="listbox" aria-label={boxLabel}>
-      {sections.map((section, index) => {
-        const heading = sectionTitle(section, timeZone);
-        const isCollapsed = collapsed.has(section.key);
-        const flat = flattenNodes(section.nodes);
-        return (
-          <section key={section.key}>
-            {heading ? (
-              <GroupHeading
-                count={flat.length}
-                first={index === 0}
-                collapsed={isCollapsed}
-                onToggle={() => toggleSection(section.key)}
-                tone={
-                  section.heading === 'overdue'
-                    ? 'overdue'
-                    : section.heading === 'pinned'
-                      ? 'pinned'
-                      : 'muted'
-                }
-                action={
-                  section.heading === 'overdue' && onPostpone
-                    ? {
-                        label: t.todos.postpone,
-                        onClick: () => onPostpone(flat.map((node) => node.task)),
-                      }
-                    : undefined
-                }
-              >
-                {heading}
-              </GroupHeading>
-            ) : null}
-            {isCollapsed ? null : renderNodeList(section.nodes)}
-          </section>
-        );
-      })}
+    <div ref={listRef} role="listbox" aria-label={boxLabel}>
+      <div
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const row = rows[virtualRow.index];
+          if (!row) return null;
+          return (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={virtualItemStyle(virtualRow.start, scrollMargin)}
+            >
+              {row.kind === 'heading' ? (
+                <GroupHeading
+                  count={row.count}
+                  first={row.first}
+                  collapsed={row.collapsed}
+                  onToggle={() => toggleSection(row.section.key)}
+                  tone={
+                    row.section.heading === 'overdue'
+                      ? 'overdue'
+                      : row.section.heading === 'pinned'
+                        ? 'pinned'
+                        : 'muted'
+                  }
+                  action={
+                    row.section.heading === 'overdue' && onPostpone
+                      ? {
+                          label: t.todos.postpone,
+                          onClick: () =>
+                            onPostpone(flattenNodes(row.section.nodes).map((node) => node.task)),
+                        }
+                      : undefined
+                  }
+                >
+                  {row.heading}
+                </GroupHeading>
+              ) : (
+                <TaskRow
+                  task={row.task}
+                  depth={row.depth}
+                  selected={todos.selectedId === row.task.id}
+                  timeZone={timeZone}
+                  tags={tags}
+                  listName={
+                    listId.startsWith('smart:') && listId !== 'smart:inbox'
+                      ? listTitle(row.task.listId, lists, '')
+                      : undefined
+                  }
+                  onSelect={() => todos.openDetail(row.task.id)}
+                  onOpen={() => todos.openDetail(row.task.id)}
+                  onComplete={() => onComplete(row.task)}
+                  onDragStart={
+                    manualSort ? (event) => handleDragStart(event, row.task) : undefined
+                  }
+                  onDragOver={manualSort ? handleDragOver : undefined}
+                  onDrop={manualSort ? (event) => handleDrop(event, row.task) : undefined}
+                  onContextMenu={
+                    onTaskMenu
+                      ? (event) => {
+                          event.preventDefault();
+                          onTaskMenu(row.task, event.clientX, event.clientY);
+                        }
+                      : undefined
+                  }
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 });

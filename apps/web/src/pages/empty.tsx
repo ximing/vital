@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
-import { HOME_PATH, t } from '@/copy';
+import { t } from '@/copy';
+import { HOME_PATH } from '@/routes';
 import { EmptyArt } from '@/ui/empty-art';
 
 export function NotFoundPage() {

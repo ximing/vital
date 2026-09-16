@@ -1,10 +1,17 @@
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { AgentMetricsResponse } from '@vital/dto';
 import { getDb } from '../../src/db/index.js';
-import { agentActions, agentMemory, agentUsage, users } from '../../src/db/schema.js';
+import {
+  agentActions,
+  agentMemory,
+  agentUsage,
+  inboxIdempotencyResponses,
+  inboxItems,
+  users,
+} from '../../src/db/schema.js';
 import { agentAdoptionDaily } from '../../src/agent/metrics.service.js';
 import { FIXTURE_TZ, FIXTURE_USER_ID, seedFixture } from './fixture.js';
 
@@ -49,6 +56,20 @@ export async function buildSnapshot(opts: { tamper?: boolean } = {}): Promise<Ag
   await db.delete(agentActions).where(eq(agentActions.userId, FIXTURE_USER_ID));
   await db.delete(agentUsage).where(eq(agentUsage.userId, FIXTURE_USER_ID));
   await db.delete(agentMemory).where(eq(agentMemory.userId, FIXTURE_USER_ID));
+  const fixtureInbox = await db
+    .select({ id: inboxItems.id })
+    .from(inboxItems)
+    .where(eq(inboxItems.userId, FIXTURE_USER_ID));
+  if (fixtureInbox.length > 0) {
+    await db
+      .delete(inboxIdempotencyResponses)
+      .where(
+        inArray(
+          inboxIdempotencyResponses.inboxItemId,
+          fixtureInbox.map((row) => row.id),
+        ),
+      );
+  }
   await db.delete(users).where(eq(users.id, FIXTURE_USER_ID));
   await seedFixture(db, opts);
   const metrics = await agentAdoptionDaily(FIXTURE_USER_ID, EVAL_WINDOW_DAYS, FIXTURE_TZ);

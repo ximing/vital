@@ -1,9 +1,18 @@
+import type { InboxItem } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
 import { Plus } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type FC, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FC,
+  type PointerEvent,
+} from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
-import { useTagsQuery } from '@/features/todos/queries';
+import { useTagsQuery } from '@/features/todos';
 import { humanError } from '@/lib/errors';
 import {
   clampInboxListWidth,
@@ -15,6 +24,7 @@ import { Button } from '@/ui/button';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { usePopover } from '@/ui/use-popover';
+import { useScrollVirtualizer, virtualItemStyle } from '@/ui/use-scroll-virtualizer';
 import { EmptyInbox, InboxSkeleton } from './EmptyInbox';
 import { InboxContextMenu } from './InboxContextMenu';
 import { InboxPageService } from './inbox-page.service';
@@ -27,6 +37,8 @@ import {
   parseInboxFilter,
   parseInboxTagId,
   PASTE_URL_ID,
+  type DayGroupKey,
+  type PendingSave,
 } from './model';
 import { useOnline } from './online';
 import { PasteUrl } from './PasteUrl';
@@ -34,6 +46,42 @@ import { useInboxActions, useInboxListQuery } from './queries';
 import { InboxUiService } from './inbox-ui.service';
 
 const POPOVER_W = 416;
+
+type InboxVirtualRow =
+  | { key: string; kind: 'pending'; save: PendingSave }
+  | { key: string; kind: 'header'; groupKey: DayGroupKey; count: number }
+  | { key: string; kind: 'item'; item: InboxItem };
+
+function flattenInboxRows(
+  pending: PendingSave[],
+  groups: { key: DayGroupKey; items: InboxItem[] }[],
+  filter: ReturnType<typeof parseInboxFilter>,
+): InboxVirtualRow[] {
+  const rows: InboxVirtualRow[] = [];
+  if (filter === 'all') {
+    for (const save of pending) {
+      rows.push({ key: `p:${save.id}`, kind: 'pending', save });
+    }
+  }
+  for (const group of groups) {
+    rows.push({
+      key: `g:${group.key}`,
+      kind: 'header',
+      groupKey: group.key,
+      count: group.items.length,
+    });
+    for (const item of group.items) {
+      rows.push({ key: `i:${item.id}`, kind: 'item', item });
+    }
+  }
+  return rows;
+}
+
+function estimateInboxRow(row: InboxVirtualRow): number {
+  if (row.kind === 'header') return 40;
+  if (row.kind === 'pending') return 48;
+  return 72;
+}
 
 /**
  * Left list column of the inbox canvas: fixed-position next to the library on
@@ -147,7 +195,27 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
   const totalCount = filterSaves(all, 'all', tagId).length;
   const activeTag = tags.find((tag) => tag.id === tagId);
   const menuItem = menu ? (all.find((item) => item.id === menu.item.id) ?? menu.item) : null;
-  const groups = groupSavesByDay(items, timeZone);
+  const rows = useMemo(
+    () =>
+      flattenInboxRows(pending, groupSavesByDay(filterSaves(all, filter, tagId), timeZone), filter),
+    [pending, all, filter, tagId, timeZone],
+  );
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const { listRef, virtualizer } = useScrollVirtualizer({ rows, estimateSize: estimateInboxRow });
+  const scrollToSelected = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedId || rows.length === 0) return;
+    if (scrollToSelected.current === selectedId) return;
+    const index = rowsRef.current.findIndex(
+      (row) => row.kind === 'item' && row.item.id === selectedId,
+    );
+    if (index < 0) return;
+    scrollToSelected.current = selectedId;
+    virtualizer.scrollToIndex(index, { align: 'auto' });
+  }, [selectedId, rows.length, virtualizer]);
+
   const summary = `${totalCount} ${t.inbox.unit} · ${unreadCount} ${t.inbox.unread}`;
   const empty =
     items.length === 0 && pending.length === 0 && !inboxQuery.isLoading && inboxQuery.error === null;
@@ -241,57 +309,73 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
           </p>
         )
       ) : (
-        <div role="list" aria-label={t.rail.capture} className="pb-8">
-          {filter === 'all' && pending.length > 0 ? (
-            <div className="pt-3">
-              {pending.map((save) => (
-                <PendingRow
-                  key={save.id}
-                  save={save}
-                  disabled={!online || save.phase === 'processing'}
-                  onRetry={() => {
-                    void actions.retry(save).then((result) => {
-                      if (result && 'id' in result) navigate(`/inbox/${result.id}`);
-                    });
-                  }}
-                />
-              ))}
-            </div>
-          ) : null}
-          {groups.map((group) => (
-            <div key={group.key}>
-              <p className="eyebrow eyebrow-rule px-3 pb-1.5 pt-5">
-                {t.inbox.group[group.key]}
-                <span className="font-mono normal-case tracking-normal tabular-nums opacity-80">
-                  {group.items.length}
-                </span>
-              </p>
-              {group.items.map((item) => (
-                <SaveRow
-                  key={item.id}
-                  item={item}
-                  tags={tags}
-                  timeZone={timeZone}
-                  selected={selectedId === item.id}
-                  compact
-                  onFavorite={
-                    online && canPatchStatus(item)
-                      ? () => patchStatus(item.id, nextFavoriteStatus(item))
-                      : undefined
-                  }
-                  onArchive={
-                    online && canPatchStatus(item)
-                      ? () => patchStatus(item.id, item.status === 'archived' ? 'unread' : 'archived')
-                      : undefined
-                  }
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    page.openItemMenu(item, event.clientX, event.clientY);
-                  }}
-                />
-              ))}
-            </div>
-          ))}
+        <div ref={listRef} role="list" aria-label={t.rail.capture} className="pb-8">
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index];
+              if (!row) return null;
+              return (
+                <div
+                  key={virtualRow.key}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  className={row.kind === 'pending' && virtualRow.index === 0 ? 'pt-3' : undefined}
+                  style={virtualItemStyle(virtualRow.start, virtualizer.options.scrollMargin)}
+                >
+                  {row.kind === 'pending' ? (
+                    <PendingRow
+                      save={row.save}
+                      disabled={!online || row.save.phase === 'processing'}
+                      onRetry={() => {
+                        void actions.retry(row.save).then((result) => {
+                          if (result && 'id' in result) navigate(`/inbox/${result.id}`);
+                        });
+                      }}
+                    />
+                  ) : row.kind === 'header' ? (
+                    <p className="eyebrow eyebrow-rule px-3 pb-1.5 pt-5">
+                      {t.inbox.group[row.groupKey]}
+                      <span className="font-mono normal-case tracking-normal tabular-nums opacity-80">
+                        {row.count}
+                      </span>
+                    </p>
+                  ) : (
+                    <SaveRow
+                      item={row.item}
+                      tags={tags}
+                      timeZone={timeZone}
+                      selected={selectedId === row.item.id}
+                      compact
+                      onFavorite={
+                        online && canPatchStatus(row.item)
+                          ? () => patchStatus(row.item.id, nextFavoriteStatus(row.item))
+                          : undefined
+                      }
+                      onArchive={
+                        online && canPatchStatus(row.item)
+                          ? () =>
+                              patchStatus(
+                                row.item.id,
+                                row.item.status === 'archived' ? 'unread' : 'archived',
+                              )
+                          : undefined
+                      }
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        page.openItemMenu(row.item, event.clientX, event.clientY);
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
       {menu && menuItem ? (

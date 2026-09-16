@@ -2,7 +2,7 @@ import type { NowRecommendation, Outcome, TodayNow } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
 import { useState, type FC } from 'react';
 import { t } from '@/copy';
-import { TodosUiService } from '@/features/todos/todos-ui.service';
+import { TodosUiService } from '@/features/todos';
 
 /**
  * "当下" card: left — current time, continuous free time and the rule reason;

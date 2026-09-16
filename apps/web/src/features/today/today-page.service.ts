@@ -2,11 +2,16 @@ import { Service } from '@rabjs/react';
 import { llmReady, type Task } from '@vital/dto';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
-import { createPayload, overdueDueAtForToday, todayYmd } from '@/features/todos/model';
-import type { ComposeExtras } from '@/features/todos/QuickAdd';
-import { todoKeys } from '@/features/todos/queries';
-import { applyDraftToCreate, type ScheduleDraft } from '@/features/todos/schedule-draft';
-import { TodosUiService } from '@/features/todos/todos-ui.service';
+import {
+  applyDraftToCreate,
+  createPayload,
+  overdueDueAtForToday,
+  todayYmd,
+  todoKeys,
+  TodosUiService,
+  type ComposeExtras,
+  type ScheduleDraft,
+} from '@/features/todos';
 import { AuthService } from '@/services/auth.service';
 import { QueryService } from '@/services/query.service';
 import { todayKeys } from './queries';

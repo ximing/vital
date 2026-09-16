@@ -19,6 +19,7 @@ import {
   attachments,
   entityLinks,
   inboxAssets,
+  inboxIdempotencyResponses,
   inboxItemBodies,
   inboxItemTags,
   inboxItems,
@@ -31,7 +32,7 @@ import { assertOwnedOutcomeId } from '../outcomes/shared.js';
 import { trackIndexJob } from '../retrieval/pipeline.js';
 import { indexInboxItem, removeInboxItemIndex } from '../retrieval/search.js';
 import { assertOwnedTagIds } from '../tags/tags.service.js';
-import { createTask, deleteTask, getTask } from '../tasks/tasks.service.js';
+import { createTaskInTx, fireIndexTask, getTask } from '../tasks/tasks.service.js';
 import { bindUpload } from '../uploads/uploads.service.js';
 import { getStorage, type StorageMetadata } from '../storage/factory.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
@@ -83,8 +84,50 @@ function htmlOnWrite(
 
 type InboxBody = { extractedText: string | null; extractedHtml: string | null };
 
+type InboxDtoRow = Pick<
+  InboxItemRow,
+  | 'id'
+  | 'title'
+  | 'outcomeId'
+  | 'originalUrl'
+  | 'canonicalUrl'
+  | 'excerpt'
+  | 'byline'
+  | 'siteName'
+  | 'status'
+  | 'source'
+  | 'capturedAt'
+  | 'readAt'
+  | 'convertedTaskId'
+  | 'deletedAt'
+  | 'createdAt'
+  | 'updatedAt'
+>;
+
+/** List/sync columns — omits generated tsvector. Idempotency snapshots live on a side table. */
+const inboxListColumns = {
+  id: inboxItems.id,
+  userId: inboxItems.userId,
+  title: inboxItems.title,
+  outcomeId: inboxItems.outcomeId,
+  originalUrl: inboxItems.originalUrl,
+  canonicalUrl: inboxItems.canonicalUrl,
+  excerpt: inboxItems.excerpt,
+  byline: inboxItems.byline,
+  siteName: inboxItems.siteName,
+  status: inboxItems.status,
+  source: inboxItems.source,
+  capturedAt: inboxItems.capturedAt,
+  readAt: inboxItems.readAt,
+  idempotencyKey: inboxItems.idempotencyKey,
+  convertedTaskId: inboxItems.convertedTaskId,
+  deletedAt: inboxItems.deletedAt,
+  createdAt: inboxItems.createdAt,
+  updatedAt: inboxItems.updatedAt,
+};
+
 export function toInboxDto(
-  row: InboxItemRow,
+  row: InboxDtoRow,
   assets: InboxAsset[],
   tagIds: string[] = [],
   body: InboxBody | null = null,
@@ -243,6 +286,32 @@ function replayOf(value: InboxIdempotencyResponse | null): InboxIdempotencyRespo
   return { status: value.status, body: value.body };
 }
 
+async function loadIdempotencyReplay(
+  inboxItemId: string,
+  db: Pick<ReturnType<typeof getDb>, 'select'> = getDb(),
+): Promise<InboxIdempotencyResponse | null> {
+  const [row] = await db
+    .select({ response: inboxIdempotencyResponses.response })
+    .from(inboxIdempotencyResponses)
+    .where(eq(inboxIdempotencyResponses.inboxItemId, inboxItemId))
+    .limit(1);
+  return replayOf(row?.response ?? null);
+}
+
+async function writeIdempotencyResponse(
+  inboxItemId: string,
+  response: InboxIdempotencyResponse,
+  db: Pick<ReturnType<typeof getDb>, 'insert'> = getDb(),
+): Promise<void> {
+  await db
+    .insert(inboxIdempotencyResponses)
+    .values({ inboxItemId, response })
+    .onConflictDoUpdate({
+      target: inboxIdempotencyResponses.inboxItemId,
+      set: { response },
+    });
+}
+
 function isInboxItemBody(value: unknown): value is InboxItem {
   return typeof value === 'object' && value !== null && 'id' in value && 'title' in value;
 }
@@ -269,7 +338,7 @@ export async function listInbox(userId: string, query: ListInboxQuery): Promise<
     ) as SQL;
   }
   const rows = await getDb()
-    .select()
+    .select(inboxListColumns)
     .from(inboxItems)
     .where(where)
     .orderBy(desc(inboxItems.capturedAt), desc(inboxItems.id))
@@ -334,7 +403,6 @@ export async function createInbox(
     capturedAt: now,
     readAt: null,
     idempotencyKey: key,
-    idempotencyResponse: null,
     convertedTaskId: null,
     deletedAt: null,
     createdAt: now,
@@ -374,7 +442,7 @@ export async function createInbox(
       .limit(1);
     if (!stored) throw AppError.of(500, 'INTERNAL_ERROR');
     if (stored.id !== id) {
-      const replay = replayOf(stored.idempotencyResponse ?? null);
+      const replay = await loadIdempotencyReplay(stored.id, tx);
       if (replay && isInboxItemBody(replay.body)) {
         const body = replay.body;
         return {
@@ -390,10 +458,7 @@ export async function createInbox(
     if (input.tagIds !== undefined) await replaceInboxTags(stored.id, input.tagIds, tx);
     const created = toInboxDto(stored, [], input.tagIds ?? [], { extractedText, extractedHtml });
     const payload: InboxIdempotencyResponse = { status: 201, body: created };
-    await tx
-      .update(inboxItems)
-      .set({ idempotencyResponse: payload })
-      .where(eq(inboxItems.id, stored.id));
+    await writeIdempotencyResponse(stored.id, payload, tx);
     return { status: 201 as const, item: created, createdRow: stored };
   });
   if (createdRow !== null) {
@@ -522,51 +587,48 @@ export async function convertInbox(
   }
   const listId = input.listId ?? (await getInboxList(userId)).id;
   const tagIds = (await tagIdsByInbox([item.id])).get(item.id) ?? [];
-  const task = await createTask(userId, {
-    title: input.title ?? item.title,
-    listId,
-    notes: item.originalUrl ?? item.excerpt ?? '',
-    ...(tagIds.length > 0 ? { tagIds } : {}),
-  });
-  const now = new Date();
-  try {
-    await getDb().transaction(async (tx) => {
-      await tx.insert(entityLinks).values([
-        {
-          id: randomUUID(),
-          userId,
-          fromType: 'inbox',
-          fromId: item.id,
-          toType: 'task',
-          toId: task.id,
-          role: 'converted_from',
-          createdAt: now,
-        },
-        {
-          id: randomUUID(),
-          userId,
-          fromType: 'task',
-          fromId: task.id,
-          toType: 'inbox',
-          toId: item.id,
-          role: 'converted_from',
-          createdAt: now,
-        },
-      ]);
-      await tx
-        .update(inboxItems)
-        .set({
-          status: 'converted',
-          convertedTaskId: task.id,
-          updatedAt: now,
-        })
-        .where(eq(inboxItems.id, item.id));
+  const created = await getDb().transaction(async (tx) => {
+    const taskRow = await createTaskInTx(tx, userId, {
+      title: input.title ?? item.title,
+      listId,
+      notes: item.originalUrl ?? item.excerpt ?? '',
+      ...(tagIds.length > 0 ? { tagIds } : {}),
     });
-  } catch (err) {
-    await deleteTask(userId, task.id);
-    throw err;
-  }
+    const now = new Date();
+    await tx.insert(entityLinks).values([
+      {
+        id: randomUUID(),
+        userId,
+        fromType: 'inbox',
+        fromId: item.id,
+        toType: 'task',
+        toId: taskRow.id,
+        role: 'converted_from',
+        createdAt: now,
+      },
+      {
+        id: randomUUID(),
+        userId,
+        fromType: 'task',
+        fromId: taskRow.id,
+        toType: 'inbox',
+        toId: item.id,
+        role: 'converted_from',
+        createdAt: now,
+      },
+    ]);
+    await tx
+      .update(inboxItems)
+      .set({
+        status: 'converted',
+        convertedTaskId: taskRow.id,
+        updatedAt: now,
+      })
+      .where(eq(inboxItems.id, item.id));
+    return taskRow;
+  });
+  fireIndexTask(created);
   const updated = await getOwnedInboxOr404(userId, id);
   trackIndexJob(indexInboxItem(updated), 'indexInboxItem');
-  return { created: true, result: { inbox: await dtoOf(updated), task } };
+  return { created: true, result: { inbox: await dtoOf(updated), task: await getTask(userId, created.id) } };
 }

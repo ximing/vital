@@ -3,6 +3,7 @@ import { runAgentScheduler } from './agent/scheduler.js';
 import { config } from './config.js';
 import { pool } from './db/index.js';
 import { healTaskNotifications, processDueNotifications } from './notifications/dispatch.js';
+import { startSweeper } from './uploads/sweeper.js';
 import { logger } from './utils/logger.js';
 
 let stopping = false;
@@ -70,6 +71,8 @@ const schedulerTimer = setInterval(() => {
   track(schedule);
 }, config.AGENT_SCHEDULER_INTERVAL_MS);
 
+const sweeperTimer = startSweeper();
+
 logger.info('worker started', {
   pollMs: config.WORKER_POLL_MS,
   healMs: config.WORKER_HEAL_INTERVAL_MS,
@@ -87,6 +90,7 @@ function shutdown(sig: string): void {
   clearInterval(poll);
   clearInterval(healTimer);
   clearInterval(schedulerTimer);
+  clearInterval(sweeperTimer);
   void (async () => {
     await drainAgentJobs();
     await Promise.allSettled([...inFlight]);

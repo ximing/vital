@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull, isNull, like } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { getDb } from '../db/index.js';
 import { habits, taskCompletions, tasks } from '../db/schema.js';
@@ -62,9 +62,8 @@ export async function loadHabitHeadlineFacts(
     .where(
       and(
         eq(tasks.userId, userId),
-        isNotNull(tasks.habitId),
+        inArray(tasks.habitId, habitIds),
         isNull(tasks.deletedAt),
-        like(tasks.habitKey, `%:${day}:%`),
       ),
     );
   const todayByHabit = new Map<string, { done: number; total: number }>();

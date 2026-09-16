@@ -244,11 +244,40 @@ export async function bindUpload(
   const ext = mime.extension(row.mime) || 'bin';
   const destKey = `${input.ownerType}/${userId}/${input.ownerId}/${id}.${ext}`;
   const storage = getStorage();
-  await storage.copyObject(row.s3Key, destKey, row.storageMeta);
-  await storage.deleteFile(row.s3Key, row.storageMeta);
-  await getDb()
-    .update(attachments)
-    .set({ s3Key: destKey, ownerType: input.ownerType, ownerId: input.ownerId })
-    .where(eq(attachments.id, id));
+  const tmpKey = row.s3Key;
+  // copy → DB (dest) → best-effort delete tmp. Deleting tmp before the
+  // UPDATE left a 404 row when the write failed and made bind unretryable.
+  await storage.copyObject(tmpKey, destKey, row.storageMeta);
+  try {
+    await getDb()
+      .update(attachments)
+      .set({ s3Key: destKey, ownerType: input.ownerType, ownerId: input.ownerId })
+      .where(eq(attachments.id, id));
+  } catch (err) {
+    try {
+      await storage.deleteFile(destKey, row.storageMeta);
+    } catch (delErr) {
+      logger.warn('bindUpload dest cleanup failed after DB error', {
+        id,
+        destKey,
+        err: String(delErr),
+      });
+    }
+    logger.warn('bindUpload DB update failed, tmp retained for retry', {
+      id,
+      tmpKey,
+      err: String(err),
+    });
+    throw err;
+  }
+  try {
+    await storage.deleteFile(tmpKey, row.storageMeta);
+  } catch (err) {
+    logger.warn('bindUpload tmp delete failed (best-effort)', {
+      id,
+      key: tmpKey,
+      err: String(err),
+    });
+  }
   return { id, status: 'ready', ownerType: input.ownerType, ownerId: input.ownerId };
 }

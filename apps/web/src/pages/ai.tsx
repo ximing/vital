@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { HOME_PATH, t } from '@/copy';
+import { t } from '@/copy';
+import { HOME_PATH } from '@/routes';
 import { AgentActivitySection } from '@/features/settings/AgentActivitySection';
 import { AgentMaintenanceButton } from '@/features/settings/AgentMaintenanceButton';
 import { HabitsSection } from '@/features/settings/HabitsSection';

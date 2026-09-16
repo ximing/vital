@@ -3,6 +3,7 @@ import { client } from '@/api/client';
 import { t } from '@/copy';
 import { ACTIVITY_CARD, ActivitySectionHead } from './ActivitySectionHead';
 import { AgentMaintenanceButton } from './AgentMaintenanceButton';
+import { settingsKeys } from './query-keys';
 
 const copy = t.settings.activity.executions;
 const capabilities: Record<string, string> = t.settings.usage.capabilities;
@@ -23,7 +24,7 @@ function reasonLabel(reason: string | null): string | null {
 
 export function AgentExecutionSection() {
   const query = useQuery({
-    queryKey: ['settings', 'agent-executions', 7],
+    queryKey: settingsKeys.agentExecutions(7),
     queryFn: () => client.listAgentExecutions(7),
     refetchInterval: 15_000,
   });

@@ -175,8 +175,9 @@ function renderAt(path: string) {
                 </>
               }
             >
-              <Route path="/inbox" element={<InboxWorkspace />} />
-              <Route path="/inbox/:id" element={<InboxReader />} />
+              <Route path="/inbox" element={<InboxWorkspace />}>
+                <Route path=":id" element={<InboxReader />} />
+              </Route>
             </Route>
           </Routes>
           <SimilarOpenToast />
@@ -406,6 +407,40 @@ describe('inbox workspace', () => {
       );
     });
     expect(await screen.findByRole('link', { name: 'https://example.com/a' })).toBeInTheDocument();
+  });
+
+  it('keeps the list mounted when opening a reader and returning', async () => {
+    const item = makeItem({ id: 'i1', title: '未读文章' });
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [item], nextCursor: null });
+    vi.mocked(client.getInbox).mockResolvedValue(item);
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    expect(await screen.findByText('未读文章')).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: /未读文章/ }));
+    expect(await screen.findByRole('heading', { name: '未读文章' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /未读文章/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: t.inbox.back }));
+    expect(await screen.findByText(t.empty.inboxReader)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /未读文章/ })).toBeInTheDocument();
+  });
+
+  it('virtualizes a long inbox list so offscreen rows are not in the document', async () => {
+    const capturedAt = new Date().toISOString();
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: Array.from({ length: 80 }, (_, i) =>
+        makeItem({
+          id: `i-${String(i).padStart(2, '0')}`,
+          title: `条目 ${String(i).padStart(2, '0')}`,
+          capturedAt,
+        }),
+      ),
+      nextCursor: null,
+    });
+    renderAt('/inbox');
+    // newestFirst by id: i-79 is first in the virtual window, i-00 is last.
+    expect(await screen.findByText('条目 79')).toBeInTheDocument();
+    expect(screen.getByText(t.inbox.group.today)).toBeInTheDocument();
+    expect(screen.queryByText('条目 00')).not.toBeInTheDocument();
   });
 
   it('shows processing then failed extract with retry', async () => {

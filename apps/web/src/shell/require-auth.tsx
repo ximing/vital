@@ -1,8 +1,8 @@
 import { observer, useService } from '@rabjs/react';
 import type { FC, ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { HOME_PATH } from '@/copy';
-import { needsOnboarding } from '@/features/onboarding';
+import { HOME_PATH } from '@/routes';
+import { needsOnboarding } from '@/features/onboarding/model';
 import { AuthService } from '@/services/auth.service';
 
 export function afterAuthPath(

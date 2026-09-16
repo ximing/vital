@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, lte } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { getDb } from '../db/index.js';
 import { holidayCalendar } from '../db/schema.js';
@@ -18,6 +18,35 @@ async function databaseLookup(date: string): Promise<ChinaCalendarKind> {
 function weekday(date: string): boolean {
   const day = DateTime.fromISO(date, { zone: 'Asia/Shanghai' });
   return day.isValid && day.weekday >= 1 && day.weekday <= 5;
+}
+
+/** One range query for CN holiday/makeup rows; dates outside the window are treated as unset. */
+export async function loadChinaCalendarWindow(
+  fromDate: string,
+  toDate: string,
+): Promise<Map<string, ChinaCalendarKind>> {
+  if (fromDate > toDate) return new Map();
+  const rows = await getDb()
+    .select({ date: holidayCalendar.date, kind: holidayCalendar.kind })
+    .from(holidayCalendar)
+    .where(
+      and(
+        eq(holidayCalendar.region, 'CN'),
+        gte(holidayCalendar.date, fromDate),
+        lte(holidayCalendar.date, toDate),
+      ),
+    );
+  const map = new Map<string, ChinaCalendarKind>();
+  for (const row of rows) {
+    if (row.kind === 'holiday' || row.kind === 'workday') map.set(row.date, row.kind);
+  }
+  return map;
+}
+
+export function chinaCalendarLookupFromWindow(
+  map: ReadonlyMap<string, ChinaCalendarKind>,
+): ChinaCalendarLookup {
+  return (date) => Promise.resolve(map.get(date) ?? null);
 }
 
 export async function matchesChinaRule(

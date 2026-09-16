@@ -16,8 +16,7 @@ import { NavLink, useLocation } from 'react-router';
 import { t } from '@/copy';
 import { REPORT_TYPES } from '@/features/reports/model';
 import { useReportCountsQuery } from '@/features/reports/queries';
-import { ListShortcuts, UserListsNav } from '@/features/todos';
-import { useCountsQuery } from '@/features/todos/queries';
+import { ListShortcuts, useCountsQuery, UserListsNav } from '@/features/todos';
 import { CapturePane } from '@/shell/CapturePane';
 import { railNavClass } from '@/shell/rail-nav';
 import {

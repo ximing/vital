@@ -1,7 +1,7 @@
 import { Service } from '@rabjs/react';
 import { QueryService } from '@/services/query.service';
-import { todoKeys } from '@/features/todos/queries';
-import { todayKeys } from './queries';
+import { todoKeys } from '@/features/todos/query-keys';
+import { todayKeys } from './query-keys';
 
 export class ThreadPageService extends Service {
   now = new Date();

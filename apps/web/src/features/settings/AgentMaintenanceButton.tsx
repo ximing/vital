@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
+import { settingsKeys } from './query-keys';
 
 export function AgentMaintenanceButton({ kind }: { kind: 'threads' | 'memory' }) {
   const queries = useQueryClient();
   const mutation = useMutation({
     mutationFn: () => kind === 'threads' ? client.organizeAgentTasks() : client.distillAgentMemory(),
-    onSuccess: () => { void queries.invalidateQueries({ queryKey: ['settings', 'agent-executions'] }); },
+    onSuccess: () => { void queries.invalidateQueries({ queryKey: settingsKeys.agentExecutionsRoot }); },
   });
   return (
     <div className="flex flex-wrap items-center gap-2">

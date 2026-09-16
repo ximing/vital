@@ -6,7 +6,7 @@ import { client } from '@/api/client';
 import { t } from '@/copy';
 import { Button } from '@/ui/button';
 import { Icon } from '@/ui/icon';
-import { todoKeys } from '@/features/todos/queries';
+import { todoKeys } from '@/features/todos/query-keys';
 import { decomposeDeferCount, decomposeSubtasks } from './model';
 import { todayKeys } from './queries';
 

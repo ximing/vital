@@ -67,10 +67,11 @@ export function rateLimitError(): Error {
 export const globalRateLimit = {
   hook: 'preHandler' as const,
   global: true,
-  // Entry nginx (39.96.159.212) is not in the trust list, so every external
-  // request resolves to the same req.ip — a per-IP cap here would throttle
-  // all users collectively. Effectively a DoS guard, not a rate limiter.
-  max: isTest ? 1000 : 1_200_000,
+  // Per-IP now that trust-proxy includes the entry nginx, so req.ip is the
+  // real client. 3000/min ≈ 50 rps: a heavy UI+sync burst is well under that
+  // (a few rps), while one IP cannot exhaust the Node process. Test stays at
+  // 1000 so existing suites do not need 3000 injections.
+  max: isTest ? 1000 : 3000,
   timeWindow: 60_000,
   keyGenerator: (req: FastifyRequest) => ipFrom(req),
   allowList: (req: FastifyRequest) => {
@@ -98,11 +99,49 @@ type AuthKind = keyof typeof authMax;
 
 const hits = new Map<string, { count: number; resetAt: number }>();
 
+const AUTH_HITS_MAX_KEYS_DEFAULT = 5000;
+const AUTH_HITS_SWEEP_MS = 60_000;
+let hitsMaxKeys = AUTH_HITS_MAX_KEYS_DEFAULT;
+
+export function sweepExpiredAuthHits(now = Date.now()): number {
+  let n = 0;
+  for (const [key, bucket] of hits) {
+    if (bucket.resetAt <= now) {
+      hits.delete(key);
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function evictOldestResetAt(): boolean {
+  let oldestKey: string | undefined;
+  let oldestReset = Infinity;
+  for (const [key, bucket] of hits) {
+    if (bucket.resetAt < oldestReset) {
+      oldestReset = bucket.resetAt;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey === undefined) return false;
+  hits.delete(oldestKey);
+  return true;
+}
+
+function ensureRoom(now: number): void {
+  if (hits.size < hitsMaxKeys) return;
+  sweepExpiredAuthHits(now);
+  while (hits.size >= hitsMaxKeys) {
+    if (!evictOldestResetAt()) break;
+  }
+}
+
 function hit(kind: AuthKind, key: string): void {
   const now = Date.now();
   const bucketKey = `${kind}:${key}`;
   let bucket = hits.get(bucketKey);
   if (!bucket || bucket.resetAt <= now) {
+    if (!bucket) ensureRoom(now);
     bucket = { count: 0, resetAt: now + 60_000 };
     hits.set(bucketKey, bucket);
   }
@@ -113,14 +152,23 @@ function hit(kind: AuthKind, key: string): void {
   }
 }
 
+const authHitsSweepTimer = setInterval(() => {
+  sweepExpiredAuthHits();
+}, AUTH_HITS_SWEEP_MS);
+authHitsSweepTimer.unref();
+
 /** Auth caps stacked on the global per-IP cap (route config.rateLimit would replace it). */
 export function limitRegister(req: FastifyRequest): Promise<void> {
   hit('register', ipFrom(req));
+  const email = emailFromBody(req.body);
+  if (email !== '') hit('register', `email:${email}`);
   return Promise.resolve();
 }
 
 export function limitLogin(req: FastifyRequest): Promise<void> {
-  hit('login', `${ipFrom(req)}:${emailFromBody(req.body)}`);
+  const email = emailFromBody(req.body);
+  hit('login', `${ipFrom(req)}:${email}`);
+  if (email !== '') hit('login', `email:${email}`);
   return Promise.resolve();
 }
 
@@ -170,7 +218,28 @@ export function setAuthRateLimits(partial: Partial<typeof authMax>): void {
 }
 
 /** Test seam. Do not call from product code. */
+export function setAuthHitsMaxKeys(n: number): void {
+  hitsMaxKeys = Math.max(1, n);
+}
+
+/** Test seam. Do not call from product code. */
+export function seedAuthRateHit(bucketKey: string, resetAt: number, count = 1): void {
+  hits.set(bucketKey, { count, resetAt });
+}
+
+/** Test seam. Do not call from product code. */
+export function authHitsSize(): number {
+  return hits.size;
+}
+
+/** Test seam. Do not call from product code. */
+export function authHitKeys(): string[] {
+  return [...hits.keys()];
+}
+
+/** Test seam. Do not call from product code. */
 export function resetAuthRateLimits(): void {
   Object.assign(authMax, defaults);
   hits.clear();
+  hitsMaxKeys = AUTH_HITS_MAX_KEYS_DEFAULT;
 }

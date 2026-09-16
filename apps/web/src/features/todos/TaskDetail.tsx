@@ -8,7 +8,7 @@ import { FIELD_CONTROL_OPEN_CLASS, FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { META_CHIP_CLASS, OutcomeField } from '@/ui/outcome-field';
 import { usePopover } from '@/ui/use-popover';
-import { DecomposeBanner } from '@/features/today/DecomposeBanner';
+import { DecomposeBanner } from '@/features/today';
 import { DraftSection } from './DraftSection';
 import { NotesEditor } from './NotesEditor';
 import { addDaysYmd, inboxList, listPickerRows, todayYmd } from './model';

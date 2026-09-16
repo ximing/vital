@@ -199,4 +199,62 @@ describe('fixed recurrence kinds', () => {
       ['2026-09-09T01:00:00.000Z', 'todo'],
     ]);
   });
+
+  it('expands holidays and makeup workdays at the inclusive window bounds', async () => {
+    const lookup = (date: string) =>
+      Promise.resolve(
+        date === '2026-10-01' || date === '2026-10-07'
+          ? ('holiday' as const)
+          : date === '2026-09-26'
+            ? ('workday' as const)
+            : null,
+      );
+    const dueAt = DateTime.fromISO('2026-10-01T09:00:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    const holidayTask = {
+      id: 't-hol',
+      listId: 'l1',
+      title: '假日',
+      timezone: 'Asia/Shanghai',
+      isAllDay: false,
+      dueAt,
+      startAt: null,
+      recurrenceRrule: null,
+      recurrenceDtstart: dueAt,
+      status: 'todo' as const,
+      priority: 3,
+      pinned: false,
+      recurrenceKind: 'holidays' as const,
+    };
+    const from = DateTime.fromISO('2026-10-01T00:00:00.000Z').toJSDate();
+    const to = DateTime.fromISO('2026-10-07T16:00:00.000Z').toJSDate();
+    const holidays = await expandFixedTask(holidayTask, [], from, to, lookup);
+    expect(holidays.map((item) => item.occurrenceAt.toISOString())).toEqual([
+      '2026-10-01T01:00:00.000Z',
+      '2026-10-07T01:00:00.000Z',
+    ]);
+
+    const workDue = DateTime.fromISO('2026-09-25T09:00:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    const workdays = await expandFixedTask(
+      {
+        ...holidayTask,
+        id: 't-work',
+        title: '工作日',
+        dueAt: workDue,
+        recurrenceDtstart: workDue,
+        recurrenceKind: 'legal_workdays',
+      },
+      [],
+      DateTime.fromISO('2026-09-25T00:00:00.000Z').toJSDate(),
+      DateTime.fromISO('2026-10-02T16:00:00.000Z').toJSDate(),
+      lookup,
+    );
+    expect(workdays.map((item) => item.occurrenceAt.toISOString())).toEqual([
+      '2026-09-25T01:00:00.000Z',
+      '2026-09-26T01:00:00.000Z',
+      '2026-09-28T01:00:00.000Z',
+      '2026-09-29T01:00:00.000Z',
+      '2026-09-30T01:00:00.000Z',
+      '2026-10-02T01:00:00.000Z',
+    ]);
+  });
 });

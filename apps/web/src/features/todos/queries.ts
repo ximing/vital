@@ -15,28 +15,14 @@ import { useService } from '@rabjs/react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
+import { todoKeys } from './query-keys';
 import { TodosUiService } from './todos-ui.service';
 
-export const todoKeys = {
-  all: ['todos'] as const,
-  lists: ['todos', 'lists'] as const,
-  tags: ['todos', 'tags'] as const,
-  counts: ['todos', 'counts'] as const,
-  tasks: (listId: string) => ['todos', 'tasks', listId] as const,
-  item: (id: string) => ['todos', 'task', id] as const,
-  calendar: (from: string, to: string) => ['todos', 'calendar', from, to] as const,
-};
+export { todoKeys } from './query-keys';
 
 async function fetchAllTasks(listId: string): Promise<Task[]> {
-  const items: Task[] = [];
-  let cursor: string | undefined;
-  for (let i = 0; i < 20; i += 1) {
-    const page = await client.listTasks({ listId, cursor, limit: 100 });
-    items.push(...page.items);
-    if (page.nextCursor === null) break;
-    cursor = page.nextCursor;
-  }
-  return items;
+  return fetchAllPages((cursor) => client.listTasks({ listId, cursor, limit: 100 }));
 }
 
 export function useListsQuery() {
@@ -79,7 +65,7 @@ export function useTasksQuery(listId: string, enabled = true) {
 }
 
 export function findTaskInCache(qc: QueryClient, id: string): Task | undefined {
-  for (const [, data] of qc.getQueriesData<Task[]>({ queryKey: ['todos', 'tasks'] })) {
+  for (const [, data] of qc.getQueriesData<Task[]>({ queryKey: todoKeys.tasksRoot })) {
     if (!Array.isArray(data)) continue;
     const found = data.find((task) => task.id === id);
     if (found) return found;

@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { latestUpdatedAt, syncEventsUrl, syncHeadMoved } from '@vital/api-client';
+import { nextSyncSince, syncEventsUrl, syncHeadMoved } from '@vital/api-client';
 import type { SyncChanges, SyncHead } from '@vital/dto';
 import { client, isTauriRuntime, tauriBaseUrl, tokenStore } from '@/api/client';
 import { browserNotify } from '@/features/notify/browser-notify.service';
@@ -31,7 +31,7 @@ async function pullChanges(): Promise<void> {
     for (let i = 0; i < MAX_PAGES; i += 1) {
       const page: SyncChanges = await client.syncChanges({ since });
       if (qc) applySyncChanges(qc, page);
-      since = page.truncated ? (latestUpdatedAt(page) ?? page.serverTime) : page.serverTime;
+      since = nextSyncSince(page);
       prevHead = page.head;
       if (!page.truncated) break;
     }

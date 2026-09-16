@@ -8,9 +8,8 @@ import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { Button } from '@/ui/button';
 import { Icon } from '@/ui/icon';
-import { todoKeys } from '@/features/todos/queries';
-import { decomposeSubtasks } from '@/features/today/model';
-import { todayKeys } from '@/features/today/queries';
+import { decomposeSubtasks, todayKeys } from '@/features/today';
+import { todoKeys } from './query-keys';
 import { TodosUiService } from './todos-ui.service';
 
 const DRAFT_POLL_MS = 3_000;

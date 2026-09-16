@@ -20,6 +20,7 @@ import {
   habits,
   holidayCalendar,
   inboxAssets,
+  inboxIdempotencyResponses,
   inboxItemBodies,
   inboxItemTags,
   inboxItems,
@@ -84,6 +85,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(inboxAssets);
     await db.delete(inboxItemTags);
     await db.delete(inboxItemBodies);
+    await db.delete(inboxIdempotencyResponses);
     await db.delete(entityLinks);
     await db.delete(inboxItems);
     await db.delete(taskTags);

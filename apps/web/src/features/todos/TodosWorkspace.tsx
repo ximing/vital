@@ -15,6 +15,7 @@ import {
 import { useEffect, useMemo, useRef, useState, type FC, type ReactNode } from 'react';
 import { NavLink, useParams, useSearchParams } from 'react-router';
 import { t } from '@/copy';
+import { Overlay } from '@/ui/overlay';
 import { humanError } from '@/lib/errors';
 import { AuthService } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
@@ -24,7 +25,7 @@ import { BoardView } from './BoardView';
 import { TaskSkeleton } from './EmptyTasks';
 import { LIST_FILTER_ID, useTodosKeyboard } from './keyboard';
 import { ListView } from './ListView';
-import { useOutcomesQuery } from '@/features/today/queries';
+import { useOutcomesQuery, usePendingDecomposeQuery } from '@/features/today';
 import {
   applyOptimisticComplete,
   boardVisibleIds,
@@ -60,7 +61,7 @@ import { TodosPageService } from './todos-page.service';
 import { UndoToast } from './UndoToast';
 import { TodosUiService } from './todos-ui.service';
 import { WeekView } from './WeekView';
-import { usePendingDecomposeQuery } from '@/features/today/queries';
+
 
 function useOnline(): boolean {
   const [online, setOnline] = useState(() =>
@@ -587,14 +588,14 @@ function TaskDetailHost({
 }) {
   if (view === 'list') return children;
   return (
-    <div className="fixed inset-0 z-[var(--z-overlay)] flex justify-end bg-fg/25" onClick={onClose}>
+    <Overlay tone="dim" align="end" onClose={onClose} closeOnBackdrop>
       <div
         className="h-full w-full max-w-[40rem] bg-surface shadow-[var(--shadow)]"
         onClick={(event) => event.stopPropagation()}
       >
         {children}
       </div>
-    </div>
+    </Overlay>
   );
 }
 

@@ -65,25 +65,38 @@ function habitDay(now: Date, timezone: string): string {
   return day;
 }
 
-/** Today's progress for a habit: completed instances vs spawned instances. */
+/** Today's progress for habits: completed instances vs spawned instances. */
+async function todayProgressByHabits(
+  userId: string,
+  habitIds: string[],
+  day: string,
+): Promise<Map<string, { done: number; total: number }>> {
+  const map = new Map<string, { done: number; total: number }>();
+  for (const id of habitIds) map.set(id, { done: 0, total: 0 });
+  if (habitIds.length === 0) return map;
+  const rows = await getDb()
+    .select({ habitId: tasks.habitId, status: tasks.status, habitKey: tasks.habitKey })
+    .from(tasks)
+    .where(
+      and(eq(tasks.userId, userId), inArray(tasks.habitId, habitIds), isNull(tasks.deletedAt)),
+    );
+  for (const row of rows) {
+    if (!row.habitId || !row.habitKey?.startsWith(`${row.habitId}:${day}:`)) continue;
+    const rec = map.get(row.habitId);
+    if (!rec) continue;
+    rec.total += 1;
+    if (row.status === 'done') rec.done += 1;
+  }
+  return map;
+}
+
 async function todayProgress(
   userId: string,
   habitId: string,
   day: string,
 ): Promise<{ done: number; total: number }> {
-  const rows = await getDb()
-    .select({ status: tasks.status })
-    .from(tasks)
-    .where(
-      and(
-        eq(tasks.userId, userId),
-        eq(tasks.habitId, habitId),
-        like(tasks.habitKey, `${habitId}:${day}:%`),
-        isNull(tasks.deletedAt),
-      ),
-    );
-  const done = rows.filter((r) => r.status === 'done').length;
-  return { done, total: rows.length };
+  const map = await todayProgressByHabits(userId, [habitId], day);
+  return map.get(habitId) ?? { done: 0, total: 0 };
 }
 
 export async function listHabits(userId: string, timezone: string, now = new Date()): Promise<Habit[]> {
@@ -93,12 +106,15 @@ export async function listHabits(userId: string, timezone: string, now = new Dat
     .where(eq(habits.userId, userId))
     .orderBy(asc(habits.sortOrder), asc(habits.createdAt));
   const day = habitDay(now, timezone);
-  const out: Habit[] = [];
-  for (const row of rows) {
-    const progress = await todayProgress(userId, row.id, day);
-    out.push(toHabitDto(row, progress.done, progress.total));
-  }
-  return out;
+  const progress = await todayProgressByHabits(
+    userId,
+    rows.map((row) => row.id),
+    day,
+  );
+  return rows.map((row) => {
+    const rec = progress.get(row.id) ?? { done: 0, total: 0 };
+    return toHabitDto(row, rec.done, rec.total);
+  });
 }
 
 export async function createHabit(
@@ -292,10 +308,15 @@ export async function spawnDailyHabits(userId: string, timezone: string, now = n
     .from(habits)
     .where(and(eq(habits.userId, userId), eq(habits.active, true)));
   const day = habitDay(now, timezone);
+  const progressByHabit = await todayProgressByHabits(
+    userId,
+    rows.map((habit) => habit.id),
+    day,
+  );
   let spawned = 0;
   for (const habit of rows) {
     if (!withinWindow(habit, now, timezone)) continue;
-    const progress = await todayProgress(userId, habit.id, day);
+    const progress = progressByHabit.get(habit.id) ?? { done: 0, total: 0 };
     if (progress.total > 0) continue;
     await spawnInstance(userId, habit, day, 1, timezone);
     spawned += 1;

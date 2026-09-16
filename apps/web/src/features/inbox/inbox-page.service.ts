@@ -1,7 +1,7 @@
 import type { ConvertInboxResponse, InboxItem } from '@vital/dto';
 import { Service } from '@rabjs/react';
 import { client } from '@/api/client';
-import { todoKeys } from '@/features/todos/queries';
+import { todoKeys } from '@/features/todos/query-keys';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { AuthService } from '@/services/auth.service';
 import { QueryService } from '@/services/query.service';

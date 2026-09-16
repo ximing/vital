@@ -77,4 +77,19 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('/node_modules/@tiptap/') || id.includes('/node_modules/prosemirror-')) {
+            return 'tiptap';
+          }
+          if (id.includes('emojibase-data')) {
+            return 'emoji';
+          }
+          return undefined;
+        },
+      },
+    },
+  },
 });
