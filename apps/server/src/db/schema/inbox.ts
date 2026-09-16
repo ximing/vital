@@ -58,7 +58,7 @@ export const inboxItems = pgTable(
   (t) => [
     uniqueIndex('inbox_items_user_idempotency_uidx')
       .on(t.userId, t.idempotencyKey)
-      .where(sql`${t.idempotencyKey} IS NOT NULL`),
+      .where(sql`${t.idempotencyKey} IS NOT NULL AND ${t.deletedAt} IS NULL`),
     index('idx_inbox_items_user_captured').on(t.userId, t.capturedAt),
     index('idx_inbox_items_user_updated').on(t.userId, t.updatedAt),
     index('idx_inbox_items_user_status_captured').on(t.userId, t.status, t.capturedAt),

@@ -99,8 +99,8 @@ export const BoardView: FC<{
     );
   }
 
-  const byStatus = splitByStatus(tasks);
-  const byPriority = splitByPriority(tasks);
+  const byStatus = splitByStatus(tasks, todos.taskSort);
+  const byPriority = splitByPriority(tasks, todos.taskSort);
   const statusCols = todos.hideCompleted ? (['todo', 'doing'] as const) : STATUS_COLS;
 
   return (

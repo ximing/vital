@@ -22,7 +22,7 @@ export async function fetchImagesInPage(
   const out: Array<{ src: string; mime: string; data: number[] }> = [];
   for (const src of urls) {
     try {
-      const res = await fetch(src, { credentials: 'omit' });
+      const res = await fetch(src, { credentials: 'omit', referrerPolicy: 'no-referrer' });
       if (!res.ok) continue;
       const buf = await res.arrayBuffer();
       if (buf.byteLength < minBytes || buf.byteLength > maxBytes) continue;

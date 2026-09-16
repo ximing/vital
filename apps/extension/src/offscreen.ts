@@ -43,11 +43,22 @@ function isParsedArticle(value: unknown): value is ParsedArticle {
   return typeof rec.title === 'string' && Array.isArray(rec.imageSrcs);
 }
 
-export async function parseInOffscreen(html: string, url: string): Promise<ParsedArticle> {
+function isParseBundle(
+  value: unknown,
+): value is { article: ParsedArticle; page: ParsedArticle } {
+  if (typeof value !== 'object' || value === null) return false;
+  const rec = value as Record<string, unknown>;
+  return isParsedArticle(rec.article) && isParsedArticle(rec.page);
+}
+
+export async function parseInOffscreen(
+  html: string,
+  url: string,
+): Promise<{ article: ParsedArticle; page: ParsedArticle }> {
   await ensureOffscreen();
   const request: OffscreenParseRequest = { type: 'parse', target: 'offscreen', html, url };
   const result: unknown = await chrome.runtime.sendMessage(request);
-  if (!isParsedArticle(result)) {
+  if (!isParseBundle(result)) {
     throw new Error('offscreen parse failed');
   }
   return result;

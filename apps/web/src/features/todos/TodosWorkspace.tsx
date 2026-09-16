@@ -1,7 +1,9 @@
 import { llmReady, type Task, type TaskPriority } from '@vital/dto';
 import { bindServices, useService } from '@rabjs/react';
 import {
+  ArrowUpDown,
   CalendarDays,
+  Check,
   Columns3,
   Ellipsis,
   EyeOff,
@@ -33,6 +35,8 @@ import {
   listTitle,
   listVisibleIds,
   parseListScope,
+  sortDirHint,
+  TASK_SORT_KEYS,
   todayYmd,
   visibleListTasks,
   weekRangeIso,
@@ -92,6 +96,14 @@ function setListScope(
   setSearch(next, { replace: true });
 }
 
+const SORT_LABEL: Record<(typeof TASK_SORT_KEYS)[number], string> = {
+  manual: t.todos.sortManual,
+  created: t.todos.sortCreated,
+  updated: t.todos.sortUpdated,
+  due: t.todos.sortDue,
+  title: t.todos.sortTitle,
+};
+
 const DETAIL_COL =
   'flex h-full min-h-0 w-[clamp(24rem,40%,40rem)] shrink-0 border-l border-border/60';
 
@@ -131,6 +143,7 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
   const completeUndo = todos.completeUndo;
   const boardMode = todos.boardMode;
   const hideCompleted = todos.hideCompleted;
+  const taskSort = todos.taskSort;
   const viewMenuRef = useRef<HTMLDivElement>(null);
   const viewMenu = usePopover(viewMenuRef);
   const taskMenu = page.taskMenu;
@@ -155,8 +168,8 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
   const tasks = visibleListTasks(filtered, listId, view, listScope, hideCompleted);
   const visibleIds =
     view === 'board'
-      ? boardVisibleIds(tasks, boardMode)
-      : listVisibleIds(listId, tasks, timeZone, undefined, lists);
+      ? boardVisibleIds(tasks, boardMode, taskSort)
+      : listVisibleIds(listId, tasks, timeZone, undefined, lists, taskSort);
   const selected =
     tasks.find((task) => task.id === selectedId) ??
     (tasksQuery.data ?? []).find((task) => task.id === selectedId);
@@ -357,6 +370,35 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
                       {hideCompleted ? t.todos.showCompleted : t.todos.hideCompleted}
                     </button>
                   ) : null}
+                  <p className="mt-1 px-2 py-1 text-[length:var(--text-caption)] text-muted">
+                    {t.todos.sort}
+                  </p>
+                  {TASK_SORT_KEYS.map((key) => {
+                    const active = taskSort.key === key;
+                    const hint = active ? sortDirHint(taskSort) : '';
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        role="menuitem"
+                        aria-checked={active}
+                        className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[length:var(--text-caption)] text-fg hover:bg-surface-muted"
+                        onClick={() => todos.setTaskSortKey(key)}
+                      >
+                        <Icon
+                          icon={active ? Check : ArrowUpDown}
+                          size={14}
+                          className={active ? 'text-accent' : 'text-transparent'}
+                        />
+                        <span className="min-w-0 flex-1 truncate">{SORT_LABEL[key]}</span>
+                        {hint ? (
+                          <span className="shrink-0 font-mono text-[length:var(--text-caption)] text-tertiary">
+                            {hint}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
                   {canPinList && currentList ? (
                     <button
                       type="button"

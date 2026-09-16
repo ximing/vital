@@ -23,9 +23,11 @@ export function metaLine(capture: CapturePayload, mode: PopupMode): string {
   const parts: string[] = [];
   const site = capture.siteName ?? hostnameOf(capture.originalUrl);
   if (site !== null && site !== '') parts.push(site);
-  const words = capture.extractedText?.trim().length ?? 0;
+  const text = mode === 'page' ? capture.pageText : capture.extractedText;
+  const images = mode === 'page' ? capture.pageImageSrcs : capture.imageSrcs;
+  const words = text?.trim().length ?? 0;
   if (words > 0) parts.push(`${words} 字`);
-  if (capture.imageSrcs.length > 0) parts.push(`${capture.imageSrcs.length} 张图`);
+  if (images.length > 0) parts.push(`${images.length} 张图`);
   return parts.join(' · ');
 }
 

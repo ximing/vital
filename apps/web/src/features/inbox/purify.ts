@@ -1,63 +1,25 @@
-import type { InboxAsset } from '@vital/dto';
+import { domPurifyConfig, textToHtml, tidyArticleHtml } from '@vital/article-html';
+import { imageSrcKeys, type InboxAsset } from '@vital/dto';
 import DOMPurify from 'dompurify';
 
-const ALLOWED_TAGS = [
-  'a',
-  'p',
-  'br',
-  'span',
-  'div',
-  'strong',
-  'em',
-  'b',
-  'i',
-  'u',
-  's',
-  'blockquote',
-  'ul',
-  'ol',
-  'li',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'pre',
-  'code',
-  'img',
-  'figure',
-  'figcaption',
-  'hr',
-];
+export { textToHtml, tidyArticleHtml };
 
-const ALLOWED_ATTR = ['href', 'title', 'rel', 'src', 'alt', 'width', 'height'];
+const DATA_URI_MEDIA_TAGS = new Set(['IMG', 'VIDEO', 'SOURCE']);
+const DATA_URI_MEDIA_ATTRS = new Set(['src', 'poster', 'srcset']);
 
-/** http(s)/mailto plus relative paths; never javascript: or data:. */
-const ALLOWED_URI = /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i;
+/** DOMPurify hard-allows data: on img/video/source; strip to match sanitize-html. */
+DOMPurify.addHook('uponSanitizeAttribute', (node, data) => {
+  if (!DATA_URI_MEDIA_TAGS.has(node.tagName)) return;
+  if (!DATA_URI_MEDIA_ATTRS.has(data.attrName)) return;
+  if (/^\s*data:/i.test(data.attrValue)) data.keepAttr = false;
+});
 
 const UPLOAD_RE =
   /\/api\/v1\/uploads\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})/i;
 
 export function purifyInboxHtml(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    ALLOW_DATA_ATTR: false,
-    ALLOWED_URI_REGEXP: ALLOWED_URI,
-  });
-}
-
-export function textToHtml(text: string): string {
-  const escaped = text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-  return escaped
-    .split(/\n{2,}/)
-    .map((para) => `<p>${para.replaceAll('\n', '<br>')}</p>`)
-    .join('');
+  const clean = DOMPurify.sanitize(html, domPurifyConfig());
+  return tidyArticleHtml(clean);
 }
 
 export function readerSourceHtml(html: string | null, text: string | null): string {
@@ -73,22 +35,45 @@ export async function rewriteInboxImages(
   if (html === '') return { html: '', objectUrls: [] };
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const objectUrls: string[] = [];
-  const bySrc = new Map(assets.map((asset) => [asset.originalSrc, asset]));
+  const bySrc = new Map<string, InboxAsset>();
+  for (const asset of assets) {
+    for (const key of imageSrcKeys(asset.originalSrc)) {
+      if (!bySrc.has(key)) bySrc.set(key, asset);
+    }
+  }
+  const resolveAssetUrl = (src: string): string | null => {
+    for (const key of imageSrcKeys(src)) {
+      const hit = bySrc.get(key);
+      if (hit?.url) return hit.url;
+    }
+    const match = UPLOAD_RE.exec(src);
+    const attachmentId = match?.[1] ?? null;
+    if (attachmentId === null) return null;
+    return assets.find((candidate) => candidate.attachmentId === attachmentId)?.url ?? null;
+  };
   for (const img of Array.from(doc.querySelectorAll('img'))) {
     const src = img.getAttribute('src');
     if (src === null || src === '') continue;
-    let attachmentId = bySrc.get(src)?.attachmentId ?? null;
-    if (attachmentId === null) {
-      const match = UPLOAD_RE.exec(src);
-      attachmentId = match?.[1] ?? null;
+    const url = resolveAssetUrl(src);
+    if (url !== null) img.setAttribute('src', url);
+  }
+  for (const video of Array.from(doc.querySelectorAll('video'))) {
+    const src = video.getAttribute('src');
+    if (src !== null && src !== '') {
+      const url = resolveAssetUrl(src);
+      if (url !== null) video.setAttribute('src', url);
     }
-    if (attachmentId === null) continue;
-    try {
-      const asset = assets.find((candidate) => candidate.attachmentId === attachmentId);
-      if (asset?.url) img.setAttribute('src', asset.url);
-    } catch {
-      // Keep the purified original src.
+    const poster = video.getAttribute('poster');
+    if (poster !== null && poster !== '') {
+      const url = resolveAssetUrl(poster);
+      if (url !== null) video.setAttribute('poster', url);
     }
+  }
+  for (const source of Array.from(doc.querySelectorAll('source[src]'))) {
+    const src = source.getAttribute('src');
+    if (src === null || src === '') continue;
+    const url = resolveAssetUrl(src);
+    if (url !== null) source.setAttribute('src', url);
   }
   for (const anchor of Array.from(doc.querySelectorAll('a[href]'))) {
     anchor.setAttribute('target', '_blank');

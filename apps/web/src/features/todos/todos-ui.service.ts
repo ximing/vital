@@ -1,6 +1,13 @@
 import { resolve, Service } from '@rabjs/react';
 import type { AgentAction, SimilarTaskHit, Task } from '@vital/dto';
-import { UNDO_COMPLETE_MS, type BoardMode } from './model';
+import {
+  DEFAULT_TASK_SORT,
+  UNDO_COMPLETE_MS,
+  defaultTaskSortDir,
+  type BoardMode,
+  type TaskSort,
+  type TaskSortKey,
+} from './model';
 
 export type DraftJobStatus = 'idle' | 'queued' | 'failed';
 
@@ -23,6 +30,7 @@ export class TodosUiService extends Service {
   quickAddNonce = 0;
   hideCompleted = true;
   boardMode: BoardMode = 'status';
+  taskSort: TaskSort = DEFAULT_TASK_SORT;
   completeUndo: CompleteUndo | null = null;
   completingIds: string[] = [];
   lastCompletionId: Record<string, string> = {};
@@ -65,6 +73,18 @@ export class TodosUiService extends Service {
 
   setBoardMode(mode: BoardMode): void {
     this.boardMode = mode;
+  }
+
+  setTaskSortKey(key: TaskSortKey): void {
+    if (key === 'manual') {
+      this.taskSort = DEFAULT_TASK_SORT;
+      return;
+    }
+    if (this.taskSort.key === key) {
+      this.taskSort = { key, dir: this.taskSort.dir === 'asc' ? 'desc' : 'asc' };
+      return;
+    }
+    this.taskSort = { key, dir: defaultTaskSortDir(key) };
   }
 
   startComplete(task: Task): void {
@@ -140,8 +160,10 @@ export class TodosUiService extends Service {
     taskId: string,
     patch: { status?: DraftJobStatus; polled?: AgentAction | null; error?: string | null },
   ): void {
-    if (patch.status !== undefined) this.draftStatus = { ...this.draftStatus, [taskId]: patch.status };
-    if (patch.polled !== undefined) this.draftPolled = { ...this.draftPolled, [taskId]: patch.polled };
+    if (patch.status !== undefined)
+      this.draftStatus = { ...this.draftStatus, [taskId]: patch.status };
+    if (patch.polled !== undefined)
+      this.draftPolled = { ...this.draftPolled, [taskId]: patch.polled };
     if (patch.error !== undefined) this.draftError = { ...this.draftError, [taskId]: patch.error };
   }
 
@@ -154,6 +176,7 @@ export class TodosUiService extends Service {
     this.quickAddNonce = 0;
     this.hideCompleted = true;
     this.boardMode = 'status';
+    this.taskSort = DEFAULT_TASK_SORT;
     this.completeUndo = null;
     this.completingIds = [];
     this.lastCompletionId = {};

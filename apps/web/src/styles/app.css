@@ -321,17 +321,32 @@ body {
   margin: 0 0 18px;
 }
 
+.reader-article p:empty {
+  display: none;
+}
+
 .reader-article a {
   color: var(--accent-primary);
   text-underline-offset: 3px;
 }
 
-.reader-article img {
+.reader-article img,
+.reader-article video {
   display: block;
   max-width: 100%;
   height: auto;
   margin: 18px 0;
   border-radius: var(--radius-md);
+}
+
+.reader-article figure {
+  margin: 0 0 18px;
+}
+
+.reader-article figcaption {
+  margin-top: -8px;
+  color: var(--fg-muted);
+  font-size: 0.9em;
 }
 
 .reader-article blockquote {
@@ -364,6 +379,98 @@ body {
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--bg-surface-muted);
+}
+
+.reader-article table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 0 0 18px;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.reader-article caption {
+  caption-side: bottom;
+  padding-top: var(--space-2);
+  color: var(--fg-muted);
+  font-size: 0.9em;
+  text-align: left;
+}
+
+.reader-article th,
+.reader-article td {
+  border: 1px solid var(--border-subtle);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  vertical-align: top;
+}
+
+.reader-article th {
+  background: var(--bg-surface-muted);
+  font-weight: 600;
+}
+
+.reader-article dl {
+  margin: 0 0 18px;
+}
+
+.reader-article dt {
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.reader-article dt:first-child {
+  margin-top: 0;
+}
+
+.reader-article dd {
+  margin: 4px 0 0 var(--space-6);
+  color: var(--fg-muted);
+}
+
+.reader-article details {
+  margin: 0 0 18px;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-muted);
+}
+
+.reader-article summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.reader-article mark {
+  padding: 0 0.2em;
+  border-radius: 2px;
+  background: var(--bg-accent-subtle);
+  color: inherit;
+}
+
+.reader-article kbd {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface-muted);
+}
+
+.reader-article sub,
+.reader-article sup {
+  font-size: 0.75em;
+  line-height: 0;
+}
+
+.reader-article del {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+}
+
+.reader-article ins {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .report-doc,

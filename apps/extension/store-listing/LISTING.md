@@ -256,8 +256,8 @@ Steps:
 **Why scripting + activeTab?**  
 Saving an article requires reading the DOM. Injection happens only on click or shortcut. The extension does not request `tabs` to scan every tab.
 
-**Why not `<all_urls>`?**  
-By design. Host permissions cover only the Vital API and storage. The current page uses activeTab.
+**Why not `<all_urls>` as a required host permission?**  
+Required hosts are only the Vital API and storage. The current page uses activeTab. Saving an article may prompt for optional access to image CDNs so those files can be copied into Vital instead of hotlinked (WeChat returns a stub image when the reader origin is sent as Referer).
 
 **How does this relate to the Vital app?**  
 Same product, browser capture entry. The extension only brings content in. Reading, tasks, and reviews live at vital.aimo.plus.

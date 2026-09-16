@@ -31,6 +31,7 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/websocket": "^11.3.0",
     "@mozilla/readability": "^0.6.0",
+    "@vital/article-html": "workspace:*",
     "@vital/dto": "workspace:*",
     "@vital/markdown": "workspace:*",
     "argon2": "^0.41.1",

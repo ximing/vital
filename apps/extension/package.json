@@ -17,6 +17,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "@vital/api-client": "workspace:*",
+    "@vital/article-html": "workspace:*",
     "@vital/dto": "workspace:*",
     "@vital/tokens": "workspace:*"
   },

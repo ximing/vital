@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
-  IMAGE_MIME_TYPES,
+  INBOX_ASSET_MIME_TYPES,
   type ConvertInboxInput,
   type ConvertInboxResponse,
   type CreateInboxInput,
@@ -359,12 +359,18 @@ export async function createInbox(
       .values(row)
       .onConflictDoNothing({
         target: [inboxItems.userId, inboxItems.idempotencyKey],
-        where: sql`${inboxItems.idempotencyKey} IS NOT NULL`,
+        where: sql`${inboxItems.idempotencyKey} IS NOT NULL AND ${inboxItems.deletedAt} IS NULL`,
       });
     const [stored] = await tx
       .select()
       .from(inboxItems)
-      .where(and(eq(inboxItems.userId, userId), eq(inboxItems.idempotencyKey, key)))
+      .where(
+        and(
+          eq(inboxItems.userId, userId),
+          eq(inboxItems.idempotencyKey, key),
+          isNull(inboxItems.deletedAt),
+        ),
+      )
       .limit(1);
     if (!stored) throw AppError.of(500, 'INTERNAL_ERROR');
     if (stored.id !== id) {
@@ -450,8 +456,8 @@ export async function deleteInbox(userId: string, id: string): Promise<void> {
   trackIndexJob(removeInboxItemIndex(id), 'removeInboxItemIndex');
 }
 
-function isImageMime(mime: string): boolean {
-  return (IMAGE_MIME_TYPES as readonly string[]).includes(mime);
+function isInboxAssetMime(mime: string): boolean {
+  return (INBOX_ASSET_MIME_TYPES as readonly string[]).includes(mime);
 }
 
 export async function patchInboxAssets(
@@ -474,7 +480,7 @@ export async function patchInboxAssets(
   for (const asset of input.assets) {
     const att = byId.get(asset.attachmentId);
     if (!att || att.userId !== userId) throw AppError.of(404, 'ATTACHMENT_NOT_FOUND');
-    if (att.status !== 'ready' || !isImageMime(att.mime)) {
+    if (att.status !== 'ready' || !isInboxAssetMime(att.mime)) {
       throw AppError.of(409, 'MEDIA_INVALID_STATE');
     }
     if (att.ownerType === 'tmp') {

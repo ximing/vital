@@ -31,6 +31,16 @@ export const IMAGE_MIME_TYPES = [
 
 export type ImageMimeType = (typeof IMAGE_MIME_TYPES)[number];
 
+/** Inbox article media: images plus playable video. */
+export const INBOX_ASSET_MIME_TYPES = [
+  ...IMAGE_MIME_TYPES,
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+] as const;
+
+export type InboxAssetMimeType = (typeof INBOX_ASSET_MIME_TYPES)[number];
+
 /** Report editor attachments: images plus a small file set. Still no SVG. */
 export const ATTACHMENT_MIME_TYPES = [
   ...IMAGE_MIME_TYPES,

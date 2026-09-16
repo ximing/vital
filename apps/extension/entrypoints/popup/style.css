@@ -56,7 +56,7 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .ghost { background: transparent; color: var(--fg-muted); }
 .ghost:hover { background: var(--bg-surface-muted); color: var(--fg-primary); }
 .modes { display: flex; gap: 4px; padding: 4px; background: var(--bg-surface-muted); border-radius: var(--radius-md); }
-.modes button { flex: 1; min-width: 0; padding: 6px 4px; min-height: 32px; background: transparent; color: var(--fg-muted); border-radius: 7px; }
+.modes button { flex: 1; min-width: 0; padding: 6px 2px; min-height: 32px; background: transparent; color: var(--fg-muted); border-radius: 7px; }
 .modes button:hover:not(:disabled) { color: var(--fg-primary); background: var(--bg-surface); }
 .modes button.active { color: var(--accent-primary); background: var(--bg-elevated); box-shadow: var(--shadow-xs); font-weight: 600; }
 .meta { margin: 8px 0 0; color: var(--fg-muted); font-size: var(--text-caption); line-height: var(--text-caption-lh); overflow-wrap: anywhere; }

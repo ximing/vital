@@ -9,7 +9,8 @@ syncTheme();
 colorScheme.addEventListener('change', syncTheme);
 import { inboxListUrl, inboxReaderUrl } from '../../src/capture-helpers.js';
 import { WEB_URL } from '../../src/config.js';
-import { copy } from '../../src/i18n.js';
+import { requestImageHostAccess } from '../../src/image-hosts.js';
+import { copy, modeLabels } from '../../src/i18n.js';
 import {
   COMMIT_PORT_NAME,
   type CapturePayload,
@@ -54,6 +55,8 @@ async function rpc(req: PanelRequest): Promise<PanelResponse> {
   return { ok: false, error: copy.toastFailed };
 }
 
+const MODES: readonly PopupMode[] = ['article', 'page', 'selection', 'task', 'file'];
+
 let capture: CapturePayload | null = null;
 let mode: PopupMode = 'article';
 let lists: List[] | null = null;
@@ -70,9 +73,18 @@ function setView(view: View): void {
   show($('footer'), view === 'capture');
 }
 
+function applyModeLabels(): void {
+  for (const m of MODES) {
+    const btn = $<HTMLButtonElement>(`mode-${m}`);
+    const labels = modeLabels[m];
+    btn.textContent = labels.zh;
+    btn.title = labels.en;
+  }
+}
+
 function renderCapture(): void {
   if (capture === null) return;
-  for (const m of ['article', 'selection', 'task', 'file'] as const) {
+  for (const m of MODES) {
     const btn = $<HTMLButtonElement>(`mode-${m}`);
     // Direct-file pages have no selection or task content to offer.
     show(btn, !(mode === 'file' && (m === 'selection' || m === 'task')));
@@ -216,13 +228,16 @@ async function boot(): Promise<void> {
   setView('capture');
 }
 
-for (const m of ['article', 'selection', 'task', 'file'] as const) {
+applyModeLabels();
+for (const m of MODES) {
   $(`mode-${m}`).addEventListener('click', () => {
     mode = m;
     renderCapture();
   });
 }
-$('save').addEventListener('click', commit);
+$('save').addEventListener('click', () => {
+  void requestImageHostAccess().finally(() => commit());
+});
 $('open-recent').addEventListener('click', () => void showRecent());
 $('recent-back').addEventListener('click', () => {
   if (capture === null) {

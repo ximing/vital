@@ -144,11 +144,49 @@ export function isOverdue(task: Task, now = new Date()): boolean {
 }
 
 export type NestedTask = { task: Task; children: Task[] };
+export type TaskSortKey = 'manual' | 'created' | 'updated' | 'due' | 'title';
+export type TaskSortDir = 'asc' | 'desc';
+export type TaskSort = { key: TaskSortKey; dir: TaskSortDir };
+export const DEFAULT_TASK_SORT: TaskSort = { key: 'manual', dir: 'asc' };
+export const TASK_SORT_KEYS: TaskSortKey[] = ['manual', 'created', 'updated', 'due', 'title'];
 
-export function nestTasks(items: Task[]): NestedTask[] {
+export function defaultTaskSortDir(key: TaskSortKey): TaskSortDir {
+  return key === 'created' || key === 'updated' ? 'desc' : 'asc';
+}
+
+export function compareTasks(a: Task, b: Task, sort: TaskSort): number {
+  const dir = sort.dir === 'asc' ? 1 : -1;
+  let cmp = 0;
+  switch (sort.key) {
+    case 'manual':
+      return a.sortOrder - b.sortOrder || a.id.localeCompare(b.id);
+    case 'created':
+      cmp = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+      break;
+    case 'updated':
+      cmp = Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
+      break;
+    case 'due': {
+      const left = a.dueAt === null ? null : Date.parse(a.dueAt);
+      const right = b.dueAt === null ? null : Date.parse(b.dueAt);
+      if (left === null && right === null) cmp = 0;
+      else if (left === null) cmp = 1;
+      else if (right === null) cmp = -1;
+      else cmp = left - right;
+      break;
+    }
+    case 'title':
+      cmp = a.title.localeCompare(b.title, 'zh');
+      break;
+  }
+  return cmp * dir || a.id.localeCompare(b.id);
+}
+
+export function nestTasks(items: Task[], sort: TaskSort = DEFAULT_TASK_SORT): NestedTask[] {
+  const sorted = [...items].sort((a, b) => compareTasks(a, b, sort));
   const byParent = new Map<string, Task[]>();
   const roots: Task[] = [];
-  for (const task of items) {
+  for (const task of sorted) {
     if (task.parentId !== null) {
       const bucket = byParent.get(task.parentId) ?? [];
       bucket.push(task);

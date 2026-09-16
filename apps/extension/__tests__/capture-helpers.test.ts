@@ -21,6 +21,9 @@ const capture: CapturePayload = {
   byline: '作者',
   siteName: 'Example',
   imageSrcs: ['https://ex.com/1.png'],
+  pageText: '整页正文',
+  pageHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
+  pageImageSrcs: ['https://ex.com/p.png'],
   selection: '一段<script>选区',
   tabId: 7,
   file: null,
@@ -96,6 +99,19 @@ describe('inboxInputFromCapture', () => {
 
   it('keeps the parsed excerpt when the note is empty', () => {
     expect(inboxInputFromCapture(capture, '新标题', '').excerpt).toBe('旧摘');
+  });
+
+  it('uses page html/text in page mode', () => {
+    expect(inboxInputFromCapture(capture, '新标题', '', 'page')).toEqual({
+      title: '新标题',
+      originalUrl: 'https://ex.com/a',
+      extractedText: '整页正文',
+      extractedHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
+      excerpt: '整页正文',
+      byline: '作者',
+      siteName: 'Example',
+      source: 'extension',
+    });
   });
 });
 

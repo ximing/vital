@@ -4,6 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { Task } from '@vital/dto';
 import {
+  ArrowUpDown,
   CalendarDays,
   CheckSquare,
   Columns3,
@@ -22,7 +23,12 @@ import { PickerOption, PickerSheet } from '../../components/PickerSheet';
 import { SearchIconButton } from '../../components/SearchIconButton';
 import { useOpenTask } from '../../components/TaskSheetHost';
 import { copy } from '../../lib/copy';
-import { startOfLocalDayIso } from '../../lib/format';
+import {
+  startOfLocalDayIso,
+  TASK_SORT_KEYS,
+  type TaskSort,
+  type TaskSortKey,
+} from '../../lib/format';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
 import { Icon } from '../../ui/icon';
@@ -31,13 +37,30 @@ import { ListDrawer } from './ListDrawer';
 import { NewTaskBar } from './NewTaskBar';
 import { TaskList } from './TaskList';
 import { emptyCopy, isSmartList, listLabel, titleCopy, type TaskListView } from './list-meta';
+import { TaskListService } from './task-list.service';
 import { TodosService } from './todos.service';
+
+const SORT_LABEL: Record<TaskSortKey, string> = {
+  manual: copy.todos.sortManual,
+  created: copy.todos.sortCreated,
+  updated: copy.todos.sortUpdated,
+  due: copy.todos.sortDue,
+  title: copy.todos.sortTitle,
+};
+
+function sortHint(sort: TaskSort, key: TaskSortKey): string {
+  if (sort.key !== key || key === 'manual') return '';
+  if (key === 'title') return sort.dir === 'asc' ? 'A → Z' : 'Z → A';
+  if (key === 'due') return sort.dir === 'asc' ? copy.todos.sortSoonest : copy.todos.sortLatest;
+  return sort.dir === 'desc' ? copy.todos.sortNewest : copy.todos.sortOldest;
+}
 
 const TodosHomeContent = observer(function TodosHomeContent() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const insets = useSafeAreaInsets();
   const s = useService(TodosService);
+  const list = useService(TaskListService);
   const openTask = useOpenTask();
   useEffect(() => {
     s.start();
@@ -140,6 +163,19 @@ const TodosHomeContent = observer(function TodosHomeContent() {
           label={copy.todos.showDone}
           onPress={() => s.selectList('smart:done')}
         />
+        {TASK_SORT_KEYS.map((key) => {
+          const active = list.taskSort.key === key;
+          const hint = sortHint(list.taskSort, key);
+          return (
+            <PickerOption
+              key={key}
+              icon={ArrowUpDown}
+              label={hint ? `${SORT_LABEL[key]} · ${hint}` : SORT_LABEL[key]}
+              selected={active}
+              onPress={() => list.setTaskSortKey(key)}
+            />
+          );
+        })}
         {s.current?.kind === 'user' ? (
           <PickerOption
             icon={Pin}

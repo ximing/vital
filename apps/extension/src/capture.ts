@@ -1,7 +1,8 @@
 import {
-  IMAGE_MIME_TYPES,
+  INBOX_ASSET_MIME_TYPES,
   MAX_INBOX_ASSETS,
   MAX_UPLOAD_BYTES,
+  imageSrcKeys,
   partSizeFor,
   totalPartsFor,
   type CreateInboxInput,
@@ -34,6 +35,7 @@ import {
   shouldConvertImage,
 } from './images.js';
 import type { CapturePayload, PopupMode } from './messages.js';
+import { requestImageHostAccess } from './image-hosts.js';
 import { convertInOffscreen, parseInOffscreen } from './offscreen.js';
 import { collectPagePayload, fetchImagesInPage, showInPageToast } from './page-scripts.js';
 import { titleForMode } from './popup-state.js';
@@ -159,7 +161,7 @@ interface FetchedImage {
 
 async function fetchOneFromSw(src: string): Promise<FetchedImage | null> {
   try {
-    const res = await fetch(src, { credentials: 'omit' });
+    const res = await fetch(src, { credentials: 'omit', referrerPolicy: 'no-referrer' });
     if (!res.ok) return null;
     const buf = await res.arrayBuffer();
     if (buf.byteLength < MIN_IMAGE_BYTES || buf.byteLength > MAX_UPLOAD_BYTES) return null;
@@ -200,7 +202,18 @@ async function fetchFromPage(tabId: number, urls: string[]): Promise<FetchedImag
   }
 }
 
+/** Idempotent create may replay a body from before assets were attached. */
+async function itemNeedingRehost(item: InboxItem, created: boolean): Promise<InboxItem | null> {
+  if (created) return item;
+  try {
+    return await getClient().getInbox(item.id);
+  } catch {
+    return item;
+  }
+}
+
 async function gatherImages(tabId: number | undefined, srcs: string[]): Promise<FetchedImage[]> {
+  if (srcs.length > 0) await requestImageHostAccess();
   const wanted = srcs.slice(0, MAX_INBOX_ASSETS);
   const found: FetchedImage[] = [];
   const missing: string[] = [];
@@ -219,7 +232,8 @@ async function gatherImages(tabId: number | undefined, srcs: string[]): Promise<
 async function prepareUpload(image: FetchedImage): Promise<FetchedImage | null> {
   let mime = image.mime === 'image/jpg' ? 'image/jpeg' : image.mime;
   let blob = image.blob;
-  if (shouldConvertImage(mime === '' ? null : mime)) {
+  const isVideo = mime.startsWith('video/');
+  if (!isVideo && shouldConvertImage(mime === '' ? null : mime)) {
     try {
       const converted = await convertInOffscreen(blob);
       mime = converted.mime;
@@ -228,7 +242,7 @@ async function prepareUpload(image: FetchedImage): Promise<FetchedImage | null> 
       // Fall through and try the original bytes if the MIME is already allowed.
     }
   }
-  if (!(IMAGE_MIME_TYPES as readonly string[]).includes(mime)) return null;
+  if (!(INBOX_ASSET_MIME_TYPES as readonly string[]).includes(mime)) return null;
   if (blob.size < MIN_IMAGE_BYTES || blob.size > MAX_UPLOAD_BYTES) return null;
   return { src: image.src, mime, blob };
 }
@@ -238,18 +252,25 @@ async function rehostImages(
   images: FetchedImage[],
   onProgress?: (done: number, total: number) => Promise<void> | void,
 ): Promise<{ item: InboxItem; failed: number }> {
-  if (images.length === 0) return { item, failed: 0 };
-  if (item.assets.length > 0) return { item, failed: 0 };
-  const assets: Array<{ attachmentId: string; originalSrc: string; sortOrder: number }> = [];
+  const have = new Set(item.assets.flatMap((asset) => imageSrcKeys(asset.originalSrc)));
+  const assets: Array<{ attachmentId: string; originalSrc: string; sortOrder: number }> =
+    item.assets.map((asset, index) => ({
+      attachmentId: asset.attachmentId,
+      originalSrc: asset.originalSrc,
+      sortOrder: asset.sortOrder ?? index,
+    }));
+  const pending = images.filter(
+    (image) => !imageSrcKeys(image.src).some((key) => have.has(key)),
+  );
   const client = getClient();
   let failed = 0;
-  for (let i = 0; i < images.length; i += 1) {
-    const raw = images[i];
+  for (let i = 0; i < pending.length; i += 1) {
+    const raw = pending[i];
     if (raw === undefined) continue;
     const prepared = await prepareUpload(raw);
     if (prepared === null) {
       failed += 1;
-      await onProgress?.(i + 1, images.length);
+      await onProgress?.(i + 1, pending.length);
       continue;
     }
     try {
@@ -263,27 +284,28 @@ async function rehostImages(
         originalSrc: prepared.src,
         sortOrder: assets.length,
       });
+      for (const key of imageSrcKeys(prepared.src)) have.add(key);
     } catch {
       failed += 1;
     }
-    await onProgress?.(i + 1, images.length);
+    await onProgress?.(i + 1, pending.length);
   }
   if (assets.length === 0) return { item, failed };
-  const rewritten = rewriteExtractedImageSrcs(
-    item.extractedHtml ?? '',
-    assets.map((asset) => ({
-      originalSrc: asset.originalSrc,
-      uploadPath: `/api/v1/uploads/${asset.attachmentId}`,
-    })),
-  );
-  if (rewritten !== '' && rewritten !== item.extractedHtml) {
-    try {
-      await client.patchInbox(item.id, { extractedHtml: rewritten });
-    } catch {
-      // Reader can still map originalSrc via assets.
+  const mapping = assets.map((asset) => ({
+    originalSrc: asset.originalSrc,
+    uploadPath: `/api/v1/uploads/${asset.attachmentId}`,
+  }));
+  const bound = pending.length > 0 ? await client.patchInboxAssets(item.id, { assets }) : item;
+  const html = bound.extractedHtml ?? item.extractedHtml ?? '';
+  try {
+    const rewritten = rewriteExtractedImageSrcs(html, mapping);
+    if (rewritten !== '' && rewritten !== html) {
+      return { item: await client.patchInbox(bound.id, { extractedHtml: rewritten }), failed };
     }
+  } catch {
+    // Reader maps originalSrc via assets.
   }
-  return { item: await client.patchInboxAssets(item.id, { assets }), failed };
+  return { item: bound, failed };
 }
 
 async function announceSaved(report: Announce, outcome: CaptureOutcome) {
@@ -429,7 +451,8 @@ async function savePage(
 
   let parsed;
   try {
-    parsed = await parseInOffscreen(page.outerHTML, originalUrl);
+    const both = await parseInOffscreen(page.outerHTML, originalUrl);
+    parsed = both.article;
   } catch {
     parsed = {
       title: clip(page.title, 500) ?? hostnameOf(originalUrl) ?? originalUrl,
@@ -453,9 +476,10 @@ async function savePage(
   });
   const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
   await announceSaved(report, outcome);
-  if (result.created) {
+  const rehostItem = await itemNeedingRehost(result.item, result.created);
+  if (rehostItem !== null) {
     const images = await gatherImages(tabId, parsed.imageSrcs);
-    await rehostWithFeedback(report, result.item, images, outcome);
+    await rehostWithFeedback(report, rehostItem, images, outcome);
   }
   return outcome;
 }
@@ -524,9 +548,12 @@ async function saveImage(
   });
   const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
   await announceSaved(report, outcome);
-  if (result.created && src !== undefined && !isTrackingPixel({ src })) {
-    const images = await gatherImages(tab?.id, [src]);
-    await rehostWithFeedback(report, result.item, images, outcome);
+  if (src !== undefined && !isTrackingPixel({ src })) {
+    const rehostItem = await itemNeedingRehost(result.item, result.created);
+    if (rehostItem !== null) {
+      const images = await gatherImages(tab?.id, [src]);
+      await rehostWithFeedback(report, rehostItem, images, outcome);
+    }
   }
   return outcome;
 }
@@ -567,6 +594,9 @@ export async function extractCapture(tab: chrome.tabs.Tab): Promise<CapturePaylo
         byline: null,
         siteName: null,
         imageSrcs: [],
+        pageText: null,
+        pageHtml: null,
+        pageImageSrcs: [],
         selection: '',
         tabId,
         file: direct,
@@ -588,21 +618,27 @@ export async function extractCapture(tab: chrome.tabs.Tab): Promise<CapturePaylo
     byline: null,
     siteName: null,
     imageSrcs: [],
+    pageText: null,
+    pageHtml: null,
+    pageImageSrcs: [],
     selection: page.selection.trim(),
     tabId,
     file: null,
   };
   try {
-    const parsed = await parseInOffscreen(page.outerHTML, originalUrl);
+    const { article, page: pageParsed } = await parseInOffscreen(page.outerHTML, originalUrl);
     return {
       ...payload,
-      title: parsed.title,
-      extractedText: parsed.extractedText,
-      extractedHtml: parsed.extractedHtml,
-      excerpt: parsed.excerpt,
-      byline: parsed.byline,
-      siteName: parsed.siteName,
-      imageSrcs: parsed.imageSrcs,
+      title: article.title,
+      extractedText: article.extractedText,
+      extractedHtml: article.extractedHtml,
+      excerpt: article.excerpt,
+      byline: article.byline,
+      siteName: article.siteName,
+      imageSrcs: article.imageSrcs,
+      pageText: pageParsed.extractedText,
+      pageHtml: pageParsed.extractedHtml,
+      pageImageSrcs: pageParsed.imageSrcs,
     };
   } catch {
     return payload;
@@ -676,17 +712,26 @@ export async function commitCapture(input: {
   const base =
     input.mode === 'selection'
       ? selectionInputFromCapture(capture, title)
-      : inboxInputFromCapture(capture, title, input.note);
+      : inboxInputFromCapture(
+          capture,
+          title,
+          input.note,
+          input.mode === 'page' ? 'page' : 'article',
+        );
   const result = await createExtensionItem(base);
   const outcome: CaptureOutcome = {
     kind: result.created ? 'created' : 'existing',
     id: result.item.id,
   };
   await input.onCreated?.(outcome);
-  if (result.created && input.mode === 'article') {
-    const images = await gatherImages(capture.tabId ?? undefined, capture.imageSrcs);
-    const { failed } = await rehostImages(result.item, images, input.onProgress);
-    return { outcome, failed };
+  if (input.mode === 'article' || input.mode === 'page') {
+    const rehostItem = await itemNeedingRehost(result.item, result.created);
+    if (rehostItem !== null) {
+      const srcs = input.mode === 'page' ? capture.pageImageSrcs : capture.imageSrcs;
+      const images = await gatherImages(capture.tabId ?? undefined, srcs);
+      const { failed } = await rehostImages(rehostItem, images, input.onProgress);
+      return { outcome, failed };
+    }
   }
   return { outcome, failed: 0 };
 }
@@ -740,6 +785,7 @@ async function activeTab(): Promise<chrome.tabs.Tab | undefined> {
 }
 
 export async function handleActionClick(tab: chrome.tabs.Tab): Promise<void> {
+  await requestImageHostAccess();
   await withAuth(tab, async (report) => {
     await savePage(tab, false, report);
   });
@@ -766,6 +812,7 @@ export async function handleContextMenu(
     await openCapturePopup();
     return;
   }
+  await requestImageHostAccess();
   await withAuth(tab, async (report) => {
     switch (info.menuItemId) {
       case MENU.page:

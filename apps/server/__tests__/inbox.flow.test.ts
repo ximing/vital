@@ -145,6 +145,36 @@ describe('inbox', () => {
     expect(listedAfter.json().items[0].title).toBe(created.json().title);
   });
 
+  it('saving the same URL after delete creates a new item', async () => {
+    const alice = await registerUser(app);
+    const url = 'https://News.Example.com/again';
+    const key = keyFor(url);
+    const first = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      headers: { 'idempotency-key': key },
+      payload: { title: 'First', originalUrl: url, source: 'extension' },
+    });
+    expect(first.statusCode).toBe(201);
+    const del = await injectJson(app, {
+      method: 'DELETE',
+      url: `/api/v1/inbox/${first.json().id}`,
+      token: alice.token,
+    });
+    expect(del.statusCode).toBe(204);
+    const second = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      headers: { 'idempotency-key': key },
+      payload: { title: 'Second', originalUrl: url, source: 'extension' },
+    });
+    expect(second.statusCode).toBe(201);
+    expect(second.json().id).not.toBe(first.json().id);
+    expect(second.json().title).toBe('Second');
+  });
+
   it('forever canonical URL idempotency returns stored response', async () => {
     const alice = await registerUser(app);
     const url = 'https://News.Example.com/path/?utm_source=x#frag';
