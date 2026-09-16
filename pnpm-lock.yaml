@@ -52,6 +52,9 @@ importers:
       '@vital/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@vital/article-html':
+        specifier: workspace:*
+        version: link:../../packages/article-html
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
@@ -210,6 +213,9 @@ importers:
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
+      '@vital/article-html':
+        specifier: workspace:*
+        version: link:../../packages/article-html
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
@@ -355,6 +361,9 @@ importers:
       '@vital/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@vital/article-html':
+        specifier: workspace:*
+        version: link:../../packages/article-html
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
@@ -459,6 +468,36 @@ importers:
       eslint:
         specifier: ^9.19.0
         version: 9.39.5(jiti@2.7.0)
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.5)(jsdom@26.1.0)(vite@8.2.2(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/article-html:
+    devDependencies:
+      '@types/sanitize-html':
+        specifier: ^2.16.0
+        version: 2.16.1
+      '@vital/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@vital/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      dompurify:
+        specifier: ^3.4.14
+        version: 3.4.14
+      eslint:
+        specifier: ^9.19.0
+        version: 9.39.5(jiti@2.7.0)
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
+      sanitize-html:
+        specifier: ^2.17.0
+        version: 2.17.7
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

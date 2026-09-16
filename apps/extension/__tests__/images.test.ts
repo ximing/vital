@@ -56,6 +56,27 @@ describe('collectArticleImages', () => {
       'https://cdn.ex.com/a-2x.jpg',
     ]);
   });
+
+  it('collects video src and poster alongside images', () => {
+    const html = `
+      <article>
+        <img src="/hero.png" width="800" height="400" />
+        <video src="https://cdn.ex.com/clip.mp4" poster="https://cdn.ex.com/poster.jpg"></video>
+      </article>`;
+    expect(collectArticleImages(html, 'https://news.example.com/p')).toEqual([
+      'https://news.example.com/hero.png',
+      'https://cdn.ex.com/poster.jpg',
+      'https://cdn.ex.com/clip.mp4',
+    ]);
+  });
+
+  it('strips WeChat #imgIndex fragments so fetch and rewrite share one key', () => {
+    const html =
+      '<img src="https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png#imgIndex=3" width="800" height="400" />';
+    expect(collectArticleImages(html, 'https://mp.weixin.qq.com/s/x')).toEqual([
+      'https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png',
+    ]);
+  });
 });
 
 describe('rewriteExtractedImageSrcs', () => {
@@ -66,6 +87,45 @@ describe('rewriteExtractedImageSrcs', () => {
     ]);
     expect(out).toContain('src="/api/v1/uploads/att-1"');
     expect(out).not.toContain('cdn.ex.com');
+  });
+
+  it('matches WeChat srcs that differ only by #imgIndex', () => {
+    const html =
+      '<img src="https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&from=appmsg#imgIndex=2">';
+    const out = rewriteExtractedImageSrcs(html, [
+      {
+        originalSrc: 'https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&from=appmsg',
+        uploadPath: '/api/v1/uploads/att-1',
+      },
+    ]);
+    expect(out).toContain('/api/v1/uploads/att-1');
+    expect(out).not.toContain('mmbiz.qpic.cn');
+  });
+
+  it('rewrites video src and poster onto upload paths', () => {
+    const html =
+      '<video src="https://cdn.ex.com/clip.mp4" poster="https://cdn.ex.com/poster.jpg" controls></video>';
+    const out = rewriteExtractedImageSrcs(html, [
+      { originalSrc: 'https://cdn.ex.com/clip.mp4', uploadPath: '/api/v1/uploads/vid-1' },
+      { originalSrc: 'https://cdn.ex.com/poster.jpg', uploadPath: '/api/v1/uploads/pos-1' },
+    ]);
+    expect(out).toContain('src="/api/v1/uploads/vid-1"');
+    expect(out).toContain('poster="/api/v1/uploads/pos-1"');
+    expect(out).not.toContain('cdn.ex.com');
+  });
+
+  it('rewrites HTML-entity srcs and data-src without DOMParser', () => {
+    const html =
+      '<img data-src="https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&amp;from=appmsg" alt="图">';
+    const out = rewriteExtractedImageSrcs(html, [
+      {
+        originalSrc: 'https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&from=appmsg',
+        uploadPath: '/api/v1/uploads/att-1',
+      },
+    ]);
+    expect(out).toContain('src="/api/v1/uploads/att-1"');
+    expect(out).not.toContain('data-src');
+    expect(out).not.toContain('mmbiz.qpic.cn');
   });
 });
 
@@ -87,5 +147,14 @@ describe('sniffMime', () => {
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
     expect(sniffMime(jpeg.buffer)).toBe('image/jpeg');
     expect(sniffMime(png.buffer)).toBe('image/png');
+  });
+
+  it('detects mp4 ftyp', () => {
+    const mp4 = new Uint8Array(12);
+    mp4[4] = 0x66;
+    mp4[5] = 0x74;
+    mp4[6] = 0x79;
+    mp4[7] = 0x70;
+    expect(sniffMime(mp4.buffer)).toBe('video/mp4');
   });
 });

@@ -29,6 +29,7 @@
     "@tiptap/react": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
     "@vital/api-client": "workspace:*",
+    "@vital/article-html": "workspace:*",
     "@vital/dto": "workspace:*",
     "@vital/markdown": "workspace:*",
     "@vital/tokens": "workspace:*",

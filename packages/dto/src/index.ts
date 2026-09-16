@@ -9,6 +9,7 @@ export * from './tasks.js';
 export * from './tags.js';
 export * from './search.js';
 export * from './inbox.js';
+export * from './image-src.js';
 export * from './outcomes.js';
 export * from './agent.js';
 export * from './habits.js';

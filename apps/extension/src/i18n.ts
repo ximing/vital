@@ -1,3 +1,5 @@
+import type { PopupMode } from './messages.js';
+
 /** Chinese-first UI copy. Only keys referenced from code live here; the popup
  * HTML carries the static skeleton text. Spec §12 / empty states. */
 export const copy = {
@@ -18,3 +20,12 @@ export const copy = {
   toastFailed: '保存失败',
   popupCannotCapture: '无法收集此页，试试右键菜单或快捷键。',
 } as const;
+
+/** Popup mode chip: Chinese label + English title (HTML skeleton is Chinese). */
+export const modeLabels: Record<PopupMode, { zh: string; en: string }> = {
+  article: { zh: '文章', en: 'Article' },
+  page: { zh: '整页', en: 'Page' },
+  selection: { zh: '选区', en: 'Selection' },
+  task: { zh: '待办', en: 'Task' },
+  file: { zh: '文件', en: 'File' },
+};

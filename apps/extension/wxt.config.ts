@@ -57,6 +57,7 @@ export default defineConfig({
       minimum_chrome_version: '127',
       permissions: ['storage', 'activeTab', 'scripting', 'contextMenus', 'offscreen'],
       host_permissions: hostPermissions,
+      optional_host_permissions: ['http://*/*', 'https://*/*'],
       externally_connectable: { matches: webMatches },
       web_accessible_resources: [
         { resources: ['popup.html'], matches: webMatches },

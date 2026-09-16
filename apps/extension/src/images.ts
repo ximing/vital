@@ -1,4 +1,4 @@
-import { IMAGE_MIME_TYPES, MAX_INBOX_ASSETS } from '@vital/dto';
+import { INBOX_ASSET_MIME_TYPES, MAX_INBOX_ASSETS, imageSrcKeys } from '@vital/dto';
 import { parseDim } from './html.js';
 
 const TRACKER_HOST =
@@ -45,31 +45,132 @@ export function imageSrcFrom(img: Element): string | null {
   return largestSrcset(img.getAttribute('srcset') ?? img.getAttribute('data-srcset'));
 }
 
-export function promoteLazyImages(root: ParentNode): void {
-  for (const img of root.querySelectorAll('img')) {
-    const src = imageSrcFrom(img);
-    if (src !== null) img.setAttribute('src', src);
+export function canonicalizeImageSrc(raw: string, pageUrl: string): string | null {
+  try {
+    const abs = new URL(raw, pageUrl);
+    if (abs.protocol !== 'http:' && abs.protocol !== 'https:') return null;
+    abs.hash = '';
+    return abs.href;
+  } catch {
+    return null;
   }
 }
 
+export function imageSrcKey(src: string): string {
+  return imageSrcKeys(src)[0] ?? src;
+}
+
+function htmlDecode(value: string): string {
+  return value
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>');
+}
+
+function lookupMappedSrc(src: string, index: Map<string, string>): string | undefined {
+  for (const key of imageSrcKeys(src)) {
+    const hit = index.get(key);
+    if (hit !== undefined) return hit;
+  }
+  return undefined;
+}
+
+export function promoteLazyImages(root: ParentNode, pageUrl?: string): void {
+  for (const img of root.querySelectorAll('img')) {
+    const raw = imageSrcFrom(img);
+    if (raw === null) continue;
+    const src = pageUrl === undefined ? raw : canonicalizeImageSrc(raw, pageUrl);
+    if (src === null) continue;
+    img.setAttribute('src', src);
+    img.removeAttribute('srcset');
+    img.removeAttribute('data-src');
+    img.removeAttribute('data-original');
+    img.removeAttribute('data-lazy-src');
+    img.removeAttribute('data-actualsrc');
+    img.removeAttribute('data-srcset');
+  }
+}
+
+function httpMediaSrc(raw: string | null | undefined, pageUrl?: string): string | null {
+  if (raw === undefined || raw === null || raw.trim() === '') return null;
+  if (raw.startsWith('blob:') || raw.startsWith('data:')) return null;
+  if (pageUrl === undefined) {
+    return raw.startsWith('http://') || raw.startsWith('https://') ? raw : null;
+  }
+  return canonicalizeImageSrc(raw, pageUrl);
+}
+
+/** Absolutize img/video URLs so later rehost can match srcs in saved HTML. */
+export function promoteMedia(root: ParentNode, pageUrl?: string): void {
+  promoteLazyImages(root, pageUrl);
+  for (const video of root.querySelectorAll('video')) {
+    const live = video instanceof HTMLVideoElement ? video.currentSrc : '';
+    const raw =
+      live ||
+      video.getAttribute('src') ||
+      video.querySelector('source')?.getAttribute('src') ||
+      null;
+    const src = httpMediaSrc(raw, pageUrl);
+    if (src !== null) {
+      video.setAttribute('src', src);
+      video.setAttribute('controls', '');
+      if (!video.hasAttribute('playsinline')) video.setAttribute('playsinline', '');
+    }
+    const poster = httpMediaSrc(video.getAttribute('poster'), pageUrl);
+    if (poster !== null) video.setAttribute('poster', poster);
+  }
+}
+
+const IMG_TAG_RE = /<img\b[^>]*>/gi;
+const SRC_ATTR_RE =
+  /\s(?:src|data-src|data-original|data-lazy-src|data-actualsrc)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+const DROP_LAZY_ATTR_RE =
+  /\s(?:srcset|data-src|data-original|data-lazy-src|data-actualsrc|data-srcset)\s*=\s*(?:"[^"]*"|'[^']*')/gi;
+
+/** String rewrite — the extension service worker has no DOMParser. */
 export function rewriteExtractedImageSrcs(
   html: string,
   mapping: Array<{ originalSrc: string; uploadPath: string }>,
 ): string {
   if (html === '' || mapping.length === 0) return html;
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const bySrc = new Map(mapping.map((row) => [row.originalSrc, row.uploadPath]));
-  for (const img of doc.querySelectorAll('img')) {
-    const src = img.getAttribute('src');
-    if (src === null) continue;
-    const next = bySrc.get(src);
-    if (next === undefined) continue;
-    img.setAttribute('src', next);
-    img.removeAttribute('srcset');
-    img.removeAttribute('data-src');
-    img.removeAttribute('data-original');
+  const index = new Map<string, string>();
+  for (const row of mapping) {
+    for (const key of imageSrcKeys(row.originalSrc)) {
+      if (!index.has(key)) index.set(key, row.uploadPath);
+    }
   }
-  return doc.body.innerHTML;
+  return html.replace(new RegExp(IMG_TAG_RE.source, 'gi'), (tag) => {
+    let found: string | undefined;
+    for (const match of tag.matchAll(new RegExp(SRC_ATTR_RE.source, 'gi'))) {
+      const raw = match[1] ?? match[2] ?? '';
+      found = lookupMappedSrc(htmlDecode(raw), index);
+      if (found !== undefined) break;
+    }
+    if (found === undefined) return tag;
+    let next = tag.replace(new RegExp(DROP_LAZY_ATTR_RE.source, 'gi'), '');
+    if (/\ssrc\s*=/i.test(next)) {
+      next = next.replace(/\ssrc\s*=\s*(?:"[^"]*"|'[^']*')/i, ` src="${found}"`);
+    } else {
+      next = next.replace(/^<img\b/i, `<img src="${found}"`);
+    }
+    return next;
+  }).replace(/<(video|source)\b[^>]*>/gi, (tag) => {
+    let next = rewriteTagAttr(tag, 'src', index);
+    next = rewriteTagAttr(next, 'poster', index);
+    return next;
+  });
+}
+
+function rewriteTagAttr(tag: string, attr: string, index: Map<string, string>): string {
+  const re = new RegExp(`\\s${attr}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i');
+  const match = re.exec(tag);
+  if (match === null) return tag;
+  const raw = match[1] ?? match[2] ?? '';
+  const found = lookupMappedSrc(htmlDecode(raw), index);
+  if (found === undefined) return tag;
+  return tag.replace(re, ` ${attr}="${found}"`);
 }
 
 export function isTrackingPixel(img: {
@@ -106,18 +207,19 @@ function pushSrc(
   limit = MAX_INBOX_ASSETS,
 ): void {
   if (srcs.length >= limit) return;
-  let abs: URL;
+  const href = canonicalizeImageSrc(raw, pageUrl);
+  if (href === null) return;
+  let path: string;
   try {
-    abs = new URL(raw, pageUrl);
+    path = new URL(href).pathname;
   } catch {
     return;
   }
-  if (abs.protocol !== 'http:' && abs.protocol !== 'https:') return;
-  if (/\.svg(\?|$)/i.test(abs.pathname)) return;
-  if (isTrackingPixel({ src: abs.href, width, height })) return;
-  if (seen.has(abs.href)) return;
-  seen.add(abs.href);
-  srcs.push(abs.href);
+  if (/\.svg(\?|$)/i.test(path)) return;
+  if (isTrackingPixel({ src: href, width, height })) return;
+  if (seen.has(href)) return;
+  seen.add(href);
+  srcs.push(href);
 }
 
 export function collectArticleImages(
@@ -129,7 +231,7 @@ export function collectArticleImages(
   const base = doc.createElement('base');
   base.setAttribute('href', pageUrl);
   doc.head.prepend(base);
-  promoteLazyImages(doc);
+  promoteMedia(doc, pageUrl);
 
   const srcs: string[] = [];
   const seen = new Set<string>();
@@ -151,6 +253,22 @@ export function collectArticleImages(
     if (raw === null) continue;
     pushSrc(srcs, seen, raw, pageUrl, null, null, limit);
   }
+  for (const video of doc.querySelectorAll('video')) {
+    const poster = video.getAttribute('poster');
+    if (poster !== null && poster.trim() !== '') {
+      pushSrc(srcs, seen, poster, pageUrl, null, null, limit);
+    }
+    const src = video.getAttribute('src');
+    if (src !== null && src.trim() !== '') {
+      pushSrc(srcs, seen, src, pageUrl, null, null, limit);
+    }
+    for (const source of video.querySelectorAll('source')) {
+      const sourceSrc = source.getAttribute('src');
+      if (sourceSrc !== null && sourceSrc.trim() !== '') {
+        pushSrc(srcs, seen, sourceSrc, pageUrl, null, null, limit);
+      }
+    }
+  }
   return srcs;
 }
 
@@ -159,7 +277,7 @@ export function normalizeMime(headerMime: string, bytes: ArrayBuffer): string | 
   if (header === 'image/jpg') {
     return 'image/jpeg';
   }
-  if ((IMAGE_MIME_TYPES as readonly string[]).includes(header)) {
+  if ((INBOX_ASSET_MIME_TYPES as readonly string[]).includes(header)) {
     return header;
   }
   return sniffMime(bytes);
@@ -241,6 +359,17 @@ export function sniffMime(bytes: ArrayBuffer): string | null {
     byte(u8, 11) === 0x50
   ) {
     return 'image/webp';
+  }
+  if (
+    byte(u8, 4) === 0x66 &&
+    byte(u8, 5) === 0x74 &&
+    byte(u8, 6) === 0x79 &&
+    byte(u8, 7) === 0x70
+  ) {
+    return 'video/mp4';
+  }
+  if (byte(u8, 0) === 0x1a && byte(u8, 1) === 0x45 && byte(u8, 2) === 0xdf && byte(u8, 3) === 0xa3) {
+    return 'video/webm';
   }
   return null;
 }

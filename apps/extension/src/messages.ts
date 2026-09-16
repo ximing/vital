@@ -2,7 +2,7 @@ import type { InboxItem, List, UserProfile } from '@vital/dto';
 import type { SaveKind } from './capture-helpers.js';
 import type { DirectFile } from './file-kind.js';
 
-export type PopupMode = 'article' | 'selection' | 'task' | 'file';
+export type PopupMode = 'article' | 'page' | 'selection' | 'task' | 'file';
 
 export interface CapturePayload {
   title: string;
@@ -13,6 +13,10 @@ export interface CapturePayload {
   byline: string | null;
   siteName: string | null;
   imageSrcs: string[];
+  /** Whole-page extract (no Readability); used when popup mode is `page`. */
+  pageText: string | null;
+  pageHtml: string | null;
+  pageImageSrcs: string[];
   selection: string;
   tabId: number | null;
   file: DirectFile | null;
@@ -121,6 +125,7 @@ export function isCommitPortMessage(value: unknown): value is CommitPortMessage 
   if (typeof rec.title !== 'string' || typeof rec.note !== 'string') return false;
   if (
     rec.mode !== 'article' &&
+    rec.mode !== 'page' &&
     rec.mode !== 'selection' &&
     rec.mode !== 'task' &&
     rec.mode !== 'file'

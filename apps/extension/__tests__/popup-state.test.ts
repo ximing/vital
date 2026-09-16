@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CapturePayload } from '../src/messages.js';
+import { modeLabels } from '../src/i18n.js';
 import {
   fileMetaLine,
   initialMode,
@@ -19,12 +20,25 @@ const capture: CapturePayload = {
   byline: '作者',
   siteName: 'Example',
   imageSrcs: ['https://ex.com/1.png', 'https://ex.com/2.png'],
+  pageText: '页'.repeat(80),
+  pageHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
+  pageImageSrcs: ['https://ex.com/p.png'],
   selection: '一段选区',
   tabId: 7,
   file: null,
 };
 
 const file = { url: 'https://ex.com/v/clip.mp4', mime: 'video/mp4', size: 123 };
+
+describe('modeLabels', () => {
+  it('has Chinese labels and English titles for every mode', () => {
+    expect(modeLabels.article).toEqual({ zh: '文章', en: 'Article' });
+    expect(modeLabels.page).toEqual({ zh: '整页', en: 'Page' });
+    expect(modeLabels.selection).toEqual({ zh: '选区', en: 'Selection' });
+    expect(modeLabels.task).toEqual({ zh: '待办', en: 'Task' });
+    expect(modeLabels.file).toEqual({ zh: '文件', en: 'File' });
+  });
+});
 
 describe('initialMode / modeDisabled', () => {
   it('prefers file, then selection, then article', () => {
@@ -36,6 +50,7 @@ describe('initialMode / modeDisabled', () => {
     expect(modeDisabled('selection', '   ')).toBe(true);
     expect(modeDisabled('selection', '有字')).toBe(false);
     expect(modeDisabled('article', '')).toBe(false);
+    expect(modeDisabled('page', '')).toBe(false);
     expect(modeDisabled('task', '')).toBe(false);
   });
 });
@@ -53,6 +68,7 @@ describe('fileMetaLine', () => {
 describe('titleForMode', () => {
   it('uses the parsed title for articles and clips the selection otherwise', () => {
     expect(titleForMode(capture, 'article')).toBe('文章标题');
+    expect(titleForMode(capture, 'page')).toBe('文章标题');
     expect(titleForMode(capture, 'selection')).toBe('一段选区');
     expect(titleForMode({ ...capture, selection: '' }, 'task')).toBe('文章标题');
   });
@@ -61,6 +77,10 @@ describe('titleForMode', () => {
 describe('metaLine', () => {
   it('shows site, word count, and image count for articles', () => {
     expect(metaLine(capture, 'article')).toBe('Example · 2000 字 · 2 张图');
+  });
+
+  it('uses page text and images for page mode', () => {
+    expect(metaLine(capture, 'page')).toBe('Example · 80 字 · 1 张图');
   });
 
   it('falls back to hostname and hides empty parts', () => {

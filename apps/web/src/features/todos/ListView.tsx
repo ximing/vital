@@ -166,9 +166,9 @@ export const ListView: FC<{
         onSelect={() => todos.openDetail(task.id)}
         onOpen={() => todos.openDetail(task.id)}
         onComplete={() => onComplete(task)}
-        onDragStart={(event) => handleDragStart(event, task)}
-        onDragOver={handleDragOver}
-        onDrop={(event) => handleDrop(event, task)}
+        onDragStart={manualSort ? (event) => handleDragStart(event, task) : undefined}
+        onDragOver={manualSort ? handleDragOver : undefined}
+        onDrop={manualSort ? (event) => handleDrop(event, task) : undefined}
         onContextMenu={
           onTaskMenu
             ? (event) => {
@@ -183,7 +183,8 @@ export const ListView: FC<{
 
   if (tasks.length === 0) return <EmptyTasks listId={listId} kind="list" done={doneScope} />;
 
-  const sections = listSections(listId, tasks, timeZone, undefined, lists);
+  const sections = listSections(listId, tasks, timeZone, undefined, lists, todos.taskSort);
+  const manualSort = todos.taskSort.key === 'manual';
   const boxLabel =
     listId === 'smart:today'
       ? t.lists.today

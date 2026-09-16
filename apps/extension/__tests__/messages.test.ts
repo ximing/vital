@@ -15,6 +15,9 @@ const payload: CapturePayload = {
   byline: null,
   siteName: null,
   imageSrcs: [],
+  pageText: null,
+  pageHtml: null,
+  pageImageSrcs: [],
   selection: '',
   tabId: null,
   file: null,
@@ -50,6 +53,15 @@ describe('message guards', () => {
         title: 't',
         note: '',
         mode: 'file',
+      }),
+    ).toBe(true);
+    expect(
+      isCommitPortMessage({
+        type: 'commit-capture',
+        capture: payload,
+        title: 't',
+        note: '',
+        mode: 'page',
       }),
     ).toBe(true);
     expect(

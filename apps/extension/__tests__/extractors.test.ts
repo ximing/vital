@@ -1,7 +1,11 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from 'vitest';
-import { extractSite } from '../src/extractors.js';
+import { extractSite, SITE_EXTRACTORS } from '../src/extractors.js';
 import { parseArticle } from '../src/parse-article.js';
+
+function parseDoc(html: string): Document {
+  return new DOMParser().parseFromString(html, 'text/html');
+}
 
 describe('extractSite', () => {
   it('pulls WeChat title and #js_content, promoting data-src images', () => {
@@ -75,6 +79,31 @@ describe('extractSite', () => {
   });
 });
 
+describe('SITE_EXTRACTORS registry', () => {
+  it('dispatches the first matching extractor and preserves host behavior', () => {
+    expect(SITE_EXTRACTORS.map((e) => e.name)).toEqual(['wechat', 'zhihu', 'xhs', 'twitter']);
+
+    const cases: Array<{ url: string; name: string }> = [
+      { url: 'https://mp.weixin.qq.com/s/abc', name: 'wechat' },
+      { url: 'https://www.zhihu.com/question/1', name: 'zhihu' },
+      { url: 'https://zhuanlan.zhihu.com/p/1', name: 'zhihu' },
+      { url: 'https://www.xiaohongshu.com/explore/1', name: 'xhs' },
+      { url: 'https://xhslink.com/a/1', name: 'xhs' },
+      { url: 'https://x.com/user/status/1', name: 'twitter' },
+      { url: 'https://www.twitter.com/user/status/1', name: 'twitter' },
+    ];
+    for (const { url, name } of cases) {
+      const host = new URL(url).hostname.toLowerCase();
+      const hits = SITE_EXTRACTORS.filter((e) => e.match(host, url));
+      expect(hits.map((e) => e.name), url).toEqual([name]);
+      const html = '<html><body><p>x</p></body></html>';
+      const viaRegistry = extractSite(parseDoc(html), url);
+      const viaFirst = hits[0]?.extract(parseDoc(html), url) ?? null;
+      expect(viaRegistry, url).toEqual(viaFirst);
+    }
+  });
+});
+
 describe('parseArticle site extractors', () => {
   it('captures the linked Zhihu answer, excluding question details and other answers', () => {
     const html = `<h1 class="QuestionHeader-title">团队冲突如何处理？</h1>
@@ -126,5 +155,50 @@ describe('parseArticle site extractors', () => {
     expect(parsed.title).toBe('正文标题');
     expect(parsed.extractedHtml).toContain('微信正文段落');
     expect(parsed.extractedHtml).not.toContain('导航要丢掉');
+  });
+
+  it('replaces WeChat video player chrome with a video card', () => {
+    const html = `<h1 id="activity-name">双11专栏</h1>
+      <div id="js_name">大淘宝技术</div>
+      <div id="js_content">
+        <p>${'正文开头足够长用来当稍后读。'.repeat(4)}</p>
+        <section>
+          <p>3D样板间：消费者可以在场景中查看商品陈列效果</p>
+          <div class="js_video" id="js_tx_video_container_0">
+            <iframe class="video_iframe" data-mpvid="wxv_123"
+              data-cover="https://mmbiz.qpic.cn/cover.jpg"
+              data-src="https://mp.weixin.qq.com/cgi-bin/readtemplate?t=tmpl/video_tmpl&vid=wxv_123"></iframe>
+            <video src="https://mpvideo.qpic.cn/clip.mp4" poster="https://mmbiz.qpic.cn/cover.jpg"></video>
+            已关注 关注 重播 分享 赞 关闭观看更多
+            退出全屏切换到竖屏全屏退出全屏大淘宝技术已关注分享视频，时长00:16
+            您的浏览器不支持 video 标签 继续观看
+          </div>
+        </section>
+        <p>基于图像的三维重建技术。</p>
+      </div>`;
+    const parsed = parseArticle(html, 'https://mp.weixin.qq.com/s/xyz');
+    expect(parsed.extractedHtml).toContain('3D样板间');
+    expect(parsed.extractedHtml).toContain('<video');
+    expect(parsed.extractedHtml).toContain('https://mpvideo.qpic.cn/clip.mp4');
+    expect(parsed.extractedHtml).toContain('视频 · 00:16');
+    expect(parsed.extractedText).toContain('3D样板间');
+    expect(parsed.extractedText).not.toMatch(/重播|退出全屏|倍速播放|您的浏览器不支持/);
+    expect(parsed.imageSrcs).toContain('https://mmbiz.qpic.cn/cover.jpg');
+    expect(parsed.imageSrcs).toContain('https://mpvideo.qpic.cn/clip.mp4');
+  });
+
+  it('tidies WeChat empty sections before collecting images', () => {
+    const html = `<h1 id="activity-name">标题</h1>
+      <div id="js_content">
+        <section><span><br></span></section>
+        <p><span><br></span></p>
+        <p>${'微信正文段落。'.repeat(12)}</p>
+        <section><img data-src="https://mmbiz.qpic.cn/hero.jpg#imgIndex=0" /></section>
+        <p><span><br></span></p>
+      </div>`;
+    const parsed = parseArticle(html, 'https://mp.weixin.qq.com/s/xyz');
+    expect(parsed.extractedHtml).toContain('微信正文段落');
+    expect(parsed.extractedHtml).not.toMatch(/<br/i);
+    expect(parsed.imageSrcs).toEqual(['https://mmbiz.qpic.cn/hero.jpg']);
   });
 });

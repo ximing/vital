@@ -15,5 +15,8 @@ describe('extension manifest contract', () => {
     expect(config).toContain('externally_connectable');
     expect(config).toContain('web_accessible_resources');
     expect(config).toContain('resolveExtensionOrigins');
+    expect(config).toContain('optional_host_permissions');
+    expect(config).toContain("'http://*/*'");
+    expect(config).toContain("'https://*/*'");
   });
 });

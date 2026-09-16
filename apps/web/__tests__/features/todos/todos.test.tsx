@@ -670,4 +670,40 @@ describe('todos workspace', () => {
     await user.click(screen.getByRole('menuitem', { name: t.todos.pin }));
     expect(client.patchList).toHaveBeenCalledWith('project-1', { pinned: true });
   });
+
+  it('sorts tasks by created date from the view menu', async () => {
+    vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox, project] });
+    vi.mocked(client.listTasks).mockResolvedValue({
+      items: [
+        makeTask({
+          id: 'old',
+          title: '先建的',
+          listId: project.id,
+          sortOrder: 1,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        }),
+        makeTask({
+          id: 'new',
+          title: '后建的',
+          listId: project.id,
+          sortOrder: 2,
+          createdAt: '2026-09-01T00:00:00.000Z',
+        }),
+      ],
+      nextCursor: null,
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/todos/lists/project-1');
+    expect(await screen.findByRole('option', { name: '先建的' })).toBeInTheDocument();
+    const older = screen.getByRole('option', { name: '先建的' });
+    const newer = screen.getByRole('option', { name: '后建的' });
+    expect(older.compareDocumentPosition(newer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: t.todos.viewMenu }));
+    await user.click(screen.getByRole('menuitem', { name: new RegExp(t.todos.sortCreated) }));
+    const afterOlder = screen.getByRole('option', { name: '先建的' });
+    const afterNewer = screen.getByRole('option', { name: '后建的' });
+    expect(
+      afterNewer.compareDocumentPosition(afterOlder) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

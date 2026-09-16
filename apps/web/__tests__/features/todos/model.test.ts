@@ -338,4 +338,22 @@ describe('todo model', () => {
     expect(sections[0]?.nodes[0]?.task.id).toBe('t2');
     expect(sections[1]?.nodes[0]?.task.id).toBe('t1');
   });
+
+  it('nests newest created tasks first when sorted by created date', () => {
+    const older = makeTask({
+      id: 'a',
+      title: '旧',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      sortOrder: 1,
+    });
+    const newer = makeTask({
+      id: 'b',
+      title: '新',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      sortOrder: 2,
+    });
+    expect(
+      nestTasks([older, newer], { key: 'created', dir: 'desc' }).map((node) => node.task.id),
+    ).toEqual(['b', 'a']);
+  });
 });

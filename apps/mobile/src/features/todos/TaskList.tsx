@@ -124,7 +124,14 @@ function TaskListContent({
   const scope = s.scope;
   const showScopeTabs = !isSmart && view === 'list';
   const doneScope = showScopeTabs && scope === 'done';
-  const nested = useMemo(() => nestTasks(items.filter((row) => row.deletedAt === null)), [items]);
+  const nested = useMemo(
+    () =>
+      nestTasks(
+        items.filter((row) => row.deletedAt === null),
+        s.taskSort,
+      ),
+    [items, s.taskSort],
+  );
   const pinnedRoots = grouped
     ? nested.filter((row) => {
         if (!row.task.pinned) return false;

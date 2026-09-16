@@ -29,6 +29,51 @@ export function isSmartListId(id: string): boolean {
 }
 
 export type ListScope = 'open' | 'done';
+export type TaskSortKey = 'manual' | 'created' | 'updated' | 'due' | 'title';
+export type TaskSortDir = 'asc' | 'desc';
+export type TaskSort = { key: TaskSortKey; dir: TaskSortDir };
+
+export const TASK_SORT_KEYS: TaskSortKey[] = ['manual', 'created', 'updated', 'due', 'title'];
+export const DEFAULT_TASK_SORT: TaskSort = { key: 'manual', dir: 'asc' };
+
+export function defaultTaskSortDir(key: TaskSortKey): TaskSortDir {
+  return key === 'created' || key === 'updated' ? 'desc' : 'asc';
+}
+
+export function compareTasks(a: Task, b: Task, sort: TaskSort): number {
+  const dir = sort.dir === 'asc' ? 1 : -1;
+  let cmp = 0;
+  switch (sort.key) {
+    case 'manual':
+      return a.sortOrder - b.sortOrder || a.id.localeCompare(b.id);
+    case 'created':
+      cmp = Date.parse(a.createdAt) - Date.parse(b.createdAt);
+      break;
+    case 'updated':
+      cmp = Date.parse(a.updatedAt) - Date.parse(b.updatedAt);
+      break;
+    case 'due': {
+      const left = a.dueAt === null ? null : Date.parse(a.dueAt);
+      const right = b.dueAt === null ? null : Date.parse(b.dueAt);
+      if (left === null && right === null) cmp = 0;
+      else if (left === null) cmp = 1;
+      else if (right === null) cmp = -1;
+      else cmp = left - right;
+      break;
+    }
+    case 'title':
+      cmp = a.title.localeCompare(b.title, 'zh');
+      break;
+  }
+  return cmp * dir || a.id.localeCompare(b.id);
+}
+
+export function sortDirHint(sort: TaskSort): string {
+  if (sort.key === 'manual') return '';
+  if (sort.key === 'title') return sort.dir === 'asc' ? 'A → Z' : 'Z → A';
+  if (sort.key === 'due') return sort.dir === 'asc' ? t.todos.sortSoonest : t.todos.sortLatest;
+  return sort.dir === 'desc' ? t.todos.sortNewest : t.todos.sortOldest;
+}
 
 export function parseListScope(raw: string | null | undefined): ListScope {
   return raw === 'done' ? 'done' : 'open';
@@ -278,11 +323,11 @@ export function weekRangeIso(
   return { from, to, days };
 }
 
-export function nestTasks(tasks: Task[]): TaskNode[] {
+export function nestTasks(tasks: Task[], sort: TaskSort = DEFAULT_TASK_SORT): TaskNode[] {
   const ids = new Set(tasks.map((item) => item.id));
   const children = new Map<string, Task[]>();
   const roots: Task[] = [];
-  const sorted = [...tasks].sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+  const sorted = [...tasks].sort((a, b) => compareTasks(a, b, sort));
   for (const task of sorted) {
     if (task.parentId && ids.has(task.parentId)) {
       const list = children.get(task.parentId) ?? [];
@@ -384,9 +429,9 @@ export function pinnedFirst<T extends { pinned?: boolean }>(items: T[]): T[] {
   return [...items].sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)));
 }
 
-function nestPinnedFirst(tasks: Task[]): TaskNode[] {
+function nestPinnedFirst(tasks: Task[], sort: TaskSort = DEFAULT_TASK_SORT): TaskNode[] {
   const { pinned, rest } = splitPinned(tasks);
-  return [...nestTasks(pinned), ...nestTasks(rest)];
+  return [...nestTasks(pinned, sort), ...nestTasks(rest, sort)];
 }
 
 function categorySections(
@@ -394,11 +439,16 @@ function categorySections(
   rest: Task[],
   lists: List[],
   keyPrefix: string,
+  sort: TaskSort = DEFAULT_TASK_SORT,
 ): ListSection[] {
   const children = listChildren(lists, listId);
-  const of = (id: string) => nestTasks(rest.filter((task) => task.listId === id));
+  const of = (id: string) =>
+    nestTasks(
+      rest.filter((task) => task.listId === id),
+      sort,
+    );
   if (children.length === 0) {
-    return [{ key: `${keyPrefix}items`, heading: null, nodes: nestTasks(rest) }];
+    return [{ key: `${keyPrefix}items`, heading: null, nodes: nestTasks(rest, sort) }];
   }
   return [
     {
@@ -422,13 +472,14 @@ export function listSections(
   timeZone: string,
   now = new Date(),
   lists: List[] = [],
+  sort: TaskSort = DEFAULT_TASK_SORT,
 ): ListSection[] {
   const open = tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled');
   const done = tasks.filter((task) => task.status === 'done');
   const { pinned: pinnedOpen, rest: restOpen } = splitPinned(open);
-  const pinnedNodes = nestTasks(pinnedOpen);
-  const openNodes = nestTasks(restOpen);
-  const doneNodes = nestPinnedFirst(done);
+  const pinnedNodes = nestTasks(pinnedOpen, sort);
+  const openNodes = nestTasks(restOpen, sort);
+  const doneNodes = nestPinnedFirst(done, sort);
   const nonempty = (sections: ListSection[]): ListSection[] =>
     sections.filter((section) => section.nodes.length > 0);
   const pinnedSection: ListSection = { key: 'pinned', heading: 'pinned', nodes: pinnedNodes };
@@ -455,8 +506,8 @@ export function listSections(
   if (listId === 'smart:done') {
     const { pinned: pinnedDone, rest: restDone } = splitPinned(done);
     return nonempty([
-      { key: 'pinned', heading: 'pinned', nodes: nestTasks(pinnedDone) },
-      { key: 'done', heading: null, nodes: nestTasks(restDone) },
+      { key: 'pinned', heading: 'pinned', nodes: nestTasks(pinnedDone, sort) },
+      { key: 'done', heading: null, nodes: nestTasks(restDone, sort) },
     ]);
   }
   if (listId.startsWith('smart:')) {
@@ -467,8 +518,8 @@ export function listSections(
     ? splitPinned(done)
     : { pinned: pinnedOpen, rest: restOpen };
   return nonempty([
-    { key: 'pinned', heading: 'pinned', nodes: nestTasks(sourcePinned) },
-    ...categorySections(listId, sourceRest, lists, doneOnly ? 'done-' : ''),
+    { key: 'pinned', heading: 'pinned', nodes: nestTasks(sourcePinned, sort) },
+    ...categorySections(listId, sourceRest, lists, doneOnly ? 'done-' : '', sort),
     ...(doneOnly ? [] : [{ key: 'done', heading: 'done' as const, nodes: doneNodes }]),
   ]);
 }
@@ -479,35 +530,71 @@ export function listVisibleIds(
   timeZone: string,
   now = new Date(),
   lists: List[] = [],
+  sort: TaskSort = DEFAULT_TASK_SORT,
 ): string[] {
-  return listSections(listId, tasks, timeZone, now, lists).flatMap((section) =>
+  return listSections(listId, tasks, timeZone, now, lists, sort).flatMap((section) =>
     flattenNodes(section.nodes).map((row) => row.task.id),
   );
 }
 
-export function boardVisibleIds(tasks: Task[], mode: BoardMode): string[] {
+export function boardVisibleIds(
+  tasks: Task[],
+  mode: BoardMode,
+  sort: TaskSort = DEFAULT_TASK_SORT,
+): string[] {
   if (mode === 'status') {
-    const by = splitByStatus(tasks);
+    const by = splitByStatus(tasks, sort);
     return [...by.todo, ...by.doing, ...by.done].map((task) => task.id);
   }
-  const by = splitByPriority(tasks);
+  const by = splitByPriority(tasks, sort);
   return [...by[0], ...by[1], ...by[2], ...by[3]].map((task) => task.id);
 }
 
-export function splitByStatus(tasks: Task[]): Record<'todo' | 'doing' | 'done', Task[]> {
+function arrangeColumn(tasks: Task[], sort: TaskSort): Task[] {
+  return pinnedFirst([...tasks].sort((a, b) => compareTasks(a, b, sort)));
+}
+
+export function splitByStatus(
+  tasks: Task[],
+  sort: TaskSort = DEFAULT_TASK_SORT,
+): Record<'todo' | 'doing' | 'done', Task[]> {
   return {
-    todo: pinnedFirst(tasks.filter((task) => task.status === 'todo')),
-    doing: pinnedFirst(tasks.filter((task) => task.status === 'doing')),
-    done: pinnedFirst(tasks.filter((task) => task.status === 'done')),
+    todo: arrangeColumn(
+      tasks.filter((task) => task.status === 'todo'),
+      sort,
+    ),
+    doing: arrangeColumn(
+      tasks.filter((task) => task.status === 'doing'),
+      sort,
+    ),
+    done: arrangeColumn(
+      tasks.filter((task) => task.status === 'done'),
+      sort,
+    ),
   };
 }
 
-export function splitByPriority(tasks: Task[]): Record<TaskPriority, Task[]> {
+export function splitByPriority(
+  tasks: Task[],
+  sort: TaskSort = DEFAULT_TASK_SORT,
+): Record<TaskPriority, Task[]> {
   return {
-    0: pinnedFirst(tasks.filter((task) => task.priority === 0)),
-    1: pinnedFirst(tasks.filter((task) => task.priority === 1)),
-    2: pinnedFirst(tasks.filter((task) => task.priority === 2)),
-    3: pinnedFirst(tasks.filter((task) => task.priority === 3)),
+    0: arrangeColumn(
+      tasks.filter((task) => task.priority === 0),
+      sort,
+    ),
+    1: arrangeColumn(
+      tasks.filter((task) => task.priority === 1),
+      sort,
+    ),
+    2: arrangeColumn(
+      tasks.filter((task) => task.priority === 2),
+      sort,
+    ),
+    3: arrangeColumn(
+      tasks.filter((task) => task.priority === 3),
+      sort,
+    ),
   };
 }
 

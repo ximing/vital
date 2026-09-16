@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ATTACHMENT_MIME_TYPES,
+  INBOX_ASSET_MIME_TYPES,
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_PARTS,
   MIN_UPLOAD_PART_BYTES,
@@ -22,6 +23,8 @@ describe('upload constants and mime', () => {
       expect(ATTACHMENT_MIME_TYPES).toContain(mime);
       expect(isUploadableMime(mime)).toBe(true);
     }
+    expect(INBOX_ASSET_MIME_TYPES).toContain('video/mp4');
+    expect(INBOX_ASSET_MIME_TYPES).toContain('image/jpeg');
     expect(isUploadableMime('image/svg+xml')).toBe(false);
     expect(isUploadableMime('application/x-msdownload')).toBe(false);
   });

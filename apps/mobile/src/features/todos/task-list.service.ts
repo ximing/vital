@@ -4,7 +4,14 @@ import type { CalendarInstance, List, ListId, Tag, Task } from '@vital/dto';
 import { client } from '../../lib/api';
 import { toast } from '../../components/toast';
 import { humanError, isNetworkError } from '../../lib/errors';
-import { localDateStamp, zonedLocalMidnightIso } from '../../lib/format';
+import {
+  DEFAULT_TASK_SORT,
+  defaultTaskSortDir,
+  localDateStamp,
+  zonedLocalMidnightIso,
+  type TaskSort,
+  type TaskSortKey,
+} from '../../lib/format';
 import { addDaysYmd, weekDays } from '../../lib/calendar-grid';
 import { pullSync, subscribeSnapshot, subscribeSync } from '../../lib/sync';
 import { AuthService } from '../../services/auth.service';
@@ -29,6 +36,7 @@ export class TaskListService extends Service {
   primed = false;
   doneOpen = false;
   scope: 'open' | 'done' = 'open';
+  taskSort: TaskSort = DEFAULT_TASK_SORT;
   contextTask: Task | null = null;
   movingTask: Task | null = null;
 
@@ -208,6 +216,18 @@ export class TaskListService extends Service {
 
   setScope(scope: 'open' | 'done'): void {
     this.scope = scope;
+  }
+
+  setTaskSortKey(key: TaskSortKey): void {
+    if (key === 'manual') {
+      this.taskSort = DEFAULT_TASK_SORT;
+      return;
+    }
+    if (this.taskSort.key === key) {
+      this.taskSort = { key, dir: this.taskSort.dir === 'asc' ? 'desc' : 'asc' };
+      return;
+    }
+    this.taskSort = { key, dir: defaultTaskSortDir(key) };
   }
 
   openContext(task: Task): void {

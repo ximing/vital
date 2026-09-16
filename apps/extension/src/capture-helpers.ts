@@ -1,7 +1,7 @@
 import type { CreateInboxInput } from '@vital/dto';
 import { clip, escapeParagraph } from './html.js';
 import { copy } from './i18n.js';
-import type { CapturePayload } from './messages.js';
+import type { CapturePayload, PopupMode } from './messages.js';
 
 export type SaveKind = 'created' | 'existing' | 'task';
 
@@ -104,13 +104,16 @@ export function inboxInputFromCapture(
   capture: CapturePayload,
   title: string,
   note: string,
+  mode: PopupMode = 'article',
 ): CreateInboxInput {
+  const extractedText = mode === 'page' ? capture.pageText : capture.extractedText;
+  const extractedHtml = mode === 'page' ? capture.pageHtml : capture.extractedHtml;
   return {
     title,
     originalUrl: capture.originalUrl,
-    extractedText: capture.extractedText,
-    extractedHtml: capture.extractedHtml,
-    excerpt: clip(note, 500) ?? capture.excerpt,
+    extractedText,
+    extractedHtml,
+    excerpt: clip(note, 500) ?? (mode === 'page' ? clip(extractedText, 500) : capture.excerpt),
     byline: capture.byline,
     siteName: capture.siteName,
     source: 'extension',
