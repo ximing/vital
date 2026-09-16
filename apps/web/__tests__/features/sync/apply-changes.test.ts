@@ -94,6 +94,7 @@ function changes(over: Partial<SyncChanges> = {}): SyncChanges {
     inbox: [],
     reports: [],
     truncated: false,
+    nextSince: 's1|2026-09-02T00:00:00.000Z||2026-09-02T00:00:00.000Z||2026-09-02T00:00:00.000Z|',
     ...over,
   };
 }
@@ -157,5 +158,26 @@ describe('applySyncChanges', () => {
     expect(cached?.status).toBe('later');
     expect(cached?.extractedHtml).toBe('<p>body</p>');
     expect(cached?.extractedText).toBe('body');
+  });
+
+  it('is idempotent: applying the same page twice does not duplicate rows', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    qc.setQueryData(todoKeys.tasks('list-1'), [task({ id: 'a', listId: 'list-1' })]);
+    qc.setQueryData(inboxKeys.list, [inbox({ id: 'i1' })]);
+    qc.setQueryData(reportKeys.list('daily'), [report({ id: 'r1', revision: 1 })]);
+    const page = changes({
+      tasks: [task({ id: 'a', listId: 'list-1', title: 'new' }), task({ id: 'b', listId: 'list-1' })],
+      inbox: [inbox({ id: 'i1', title: 'next' })],
+      reports: [report({ id: 'r1', revision: 2 })],
+    });
+    applySyncChanges(qc, page);
+    applySyncChanges(qc, page);
+    expect(qc.getQueryData<Task[]>(todoKeys.tasks('list-1'))?.map((row) => row.id).sort()).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(qc.getQueryData<InboxItem[]>(inboxKeys.list)).toHaveLength(1);
+    expect(qc.getQueryData<ReportListItem[]>(reportKeys.list('daily'))).toHaveLength(1);
+    expect(qc.getQueryData<ReportListItem[]>(reportKeys.list('daily'))?.[0]?.revision).toBe(2);
   });
 });

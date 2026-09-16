@@ -16,6 +16,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 're
 import { t } from '@/copy';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { Overlay } from '@/ui/overlay';
 import { canPatchStatus, isFavorite } from './model';
 
 function Item({
@@ -118,14 +119,9 @@ export function InboxContextMenu({
   }, [x, y, tags.length, tagIds.length]);
 
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onClose, true);
     window.addEventListener('resize', onClose);
     return () => {
-      window.removeEventListener('keydown', onKey);
       window.removeEventListener('scroll', onClose, true);
       window.removeEventListener('resize', onClose);
     };
@@ -161,14 +157,7 @@ export function InboxContextMenu({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-overlay)]"
-      onClick={onClose}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-    >
+    <Overlay onClose={onClose} closeOnBackdrop closeOnEscape closeOnContextMenu>
       <div
         ref={menuRef}
         role="menu"
@@ -249,6 +238,6 @@ export function InboxContextMenu({
           onSelect={act(onDelete)}
         />
       </div>
-    </div>
+    </Overlay>
   );
 }

@@ -1,7 +1,8 @@
 import { bindServices, useService } from '@rabjs/react';
 import type { FC } from 'react';
 import { useNavigate } from 'react-router';
-import { HOME_PATH, t } from '@/copy';
+import { t } from '@/copy';
+import { HOME_PATH } from '@/routes';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { EmptyArt } from '@/ui/empty-art';

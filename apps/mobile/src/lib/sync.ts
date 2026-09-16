@@ -1,5 +1,5 @@
 import { AppState, type AppStateStatus, type NativeEventSubscription } from 'react-native';
-import { latestUpdatedAt, syncEventsUrl } from '@vital/api-client';
+import { nextSyncSince, syncEventsUrl } from '@vital/api-client';
 import type { SyncChanges } from '@vital/dto';
 import { apiUrl, client } from './api';
 import { localDateStamp } from './format';
@@ -88,6 +88,7 @@ export async function pullSync(): Promise<SyncChanges | null> {
       inbox: [],
       reports: [],
       truncated: false,
+      nextSince: cursor,
     };
     for (let i = 0; i < MAX_PAGES; i += 1) {
       const page = await client.syncChanges({ since: cursor });
@@ -96,7 +97,8 @@ export async function pullSync(): Promise<SyncChanges | null> {
       acc.reports.push(...page.reports);
       acc.head = page.head;
       acc.serverTime = page.serverTime;
-      cursor = page.truncated ? (latestUpdatedAt(page) ?? page.serverTime) : page.serverTime;
+      acc.nextSince = page.nextSince;
+      cursor = nextSyncSince(page);
       if (!page.truncated) {
         acc.truncated = false;
         break;

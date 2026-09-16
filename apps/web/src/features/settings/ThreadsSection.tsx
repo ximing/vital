@@ -1,7 +1,7 @@
 import type { Outcome } from '@vital/dto';
 import { useState, type FormEvent } from 'react';
 import { t } from '@/copy';
-import { useOutcomeActions, useOutcomesQuery } from '@/features/today/queries';
+import { useOutcomeActions, useOutcomesQuery } from '@/features/today';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { ACTIVITY_CARD, ActivitySectionHead } from './ActivitySectionHead';
 

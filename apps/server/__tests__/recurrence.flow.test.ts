@@ -199,4 +199,37 @@ describe('recurrence flow', () => {
       '2026-09-09T01:00:00.000Z',
     ]);
   });
+
+  it('calendar holiday expansion includes window bounds and skips a makeup-outside day', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    await db.insert(holidayCalendar).values([
+      { region: 'CN', date: '2026-09-30', kind: 'holiday', sourceVersion: 'test' },
+      { region: 'CN', date: '2026-10-01', kind: 'holiday', sourceVersion: 'test' },
+      { region: 'CN', date: '2026-10-07', kind: 'holiday', sourceVersion: 'test' },
+    ]);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '假日值班',
+        listId: inbox,
+        dueAt: '2026-10-01T09:00:00+08:00',
+        timezone: 'Asia/Shanghai',
+        recurrenceKind: 'holidays',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const calendar = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks/calendar?from=2026-10-01T00:00:00.000Z&to=2026-10-07T16:00:00.000Z',
+      token: alice.token,
+    });
+    expect(calendar.statusCode).toBe(200);
+    expect(calendar.json().instances.map((item: { occurrenceAt: string }) => item.occurrenceAt)).toEqual([
+      '2026-10-01T01:00:00.000Z',
+      '2026-10-07T01:00:00.000Z',
+    ]);
+  });
 });

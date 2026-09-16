@@ -7,6 +7,7 @@ import type { AgentActionLogItem, AgentMetricsResponse } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { settingsKeys } from './query-keys';
 
 const copy = t.settings.activity;
 
@@ -390,19 +391,19 @@ function ProposalHistory({ groups, today }: { groups: DayGroup[]; today: string 
 export function AgentActivitySection() {
   const qc = useQueryClient();
   const query = useQuery({
-    queryKey: ['settings', 'agent-activity', 7],
+    queryKey: settingsKeys.agentActivity(7),
     queryFn: () => client.listAgentActions({ days: 7 }),
   });
   const metricsQuery = useQuery({
-    queryKey: ['settings', 'agent-metrics', METRICS_DAYS],
+    queryKey: settingsKeys.agentMetrics(METRICS_DAYS),
     queryFn: () => client.getAgentMetrics(METRICS_DAYS),
   });
   const settle = useMutation({
     mutationFn: ({ id, feedback }: { id: string; feedback: 'accepted' | 'dismissed' }) =>
       client.sendAgentActionFeedback(id, { feedback }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['settings', 'agent-activity'] });
-      void qc.invalidateQueries({ queryKey: ['settings', 'agent-metrics'] });
+      void qc.invalidateQueries({ queryKey: settingsKeys.agentActivityRoot });
+      void qc.invalidateQueries({ queryKey: settingsKeys.agentMetricsRoot });
     },
   });
 

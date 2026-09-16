@@ -1,6 +1,14 @@
+import { randomUUID } from 'node:crypto';
+import {
+  decodeSyncCursor,
+  SYNC_CURSOR_OVERLAP_MS,
+  type SyncChanges,
+} from '@vital/dto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
+import { getDb } from '../src/db/index.js';
+import { tasks } from '../src/db/schema.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -118,6 +126,7 @@ describe('sync', () => {
     const body = res.json() as {
       serverTime: string;
       truncated: boolean;
+      nextSince: string;
       head: { revision: number };
       tasks: { id: string; deletedAt: string | null }[];
       inbox: { id: string; deletedAt: string | null }[];
@@ -125,6 +134,8 @@ describe('sync', () => {
     };
     expect(body.truncated).toBe(false);
     expect(typeof body.serverTime).toBe('string');
+    expect(body.nextSince.startsWith('s1|')).toBe(true);
+    expect(decodeSyncCursor(body.nextSince)).not.toBeNull();
     expect(body.head.revision).toBeGreaterThan(0);
     expect(body.tasks.map((row) => row.id)).toContain(taskId);
     expect(body.tasks.map((row) => row.id)).not.toContain(bobTask.json().id);
@@ -181,5 +192,133 @@ describe('sync', () => {
     expect(created.statusCode).toBe(201);
     await invalidated;
     ws.terminate();
+  });
+
+  it('pages 320 same-millisecond rows without loss or duplicates', async () => {
+    const alice = await registerUser(app);
+    const listId = await inboxId(app, alice.token);
+    const stamped = new Date('2026-03-01T12:00:00.000Z');
+    const ids = Array.from({ length: 320 }, () => randomUUID());
+    await getDb()
+      .insert(tasks)
+      .values(
+        ids.map((id, i) => ({
+          id,
+          userId: alice.id,
+          listId,
+          title: `row-${i}`,
+          timezone: 'UTC',
+          sortOrder: i,
+          createdAt: stamped,
+          updatedAt: stamped,
+        })),
+      );
+
+    const seen: string[] = [];
+    let since = EPOCH;
+    for (let page = 0; page < 20; page += 1) {
+      const res = await injectJson(app, {
+        method: 'GET',
+        url: `/api/v1/sync/changes?since=${encodeURIComponent(since)}&limit=80`,
+        token: alice.token,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as SyncChanges;
+      seen.push(...body.tasks.map((row) => row.id));
+      since = body.nextSince;
+      if (!body.truncated) break;
+      expect(page).toBeLessThan(19);
+    }
+    expect(seen).toHaveLength(320);
+    expect(new Set(seen).size).toBe(320);
+    expect(seen.sort()).toEqual([...ids].sort());
+  });
+
+  it('overlap window on nextSince catches a slow-commit row', async () => {
+    const alice = await registerUser(app);
+    const listId = await inboxId(app, alice.token);
+    const first = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/sync/changes?since=${new Date().toISOString()}`,
+      token: alice.token,
+    });
+    expect(first.statusCode).toBe(200);
+    const page = first.json() as SyncChanges;
+    const cursor = decodeSyncCursor(page.nextSince);
+    expect(cursor).not.toBeNull();
+    if (cursor === null) throw new Error('expected nextSince cursor');
+    expect(Date.parse(page.serverTime) - Date.parse(cursor.tasks.ts)).toBe(SYNC_CURSOR_OVERLAP_MS);
+
+    const serverTime = new Date(page.serverTime);
+    const lateId = randomUUID();
+    const tooOldId = randomUUID();
+    await getDb()
+      .insert(tasks)
+      .values([
+        {
+          id: lateId,
+          userId: alice.id,
+          listId,
+          title: 'slow commit',
+          timezone: 'UTC',
+          createdAt: new Date(serverTime.getTime() - 5_000),
+          updatedAt: new Date(serverTime.getTime() - 5_000),
+        },
+        {
+          id: tooOldId,
+          userId: alice.id,
+          listId,
+          title: 'outside overlap',
+          timezone: 'UTC',
+          createdAt: new Date(serverTime.getTime() - 15_000),
+          updatedAt: new Date(serverTime.getTime() - 15_000),
+        },
+      ]);
+
+    const second = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/sync/changes?since=${encodeURIComponent(page.nextSince)}`,
+      token: alice.token,
+    });
+    expect(second.statusCode).toBe(200);
+    const pulled = (second.json() as SyncChanges).tasks.map((row) => row.id);
+    expect(pulled).toContain(lateId);
+    expect(pulled).not.toContain(tooOldId);
+  });
+
+  it('accepts the opaque cursor from a previous page and rejects a malformed one', async () => {
+    const alice = await registerUser(app);
+    const listId = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'keep', listId },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const iso = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/sync/changes?since=${EPOCH}`,
+      token: alice.token,
+    });
+    expect(iso.statusCode).toBe(200);
+    const nextSince = (iso.json() as SyncChanges).nextSince;
+    expect(nextSince.startsWith('s1|')).toBe(true);
+
+    const follow = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/sync/changes?since=${encodeURIComponent(nextSince)}`,
+      token: alice.token,
+    });
+    expect(follow.statusCode).toBe(200);
+
+    const bad = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/sync/changes?since=s1%7Cnot-a-cursor',
+      token: alice.token,
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error.code).toBe('VALIDATION_ERROR');
   });
 });

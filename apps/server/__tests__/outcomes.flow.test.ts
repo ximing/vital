@@ -2,6 +2,8 @@ import { DateTime } from 'luxon';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
+import { db } from '../src/db/index.js';
+import { outcomes } from '../src/db/schema.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -195,6 +197,7 @@ describe('GET /api/v1/today', () => {
       payload: { title: '未读资料' },
     });
 
+    const [before] = await db.select().from(outcomes);
     const res = await injectJson(app, {
       method: 'GET',
       url: '/api/v1/today',
@@ -213,6 +216,11 @@ describe('GET /api/v1/today', () => {
     expect(body.pulse.inboxPending).toBe(1);
     expect(body.pulse.reportStreak).toBe(0);
     expect(body.generatedAt).toBeTruthy();
+
+    const [after] = await db.select().from(outcomes);
+    expect(after?.updatedAt.getTime()).toBe(before?.updatedAt.getTime());
+    expect(after?.ruleUpdatedAt).toBeNull();
+    expect(after?.ruleSignal).toBeNull();
   });
 
   it('alerts on all-day tasks only from the next local day, timed tasks past the instant', async () => {

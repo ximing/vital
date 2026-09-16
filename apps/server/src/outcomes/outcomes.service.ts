@@ -9,7 +9,6 @@ import type {
   OutcomeMaterial,
   OutcomeSignal,
   PatchOutcomeInput,
-  Task,
   TodayDashboard,
   TodayPulse,
 } from '@vital/dto';
@@ -32,11 +31,21 @@ import { summarizePayload, targetNamesFor, toAgentActionDto } from '../agent/act
 import { trackIndexJob } from '../retrieval/pipeline.js';
 import { indexOutcome, removeOutcomeIndex } from '../retrieval/search.js';
 import { listHabitsForOutcome } from '../habits/habits.service.js';
-import { linkedHabitFacts, loadHabitHeadlineFacts } from '../habits/progress.js';
+import {
+  linkedHabitFacts,
+  loadHabitHeadlineFacts,
+  type HabitHeadlineFact,
+} from '../habits/progress.js';
 import { listTasks } from '../tasks/tasks.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 import { computeNow } from './now-engine.js';
-import { computeSignal, isOverdue, selectRuleNextStep, type OutcomeFacts } from './rule-engine.js';
+import {
+  computeSignal,
+  isOverdue,
+  selectRuleNextStep,
+  type NextStepTask,
+  type OutcomeFacts,
+} from './rule-engine.js';
 import { getOwnedOutcomeOr404 } from './shared.js';
 
 export { assertOwnedOutcomeId, getOwnedOutcomeOr404 } from './shared.js';
@@ -80,6 +89,31 @@ export function toOutcomeDto(
     completedLast7d: stats.completedLast7d,
     materialCount: stats.materialCount,
   };
+}
+
+async function loadMaterialCounts(
+  userId: string,
+  outcomeIds: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  for (const id of outcomeIds) map.set(id, 0);
+  if (outcomeIds.length === 0) return map;
+  const materialRows = await getDb()
+    .select({ outcomeId: inboxItems.outcomeId, n: sql<number>`count(*)::int` })
+    .from(inboxItems)
+    .where(
+      and(
+        eq(inboxItems.userId, userId),
+        inArray(inboxItems.outcomeId, outcomeIds),
+        isNull(inboxItems.deletedAt),
+        ne(inboxItems.status, 'converted'),
+      ),
+    )
+    .groupBy(inboxItems.outcomeId);
+  for (const row of materialRows) {
+    if (row.outcomeId) map.set(row.outcomeId, row.n);
+  }
+  return map;
 }
 
 /** Per-outcome task/material counters for the board. */
@@ -141,23 +175,10 @@ async function statsForOutcomes(
     if (rec) rec.completedLast7d += fact.daysDoneLast7d;
   }
 
-  const materialRows = await getDb()
-    .select({ outcomeId: inboxItems.outcomeId, n: sql<number>`count(*)::int` })
-    .from(inboxItems)
-    .where(
-      and(
-        eq(inboxItems.userId, userId),
-        inArray(inboxItems.outcomeId, outcomeIds),
-        isNull(inboxItems.deletedAt),
-        ne(inboxItems.status, 'converted'),
-      ),
-    )
-    .groupBy(inboxItems.outcomeId);
-  for (const row of materialRows) {
-    if (row.outcomeId) {
-      const rec = map.get(row.outcomeId);
-      if (rec) rec.materialCount = row.n;
-    }
+  const materialCounts = await loadMaterialCounts(userId, outcomeIds);
+  for (const [id, n] of materialCounts) {
+    const rec = map.get(id);
+    if (rec) rec.materialCount = n;
   }
 
   return map;
@@ -414,78 +435,149 @@ export async function getOutcomeDetail(userId: string, id: string): Promise<Outc
   };
 }
 
-/** Recompute and store the deterministic rule-layer fields for one thread. */
-export async function refreshOutcomeRuleFields(
+interface OpenRuleTask extends NextStepTask {
+  outcomeId: string;
+  habitId: string | null;
+}
+
+interface OutcomeRuleContext {
+  openByOutcome: Map<string, OpenRuleTask[]>;
+  completionsByOutcome: Map<string, Date[]>;
+  lastTaskActivityByOutcome: Map<string, Date | null>;
+}
+
+interface OutcomeRuleFields {
+  ruleSignal: OutcomeSignal;
+  ruleNextStep: string | null;
+  lastActivityAt: Date | null;
+}
+
+function asInstant(value: Date | string | null | undefined): Date | null {
+  if (value === null || value === undefined) return null;
+  return value instanceof Date ? value : new Date(value);
+}
+
+function laterOf(a: Date | null, b: Date | null): Date | null {
+  if (a && b) return a > b ? a : b;
+  return a ?? b;
+}
+
+/** Open tasks, 14d completions, and last activity — one query each, grouped in memory. */
+async function loadOutcomeRuleContext(
   userId: string,
-  outcomeId: string,
-  now = new Date(),
-): Promise<void> {
-  // All-day overdue checks are calendar-date based, so the user's zone matters here.
-  const timezone = (await getUserEntity(userId)).timezone;
-  const openTasks = await getDb()
+  outcomeIds: string[],
+  now: Date,
+): Promise<OutcomeRuleContext> {
+  const openByOutcome = new Map<string, OpenRuleTask[]>();
+  const completionsByOutcome = new Map<string, Date[]>();
+  const lastTaskActivityByOutcome = new Map<string, Date | null>();
+  for (const id of outcomeIds) {
+    openByOutcome.set(id, []);
+    completionsByOutcome.set(id, []);
+    lastTaskActivityByOutcome.set(id, null);
+  }
+  if (outcomeIds.length === 0) {
+    return { openByOutcome, completionsByOutcome, lastTaskActivityByOutcome };
+  }
+
+  const openRows = await getDb()
     .select({
+      outcomeId: tasks.outcomeId,
       title: tasks.title,
       status: tasks.status,
       dueAt: tasks.dueAt,
       priority: tasks.priority,
       isAllDay: tasks.isAllDay,
+      habitId: tasks.habitId,
     })
     .from(tasks)
     .where(
       and(
         eq(tasks.userId, userId),
-        eq(tasks.outcomeId, outcomeId),
+        inArray(tasks.outcomeId, outcomeIds),
         isNull(tasks.deletedAt),
         inArray(tasks.status, ['todo', 'doing']),
       ),
     );
+  for (const row of openRows) {
+    if (!row.outcomeId) continue;
+    const list = openByOutcome.get(row.outcomeId);
+    if (!list) continue;
+    list.push({
+      outcomeId: row.outcomeId,
+      title: row.title,
+      status: row.status,
+      dueAt: row.dueAt,
+      priority: row.priority,
+      isAllDay: row.isAllDay,
+      habitId: row.habitId,
+    });
+  }
 
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
   const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
   const doneRows = await getDb()
-    .select({ completedAt: taskCompletions.completedAt })
+    .select({ outcomeId: tasks.outcomeId, completedAt: taskCompletions.completedAt })
     .from(taskCompletions)
     .innerJoin(tasks, eq(tasks.id, taskCompletions.taskId))
     .where(
       and(
         eq(tasks.userId, userId),
-        eq(tasks.outcomeId, outcomeId),
+        inArray(tasks.outcomeId, outcomeIds),
         gte(taskCompletions.completedAt, twoWeeksAgo),
       ),
     );
-  const completedLast7d = doneRows.filter((r) => r.completedAt >= weekAgo).length;
-  const completedPrev7d = doneRows.length - completedLast7d;
+  for (const row of doneRows) {
+    if (!row.outcomeId) continue;
+    const at = asInstant(row.completedAt);
+    if (!at) continue;
+    const list = completionsByOutcome.get(row.outcomeId);
+    if (list) list.push(at);
+  }
 
-  const [activity] = await getDb()
-    .select({ last: sql<Date | string | null>`max(${tasks.updatedAt})` })
+  const activityRows = await getDb()
+    .select({
+      outcomeId: tasks.outcomeId,
+      last: sql<Date | string | null>`max(${tasks.updatedAt})`,
+    })
     .from(tasks)
-    .where(and(eq(tasks.userId, userId), eq(tasks.outcomeId, outcomeId), isNull(tasks.deletedAt)));
-  // Raw sql<> aggregates come back untyped (string), coerce defensively.
-  const lastTaskActivity = activity?.last ? new Date(activity.last) : null;
-  const lastDone = doneRows.reduce<Date | null>((acc, r) => {
-    const at = r.completedAt instanceof Date ? r.completedAt : new Date(r.completedAt);
-    return acc === null || at > acc ? at : acc;
-  }, null);
-  const lastActivityAt =
-    lastTaskActivity && lastDone
-      ? lastTaskActivity > lastDone
-        ? lastTaskActivity
-        : lastDone
-      : (lastTaskActivity ?? lastDone);
+    .where(
+      and(eq(tasks.userId, userId), inArray(tasks.outcomeId, outcomeIds), isNull(tasks.deletedAt)),
+    )
+    .groupBy(tasks.outcomeId);
+  for (const row of activityRows) {
+    if (!row.outcomeId) continue;
+    lastTaskActivityByOutcome.set(row.outcomeId, asInstant(row.last));
+  }
 
-  const linkedHabits = linkedHabitFacts(await loadHabitHeadlineFacts(userId, timezone, now), outcomeId);
+  return { openByOutcome, completionsByOutcome, lastTaskActivityByOutcome };
+}
+
+function ruleFieldsForOutcome(
+  outcomeId: string,
+  ctx: OutcomeRuleContext,
+  habitFacts: HabitHeadlineFact[],
+  now: Date,
+  timezone: string,
+): OutcomeRuleFields {
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+  const openTasks = ctx.openByOutcome.get(outcomeId) ?? [];
+  const doneAt = ctx.completionsByOutcome.get(outcomeId) ?? [];
+  const completedLast7d = doneAt.filter((at) => at >= weekAgo).length;
+  const completedPrev7d = doneAt.length - completedLast7d;
+  const lastDone = doneAt.reduce<Date | null>(
+    (acc, at) => (acc === null || at > acc ? at : acc),
+    null,
+  );
+  const lastActivityAt = laterOf(ctx.lastTaskActivityByOutcome.get(outcomeId) ?? null, lastDone);
+
+  const linkedHabits = linkedHabitFacts(habitFacts, outcomeId);
   const habitDaysLast7d = linkedHabits.reduce((sum, habit) => sum + habit.daysDoneLast7d, 0);
   const habitDaysPrev7d = linkedHabits.reduce((sum, habit) => sum + habit.daysDonePrev7d, 0);
   const habitLast = linkedHabits.reduce<Date | null>((acc, habit) => {
     if (!habit.lastCompletedAt) return acc;
     return acc === null || habit.lastCompletedAt > acc ? habit.lastCompletedAt : acc;
   }, null);
-  const lastActivityWithHabits =
-    lastActivityAt && habitLast
-      ? lastActivityAt > habitLast
-        ? lastActivityAt
-        : habitLast
-      : (lastActivityAt ?? habitLast);
+  const lastActivityWithHabits = laterOf(lastActivityAt, habitLast);
   const incompleteHabit = linkedHabits.find((habit) => habit.todayDone < habit.todayTarget);
 
   const facts: OutcomeFacts = {
@@ -496,13 +588,58 @@ export async function refreshOutcomeRuleFields(
     lastActivityAt: lastActivityWithHabits,
   };
 
+  return {
+    ruleSignal: computeSignal(facts, now),
+    ruleNextStep: selectRuleNextStep(openTasks, now, timezone) ?? incompleteHabit?.name ?? null,
+    lastActivityAt: lastActivityWithHabits,
+  };
+}
+
+function statsFromRuleContext(
+  outcomeIds: string[],
+  ctx: OutcomeRuleContext,
+  habitFacts: HabitHeadlineFact[],
+  materialCounts: Map<string, number>,
+  now: Date,
+): Map<string, OutcomeStats> {
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+  const map = new Map<string, OutcomeStats>();
+  for (const id of outcomeIds) {
+    const openCount = (ctx.openByOutcome.get(id) ?? []).filter((task) => task.habitId === null).length;
+    const completedLast7d = (ctx.completionsByOutcome.get(id) ?? []).filter((at) => at >= weekAgo)
+      .length;
+    const habitDays = linkedHabitFacts(habitFacts, id).reduce(
+      (sum, habit) => sum + habit.daysDoneLast7d,
+      0,
+    );
+    map.set(id, {
+      openTaskCount: openCount,
+      completedLast7d: completedLast7d + habitDays,
+      materialCount: materialCounts.get(id) ?? 0,
+    });
+  }
+  return map;
+}
+
+/** Recompute and store the deterministic rule-layer fields for one thread. */
+export async function refreshOutcomeRuleFields(
+  userId: string,
+  outcomeId: string,
+  now = new Date(),
+): Promise<void> {
+  // All-day overdue checks are calendar-date based, so the user's zone matters here.
+  const timezone = (await getUserEntity(userId)).timezone;
+  const habitFacts = await loadHabitHeadlineFacts(userId, timezone, now);
+  const ctx = await loadOutcomeRuleContext(userId, [outcomeId], now);
+  const fields = ruleFieldsForOutcome(outcomeId, ctx, habitFacts, now, timezone);
+
   await getDb()
     .update(outcomes)
     .set({
-      ruleSignal: computeSignal(facts, now),
-      ruleNextStep: selectRuleNextStep(openTasks, now, timezone) ?? incompleteHabit?.name ?? null,
+      ruleSignal: fields.ruleSignal,
+      ruleNextStep: fields.ruleNextStep,
       ruleUpdatedAt: now,
-      lastActivityAt: lastActivityWithHabits,
+      lastActivityAt: fields.lastActivityAt,
       updatedAt: now,
     })
     .where(eq(outcomes.id, outcomeId));
@@ -559,42 +696,45 @@ async function todayPulse(userId: string, timezone: string): Promise<TodayPulse>
 }
 
 export async function getTodayDashboard(userId: string, timezone: string): Promise<TodayDashboard> {
+  const now = new Date();
   const rows = await getDb()
     .select()
     .from(outcomes)
     .where(and(eq(outcomes.userId, userId), eq(outcomes.status, 'open')))
     .orderBy(asc(outcomes.sortOrder), asc(outcomes.createdAt));
+  const outcomeIds = rows.map((r) => r.id);
 
-  // Read-through: rule layer is always fresh, agent fields are read as materialized.
-  for (const row of rows) {
-    await refreshOutcomeRuleFields(userId, row.id);
-  }
-  const fresh = await getDb()
-    .select()
-    .from(outcomes)
-    .where(and(eq(outcomes.userId, userId), eq(outcomes.status, 'open')))
-    .orderBy(asc(outcomes.sortOrder), asc(outcomes.createdAt));
-  const stats = await statsForOutcomes(
-    userId,
-    fresh.map((r) => r.id),
-  );
+  // Compute in memory: overdue / habit-today depend on `now`, so a write would still go stale.
+  const [entity, habitFacts, ctx, materialCounts] = await Promise.all([
+    getUserEntity(userId),
+    loadHabitHeadlineFacts(userId, timezone, now),
+    loadOutcomeRuleContext(userId, outcomeIds, now),
+    loadMaterialCounts(userId, outcomeIds),
+  ]);
+  const stats = statsFromRuleContext(outcomeIds, ctx, habitFacts, materialCounts, now);
+  const fresh = rows.map((row) => {
+    const fields = ruleFieldsForOutcome(row.id, ctx, habitFacts, now, timezone);
+    return {
+      ...row,
+      ruleSignal: fields.ruleSignal,
+      ruleNextStep: fields.ruleNextStep,
+      lastActivityAt: fields.lastActivityAt,
+    };
+  });
 
-  const todayTasks: Task[] = await listTasks(userId, {
-    listId: 'smart:today',
-    limit: 100,
-  }).then((r) => r.items);
-
-  const pulse = await todayPulse(userId, timezone);
+  const [todayTasks, pulse, habitWindowRows] = await Promise.all([
+    listTasks(userId, { listId: 'smart:today', limit: 100 }).then((r) => r.items),
+    todayPulse(userId, timezone),
+    getDb()
+      .select({ start: habits.windowStart, end: habits.windowEnd })
+      .from(habits)
+      .where(and(eq(habits.userId, userId), eq(habits.active, true))),
+  ]);
 
   // "当下" card: rule layer only for now; the agent layer may later rewrite the reason.
-  const entity = await getUserEntity(userId);
-  const habitWindowRows = await getDb()
-    .select({ start: habits.windowStart, end: habits.windowEnd })
-    .from(habits)
-    .where(and(eq(habits.userId, userId), eq(habits.active, true)));
   const signalByOutcome = new Map(fresh.map((row) => [row.id, asSignal(row.ruleSignal)]));
-  const now = computeNow({
-    now: new Date(),
+  const nowCard = computeNow({
+    now,
     timezone,
     tasks: todayTasks.map((task) => ({
       id: task.id,
@@ -618,7 +758,7 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
     outcomes: fresh.map((row) => toOutcomeDto(row, stats.get(row.id))),
     tasks: todayTasks,
     pulse,
-    now,
-    generatedAt: new Date().toISOString(),
+    now: nowCard,
+    generatedAt: now.toISOString(),
   };
 }

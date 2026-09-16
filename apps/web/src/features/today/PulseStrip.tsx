@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { todayKeys } from './query-keys';
 
 const CHIP =
   'inline-flex h-7 items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg';
@@ -10,7 +11,7 @@ const CHIP =
 /** Live agent status: running executions get a pulsing dot; failures turn the chip amber. */
 function AgentStatusChip() {
   const query = useQuery({
-    queryKey: ['today', 'agent-exec-status'],
+    queryKey: todayKeys.agentExecStatus,
     queryFn: () => client.listAgentExecutions(1),
     refetchInterval: 15_000,
     retry: false,

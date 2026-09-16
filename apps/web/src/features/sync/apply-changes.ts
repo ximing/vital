@@ -6,11 +6,11 @@ import {
   mergeTasksIntoList,
 } from '@vital/api-client';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
-import { inboxKeys } from '@/features/inbox/queries';
+import { inboxKeys } from '@/features/inbox/query-keys';
 import { reportKeys } from '@/features/reports/queries';
-import { todayKeys } from '@/features/today/queries';
+import { todayKeys } from '@/features/today/query-keys';
 import { descendantListIds } from '@/features/todos/model';
-import { todoKeys } from '@/features/todos/queries';
+import { todoKeys } from '@/features/todos/query-keys';
 
 function listIdOf(key: QueryKey): string | undefined {
   return typeof key[2] === 'string' ? key[2] : undefined;
@@ -34,7 +34,7 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
       if (task.deletedAt) qc.removeQueries({ queryKey: todoKeys.item(task.id) });
       else qc.setQueryData(todoKeys.item(task.id), task);
     }
-    void qc.invalidateQueries({ queryKey: ['todos', 'calendar'] });
+    void qc.invalidateQueries({ queryKey: todoKeys.calendarRoot });
     void qc.invalidateQueries({ queryKey: todoKeys.counts });
     // Task moves shift outcome counts / signals on the today dashboard.
     void qc.invalidateQueries({ queryKey: todayKeys.all });
@@ -63,6 +63,6 @@ export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
       const list = qc.getQueryData<ReportListItem[]>(key);
       if (list) qc.setQueryData(key, mergeReportListItems(list, [item]));
     }
-    void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
+    void qc.invalidateQueries({ queryKey: reportKeys.overviewRoot });
   }
 }

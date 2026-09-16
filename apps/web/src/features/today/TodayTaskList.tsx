@@ -1,7 +1,7 @@
 import type { Habit, List, Tag, Task } from '@vital/dto';
 import { Link } from 'react-router';
 import { t } from '@/copy';
-import { ListView } from '@/features/todos/ListView';
+import { ListView } from '@/features/todos';
 import { HabitCard } from './HabitCard';
 import { HabitEmptyCard } from './HabitEmptyCard';
 import { habitTodayProgress, habitTodayTask } from './model';

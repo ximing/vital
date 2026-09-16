@@ -6,6 +6,7 @@ import {
   mergeInboxItems,
   mergeReportListItems,
   mergeTasksIntoList,
+  nextSyncSince,
   syncEventsUrl,
   syncHeadMoved,
 } from '../src/sync.js';
@@ -168,5 +169,53 @@ describe('mergeInboxItems + reports + latestUpdatedAt', () => {
         reports: [b],
       }),
     ).toBe('2026-09-02T00:00:00.000Z');
+  });
+
+  it('upserts are idempotent under repeated delivery', () => {
+    const a = task({ id: 'a', listId: 'L', title: 'x' });
+    const again = task({ id: 'a', listId: 'L', title: 'x' });
+    const note = inbox({ id: 'i' });
+    const rep = report({ id: 'r', revision: 1 });
+    expect(mergeTasksIntoList([a], [again], 'L')).toHaveLength(1);
+    expect(mergeInboxItems([note], [note])).toHaveLength(1);
+    expect(mergeReportListItems([rep], [rep])).toHaveLength(1);
+  });
+});
+
+describe('nextSyncSince', () => {
+  it('prefers the server-issued cursor over latestUpdatedAt', () => {
+    expect(
+      nextSyncSince({
+        nextSince: 's1|2026-09-02T00:00:00.000Z|a||2026-09-02T00:00:00.000Z||2026-09-02T00:00:00.000Z|',
+        truncated: true,
+        serverTime: '2026-09-03T00:00:00.000Z',
+        tasks: [task({ id: 't', listId: 'L', updatedAt: '2026-09-01T00:00:00.000Z' })],
+        inbox: [],
+        reports: [],
+      }),
+    ).toBe('s1|2026-09-02T00:00:00.000Z|a||2026-09-02T00:00:00.000Z||2026-09-02T00:00:00.000Z|');
+  });
+
+  it('falls back to the old timestamp heuristic when nextSince is missing', () => {
+    expect(
+      nextSyncSince({
+        nextSince: '',
+        truncated: true,
+        serverTime: '2026-09-03T00:00:00.000Z',
+        tasks: [task({ id: 't', listId: 'L', updatedAt: '2026-09-01T00:00:00.000Z' })],
+        inbox: [],
+        reports: [],
+      }),
+    ).toBe('2026-09-01T00:00:00.000Z');
+    expect(
+      nextSyncSince({
+        nextSince: '',
+        truncated: false,
+        serverTime: '2026-09-03T00:00:00.000Z',
+        tasks: [],
+        inbox: [],
+        reports: [],
+      }),
+    ).toBe('2026-09-03T00:00:00.000Z');
   });
 });

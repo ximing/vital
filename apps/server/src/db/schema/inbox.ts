@@ -43,7 +43,6 @@ export const inboxItems = pgTable(
     capturedAt: timestamp('captured_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     readAt: timestamp('read_at', { withTimezone: true, mode: 'date' }),
     idempotencyKey: char('idempotency_key', { length: 64 }),
-    idempotencyResponse: jsonb('idempotency_response').$type<InboxIdempotencyResponse>(),
     convertedTaskId: char('converted_task_id', { length: 36 }),
     deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'date' }),
     searchTsv: tsvector('search_tsv')
@@ -85,6 +84,13 @@ export const inboxItemBodies = pgTable('inbox_item_bodies', {
   extractedHtml: text('extracted_html'),
 });
 
+/** Replay snapshot for POST /inbox. Loaded only on idempotent replay, never on list/sync. */
+export const inboxIdempotencyResponses = pgTable('inbox_idempotency_responses', {
+  inboxItemId: char('inbox_item_id', { length: 36 }).primaryKey(),
+  response: jsonb('response').$type<InboxIdempotencyResponse>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+});
+
 export const inboxAssets = pgTable(
   'inbox_assets',
   {
@@ -103,5 +109,6 @@ export const inboxAssets = pgTable(
 export type InboxItemRow = typeof inboxItems.$inferSelect;
 export type NewInboxItem = typeof inboxItems.$inferInsert;
 export type InboxItemBodyRow = typeof inboxItemBodies.$inferSelect;
+export type InboxIdempotencyResponseRow = typeof inboxIdempotencyResponses.$inferSelect;
 export type InboxAssetRow = typeof inboxAssets.$inferSelect;
 export type NewInboxAsset = typeof inboxAssets.$inferInsert;

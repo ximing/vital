@@ -6,10 +6,10 @@ import {
   inboxHref,
   parseInboxFilter,
   parseInboxTagId,
+  useInboxListQuery,
   type InboxFilter,
-} from '@/features/inbox/model';
-import { useInboxListQuery } from '@/features/inbox/queries';
-import { useTagsQuery } from '@/features/todos/queries';
+} from '@/features/inbox';
+import { useTagsQuery } from '@/features/todos';
 import { railNavClass } from '@/shell/rail-nav';
 import { Icon, type LucideIcon } from '@/ui/icon';
 

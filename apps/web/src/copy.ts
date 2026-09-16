@@ -1025,6 +1025,3 @@ export const t = {
     footer: '单用户，自托管。数据在你自己的 Postgres 里。',
   },
 } as const;
-
-export const HOME_PATH = '/today';
-export const TODOS_HOME_PATH = '/todos/lists/smart:today';

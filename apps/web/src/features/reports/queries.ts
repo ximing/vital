@@ -1,6 +1,5 @@
 import type {
   Report,
-  ReportCollection,
   ReportEmbeds,
   ReportListItem,
   ReportOverview,
@@ -11,6 +10,7 @@ import type {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
 import type { SlashHit } from './model';
 
 export const reportKeys = {
@@ -18,21 +18,14 @@ export const reportKeys = {
   list: (type: ReportType) => ['reports', 'list', type] as const,
   current: (type: ReportType) => ['reports', 'current', type] as const,
   counts: ['reports', 'counts'] as const,
+  overviewRoot: ['reports', 'overview'] as const,
   overview: (type: ReportType, at = '') => ['reports', 'overview', type, at] as const,
   item: (id: string) => ['reports', 'item', id] as const,
   review: (id: string) => ['reports', 'review', id] as const,
 };
 
 async function fetchAllReports(type: ReportType): Promise<ReportListItem[]> {
-  const items: ReportListItem[] = [];
-  let cursor: string | undefined;
-  for (let i = 0; i < 20; i += 1) {
-    const page: ReportCollection = await client.listReports({ type, cursor, limit: 100 });
-    items.push(...page.items);
-    if (page.nextCursor === null) break;
-    cursor = page.nextCursor;
-  }
-  return items;
+  return fetchAllPages((cursor) => client.listReports({ type, cursor, limit: 100 }));
 }
 
 export function useReportListQuery(type: ReportType) {
@@ -101,7 +94,7 @@ export function useReportActions() {
     const report = await client.patchReport(id, input);
     cacheReport(report);
     void qc.invalidateQueries({ queryKey: reportKeys.list(report.type) });
-    void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
+    void qc.invalidateQueries({ queryKey: reportKeys.overviewRoot });
     void qc.invalidateQueries({ queryKey: reportKeys.review(id) });
     await markWroteDaily(report.type);
     return report;
@@ -126,7 +119,7 @@ export function useReportActions() {
   }
 
   function refreshStats(type: ReportType, id?: string): void {
-    void qc.invalidateQueries({ queryKey: ['reports', 'overview'] });
+    void qc.invalidateQueries({ queryKey: reportKeys.overviewRoot });
     if (id) void qc.invalidateQueries({ queryKey: reportKeys.review(id) });
   }
 

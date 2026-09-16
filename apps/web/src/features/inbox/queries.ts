@@ -9,28 +9,18 @@ import type {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
-import { todoKeys } from '@/features/todos/queries';
+import { todoKeys } from '@/features/todos/query-keys';
+import { fetchAllPages } from '@/lib/fetch-all-pages';
 import { humanError } from '@/lib/errors';
 import { createInputFromPreview, pendingIdForUrl, type PendingSave } from './model';
 import { useService } from '@rabjs/react';
 import { InboxUiService } from './inbox-ui.service';
+import { inboxKeys } from './query-keys';
 
-export const inboxKeys = {
-  all: ['inbox'] as const,
-  list: ['inbox', 'list'] as const,
-  item: (id: string) => ['inbox', 'item', id] as const,
-};
+export { inboxKeys } from './query-keys';
 
 async function fetchAllInbox(): Promise<InboxItem[]> {
-  const items: InboxItem[] = [];
-  let cursor: string | undefined;
-  for (let i = 0; i < 20; i += 1) {
-    const page = await client.listInbox({ cursor, limit: 100 });
-    items.push(...page.items);
-    if (page.nextCursor === null) break;
-    cursor = page.nextCursor;
-  }
-  return items;
+  return fetchAllPages((cursor) => client.listInbox({ cursor, limit: 100 }));
 }
 
 export function useInboxListQuery() {

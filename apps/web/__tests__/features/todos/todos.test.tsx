@@ -417,9 +417,10 @@ describe('todos workspace', () => {
     (document.activeElement as HTMLElement).blur();
 
     await user.keyboard('t');
-    expect(
-      await screen.findByRole('heading', { level: 1, name: t.lists.today }),
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('main')).toHaveAttribute('data-region', 'today-canvas');
+    });
+    expect(screen.getByRole('heading', { level: 1, name: t.lists.today })).toBeInTheDocument();
   });
 
   it('renders week chips for all-day and dots for timed instances', async () => {
@@ -705,5 +706,22 @@ describe('todos workspace', () => {
     expect(
       afterNewer.compareDocumentPosition(afterOlder) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('virtualizes a long list so offscreen rows are not in the document', async () => {
+    vi.mocked(client.listTasks).mockResolvedValue({
+      items: Array.from({ length: 80 }, (_, i) =>
+        makeTask({
+          id: `t-${i}`,
+          title: `任务 ${String(i).padStart(2, '0')}`,
+          listId: 'inbox-1',
+          sortOrder: i,
+        }),
+      ),
+      nextCursor: null,
+    });
+    renderAt('/todos/lists/smart:inbox');
+    expect(await screen.findByRole('option', { name: '任务 00' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '任务 79' })).not.toBeInTheDocument();
   });
 });

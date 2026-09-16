@@ -4,8 +4,14 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
-import { db } from '../src/db/index.js';
-import { attachments, entityLinks, inboxItems } from '../src/db/schema.js';
+import { db, getDb, setDb } from '../src/db/index.js';
+import {
+  attachments,
+  entityLinks,
+  inboxIdempotencyResponses,
+  inboxItems,
+  tasks,
+} from '../src/db/schema.js';
 import { setExtractTransport, type ExtractTransport } from '../src/extract/fetch.js';
 import { extractSemaphore } from '../src/extract/semaphore.js';
 import { EXTRACT_TIMEOUT_MS } from '../src/extract/ssrf.js';
@@ -200,6 +206,58 @@ describe('inbox', () => {
     expect(second.json().title).toBe('First');
     const rows = await db.select().from(inboxItems).where(eq(inboxItems.userId, alice.id));
     expect(rows).toHaveLength(1);
+    const [snap] = await db
+      .select()
+      .from(inboxIdempotencyResponses)
+      .where(eq(inboxIdempotencyResponses.inboxItemId, id));
+    expect(snap?.response).toMatchObject({ status: 201, body: { id, title: 'First' } });
+  });
+
+  it('list and sync payloads omit the idempotency snapshot', async () => {
+    const alice = await registerUser(app);
+    const url = 'https://example.com/idem-snap';
+    const key = keyFor(url);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      headers: { 'idempotency-key': key },
+      payload: {
+        title: 'Snap',
+        originalUrl: url,
+        extractedHtml: `<p>${'body-for-snapshot'.repeat(20)}</p>`,
+        source: 'extension',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+    const [snap] = await db
+      .select()
+      .from(inboxIdempotencyResponses)
+      .where(eq(inboxIdempotencyResponses.inboxItemId, id));
+    expect(snap?.response).toMatchObject({ status: 201 });
+
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox',
+      token: alice.token,
+    });
+    expect(listed.statusCode).toBe(200);
+    const listItem = listed.json().items[0] as Record<string, unknown>;
+    expect(listItem.id).toBe(id);
+    expect(listItem).not.toHaveProperty('idempotencyResponse');
+    expect(listItem).not.toHaveProperty('idempotency_response');
+
+    const sync = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/sync/changes?since=1970-01-01T00:00:00.000Z',
+      token: alice.token,
+    });
+    expect(sync.statusCode).toBe(200);
+    const syncItem = (sync.json().inbox as Record<string, unknown>[]).find((row) => row.id === id);
+    expect(syncItem).toBeTruthy();
+    expect(syncItem).not.toHaveProperty('idempotencyResponse');
+    expect(syncItem).not.toHaveProperty('idempotency_response');
   });
 
   it('extension source without Idempotency-Key is 400', async () => {
@@ -375,6 +433,90 @@ describe('inbox', () => {
     expect(links).toHaveLength(2);
     const roles = links.map((l) => `${l.fromType}->${l.toType}:${l.role}`).sort();
     expect(roles).toEqual(['inbox->task:converted_from', 'task->inbox:converted_from']);
+  });
+
+  it('convert is idempotent when convertedTaskId already points at a task', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: 'Once' },
+    });
+    const first = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/inbox/${created.json().id}/convert`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(first.statusCode).toBe(201);
+    const second = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/inbox/${created.json().id}/convert`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json().task.id).toBe(first.json().task.id);
+    const leftover = await db.select().from(tasks).where(eq(tasks.userId, alice.id));
+    expect(leftover).toHaveLength(1);
+  });
+
+  it('rolls back the task when entity_links insert fails', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: 'Will fail' },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const real = getDb();
+    const origTransaction = real.transaction.bind(real);
+    setDb(
+      new Proxy(real, {
+        get(target, prop, receiver) {
+          if (prop === 'transaction') {
+            return (fn: Parameters<typeof real.transaction>[0]) =>
+              origTransaction(async (tx) => {
+                const insert = tx.insert.bind(tx);
+                Object.assign(tx, {
+                  insert: (table: unknown) => {
+                    if (table === entityLinks) {
+                      throw new Error('entity_links insert failed');
+                    }
+                    return insert(table as never);
+                  },
+                });
+                return fn(tx);
+              });
+          }
+          const value = Reflect.get(target, prop, receiver) as unknown;
+          if (typeof value === 'function') {
+            return (value as (...args: unknown[]) => unknown).bind(target);
+          }
+          return value;
+        },
+      }) as typeof real,
+    );
+
+    try {
+      const convert = await injectJson(app, {
+        method: 'POST',
+        url: `/api/v1/inbox/${created.json().id}/convert`,
+        token: alice.token,
+        payload: {},
+      });
+      expect(convert.statusCode).toBe(500);
+      const leftover = await db.select().from(tasks).where(eq(tasks.userId, alice.id));
+      expect(leftover).toHaveLength(0);
+      const [item] = await db.select().from(inboxItems).where(eq(inboxItems.id, created.json().id));
+      expect(item?.convertedTaskId).toBeNull();
+      expect(item?.status).toBe('unread');
+    } finally {
+      setDb(null);
+    }
   });
 
   it('completing converted task archives inbox only when convertArchiveOnComplete', async () => {

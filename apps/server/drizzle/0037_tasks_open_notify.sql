@@ -1,0 +1,1 @@
+CREATE INDEX "idx_tasks_open_notify" ON "tasks" USING btree ("id") WHERE "deleted_at" IS NULL AND "status" IN ('todo', 'doing') AND ("due_at" IS NOT NULL OR "reminder_at" IS NOT NULL OR "reminder_mode" IN ('due', 'offset', 'custom'));

@@ -2,7 +2,7 @@ import { DEFAULT_LLM_SETTINGS, DEFAULT_NOTIFICATION_PREFS, type UserProfile } fr
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { HOME_PATH } from '@/copy';
+import { HOME_PATH } from '@/routes';
 import { setAuthForTest } from '@/services/auth.service';
 import { RootEntry } from '@/shell/require-auth';
 import { RabRoot } from '../helpers/rab-root';

@@ -273,7 +273,14 @@ describe('create/convert routes attach similarOpenTasks', () => {
 
 describe('agent/habit paths do not run duplicate detection', () => {
   it('keeps findPotentialDuplicates out of createTask, materialize, and habit spawn', () => {
-    const createSrc = readFileSync(join(srcRoot, 'tasks/tasks.service.ts'), 'utf8');
+    const createSrc = [
+      'tasks/tasks.service.ts',
+      'tasks/tasks.write.ts',
+      'tasks/tasks.read.ts',
+      'tasks/tasks.shared.ts',
+    ]
+      .map((rel) => readFileSync(join(srcRoot, rel), 'utf8'))
+      .join('\n');
     const actionsSrc = readFileSync(join(srcRoot, 'agent/actions.service.ts'), 'utf8');
     const habitsSrc = readFileSync(join(srcRoot, 'habits/habits.service.ts'), 'utf8');
     expect(createSrc).not.toContain('findPotentialDuplicates');

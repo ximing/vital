@@ -35,6 +35,7 @@ export async function injectJson(
     token?: string;
     cookie?: string;
     headers?: Record<string, string>;
+    remoteAddress?: string;
   },
 ): Promise<LightMyRequestResponse> {
   const headers: Record<string, string> = {};
@@ -49,6 +50,9 @@ export async function injectJson(
   };
   if (opts.payload !== undefined) {
     injectOpts.payload = opts.payload;
+  }
+  if (opts.remoteAddress !== undefined) {
+    injectOpts.remoteAddress = opts.remoteAddress;
   }
   return app.inject(injectOpts);
 }

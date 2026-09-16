@@ -14,22 +14,23 @@ import {
 } from 'lucide-react';
 import { bindServices, useService } from '@rabjs/react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { HOME_PATH, TODOS_HOME_PATH, t } from '@/copy';
-import { ActivationChecklist } from '@/features/onboarding';
+import { Suspense, useState, type FC } from 'react';
+import { t } from '@/copy';
+import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
+import { ActivationChecklist } from '@/features/onboarding/ActivationChecklist';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
-import { InboxUiService } from '@/features/inbox/inbox-ui.service';
+import { InboxUiService } from '@/features/inbox';
 import { ReportUiService } from '@/features/reports/report-ui.service';
-import { SimilarOpenToast } from '@/features/todos/SimilarOpenToast';
-import { TodosUiService } from '@/features/todos/todos-ui.service';
+import { SimilarOpenToast, TodosUiService } from '@/features/todos';
 import { AccountMenu } from '@/shell/AccountMenu';
 import { loadPaneWidth, RAIL_WIDTH, savePaneWidth, type PaneSection } from '@/shell/chrome';
 import { SecondaryPane } from '@/shell/SecondaryPane';
 import { sectionOf, showsPane, type AppSection } from '@/shell/section';
 import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
+import { RouteFallback } from '@/shell/route-fallback';
 import { Icon } from '@/ui/icon';
-import { useState, type FC } from 'react';
 
 const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
   { id: 'today', to: HOME_PATH, icon: Sun, label: t.rail.today },
@@ -156,7 +157,9 @@ function ShellContent() {
       ) : null}
 
       <div data-region="canvas" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <Outlet />
+        <Suspense fallback={<RouteFallback />}>
+          <Outlet />
+        </Suspense>
       </div>
       {todos.similarOpen.length > 0 ? <SimilarOpenToast /> : null}
       <CommandPalette />

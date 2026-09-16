@@ -55,6 +55,59 @@ describe('tasks', () => {
     expect(ids).toContain(created.json().id);
   });
 
+  it('smart:today uses local day bounds so 00:30 UTC+8 is today and 23:30 previous local day is overdue', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const tz = 'Asia/Shanghai';
+    const now = DateTime.now().setZone(tz);
+    const todayStart = now.startOf('day');
+    const today0030 = todayStart.plus({ minutes: 30 }).toISO()!;
+    const yesterday2330 = todayStart.minus({ minutes: 30 }).toISO()!;
+    const tomorrow0030 = todayStart.plus({ days: 1, minutes: 30 }).toISO()!;
+
+    const early = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'today 00:30', listId: inbox, dueAt: today0030, timezone: tz },
+    });
+    const overdue = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'yesterday 23:30', listId: inbox, dueAt: yesterday2330, timezone: tz },
+    });
+    const tomorrow = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'tomorrow 00:30', listId: inbox, dueAt: tomorrow0030, timezone: tz },
+    });
+    expect(early.statusCode).toBe(201);
+    expect(overdue.statusCode).toBe(201);
+    expect(tomorrow.statusCode).toBe(201);
+
+    const today = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks?listId=smart:today',
+      token: alice.token,
+    });
+    const ids = (today.json().items as { id: string }[]).map((t) => t.id);
+    expect(ids).toContain(early.json().id);
+    expect(ids).toContain(overdue.json().id);
+    expect(ids).not.toContain(tomorrow.json().id);
+
+    const upcoming = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks?listId=smart:upcoming',
+      token: alice.token,
+    });
+    const upcomingIds = (upcoming.json().items as { id: string }[]).map((t) => t.id);
+    expect(upcomingIds).toContain(early.json().id);
+    expect(upcomingIds).toContain(tomorrow.json().id);
+    expect(upcomingIds).not.toContain(overdue.json().id);
+  });
+
   it('uncomplete undated non-recurring restores due_at null', async () => {
     const alice = await registerUser(app);
     const inbox = await inboxId(app, alice.token);

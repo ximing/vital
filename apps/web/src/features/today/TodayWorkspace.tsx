@@ -7,20 +7,23 @@ import { humanError } from '@/lib/errors';
 import { AuthService } from '@/services/auth.service';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
-import { TaskSkeleton } from '@/features/todos/EmptyTasks';
-import { useTodosKeyboard } from '@/features/todos/keyboard';
-import { applyOptimisticComplete, inboxList, isOverdue, listVisibleIds } from '@/features/todos/model';
-import { QuickAdd } from '@/features/todos/QuickAdd';
-import { TaskDetail } from '@/features/todos/TaskDetail';
 import {
+  applyOptimisticComplete,
+  inboxList,
+  isOverdue,
+  listVisibleIds,
+  QuickAdd,
+  TaskDetail,
+  TaskSkeleton,
+  TodosUiService,
+  UndoToast,
   useDetailTask,
   useListsQuery,
   useTagsQuery,
   useTasksQuery,
   useTodoActions,
-} from '@/features/todos/queries';
-import { UndoToast } from '@/features/todos/UndoToast';
-import { TodosUiService } from '@/features/todos/todos-ui.service';
+  useTodosKeyboard,
+} from '@/features/todos';
 import { OutcomeBoard } from './OutcomeBoard';
 import { NowCard } from './NowCard';
 import { PulseStrip } from './PulseStrip';

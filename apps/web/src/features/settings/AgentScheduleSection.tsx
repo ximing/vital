@@ -3,6 +3,7 @@ import type { AgentScheduleItem, AgentScheduleStatus } from '@vital/dto';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { ACTIVITY_CARD, ActivitySectionHead } from './ActivitySectionHead';
+import { settingsKeys } from './query-keys';
 
 const copy = t.settings.activity.schedule;
 const capabilityLabels: Record<string, string> = t.settings.usage.capabilities;
@@ -37,8 +38,8 @@ function waitDetail(item: AgentScheduleItem): string | null {
 function ScheduleRow({ item }: { item: AgentScheduleItem }) {
   const qc = useQueryClient();
   const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ['settings', 'agent-schedule'] });
-    void qc.invalidateQueries({ queryKey: ['settings', 'agent-executions'] });
+    void qc.invalidateQueries({ queryKey: settingsKeys.agentSchedule });
+    void qc.invalidateQueries({ queryKey: settingsKeys.agentExecutionsRoot });
   };
   const runNow = useMutation({
     // Reuses the existing manual dispatch endpoints — no new trigger API.
@@ -118,7 +119,7 @@ function ScheduleRow({ item }: { item: AgentScheduleItem }) {
 /** Read-only "what is the agent waiting for" view with run-now / cancel actions. */
 export function AgentScheduleSection() {
   const query = useQuery({
-    queryKey: ['settings', 'agent-schedule'],
+    queryKey: settingsKeys.agentSchedule,
     queryFn: () => client.listAgentSchedule(),
     refetchInterval: 15_000,
   });

@@ -3,7 +3,7 @@ import { Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
-import { PriorityMark } from '@/features/todos/priority';
+import { PriorityMark } from '@/features/todos';
 
 /** Semantic hue for the captured rows' mini dot — matches the meta-row stats coding. */
 const CAPTURED_TONE = 'var(--status-doing)';

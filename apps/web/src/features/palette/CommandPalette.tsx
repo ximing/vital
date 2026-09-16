@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { markOnboarding } from '@/features/onboarding/mark';
-import { useListsQuery } from '@/features/todos/queries';
+import { useListsQuery } from '@/features/todos';
+import { Overlay } from '@/ui/overlay';
 import {
   OPEN_PALETTE_EVENT,
   commandItems,
@@ -158,9 +159,13 @@ export function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-overlay)] flex items-start justify-center bg-[color:var(--scrim)] px-4 pt-[15vh]"
-      onMouseDown={close}
+    <Overlay
+      tone="scrim"
+      align="start"
+      className="px-4 pt-[15vh]"
+      onClose={close}
+      closeOnBackdrop
+      backdropEvent="mousedown"
     >
       <div
         role="dialog"
@@ -214,6 +219,6 @@ export function CommandPalette() {
           )}
         </ul>
       </div>
-    </div>
+    </Overlay>
   );
 }

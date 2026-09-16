@@ -2,7 +2,12 @@ import { createRequire } from 'node:module';
 import { DateTime } from 'luxon';
 import type { Options, RRule as RRuleInstance } from 'rrule';
 import { AppError } from '../errors.js';
-import { matchesChinaRule, type ChinaCalendarLookup } from '../holidays/china-calendar.js';
+import {
+  chinaCalendarLookupFromWindow,
+  loadChinaCalendarWindow,
+  matchesChinaRule,
+  type ChinaCalendarLookup,
+} from '../holidays/china-calendar.js';
 
 const { RRule } = createRequire(import.meta.url)('rrule') as {
   RRule: {
@@ -382,6 +387,22 @@ function matchesFixedKind(
   return matchesChinaRule(cursor.toISODate() ?? '', kind, lookup);
 }
 
+async function resolveChinaLookup(
+  task: FixedRecurrenceTask,
+  from: Date,
+  lookup: ChinaCalendarLookup | undefined,
+  days: number,
+): Promise<ChinaCalendarLookup | undefined> {
+  if (lookup) return lookup;
+  if (task.recurrenceKind !== 'holidays' && task.recurrenceKind !== 'legal_workdays') return undefined;
+  const zone = task.timezone;
+  const start = DateTime.fromJSDate(from, { zone }).minus({ days: 1 }).toISODate();
+  const end = DateTime.fromJSDate(from, { zone }).plus({ days }).toISODate();
+  if (!start || !end) return undefined;
+  const map = await loadChinaCalendarWindow(start, end);
+  return chinaCalendarLookupFromWindow(map);
+}
+
 async function fixedCursorMatches(
   task: FixedRecurrenceTask,
   cursor: DateTime,
@@ -401,6 +422,7 @@ export async function nextFixedOccurrenceAfter(
   lookup?: ChinaCalendarLookup,
 ): Promise<Date | null> {
   if (task.dueAt === null) return null;
+  const resolved = await resolveChinaLookup(task, afterDue, lookup, 401);
   const zone = task.timezone;
   const origin = DateTime.fromJSDate(task.dueAt, { zone });
   const after = DateTime.fromJSDate(afterDue, { zone });
@@ -412,7 +434,7 @@ export async function nextFixedOccurrenceAfter(
   };
   for (let day = 1; day <= 400; day += 1) {
     const cursor = after.startOf('day').plus({ days: day }).set(time);
-    if (await fixedCursorMatches(task, cursor, lookup)) return cursor.toJSDate();
+    if (await fixedCursorMatches(task, cursor, resolved)) return cursor.toJSDate();
   }
   return null;
 }
@@ -424,6 +446,7 @@ export async function firstFixedOccurrenceOnOrAfter(
 ): Promise<Date | null> {
   if (task.dueAt === null) return null;
   if (task.dueAt >= fromUtc) return task.dueAt;
+  const resolved = await resolveChinaLookup(task, fromUtc, lookup, 401);
   const zone = task.timezone;
   const origin = DateTime.fromJSDate(task.dueAt, { zone });
   const from = DateTime.fromJSDate(fromUtc, { zone });
@@ -436,7 +459,7 @@ export async function firstFixedOccurrenceOnOrAfter(
   let cursor = from.startOf('day').set(time);
   if (cursor.toMillis() < fromUtc.getTime()) cursor = cursor.plus({ days: 1 });
   for (let day = 0; day < 400; day += 1) {
-    if (await fixedCursorMatches(task, cursor, lookup)) return cursor.toJSDate();
+    if (await fixedCursorMatches(task, cursor, resolved)) return cursor.toJSDate();
     cursor = cursor.plus({ days: 1 });
   }
   return null;
@@ -546,6 +569,7 @@ export async function expandFixedTask(
   completions: { occurrenceAt: Date }[],
   fromUtc: Date,
   toUtc: Date,
+  lookup?: ChinaCalendarLookup,
 ): Promise<CalendarInstance[]> {
   const status =
     task.status === 'todo' || task.status === 'doing' || task.status === 'done' || task.status === 'canceled'
@@ -566,7 +590,8 @@ export async function expandFixedTask(
     pinned: task.pinned,
   }));
   const dueMs = task.dueAt?.getTime();
-  let cursor = await firstFixedOccurrenceOnOrAfter(task, fromUtc);
+  const resolved = await resolveChinaLookup(task, fromUtc, lookup, 401);
+  let cursor = await firstFixedOccurrenceOnOrAfter(task, fromUtc, resolved);
   for (let count = 0; cursor !== null && cursor <= toUtc && count < 400; count += 1) {
     if (cursor >= fromUtc && !doneAt.has(cursor.getTime())) {
       out.push({
@@ -580,7 +605,7 @@ export async function expandFixedTask(
         pinned: task.pinned,
       });
     }
-    cursor = await nextFixedOccurrenceAfter(task, cursor);
+    cursor = await nextFixedOccurrenceAfter(task, cursor, resolved);
   }
   if (cursor !== null && cursor <= toUtc) throw AppError.of(400, 'RRULE_TOO_DENSE');
   return out;

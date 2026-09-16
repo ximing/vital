@@ -1,8 +1,13 @@
+import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { DateTime } from 'luxon';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
-import { spawnDailyHabits } from '../src/habits/habits.service.js';
+import { getDb } from '../src/db/index.js';
+import { lists, tasks } from '../src/db/schema.js';
+import { listHabits, spawnDailyHabits } from '../src/habits/habits.service.js';
+import { loadHabitHeadlineFacts } from '../src/habits/progress.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { registerUser } from './helpers/session.js';
@@ -58,6 +63,81 @@ describe('habits', () => {
     );
     expect(habitTasks.length).toBeGreaterThan(0);
     expect(habitTasks.every((task) => task.similarOpenTasks === undefined)).toBe(true);
+  });
+
+  it('counts today progress by habitId and local day, not a leading-wildcard date', async () => {
+    const alice = await registerUser(app);
+    const water = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '喝水', kind: 'count', targetCount: 8 },
+    });
+    const stretch = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '拉伸', kind: 'daily' },
+    });
+    const waterId = water.json().id as string;
+    const stretchId = stretch.json().id as string;
+    const inboxRows = await getDb()
+      .select({ id: lists.id })
+      .from(lists)
+      .where(eq(lists.userId, alice.id));
+    const inbox = inboxRows[0];
+    if (!inbox) throw new Error('missing inbox list');
+    const tz = 'Asia/Shanghai';
+    const now = DateTime.fromISO('2026-09-16T00:30:00', { zone: tz }).toJSDate();
+    const today = '2026-09-16';
+    const yesterday = '2026-09-15';
+    await getDb()
+      .insert(tasks)
+      .values([
+        {
+          id: randomUUID(),
+          userId: alice.id,
+          listId: inbox.id,
+          habitId: waterId,
+          habitSeq: 1,
+          habitKey: `${waterId}:${today}:1`,
+          title: '喝水',
+          status: 'done',
+          timezone: tz,
+        },
+        {
+          id: randomUUID(),
+          userId: alice.id,
+          listId: inbox.id,
+          habitId: waterId,
+          habitSeq: 1,
+          habitKey: `${waterId}:${yesterday}:1`,
+          title: '喝水',
+          status: 'done',
+          timezone: tz,
+        },
+        {
+          id: randomUUID(),
+          userId: alice.id,
+          listId: inbox.id,
+          habitId: stretchId,
+          habitSeq: 1,
+          habitKey: `${stretchId}:${today}:1`,
+          title: '拉伸',
+          status: 'todo',
+          timezone: tz,
+        },
+      ]);
+
+    const listed = await listHabits(alice.id, tz, now);
+    const waterRow = listed.find((row) => row.id === waterId);
+    const stretchRow = listed.find((row) => row.id === stretchId);
+    expect(waterRow).toMatchObject({ todayDone: 1, todayTotal: 1 });
+    expect(stretchRow).toMatchObject({ todayDone: 0, todayTotal: 1 });
+
+    const facts = await loadHabitHeadlineFacts(alice.id, tz, now);
+    expect(facts.find((row) => row.id === waterId)?.todayDone).toBe(1);
+    expect(facts.find((row) => row.id === stretchId)?.todayDone).toBe(0);
   });
 
   it('does not spawn outside the window', async () => {

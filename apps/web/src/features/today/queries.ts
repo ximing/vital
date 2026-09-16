@@ -9,15 +9,9 @@ import type {
 } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
+import { todayKeys } from './query-keys';
 
-export const todayKeys = {
-  all: ['today'] as const,
-  dashboard: ['today', 'dashboard'] as const,
-  outcomes: (status: 'open' | 'closed' = 'open') => ['today', 'outcomes', status] as const,
-  detail: (id: string) => ['today', 'thread', id] as const,
-  habits: ['today', 'habits'] as const,
-  decompose: (taskId: string) => ['today', 'decompose', taskId] as const,
-};
+export { todayKeys } from './query-keys';
 
 export function useTodayQuery() {
   return useQuery({
@@ -39,6 +33,14 @@ export function useOutcomesQuery(status: 'open' | 'closed' = 'open') {
   return useQuery({
     queryKey: todayKeys.outcomes(status),
     queryFn: (): Promise<Outcome[]> => client.listOutcomes(status),
+  });
+}
+
+/** All outcomes regardless of status — for the "belongs to" label when attaching materials. */
+export function useAllOutcomesQuery() {
+  return useQuery({
+    queryKey: todayKeys.outcomes('all'),
+    queryFn: (): Promise<Outcome[]> => client.listOutcomes(),
   });
 }
 

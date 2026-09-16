@@ -1,5 +1,6 @@
 import type { List, SearchResults } from '@vital/dto';
-import { HOME_PATH, t } from '@/copy';
+import { t } from '@/copy';
+import { HOME_PATH } from '@/routes';
 import { userLists } from '@/features/todos/model';
 
 export type PaletteKind = 'goto' | 'list' | 'task' | 'outcome' | 'inbox';

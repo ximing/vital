@@ -66,7 +66,9 @@ describe('web shell contract', () => {
     expect(auth).toContain('Navigate to="/login"');
     expect(auth).toContain('HOME_PATH');
     const copy = read('src/copy.ts');
-    expect(copy).toContain("HOME_PATH = '/today'");
+    const routes = read('src/routes.ts');
+    expect(routes).toContain("HOME_PATH = '/today'");
+    expect(copy).not.toContain('HOME_PATH');
     expect(copy).not.toContain('LANDING_PATH');
     expect(copy).toContain('打开后，先看到');
     expect(copy).toContain('下载最新版本');
@@ -87,10 +89,13 @@ describe('web shell contract', () => {
 
   it('inbox lives under features/inbox with reader, convert, and empty copy', () => {
     const app = read('src/App.tsx');
-    expect(app).toContain('/inbox/:id');
+    expect(app).toContain('path="/inbox"');
+    expect(app).toContain('path=":id"');
     expect(app).toContain('/auth/extension');
     expect(app).toContain('InboxWorkspace');
     expect(app).toContain('InboxReader');
+    expect(app).toContain('lazy(');
+    expect(app).toContain('Suspense');
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
     expect(pkg.dependencies.dompurify).toBeTruthy();
     const copy = read('src/copy.ts');

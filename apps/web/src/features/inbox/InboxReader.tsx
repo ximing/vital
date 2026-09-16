@@ -9,20 +9,19 @@ import {
   ListTodo,
   Star,
 } from 'lucide-react';
-import { bindServices, useService } from '@rabjs/react';
+import { observer, useService } from '@rabjs/react';
 import { useEffect, useRef, useState, type FC, type UIEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { useOutcomesQuery } from '@/features/today/queries';
-import { useTagsQuery } from '@/features/todos/queries';
+import { useOutcomesQuery } from '@/features/today';
+import { useTagsQuery } from '@/features/todos';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Icon, type LucideIcon } from '@/ui/icon';
 import { OutcomeField } from '@/ui/outcome-field';
 import { EmptyReader, InboxSkeleton } from './EmptyInbox';
-import { InboxListColumn } from './InboxListPanel';
 import { inboxSourceIcon, inboxSourceTextClass } from './InboxRow';
 import {
   canPatchStatus,
@@ -166,14 +165,12 @@ function InboxReaderContent() {
   }
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 bg-canvas">
-      <InboxListColumn selectedId={id} className="hidden lg:flex" />
-      <main
-        id="main"
-        data-region="reading-canvas"
-        onScroll={onScroll}
-        className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-canvas"
-      >
+    <main
+      id="main"
+      data-region="reading-canvas"
+      onScroll={onScroll}
+      className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-canvas"
+    >
       <div className="sticky top-0 z-[var(--z-sticky)] h-[2px] w-full shrink-0" aria-hidden="true">
         <div
           className="h-full bg-accent transition-[width] duration-[var(--ease-in)]"
@@ -401,9 +398,8 @@ function InboxReaderContent() {
           </>
         )}
       </div>
-      </main>
-    </div>
+    </main>
   );
 }
 
-export const InboxReader: FC = bindServices(InboxReaderContent, [InboxPageService]);
+export const InboxReader: FC = observer(InboxReaderContent);

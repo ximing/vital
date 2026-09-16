@@ -54,6 +54,12 @@ export const envSchema = z.object({
   SWEEPER_INTERVAL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
   SWEEPER_DRY_RUN: boolEnum.default('true'),
   MEDIA_UPLOADING_TTL_HOURS: z.coerce.number().int().min(1).default(24),
+  // Slightly under the S3 tmp/ lifecycle (7d) so ready-but-unbound rows flip
+  // to orphaned before the object 404s.
+  MEDIA_TMP_READY_TTL_DAYS: z.coerce.number().int().min(1).default(6),
+  // Comma-separated CIDR/IP appended to loopback + docker 172.16.0.0/12.
+  // Default is the production entry nginx on the Aliyun ECS public IP.
+  TRUST_PROXY_EXTRA: z.string().default('39.96.159.212'),
   WEB_ORIGIN: z.string().url().default('http://localhost:5180'),
   COOKIE_SECURE: boolEnum.default('false'),
   MEOW_BASE_URL: z.string().url().default('https://api.chuckfang.com'),

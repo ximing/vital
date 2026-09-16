@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
@@ -291,25 +291,56 @@ export async function processDueNotifications(now = new Date()): Promise<number>
   return claimed.length;
 }
 
-export async function healTaskNotifications(now = new Date()): Promise<number> {
-  const rows = await getDb()
-    .select()
-    .from(tasks)
-    .where(
-      and(
-        isNull(tasks.deletedAt),
-        inArray(tasks.status, ['todo', 'doing']),
-        or(
-          sql`${tasks.dueAt} IS NOT NULL`,
-          sql`${tasks.reminderAt} IS NOT NULL`,
-          sql`${tasks.reminderMode} IN ('due', 'offset', 'custom')`,
-        ),
-      ),
-    )
-    .limit(200);
+/** Matches idx_tasks_open_notify: open tasks that may need a remind/due outbox row. */
+function healEligible() {
+  return and(
+    isNull(tasks.deletedAt),
+    inArray(tasks.status, ['todo', 'doing']),
+    or(
+      isNotNull(tasks.dueAt),
+      isNotNull(tasks.reminderAt),
+      inArray(tasks.reminderMode, ['due', 'offset', 'custom']),
+    ),
+  );
+}
+
+export const HEAL_PAGE_SIZE = 200;
+
+/** In-memory keyset; a worker restart rescan from the start is fine. */
+let healCursor: string | undefined;
+
+export function resetHealTaskNotificationsCursor(): void {
+  healCursor = undefined;
+}
+
+export async function healTaskNotifications(now = new Date(), pageSize = HEAL_PAGE_SIZE): Promise<number> {
+  const db = getDb();
+  const page = Math.max(1, pageSize);
+
+  const fetchPage = (cursor: string | undefined) =>
+    db
+      .select()
+      .from(tasks)
+      .where(cursor ? and(healEligible(), gt(tasks.id, cursor)) : healEligible())
+      .orderBy(asc(tasks.id))
+      .limit(page);
+
+  let rows = await fetchPage(healCursor);
+  if (rows.length === 0 && healCursor !== undefined) {
+    healCursor = undefined;
+    rows = await fetchPage(undefined);
+  }
+  if (rows.length < page) healCursor = undefined;
+  else healCursor = rows[rows.length - 1]?.id;
+
+  const userIds = [...new Set(rows.map((row) => row.userId))];
+  const userRows =
+    userIds.length === 0 ? [] : await db.select().from(users).where(inArray(users.id, userIds));
+  const byUser = new Map(userRows.map((user) => [user.id, user]));
+
   let n = 0;
   for (const task of rows) {
-    const [user] = await getDb().select().from(users).where(eq(users.id, task.userId)).limit(1);
+    const user = byUser.get(task.userId);
     if (!user) continue;
     await syncTaskNotifications(task, user, now);
     n += 1;

@@ -12,6 +12,7 @@ describe('query indexes', () => {
     expect(names).toContain('idx_tasks_user_parent');
     expect(names).toContain('idx_tasks_user_habit');
     expect(names).toContain('idx_tasks_live_status_due');
+    expect(names).toContain('idx_tasks_open_notify');
   });
 
   it('covers inbox status, outcome, and live-captured scans', () => {

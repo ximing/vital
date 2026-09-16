@@ -1,7 +1,22 @@
-import type { InboxItem, SyncChanges, SyncChangesQuery, SyncHead, Task } from '@vital/dto';
-import { and, asc, eq, gt, inArray, max } from 'drizzle-orm';
+import type {
+  InboxItem,
+  SyncChanges,
+  SyncChangesQuery,
+  SyncCursor,
+  SyncHead,
+  SyncKeyset,
+  Task,
+} from '@vital/dto';
+import {
+  encodeSyncCursor,
+  isoToSyncCursor,
+  overlapSyncCursor,
+  parseSyncSince,
+} from '@vital/dto';
+import { and, asc, eq, gt, gte, inArray, max, or, sql, type Column, type SQL } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { inboxItems, reports, tasks, taskTags } from '../db/schema.js';
+import { AppError } from '../errors.js';
 import { loadAssetsByItemIds, tagIdsByInbox, toInboxDto } from '../inbox/inbox.service.js';
 import { toReportListItem } from '../reports/reports.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
@@ -55,11 +70,39 @@ async function tagIdsByTask(taskIds: string[]): Promise<Map<string, string[]>> {
   return map;
 }
 
+/**
+ * ISO `since` keeps exclusive `updated_at > ts` so old clients that page on
+ * `latestUpdatedAt` cannot loop. Opaque cursors use keyset comparison.
+ * Empty `id` means "start of this timestamp" (`updated_at >= ts`).
+ */
+function afterKeyset(
+  updatedAt: Column,
+  id: Column,
+  key: SyncKeyset,
+  exclusiveTimestamp: boolean,
+): SQL {
+  const ts = new Date(key.ts);
+  if (exclusiveTimestamp) return gt(updatedAt, ts);
+  if (key.id === '') return gte(updatedAt, ts);
+  return or(gt(updatedAt, ts), and(eq(updatedAt, ts), sql`${id} > ${key.id}`)) as SQL;
+}
+
+function keysetOf(row: { updatedAt: Date; id: string } | undefined, fallback: SyncKeyset): SyncKeyset {
+  if (!row) return fallback;
+  return { ts: row.updatedAt.toISOString(), id: row.id };
+}
+
 export async function getSyncChanges(
   userId: string,
   query: SyncChangesQuery,
 ): Promise<SyncChanges> {
-  const since = new Date(query.since);
+  const serverTime = new Date();
+  const parsed = parseSyncSince(query.since);
+  if (parsed === null) throw AppError.of(400, 'VALIDATION_ERROR');
+  const exclusiveTimestamp = parsed.kind === 'iso';
+  const incoming: SyncCursor =
+    parsed.kind === 'iso' ? isoToSyncCursor(parsed.at) : parsed.cursor;
+
   const limit = query.limit;
   const fetchLimit = limit + 1;
   const db = getDb();
@@ -68,19 +111,34 @@ export async function getSyncChanges(
     db
       .select()
       .from(tasks)
-      .where(and(eq(tasks.userId, userId), gt(tasks.updatedAt, since)))
+      .where(
+        and(
+          eq(tasks.userId, userId),
+          afterKeyset(tasks.updatedAt, tasks.id, incoming.tasks, exclusiveTimestamp),
+        ),
+      )
       .orderBy(asc(tasks.updatedAt), asc(tasks.id))
       .limit(fetchLimit),
     db
       .select()
       .from(inboxItems)
-      .where(and(eq(inboxItems.userId, userId), gt(inboxItems.updatedAt, since)))
+      .where(
+        and(
+          eq(inboxItems.userId, userId),
+          afterKeyset(inboxItems.updatedAt, inboxItems.id, incoming.inbox, exclusiveTimestamp),
+        ),
+      )
       .orderBy(asc(inboxItems.updatedAt), asc(inboxItems.id))
       .limit(fetchLimit),
     db
       .select()
       .from(reports)
-      .where(and(eq(reports.userId, userId), gt(reports.updatedAt, since)))
+      .where(
+        and(
+          eq(reports.userId, userId),
+          afterKeyset(reports.updatedAt, reports.id, incoming.reports, exclusiveTimestamp),
+        ),
+      )
       .orderBy(asc(reports.updatedAt), asc(reports.id))
       .limit(fetchLimit),
   ]);
@@ -103,12 +161,21 @@ export async function getSyncChanges(
     toInboxDto(row, assets.get(row.id) ?? [], inboxTags.get(row.id) ?? []),
   );
 
+  const nextCursor = truncated
+    ? {
+        tasks: keysetOf(taskPage[taskPage.length - 1], incoming.tasks),
+        inbox: keysetOf(inboxPage[inboxPage.length - 1], incoming.inbox),
+        reports: keysetOf(reportPage[reportPage.length - 1], incoming.reports),
+      }
+    : overlapSyncCursor(serverTime);
+
   return {
-    serverTime: new Date().toISOString(),
+    serverTime: serverTime.toISOString(),
     head: await getSyncHead(userId),
     tasks: mappedTasks,
     inbox: mappedInbox,
     reports: reportPage.map(toReportListItem),
     truncated,
+    nextSince: encodeSyncCursor(nextCursor),
   };
 }

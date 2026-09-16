@@ -14,6 +14,7 @@ export {
   mergeInboxItems,
   mergeReportListItems,
   mergeTasksIntoList,
+  nextSyncSince,
   syncEventsUrl,
   syncHeadMoved,
 } from './sync.js';
