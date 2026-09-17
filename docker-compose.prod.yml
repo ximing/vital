@@ -1,5 +1,5 @@
-# Production on home-app (11022): GHCR images, external Postgres, web on :13005.
-# Entry nginx (39.96.159.212) reverse-proxies https://vital.aimo.plus → :13005.
+# Production on home-app (11022): GHCR server image (API + SPA 静态托管), external Postgres.
+# Entry nginx (39.96.159.212) reverse-proxies https://vital.aimo.plus → :13005 → server:3010.
 #
 #   cp .env.production.example .env   # fill secrets; WEB_ORIGIN=https://vital.aimo.plus
 #   docker compose -f docker-compose.prod.yml pull
@@ -36,6 +36,9 @@ services:
     <<: *app
     image: ghcr.io/ximing/vital-server:${VITAL_IMAGE_TAG:-stable}
     container_name: vital-server
+    # 入口 nginx（39.96.159.212）反代 https://vital.aimo.plus → 这里；server 同时托管 SPA 静态资产
+    ports:
+      - '${VITAL_WEB_BIND:-0.0.0.0}:${VITAL_WEB_PORT:-13005}:3010'
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -72,19 +75,3 @@ services:
       http_proxy: ''
       https_proxy: ''
       all_proxy: ''
-
-  web:
-    <<: *app
-    image: ghcr.io/ximing/vital-web:${VITAL_IMAGE_TAG:-stable}
-    container_name: vital-web
-    ports:
-      - '${VITAL_WEB_BIND:-0.0.0.0}:${VITAL_WEB_PORT:-13005}:80'
-    depends_on:
-      server:
-        condition: service_healthy
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/api/health']
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 10s

@@ -47,7 +47,16 @@ export function registerErrorHandler(app: FastifyInstance): void {
     send(reply, 500, 'INTERNAL_ERROR', ERROR_MESSAGES.INTERNAL_ERROR);
   });
 
-  app.setNotFoundHandler((_req, reply) => {
+  app.setNotFoundHandler((req, reply) => {
+    // 生产环境 server 托管 SPA：未命中文件的非 /api GET 请求回退到 index.html
+    if (
+      app.webDistRoot &&
+      req.method === 'GET' &&
+      !req.url.startsWith('/api')
+    ) {
+      void reply.sendFile('index.html');
+      return;
+    }
     send(reply, 404, 'NOT_FOUND', ERROR_MESSAGES.NOT_FOUND);
   });
 }

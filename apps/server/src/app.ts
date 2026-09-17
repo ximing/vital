@@ -18,6 +18,7 @@ import { registerLlmRoutes } from './llm/llm.routes.js';
 import { registerListRoutes } from './lists/lists.routes.js';
 import { populateUser } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
+import { registerWebStatic } from './web-static.js';
 import { globalRateLimit, ipFrom } from './plugins/rate-limit.js';
 import { isTrustedProxy } from './plugins/trust-proxy.js';
 import { registerReportRoutes } from './reports/reports.routes.js';
@@ -63,7 +64,9 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
 
   app.decorate('db', getDb());
 
-  await app.register(helmet);
+  // CSP stays off: the server hosts the SPA (inline theme script in index.html),
+  // and helmet's default CSP never applied to static assets when nginx served them.
+  await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, {
     origin: config.WEB_ORIGIN,
     credentials: true,
@@ -107,6 +110,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   });
 
   registerErrorHandler(app);
+  await registerWebStatic(app);
   registerHealthRoutes(app);
   registerAppReleaseRoutes(app);
   registerAuthRoutes(app);

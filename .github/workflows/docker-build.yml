@@ -32,10 +32,6 @@ jobs:
             image: vital-server
             file: apps/server/Dockerfile
             context: .
-          - name: web
-            image: vital-web
-            file: apps/web/Dockerfile
-            context: .
     steps:
       - name: Checkout
         uses: actions/checkout@v4
