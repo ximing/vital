@@ -38,6 +38,7 @@ import {
   taskTags,
   userLlmProviders,
   userLlmRoutes,
+  userInwitConfig,
   users,
 } from '../../src/db/schema.js';
 
@@ -106,6 +107,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(extensionAuthCodes);
     await db.delete(userLlmRoutes);
     await db.delete(userLlmProviders);
+    await db.delete(userInwitConfig);
     await db.delete(users);
   });
 }

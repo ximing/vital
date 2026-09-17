@@ -151,6 +151,20 @@ export class InboxService extends Service {
     }
   }
 
+  async exportToInwit(item: InboxItem): Promise<void> {
+    if (item.inwitDocumentId !== null) {
+      toast(copy.inbox.exportedInwit);
+      return;
+    }
+    try {
+      const res = await client.exportInboxToInwit(item.id);
+      this.mergeItem(res.inbox);
+      toast(copy.toast.exportedInwit);
+    } catch (err) {
+      toast(humanError(err));
+    }
+  }
+
   async remove(item: InboxItem): Promise<void> {
     try {
       await client.deleteInbox(item.id);
@@ -276,6 +290,21 @@ export class InboxDetailService extends Service {
     } catch (err) {
       toast(humanError(err));
       return false;
+    }
+  }
+
+  async exportToInwit(): Promise<void> {
+    const item = this.item;
+    if (item === null || item.inwitDocumentId !== null) return;
+    this.busy = true;
+    try {
+      const res = await client.exportInboxToInwit(item.id);
+      this.item = res.inbox;
+      toast(copy.toast.exportedInwit);
+    } catch (err) {
+      toast(humanError(err));
+    } finally {
+      this.busy = false;
     }
   }
 }

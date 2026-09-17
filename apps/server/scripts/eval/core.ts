@@ -11,6 +11,7 @@ import {
   days,
   inboxIdempotencyResponses,
   inboxItems,
+  userInwitConfig,
   users,
 } from '../../src/db/schema.js';
 import { agentAdoptionDaily } from '../../src/agent/metrics.service.js';
@@ -72,6 +73,7 @@ export async function buildSnapshot(opts: { tamper?: boolean } = {}): Promise<Ag
       );
   }
   await db.delete(days).where(eq(days.userId, FIXTURE_USER_ID));
+  await db.delete(userInwitConfig).where(eq(userInwitConfig.userId, FIXTURE_USER_ID));
   await db.delete(users).where(eq(users.id, FIXTURE_USER_ID));
   await seedFixture(db, opts);
   const metrics = await agentAdoptionDaily(FIXTURE_USER_ID, EVAL_WINDOW_DAYS, FIXTURE_TZ);

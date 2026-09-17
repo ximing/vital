@@ -63,6 +63,10 @@ import type {
   InboxCollection,
   InboxItem,
   InboxPreview,
+  InboxExportInwitResponse,
+  InwitConfigInput,
+  InwitConfigPublic,
+  InwitTestResponse,
   List,
   ListCollection,
   Tag,
@@ -234,6 +238,10 @@ export interface VitalClient {
   patchInboxAssets(id: string, input: PatchInboxAssetsInput): Promise<InboxItem>;
   deleteInbox(id: string): Promise<void>;
   convertInbox(id: string, input?: ConvertInboxInput): Promise<ConvertInboxResponse>;
+  exportInboxToInwit(id: string): Promise<InboxExportInwitResponse>;
+  getInwitConfig(): Promise<InwitConfigPublic>;
+  putInwitConfig(input: InwitConfigInput): Promise<InwitConfigPublic>;
+  testInwit(): Promise<InwitTestResponse>;
   listReports(query?: {
     type?: ReportType;
     cursor?: string;
@@ -498,6 +506,12 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     deleteInbox: (id) => http.request(`/api/v1/inbox/${id}`, { method: 'DELETE' }),
     convertInbox: (id, input = {}) =>
       http.request(`/api/v1/inbox/${id}/convert`, { method: 'POST', body: input }),
+    exportInboxToInwit: (id) =>
+      http.request(`/api/v1/inbox/${id}/export-inwit`, { method: 'POST', body: {} }),
+    getInwitConfig: () => http.request('/api/v1/integrations/inwit'),
+    putInwitConfig: (input) =>
+      http.request('/api/v1/integrations/inwit', { method: 'PUT', body: input }),
+    testInwit: () => http.request('/api/v1/integrations/inwit/test', { method: 'POST', body: {} }),
     listReports: (query = {}) => {
       const q: Record<string, string | number | boolean | undefined> = {};
       if (query.type !== undefined) q.type = query.type;

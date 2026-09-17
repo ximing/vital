@@ -213,6 +213,14 @@ const InboxDetailContent = observer(function InboxDetailContent({ inboxId }: { i
         <Button loading={s.busy} disabled={converted} onPress={() => void s.convert(openTask)}>
           {converted ? copy.inbox.convertedChip : copy.actions.convert}
         </Button>
+        <Button
+          variant="quiet"
+          loading={s.busy}
+          disabled={item.inwitDocumentId !== null}
+          onPress={() => void s.exportToInwit()}
+        >
+          {item.inwitDocumentId !== null ? copy.inbox.exportedInwit : copy.inbox.exportInwit}
+        </Button>
       </ActionBar>
       <PickerSheet visible={s.more} title={item.title} onClose={() => s.closeMore()}>
         {item.originalUrl ? (

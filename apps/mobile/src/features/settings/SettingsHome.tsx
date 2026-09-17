@@ -23,6 +23,7 @@ import { rnShadow } from '../../ui/card';
 import type { LucideIcon } from '../../ui/icon';
 import { formatProgress, progressRatio } from './app-update';
 import { LlmSection } from './LlmSection';
+import { InwitSection } from './InwitSection';
 import { SettingsService } from './settings.service';
 
 const ZONES = [
@@ -341,6 +342,9 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
 
         <SectionHead title={copy.settings.tabs.llm} />
         <LlmSection />
+
+        <SectionHead title={copy.settings.tabs.inwit} />
+        <InwitSection />
 
         <SectionHead title={copy.settings.tabs.about} />
         <View style={[styles.card, styles.cardFlush]}>

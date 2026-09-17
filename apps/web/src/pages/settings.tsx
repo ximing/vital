@@ -1,9 +1,10 @@
-import { Bell, KeyRound, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react';
+import { Bell, BookMarked, KeyRound, Palette, SlidersHorizontal, Sparkles, User } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { AccountSection } from '@/features/settings/AccountSection';
 import { LlmSection } from '@/features/settings/LlmSection';
+import { InwitSection } from '@/features/settings/InwitSection';
 import { NotificationsSection } from '@/features/settings/NotificationsSection';
 import { PrefsSection } from '@/features/settings/PrefsSection';
 import { TokensSection } from '@/features/settings/TokensSection';
@@ -12,7 +13,7 @@ import { Icon, type LucideIcon } from '@/ui/icon';
 import { SelectField } from '@/ui/select-field';
 
 const TABS: {
-  id: 'account' | 'appearance' | 'notifications' | 'prefs' | 'llm' | 'tokens';
+  id: 'account' | 'appearance' | 'notifications' | 'prefs' | 'llm' | 'tokens' | 'inwit';
   label: string;
   icon: LucideIcon;
 }[] = [
@@ -21,6 +22,7 @@ const TABS: {
   { id: 'notifications', label: t.settings.tabs.notifications, icon: Bell },
   { id: 'prefs', label: t.settings.tabs.prefs, icon: SlidersHorizontal },
   { id: 'llm', label: t.settings.tabs.llm, icon: Sparkles },
+  { id: 'inwit', label: t.settings.tabs.inwit, icon: BookMarked },
   { id: 'tokens', label: t.settings.tabs.tokens, icon: KeyRound },
 ];
 
@@ -39,6 +41,7 @@ function isTab(value: string | null): (typeof TABS)[number]['id'] {
     value === 'notifications' ||
     value === 'prefs' ||
     value === 'llm' ||
+    value === 'inwit' ||
     value === 'tokens'
   ) {
     return value;
@@ -160,6 +163,11 @@ export function SettingsPage() {
           {tab === 'llm' ? (
             <SettingsBlock title={t.settings.llm.title} description={t.settings.llm.hint}>
               <LlmSection />
+            </SettingsBlock>
+          ) : null}
+          {tab === 'inwit' ? (
+            <SettingsBlock title={t.settings.inwit.title} description={t.settings.inwit.hint}>
+              <InwitSection />
             </SettingsBlock>
           ) : null}
           {tab === 'tokens' ? (

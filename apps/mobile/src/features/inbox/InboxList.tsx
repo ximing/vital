@@ -228,6 +228,11 @@ const InboxListContent = observer(function InboxListContent() {
                     <Text style={styles.convertedLabel}>{copy.inbox.convertedChip}</Text>
                   </View>
                 ) : null}
+                {item.inwitDocumentId !== null ? (
+                  <View style={styles.convertedChip}>
+                    <Text style={styles.convertedLabel}>{copy.inbox.exportedInwit}</Text>
+                  </View>
+                ) : null}
               </View>
             </Pressable>
           );
@@ -325,6 +330,22 @@ const InboxListContent = observer(function InboxListContent() {
               }}
             >
               <Text style={styles.optionLabel}>{copy.actions.convert}</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              style={styles.option}
+              onPress={() => {
+                const item = s.menuItem;
+                s.closeMenu();
+                if (item === null) return;
+                void s.exportToInwit(item);
+              }}
+            >
+              <Text style={styles.optionLabel}>
+                {s.menuItem.inwitDocumentId !== null
+                  ? copy.inbox.exportedInwit
+                  : copy.inbox.exportInwit}
+              </Text>
             </Pressable>
             {s.menuItem.originalUrl ? (
               <Pressable

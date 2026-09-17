@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Archive,
   ArchiveRestore,
+  BookMarked,
   BookOpen,
   Check,
   Copy,
@@ -72,6 +73,7 @@ export function InboxContextMenu({
   onFavorite,
   onArchive,
   onConvert,
+  onExportInwit,
   onCopyUrl,
   onAddToReport,
   onPatchTags,
@@ -88,6 +90,7 @@ export function InboxContextMenu({
   onFavorite: () => void;
   onArchive: () => void;
   onConvert: () => void;
+  onExportInwit: () => void;
   onCopyUrl: () => void;
   onAddToReport: () => void;
   onPatchTags: (tagIds: string[]) => void;
@@ -105,6 +108,7 @@ export function InboxContextMenu({
   }
   const patchable = canPatchStatus(item);
   const converted = item.status === 'converted';
+  const exportedInwit = item.inwitDocumentId !== null;
   const favorited = isFavorite(item);
   const archived = item.status === 'archived';
 
@@ -191,6 +195,13 @@ export function InboxContextMenu({
           active={converted}
           disabled={disabled || converted}
           onSelect={act(onConvert)}
+        />
+        <Item
+          icon={BookMarked}
+          label={exportedInwit ? t.inbox.exportedInwit : t.inbox.exportInwit}
+          active={exportedInwit}
+          disabled={disabled || exportedInwit}
+          onSelect={act(onExportInwit)}
         />
         {item.originalUrl ? (
           <Item icon={Copy} label={t.inbox.copyLink} onSelect={act(onCopyUrl)} />

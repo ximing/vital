@@ -131,6 +131,8 @@ function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): I
     capturedAt: '2026-09-06T00:00:00.000Z',
     readAt: null,
     convertedTaskId: null,
+    inwitDocumentId: null,
+    inwitExportedAt: null,
     tagIds: [],
     assets: [],
     deletedAt: null,
@@ -154,6 +156,8 @@ const preview: InboxPreview = {
   source: 'web',
   readAt: null,
   convertedTaskId: null,
+  inwitDocumentId: null,
+  inwitExportedAt: null,
   tagIds: [],
   assets: [],
 };

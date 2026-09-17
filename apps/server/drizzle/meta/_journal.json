@@ -281,6 +281,13 @@
       "when": 1789606800022,
       "tag": "0039_llm_model_pricing",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1789642465110,
+      "tag": "0040_real_zombie",
+      "breakpoints": true
     }
   ]
 }

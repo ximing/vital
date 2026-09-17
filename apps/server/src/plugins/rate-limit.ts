@@ -91,6 +91,7 @@ const defaults = {
   notify: isTest ? 1000 : 10,
   extensionAuth: isTest ? 1000 : 20,
   llm: isTest ? 1000 : 20,
+  inwit: isTest ? 1000 : 20,
 };
 
 const authMax = { ...defaults };
@@ -209,6 +210,12 @@ export function limitExtensionAuth(req: FastifyRequest): Promise<void> {
 export function limitLlm(req: FastifyRequest): Promise<void> {
   const userId = req.user?.id ?? '';
   hit('llm', `${ipFrom(req)}:${userId}`);
+  return Promise.resolve();
+}
+
+export function limitInwit(req: FastifyRequest): Promise<void> {
+  const userId = req.user?.id ?? '';
+  hit('inwit', `${ipFrom(req)}:${userId}`);
   return Promise.resolve();
 }
 

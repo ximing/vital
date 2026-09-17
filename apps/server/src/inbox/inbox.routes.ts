@@ -14,7 +14,8 @@ import { z } from 'zod';
 import { extractUrl } from '../extract/extract.js';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
-import { limitInbox } from '../plugins/rate-limit.js';
+import { limitInbox, limitInwit } from '../plugins/rate-limit.js';
+import { exportInboxToInwit } from '../inwit/inwit-export.service.js';
 import { withSimilarOpenTasks } from '../retrieval/duplicates.js';
 import {
   convertInbox,
@@ -113,5 +114,13 @@ export function registerInboxRoutes(app: FastifyInstance): void {
       task,
       ...(task.similarOpenTasks ? { similarOpenTasks: task.similarOpenTasks } : {}),
     });
+  });
+
+  app.post('/api/v1/inbox/:id/export-inwit', { preHandler: [requireAuth, limitInwit] }, async (req, reply) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    const exported = await exportInboxToInwit(user.id, id);
+    return reply.code(201).send(exported);
   });
 }

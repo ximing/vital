@@ -15,6 +15,7 @@ import { registerHabitRoutes } from './habits/habits.routes.js';
 import { registerDayRoutes } from './days/days.routes.js';
 import { registerAgentRoutes } from './agent/agent.routes.js';
 import { registerLlmRoutes } from './llm/llm.routes.js';
+import { registerInwitRoutes } from './inwit/inwit.routes.js';
 import { registerListRoutes } from './lists/lists.routes.js';
 import { populateUser } from './plugins/auth.js';
 import { registerErrorHandler } from './plugins/error-handler.js';
@@ -119,6 +120,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   registerNotificationRoutes(app);
   registerListRoutes(app);
   registerLlmRoutes(app);
+  registerInwitRoutes(app);
   registerTaskRoutes(app);
   registerTagRoutes(app);
   registerInboxRoutes(app);

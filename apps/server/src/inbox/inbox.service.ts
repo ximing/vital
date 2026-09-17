@@ -99,6 +99,8 @@ type InboxDtoRow = Pick<
   | 'capturedAt'
   | 'readAt'
   | 'convertedTaskId'
+  | 'inwitDocumentId'
+  | 'inwitExportedAt'
   | 'deletedAt'
   | 'createdAt'
   | 'updatedAt'
@@ -121,6 +123,8 @@ const inboxListColumns = {
   readAt: inboxItems.readAt,
   idempotencyKey: inboxItems.idempotencyKey,
   convertedTaskId: inboxItems.convertedTaskId,
+  inwitDocumentId: inboxItems.inwitDocumentId,
+  inwitExportedAt: inboxItems.inwitExportedAt,
   deletedAt: inboxItems.deletedAt,
   createdAt: inboxItems.createdAt,
   updatedAt: inboxItems.updatedAt,
@@ -148,6 +152,8 @@ export function toInboxDto(
     capturedAt: row.capturedAt.toISOString(),
     readAt: iso(row.readAt),
     convertedTaskId: row.convertedTaskId,
+    inwitDocumentId: row.inwitDocumentId,
+    inwitExportedAt: iso(row.inwitExportedAt),
     tagIds,
     assets,
     deletedAt: iso(row.deletedAt),
@@ -229,7 +235,7 @@ export async function loadAssetsByItemIds(ids: string[]): Promise<Map<string, In
   return map;
 }
 
-async function loadBodiesByItemIds(ids: string[]): Promise<Map<string, InboxBody>> {
+export async function loadBodiesByItemIds(ids: string[]): Promise<Map<string, InboxBody>> {
   const map = new Map<string, InboxBody>();
   if (ids.length === 0) return map;
   const rows = await getDb()
@@ -260,7 +266,7 @@ async function writeInboxBody(
     });
 }
 
-async function dtoOf(row: InboxItemRow): Promise<InboxItem> {
+export async function dtoOf(row: InboxItemRow): Promise<InboxItem> {
   const [assets, tags, bodies] = await Promise.all([
     loadAssetsByItemIds([row.id]),
     tagIdsByInbox([row.id]),

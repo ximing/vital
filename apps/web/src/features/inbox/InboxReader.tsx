@@ -2,6 +2,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
+  BookMarked,
   Check,
   ChevronLeft,
   Copy,
@@ -107,6 +108,7 @@ function InboxReaderContent() {
   const originalUrl = item?.originalUrl ?? null;
   const patchable = item ? canPatchStatus(item) : false;
   const converted = item?.status === 'converted';
+  const exportedInwit = item?.inwitDocumentId != null;
   const [readProgress, setReadProgress] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -159,6 +161,16 @@ function InboxReaderContent() {
       const res = await page.convertKeepUrl(item.id);
       setConvertNote(t.inbox.convertKeptUrl);
       if (res.task.id) page.openConvertedTask(res.task.id);
+    } catch (err) {
+      page.setActionError(humanError(err));
+    }
+  }
+
+  async function onExportInwit() {
+    if (!item || exportedInwit) return;
+    try {
+      await page.exportToInwit(item.id);
+      setConvertNote(null);
     } catch (err) {
       page.setActionError(humanError(err));
     }
@@ -230,6 +242,14 @@ function InboxReaderContent() {
               activeClass="bg-done/12 text-done"
               disabled={!online || converted || !item}
               onClick={() => void onConvert()}
+            />
+            <ActionButton
+              label={exportedInwit ? t.inbox.exportedInwit : t.inbox.exportInwit}
+              icon={BookMarked}
+              active={exportedInwit}
+              activeClass="bg-done/12 text-done"
+              disabled={!online || exportedInwit || !item}
+              onClick={() => void onExportInwit()}
             />
             <ActionButton
               label={t.inbox.addToReport}

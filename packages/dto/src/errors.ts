@@ -38,6 +38,14 @@ export const ERROR_MESSAGES = {
   TOKEN_LIMIT_REACHED: '访问令牌数量已达上限',
   DAY_LIMIT_REACHED: '日子数量已达上限',
   DAY_NOT_DELETABLE: '系统节日不能删除，可以隐藏',
+  INWIT_NOT_CONFIGURED: '还没有配置 inwit accessKey',
+  INWIT_EMPTY_BODY: '这篇文章没有可转存的正文',
+  INWIT_KEY_INVALID: 'inwit accessKey 无效，请重新配置',
+  INWIT_KEY_FORBIDDEN: 'inwit accessKey 无权限',
+  INWIT_TOPIC_INVALID: 'inwit 默认主题已失效，请重新拉取列表',
+  INWIT_RATE_LIMITED: 'inwit 转存太频繁，请稍后再试',
+  INWIT_UNREACHABLE: 'inwit 服务暂时不可达，请检查服务地址',
+  INWIT_REJECTED: 'inwit 拒绝了这次转存请求',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

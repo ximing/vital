@@ -78,6 +78,8 @@ export async function extractUrl(rawUrl: string): Promise<InboxPreview> {
       source: 'web',
       readAt: null,
       convertedTaskId: null,
+      inwitDocumentId: null,
+      inwitExportedAt: null,
       tagIds: [],
       assets: [],
     };

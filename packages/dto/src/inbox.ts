@@ -55,6 +55,9 @@ export interface InboxItem {
   capturedAt: string;
   readAt: string | null;
   convertedTaskId: string | null;
+  /** inwit document created by 转存 (null = not exported yet). */
+  inwitDocumentId: string | null;
+  inwitExportedAt: string | null;
   tagIds: string[];
   assets: InboxAsset[];
   deletedAt: string | null;

@@ -58,6 +58,8 @@ const inbox = (over: Partial<InboxItem> & Pick<InboxItem, 'id'>): InboxItem => (
   capturedAt: '2026-09-01T00:00:00.000Z',
   readAt: null,
   convertedTaskId: null,
+  inwitDocumentId: null,
+  inwitExportedAt: null,
   tagIds: [],
   assets: [],
   deletedAt: null,

@@ -60,6 +60,14 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 | `TOKEN_LIMIT_REACHED` | 访问令牌数量已达上限 |
 | `DAY_LIMIT_REACHED` | 日子数量已达上限 |
 | `DAY_NOT_DELETABLE` | 系统节日不能删除，可以隐藏 |
+| `INWIT_NOT_CONFIGURED` | 还没有配置 inwit accessKey |
+| `INWIT_EMPTY_BODY` | 这篇文章没有可转存的正文 |
+| `INWIT_KEY_INVALID` | inwit accessKey 无效，请重新配置 |
+| `INWIT_KEY_FORBIDDEN` | inwit accessKey 无权限 |
+| `INWIT_TOPIC_INVALID` | inwit 默认主题已失效，请重新拉取列表 |
+| `INWIT_RATE_LIMITED` | inwit 转存太频繁，请稍后再试 |
+| `INWIT_UNREACHABLE` | inwit 服务暂时不可达，请检查服务地址 |
+| `INWIT_REJECTED` | inwit 拒绝了这次转存请求 |
 
 ## Types
 
@@ -475,6 +483,9 @@ export interface InboxItem {
   capturedAt: string;
   readAt: string | null;
   convertedTaskId: string | null;
+  /** inwit document created by 转存 (null = not exported yet). */
+  inwitDocumentId: string | null;
+  inwitExportedAt: string | null;
   tagIds: string[];
   assets: InboxAsset[];
   deletedAt: string | null;
@@ -496,6 +507,35 @@ export interface ConvertInboxResponse {
   task: Task;
   /** Same hits as `task.similarOpenTasks` when convert created a new task. */
   similarOpenTasks?: SimilarTaskHit[];
+}
+```
+
+```ts
+export interface InwitConfigPublic {
+  baseUrl: string;
+  accessKeySet: boolean;
+  defaultTopicId: string | null;
+}
+```
+
+```ts
+export interface InwitTopic {
+  id: string;
+  title: string;
+}
+```
+
+```ts
+export interface InwitTestResponse {
+  ok: true;
+  topics: InwitTopic[];
+}
+```
+
+```ts
+export interface InboxExportInwitResponse {
+  inbox: InboxItem;
+  inwitDocumentId: string;
 }
 ```
 
@@ -1900,6 +1940,19 @@ Request body (`convertInboxInputSchema`):
 - `listId`: uuid (optional)
 - `title`: string 1–500 (optional)
 
+#### `POST /api/v1/inbox/:id/export-inwit`
+
+Export Inbox To Inwit
+
+- Auth: Bearer required
+- Client: `exportInboxToInwit`
+- Status: 201
+- Response: `InboxExportInwitResponse`
+
+Path params:
+
+- `id`: uuid
+
 #### `POST /api/v1/inbox/extract`
 
 Fetch a URL and return a preview. Follow with POST /api/v1/inbox using the preview fields.
@@ -2733,6 +2786,38 @@ Query (`habitCheckinsQuerySchema`):
 
 - `from`: string pattern
 - `to`: string pattern
+
+### integrations
+
+#### `GET /api/v1/integrations/inwit`
+
+Get Inwit Config
+
+- Auth: Bearer required
+- Client: `getInwitConfig`
+- Response: `InwitConfigPublic`
+
+#### `PUT /api/v1/integrations/inwit`
+
+Put Inwit Config
+
+- Auth: Bearer required
+- Client: `putInwitConfig`
+- Response: `InwitConfigPublic`
+
+Request body (`inwitConfigInputSchema`):
+
+- `baseUrl`: string 0–512 url (optional)
+- `accessKey`: string pattern (optional)
+- `defaultTopicId`: uuid (optional, nullable)
+
+#### `POST /api/v1/integrations/inwit/test`
+
+Test Inwit
+
+- Auth: Bearer required
+- Client: `testInwit`
+- Response: `InwitTestResponse`
 
 ### outcomes
 

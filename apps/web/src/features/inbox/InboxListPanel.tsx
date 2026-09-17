@@ -396,6 +396,11 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
               page.setActionError(humanError(err));
             });
           }}
+          onExportInwit={() => {
+            void page.exportToInwit(menuItem.id).catch((err) => {
+              page.setActionError(humanError(err));
+            });
+          }}
           onCopyUrl={() => {
             if (!menuItem.originalUrl) return;
             void navigator.clipboard.writeText(menuItem.originalUrl).catch(() => {

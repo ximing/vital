@@ -44,6 +44,9 @@ export const inboxItems = pgTable(
     readAt: timestamp('read_at', { withTimezone: true, mode: 'date' }),
     idempotencyKey: char('idempotency_key', { length: 64 }),
     convertedTaskId: char('converted_task_id', { length: 36 }),
+    /** inwit document created by 转存 (null = not exported). */
+    inwitDocumentId: char('inwit_document_id', { length: 36 }),
+    inwitExportedAt: timestamp('inwit_exported_at', { withTimezone: true, mode: 'date' }),
     deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'date' }),
     searchTsv: tsvector('search_tsv')
       .notNull()

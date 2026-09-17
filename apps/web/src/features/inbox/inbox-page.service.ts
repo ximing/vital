@@ -1,6 +1,7 @@
 import type { ConvertInboxResponse, InboxItem } from '@vital/dto';
 import { Service } from '@rabjs/react';
 import { client } from '@/api/client';
+import { t } from '@/copy';
 import { todoKeys } from '@/features/todos/query-keys';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { AuthService } from '@/services/auth.service';
@@ -57,6 +58,13 @@ export class InboxPageService extends Service {
     await this.refresh();
     await this.query.invalidate(todoKeys.all);
     return res;
+  }
+
+  async exportToInwit(id: string): Promise<void> {
+    this.actionError = null;
+    await client.exportInboxToInwit(id);
+    this.setStatusNote(t.inbox.exportInwitNote);
+    await this.refresh();
   }
 
   openConvertedTask(taskId: string): void {
