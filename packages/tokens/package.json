@@ -28,7 +28,7 @@
     "@vital/tsconfig": "workspace:*",
     "eslint": "^9.19.0",
     "png-to-ico": "^3.0.1",
-    "typescript": "^5.7.3",
+    "typescript": "^7.0.0",
     "vitest": "^4.1.11"
   }
 }
