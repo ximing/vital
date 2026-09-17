@@ -160,7 +160,7 @@ function makeDashboard(over: Partial<TodayDashboard> = {}): TodayDashboard {
   return {
     outcomes: [],
     tasks: [],
-    pulse: { inboxPending: 3, reportStreak: 4, todayReportId: null },
+    pulse: { inboxPending: 3, reportStreak: 4, todayReportId: null, upcomingDay: null },
     now: {
       continuousMinutes: 120,
       quiet: false,

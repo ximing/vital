@@ -6,7 +6,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
 import { getDb } from '../src/db/index.js';
 import { lists, tasks } from '../src/db/schema.js';
-import { listHabits, spawnDailyHabits } from '../src/habits/habits.service.js';
+import { expireStaleHabitInstances, listHabits, spawnDailyHabits } from '../src/habits/habits.service.js';
+import { allDayLocalMidnight } from '../src/tasks/recurrence.js';
 import { loadHabitHeadlineFacts } from '../src/habits/progress.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
@@ -380,5 +381,152 @@ describe('habits', () => {
       token: alice.token,
     });
     expect(taskGet.statusCode).toBe(404);
+  });
+
+  it('expires yesterday’s open instances so daily habits do not carry', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '喝水', kind: 'count', targetCount: 8 },
+    });
+    const habitId = created.json().id as string;
+    const inboxRows = await getDb()
+      .select({ id: lists.id })
+      .from(lists)
+      .where(eq(lists.userId, alice.id));
+    const inbox = inboxRows[0];
+    if (!inbox) throw new Error('missing inbox list');
+    const tz = 'Asia/Shanghai';
+    const yesterday = DateTime.fromISO('2026-09-15T12:00:00', { zone: tz });
+    const todayNoon = DateTime.fromISO('2026-09-16T12:00:00', { zone: tz }).toJSDate();
+    const staleId = randomUUID();
+    await getDb()
+      .insert(tasks)
+      .values({
+        id: staleId,
+        userId: alice.id,
+        listId: inbox.id,
+        habitId,
+        habitSeq: 1,
+        habitKey: `${habitId}:2026-09-15:1`,
+        title: '喝水',
+        status: 'todo',
+        dueAt: allDayLocalMidnight('2026-09-15', tz),
+        isAllDay: true,
+        timezone: tz,
+      });
+
+    const review = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/reports/current?type=daily&at=${yesterday.toISODate()}`,
+      token: alice.token,
+    });
+    expect(review.statusCode).toBe(200);
+    const reviewBody = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/reports/${review.json().id as string}/review`,
+      token: alice.token,
+    });
+    expect(reviewBody.statusCode).toBe(200);
+    expect(
+      (reviewBody.json().carried as Array<{ title: string }>).map((row) => row.title),
+    ).not.toContain('喝水');
+
+    expect(await expireStaleHabitInstances(alice.id, tz, todayNoon)).toBe(1);
+    const [stale] = await getDb().select().from(tasks).where(eq(tasks.id, staleId));
+    expect(stale?.deletedAt).not.toBeNull();
+    expect(await spawnDailyHabits(alice.id, tz, todayNoon)).toBe(1);
+  });
+
+  it('lists completed instances as check-ins by local day', async () => {
+    const alice = await registerUser(app);
+    const water = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '喝水', kind: 'count', targetCount: 8 },
+    });
+    const stretch = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '锻炼', kind: 'daily' },
+    });
+    const waterId = water.json().id as string;
+    const stretchId = stretch.json().id as string;
+    const inboxRows = await getDb()
+      .select({ id: lists.id })
+      .from(lists)
+      .where(eq(lists.userId, alice.id));
+    const inbox = inboxRows[0];
+    if (!inbox) throw new Error('missing inbox list');
+    const tz = 'Asia/Shanghai';
+    await getDb()
+      .insert(tasks)
+      .values([
+        {
+          id: randomUUID(),
+          userId: alice.id,
+          listId: inbox.id,
+          habitId: waterId,
+          habitSeq: 1,
+          habitKey: `${waterId}:2026-09-15:1`,
+          title: '喝水',
+          status: 'done',
+          timezone: tz,
+        },
+        {
+          id: randomUUID(),
+          userId: alice.id,
+          listId: inbox.id,
+          habitId: waterId,
+          habitSeq: 2,
+          habitKey: `${waterId}:2026-09-15:2`,
+          title: '喝水',
+          status: 'done',
+          timezone: tz,
+        },
+        {
+          id: randomUUID(),
+          userId: alice.id,
+          listId: inbox.id,
+          habitId: stretchId,
+          habitSeq: 1,
+          habitKey: `${stretchId}:2026-09-16:1`,
+          title: '锻炼',
+          status: 'done',
+          timezone: tz,
+        },
+        {
+          id: randomUUID(),
+          userId: alice.id,
+          listId: inbox.id,
+          habitId: waterId,
+          habitSeq: 1,
+          habitKey: `${waterId}:2026-09-16:1`,
+          title: '喝水',
+          status: 'todo',
+          timezone: tz,
+        },
+      ]);
+
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/habits/checkins?from=2026-09-01&to=2026-09-30',
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json().items as Array<{
+      habitId: string;
+      days: Array<{ date: string; done: number }>;
+    }>;
+    expect(items.find((row) => row.habitId === waterId)?.days).toEqual([
+      { date: '2026-09-15', done: 2 },
+    ]);
+    expect(items.find((row) => row.habitId === stretchId)?.days).toEqual([
+      { date: '2026-09-16', done: 1 },
+    ]);
   });
 });

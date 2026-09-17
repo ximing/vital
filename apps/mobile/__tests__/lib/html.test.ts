@@ -12,6 +12,7 @@ describe('decodeEntities', () => {
 
   it('decodes a mix of named and numeric references', () => {
     expect(decodeEntities('A&amp;B&#x20;&lt;x&gt;')).toBe('A&B <x>');
+    expect(decodeEntities('foo &mdash; bar &hellip;')).toBe('foo — bar …');
   });
 
   it('leaves invalid or out-of-range references untouched', () => {

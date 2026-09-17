@@ -267,6 +267,20 @@
       "when": 1789606800020,
       "tag": "0037_tasks_open_notify",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1789606800021,
+      "tag": "0038_days",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1789606800022,
+      "tag": "0039_llm_model_pricing",
+      "breakpoints": true
     }
   ]
 }

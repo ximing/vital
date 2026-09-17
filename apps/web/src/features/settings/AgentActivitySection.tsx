@@ -2,7 +2,7 @@ import { AgentExecutionSection } from './AgentExecutionSection';
 import { AgentScheduleSection } from './AgentScheduleSection';
 import { ACTIVITY_CARD, ActivitySectionHead } from './ActivitySectionHead';
 import { formatCost } from './UsageSection';
-import { useState, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { AgentActionLogItem, AgentMetricsResponse } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
@@ -235,11 +235,7 @@ export function proposalFullText(item: AgentActionLogItem): string {
   return body;
 }
 
-export function proposalCanExpand(item: AgentActionLogItem): boolean {
-  const full = proposalFullText(item);
-  const preview = detailText(item);
-  return full !== preview || full.includes('\n') || full.length > 72;
-}
+const BODY_TEXT = 'text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]';
 
 export function ExpandableProposalText({
   item,
@@ -249,21 +245,38 @@ export function ExpandableProposalText({
   tone?: 'fg' | 'muted';
 }) {
   const [open, setOpen] = useState(false);
-  const canExpand = proposalCanExpand(item);
-  const text = open ? proposalFullText(item) : detailText(item);
+  // The toggle only exists when the FULL body can't fit the 2-line clamp —
+  // measured against a hidden copy at real width, not a length heuristic.
+  const [overflow, setOverflow] = useState(false);
+  const measureRef = useRef<HTMLParagraphElement | null>(null);
+  const full = proposalFullText(item);
+  const text = open ? full : detailText(item);
   const color = tone === 'muted' ? 'text-muted' : 'text-fg';
   const weight = tone === 'muted' ? 'font-normal' : 'font-medium';
 
+  useLayoutEffect(() => {
+    const el = measureRef.current;
+    if (!el) return;
+    const update = () => setOverflow(el.scrollHeight > el.clientHeight + 1);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [full, weight]);
+
   return (
-    <div className="min-w-0 flex-1">
+    <div className="relative min-w-0 flex-1">
       <p
-        className={`text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${weight} ${color} ${
-          open ? 'whitespace-pre-wrap' : 'line-clamp-2'
-        }`}
+        ref={measureRef}
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-0 top-0 opacity-0 ${BODY_TEXT} ${weight} line-clamp-2 whitespace-pre-wrap`}
       >
+        {full}
+      </p>
+      <p className={`${BODY_TEXT} ${weight} ${color} ${open ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>
         {text}
       </p>
-      {canExpand ? (
+      {open || overflow ? (
         <button
           type="button"
           aria-expanded={open}

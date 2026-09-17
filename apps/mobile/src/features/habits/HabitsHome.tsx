@@ -19,8 +19,10 @@ import { PickerOption, PickerSheet } from '../../components/PickerSheet';
 import { SelectField } from '../../components/SelectField';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { copy } from '../../lib/copy';
+import { localDateStamp } from '../../lib/format';
 import { useTheme } from '../../theme/use-theme';
 import { cardStyle, rnShadow } from '../../ui/card';
+import { HabitCheckinCalendar, HabitMonthNav } from './HabitCheckinCalendar';
 import { HabitsService } from './habits.service';
 
 /** 行内频率描述：类型 · 时间窗 · 所属线程 · 今日进度（暂停时标注）。 */
@@ -129,53 +131,67 @@ const HabitsHomeContent = observer(function HabitsHomeContent() {
           />
         ) : (
           <View style={[cardStyle(t), rnShadow(t)]}>
+            <HabitMonthNav
+              monthCursor={s.monthCursorOrNow}
+              today={s.today}
+              onShift={(delta) => s.shiftMonth(delta)}
+            />
             {habits.map((habit, index) => (
-              <Pressable
+              <View
                 key={habit.id}
-                accessibilityRole="button"
-                accessibilityLabel={habit.name}
-                onLongPress={() => s.openMenu(habit)}
-                delayLongPress={320}
-                onPress={() => s.openMenu(habit)}
-                style={({ pressed }) => [
-                  styles.row,
-                  index < habits.length - 1 && styles.rowBorder,
-                  pressed && styles.rowPressed,
-                  !habit.active && styles.rowPaused,
-                ]}
+                style={[index < habits.length - 1 && styles.rowBorder, !habit.active && styles.rowPaused]}
               >
-                <View style={styles.rowBody}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {habit.name}
-                    </Text>
-                    {habit.createdBy === 'agent' ? (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{copy.habits.agentBadge}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={styles.meta} numberOfLines={1}>
-                    {habitMeta(
-                      habit,
-                      s.outcomes.find((outcome) => outcome.id === habit.outcomeId)?.name,
-                    )}
-                  </Text>
-                </View>
-                <Switch
-                  accessibilityLabel={habit.active ? copy.habits.pause : copy.habits.resume}
-                  value={habit.active}
-                  onValueChange={(next) => void s.setActive(habit, next)}
-                  trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                />
-                <IconButton
-                  icon={Ellipsis}
-                  label={copy.todos.more}
-                  size={20}
-                  color={t.fgMuted}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={habit.name}
+                  onLongPress={() => s.openMenu(habit)}
+                  delayLongPress={320}
                   onPress={() => s.openMenu(habit)}
-                />
-              </Pressable>
+                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                >
+                  <View style={styles.rowBody}>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {habit.name}
+                      </Text>
+                      {habit.createdBy === 'agent' ? (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{copy.habits.agentBadge}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Text style={styles.meta} numberOfLines={1}>
+                      {habitMeta(
+                        habit,
+                        s.outcomes.find((outcome) => outcome.id === habit.outcomeId)?.name,
+                      )}
+                    </Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel={habit.active ? copy.habits.pause : copy.habits.resume}
+                    value={habit.active}
+                    onValueChange={(next) => void s.setActive(habit, next)}
+                    trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                  />
+                  <IconButton
+                    icon={Ellipsis}
+                    label={copy.todos.more}
+                    size={20}
+                    color={t.fgMuted}
+                    onPress={() => s.openMenu(habit)}
+                  />
+                </Pressable>
+                <View style={styles.calWrap}>
+                  <HabitCheckinCalendar
+                    habit={habit}
+                    days={s.daysFor(habit.id)}
+                    monthCursor={s.monthCursorOrNow}
+                    weekStartsOn={s.weekStartsOn}
+                    today={s.today}
+                    createdOn={localDateStamp(s.tz, new Date(habit.createdAt))}
+                  />
+                </View>
+              </View>
             ))}
           </View>
         )}
@@ -327,6 +343,7 @@ const createStyles = (t: Theme) =>
     },
     rowPressed: { backgroundColor: t.bgSurfaceMuted },
     rowPaused: { opacity: 0.6 },
+    calWrap: { paddingHorizontal: t.space[3], paddingBottom: t.space[3] },
     rowBody: { flex: 1, minWidth: 0, gap: 2 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: t.space[2] },
     name: {

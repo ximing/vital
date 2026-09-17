@@ -276,6 +276,7 @@ export async function getReportOverview(
     );
   let carried = 0;
   for (const task of openTasks) {
+    if (task.habitId !== null) continue;
     if (isCarried(task.dueAt, task.startAt, period.start, period.end, tz, periodBounds.end)) {
       carried += 1;
     }

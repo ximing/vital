@@ -28,5 +28,7 @@ describe('ERROR_MESSAGES', () => {
       '大模型暂时不可用，请检查 API Base、密钥和模型名称',
     );
     expect(ERROR_MESSAGES.TOKEN_LIMIT_REACHED).toBe('访问令牌数量已达上限');
+    expect(ERROR_MESSAGES.DAY_LIMIT_REACHED).toBe('日子数量已达上限');
+    expect(ERROR_MESSAGES.DAY_NOT_DELETABLE).toBe('系统节日不能删除，可以隐藏');
   });
 });

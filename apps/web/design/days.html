@@ -1,0 +1,477 @@
+<!-- 设计稿 · 日子 /days · 1280 桌面 · 两块画板：主列表 + 编辑弹层 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital · 日子 · 设计稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* emerald garden tokens —— 与 packages/tokens 对齐 */
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-deep:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --dim:#555E56; --faint:#98A098; --line:#E2E6E0;
+    --soon:#B4761E; --soon-bg:#F5EAD7; --danger:#CE4A45;
+    --shadow:0 1px 2px rgb(20 34 24/5%),0 10px 28px rgb(20 34 24/7%);
+    --shadow-xs:0 1px 2px rgb(20 34 24/5%);
+    --display:Sora,Inter,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --sans:Inter,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:#E7EBE6;color:var(--ink);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:21px;
+    display:flex;flex-direction:column;align-items:center;gap:56px;padding:48px 0 96px}
+  .num{font-variant-numeric:tabular-nums}
+  .fd{font-family:var(--display);letter-spacing:-0.02em}
+  .art-label{font-size:12px;color:var(--dim);letter-spacing:.06em;margin-bottom:-40px}
+  .board{width:1280px;height:860px;background:var(--canvas);position:relative;overflow:hidden;
+    border-radius:12px;box-shadow:0 24px 64px rgb(20 34 24/14%)}
+
+  /* ===== 页面骨架（画布区，左侧导航略） ===== */
+  .page{height:100%;overflow-y:auto;padding:32px 48px 64px}
+  .col{max-width:1040px;margin:0 auto}
+
+  /* 页头 */
+  .pagehead{display:flex;align-items:flex-end;gap:24px}
+  .pagehead h1{font-family:var(--display);font-size:26px;line-height:34px;font-weight:700}
+  .pagehead .hint{font-size:13px;line-height:18px;color:var(--dim);margin-top:4px}
+  .pagehead .acts{margin-left:auto;display:flex;gap:8px;padding-bottom:2px}
+  .btn{height:36px;padding:0 16px;border-radius:10px;font-size:14px;font-weight:500;
+    display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;cursor:pointer}
+  .btn-ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+  .btn-ghost:hover{background:var(--muted)}
+  .btn-primary{background:var(--accent);color:#fff;font-weight:600}
+  .btn-primary:hover{background:var(--accent-deep)}
+
+  /* ===== Hero · 下一个日子 ===== */
+  .hero{margin-top:24px;background:var(--elevated);border-radius:20px;box-shadow:var(--shadow);
+    display:grid;grid-template-columns:1fr 340px;overflow:hidden;position:relative}
+  .hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent)}
+  .hero-main{padding:28px 32px 26px 36px;min-width:0}
+  .eyebrow{font-size:11px;font-weight:650;letter-spacing:.09em;color:var(--faint);text-transform:uppercase}
+  .eyebrow-accent{color:var(--accent)}
+  .hero-count{display:flex;align-items:baseline;gap:10px;margin-top:14px}
+  .hero-count .n{font-family:var(--display);font-size:88px;line-height:.95;font-weight:700;
+    color:var(--accent-deep);letter-spacing:-0.04em}
+  .hero-count .u{font-size:16px;font-weight:600;color:var(--accent)}
+  .hero-name{margin-top:10px;font-family:var(--display);font-size:20px;line-height:28px;font-weight:600}
+  .hero-meta{margin-top:4px;font-size:13px;color:var(--dim)}
+  .hero-chips{display:flex;gap:8px;margin-top:14px}
+  .chip{height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:500;
+    display:inline-flex;align-items:center;gap:5px}
+  .chip-holiday{background:var(--soon-bg);color:var(--soon)}
+  .chip-lunar{background:var(--accent-subtle);color:var(--accent-deep)}
+  .chip-bell{background:var(--muted);color:var(--dim)}
+  /* 进度轨：今天 → 中秋，放假区间成色带 */
+  .track{margin-top:22px}
+  .track-rail{position:relative;height:6px;border-radius:3px;background:var(--muted)}
+  .track-fill{position:absolute;left:0;top:0;bottom:0;width:38%;border-radius:3px;
+    background:linear-gradient(90deg,var(--accent-subtle),var(--accent))}
+  .track-band{position:absolute;top:-3px;bottom:-3px;left:calc(38% + 2px);width:22%;
+    border-radius:5px;background:rgb(180 118 30/18%);border:1px dashed rgb(180 118 30/45%)}
+  .track-dot{position:absolute;top:50%;width:10px;height:10px;border-radius:5px;transform:translate(-50%,-50%)}
+  .track-dot.from{left:0;background:var(--ink)}
+  .track-dot.to{left:38%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-subtle)}
+  .track-lab{display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--faint)}
+  .track-lab .to-lab{color:var(--accent);font-weight:600}
+  .hero-cover{position:relative;min-height:100%}
+  .hero-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .hero-cover .pin{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:15px;
+    background:rgb(27 33 29/45%);display:grid;place-items:center;backdrop-filter:blur(4px)}
+
+  /* ===== 年度时间轴 ===== */
+  .timeline{margin-top:28px;background:var(--surface);border:1px solid var(--line);
+    border-radius:14px;padding:18px 24px 16px}
+  .timeline-head{display:flex;align-items:baseline;gap:12px}
+  .timeline-head .t{font-size:13px;font-weight:600}
+  .timeline-head .m{font-size:12px;color:var(--faint)}
+  .tl{position:relative;height:64px;margin-top:10px}
+  .tl-rail{position:absolute;left:0;right:0;top:30px;height:2px;background:var(--line);border-radius:1px}
+  .tl-month{position:absolute;top:36px;font-size:11px;color:var(--faint);transform:translateX(-50%)}
+  .tl-month::before{content:"";position:absolute;left:50%;top:-9px;width:1px;height:5px;background:var(--line)}
+  .tl-today{position:absolute;left:0;top:22px;text-align:left}
+  .tl-today .tick{width:2px;height:18px;background:var(--ink);border-radius:1px}
+  .tl-today .lab{position:absolute;top:-16px;left:0;font-size:11px;font-weight:600;white-space:nowrap}
+  .tl-dot{position:absolute;top:30px;transform:translate(-50%,-50%);text-align:center}
+  .tl-dot .d{display:block;width:11px;height:11px;border-radius:6px;background:var(--accent);margin:0 auto;
+    box-shadow:0 0 0 2.5px #fff,0 1px 3px rgb(20 34 24/25%)}
+  .tl-dot .lab{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+    font-size:11px;color:var(--dim);white-space:nowrap}
+  .tl-dot .lab b{font-weight:600;color:var(--ink)}
+  .tl-dot.holiday .d{background:var(--soon)}
+  .tl-dot.far .d{background:var(--faint)}
+
+  /* ===== 筛选 ===== */
+  .filters{display:flex;align-items:center;gap:6px;margin-top:26px}
+  .f-pill{height:32px;padding:0 14px;border-radius:999px;font-size:13px;color:var(--dim);
+    display:inline-flex;align-items:center;cursor:pointer;border:none;background:transparent}
+  .f-pill:hover{background:var(--muted)}
+  .f-pill.on{background:var(--accent-subtle);color:var(--accent-deep);font-weight:600}
+  .filters .cnt{margin-left:auto;font-size:12px;color:var(--faint)}
+
+  /* ===== 今天 banner ===== */
+  .todayband{margin-top:18px;display:flex;align-items:center;gap:16px;
+    background:linear-gradient(100deg,var(--accent-subtle),rgb(223 237 228/40%));
+    border-radius:16px;padding:14px 20px 14px 16px}
+  .todayband img{width:56px;height:56px;border-radius:12px;object-fit:cover;flex:none}
+  .todayband .tx{min-width:0;flex:1}
+  .todayband .t1{font-family:var(--display);font-size:16px;font-weight:600}
+  .todayband .t2{font-size:12px;color:var(--dim);margin-top:2px}
+  .todayband .big{text-align:right;flex:none}
+  .todayband .big .n{font-family:var(--display);font-size:24px;font-weight:700;color:var(--accent-deep)}
+  .todayband .big .u{font-size:12px;color:var(--accent);font-weight:600}
+
+  /* ===== 分组 ===== */
+  .sec{display:flex;align-items:center;gap:10px;margin:30px 0 12px}
+  .sec .lab{font-size:11px;font-weight:650;letter-spacing:.09em;color:var(--faint);text-transform:uppercase}
+  .sec .n{font-size:11px;color:var(--faint)}
+  .sec .rule{flex:1;height:1px;background:var(--line)}
+
+  /* 倒数卡片：数字为主体 */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .dcard{background:var(--elevated);border-radius:14px;box-shadow:var(--shadow-xs);
+    display:flex;align-items:center;gap:16px;padding:16px 20px 16px 16px;cursor:pointer;
+    transition:box-shadow .18s cubic-bezier(.2,0,0,1),transform .18s cubic-bezier(.2,0,0,1)}
+  .dcard:hover{box-shadow:var(--shadow);transform:translateY(-1px)}
+  .dcard img{width:64px;height:64px;border-radius:10px;object-fit:cover;flex:none}
+  .dcard .tx{min-width:0;flex:1}
+  .dcard .nm{font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px}
+  .dcard .mt{font-size:12px;color:var(--faint);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dcard .mt .holiday{color:var(--soon);font-weight:500}
+  .dcard .ct{text-align:right;flex:none}
+  .dcard .ct .n{font-family:var(--display);font-size:34px;line-height:1;font-weight:700;
+    color:var(--accent-deep);letter-spacing:-0.03em}
+  .dcard .ct .u{font-size:11px;font-weight:600;color:var(--accent);margin-top:3px}
+  .pin-ic{width:14px;height:14px;flex:none;color:var(--accent)}
+
+  /* 正数：hairline 安静列表 */
+  .ulist{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .urow{display:flex;align-items:center;gap:14px;padding:13px 20px 13px 16px;cursor:pointer}
+  .urow + .urow{border-top:1px solid var(--line)}
+  .urow:hover{background:var(--muted)}
+  .urow img{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:none}
+  .urow .tx{min-width:0;flex:1}
+  .urow .nm{font-size:14px;font-weight:500}
+  .urow .mt{font-size:12px;color:var(--faint);margin-top:1px}
+  .urow .ct{display:flex;align-items:baseline;gap:6px;flex:none}
+  .urow .ct .n{font-family:var(--display);font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.02em}
+  .urow .ct .u{font-size:11px;color:var(--dim)}
+  .yrchip{flex:none;height:22px;padding:0 8px;border-radius:999px;background:var(--muted);
+    color:var(--dim);font-size:11px;font-weight:600;display:inline-flex;align-items:center;margin-left:8px}
+
+  /* ===== 画板 2：编辑弹层 ===== */
+  .scrim{position:absolute;inset:0;background:rgb(27 33 29/32%);display:grid;place-items:center}
+  .sheet{width:560px;max-height:92%;background:var(--elevated);border-radius:20px;box-shadow:var(--shadow);
+    overflow:hidden;display:flex;flex-direction:column}
+  .sheet-cover{position:relative;height:148px;flex:none}
+  .sheet-cover img{width:100%;height:100%;object-fit:cover}
+  .sheet-cover .grad{position:absolute;inset:0;background:linear-gradient(to top,rgb(27 33 29/55%),transparent 60%)}
+  .sheet-cover .ct{position:absolute;left:24px;bottom:14px;color:#fff}
+  .sheet-cover .ct .t{font-family:var(--display);font-size:18px;font-weight:600}
+  .sheet-cover .ct .m{font-size:12px;opacity:.85;margin-top:2px}
+  .sheet-cover .preset-row{position:absolute;right:16px;bottom:14px;display:flex;gap:6px}
+  .sheet-cover img.preset-dot{width:26px;height:26px;border-radius:8px;border:2px solid rgb(255 255 255/70%);
+    object-fit:cover;cursor:pointer}
+  .sheet-cover img.preset-dot.on{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
+  .sheet-body{padding:20px 24px;overflow-y:auto}
+  .field + .field{margin-top:16px}
+  .field .fl{font-size:12px;font-weight:600;color:var(--dim);margin-bottom:6px}
+  .input{height:40px;width:100%;border:1px solid var(--line);border-radius:10px;padding:0 12px;
+    font-size:14px;background:var(--surface);display:flex;align-items:center;color:var(--ink)}
+  .input.ph{color:var(--faint)}
+  .seg{display:inline-flex;background:var(--muted);border-radius:10px;padding:3px;gap:2px}
+  .seg .o{height:28px;padding:0 12px;border-radius:7px;font-size:13px;color:var(--dim);
+    display:inline-flex;align-items:center;cursor:pointer}
+  .seg .o.on{background:var(--elevated);color:var(--ink);font-weight:600;box-shadow:var(--shadow-xs)}
+  .chips-row{display:flex;gap:6px;flex-wrap:wrap}
+  .rchip{height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--line);
+    font-size:12px;color:var(--dim);display:inline-flex;align-items:center;cursor:pointer;background:var(--surface)}
+  .rchip.on{background:var(--accent-subtle);border-color:transparent;color:var(--accent-deep);font-weight:600}
+  .switch-row{display:flex;align-items:center;gap:10px;padding:2px 0}
+  .switch-row .st{flex:1;font-size:14px}
+  .sw{width:36px;height:22px;border-radius:11px;background:var(--accent);position:relative;flex:none}
+  .sw::after{content:"";position:absolute;top:3px;right:3px;width:16px;height:16px;border-radius:8px;background:#fff}
+  .sheet-foot{flex:none;display:flex;align-items:center;gap:8px;padding:14px 24px;border-top:1px solid var(--line)}
+  .btn-danger{background:transparent;color:var(--danger);font-weight:500}
+  .btn-danger:hover{background:rgb(206 74 69/8%)}
+</style>
+</head>
+<body>
+
+<div class="art-label">画板 1 · /days 主列表 · 今天 = 2026-09-16 周三</div>
+<div class="board">
+  <div class="page">
+    <div class="col">
+
+      <!-- 页头 -->
+      <div class="pagehead">
+        <div>
+          <h1 class="fd">日子</h1>
+          <p class="hint">记下想倒数、想记得的日子。</p>
+        </div>
+        <div class="acts">
+          <button class="btn btn-ghost">节日目录</button>
+          <button class="btn btn-primary">＋ 添加</button>
+        </div>
+      </div>
+
+      <!-- Hero · 下一个日子 -->
+      <section class="hero">
+        <div class="hero-main">
+          <span class="eyebrow eyebrow-accent">下一个日子</span>
+          <div class="hero-count">
+            <span class="n num">9</span>
+            <span class="u">天后</span>
+          </div>
+          <p class="hero-name">中秋</p>
+          <p class="hero-meta num">2026-09-25 · 周五 · 农历八月十五</p>
+          <div class="hero-chips">
+            <span class="chip chip-holiday">放假 09-25 – 09-27</span>
+            <span class="chip chip-bell">🔔 提前 3 天提醒</span>
+          </div>
+          <div class="track">
+            <div class="track-rail">
+              <div class="track-fill"></div>
+              <div class="track-band" title="放假区间"></div>
+              <div class="track-dot from"></div>
+              <div class="track-dot to"></div>
+            </div>
+            <div class="track-lab">
+              <span>今天 09-16</span>
+              <span class="to-lab">中秋 09-25</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-cover">
+          <img src="../public/days/moon.jpg" alt="中秋封面" />
+          <span class="pin">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M16 3a1 1 0 0 0-.8.4l-2.4 3.2-4.6 1.1a1 1 0 0 0-.5 1.7l3.2 3.2-4.4 5.1a1 1 0 1 0 1.5 1.3l4.4-5.1 3.2 3.2a1 1 0 0 0 1.7-.5l1.1-4.6 3.2-2.4A1 1 0 0 0 22 8.6l-5.2-5.2A1 1 0 0 0 16 3Z"/></svg>
+          </span>
+        </div>
+      </section>
+
+      <!-- 年度时间轴 -->
+      <section class="timeline">
+        <div class="timeline-head">
+          <span class="t">接下来的日子</span>
+          <span class="m">未来 5 个月 · 5 个日子</span>
+        </div>
+        <div class="tl">
+          <div class="tl-rail"></div>
+          <div class="tl-today" style="left:1%">
+            <div class="lab">今天 09-16</div>
+            <div class="tick"></div>
+          </div>
+          <div class="tl-month" style="left:1%">9月</div>
+          <div class="tl-month" style="left:30%">11月</div>
+          <div class="tl-month" style="left:50%">12月</div>
+          <div class="tl-month" style="left:70%">1月</div>
+          <div class="tl-month" style="left:90%">2月</div>
+          <div class="tl-dot holiday" style="left:6%"><span class="d"></span></div>
+          <div class="tl-dot holiday" style="left:10.5%"><span class="lab"><b>国庆</b> 10-01</span><span class="d"></span></div>
+          <div class="tl-dot" style="left:35%"><span class="lab"><b>妈妈生日</b> 11-08</span><span class="d"></span></div>
+          <div class="tl-dot" style="left:70%"><span class="lab"><b>元旦</b> 01-01</span><span class="d"></span></div>
+          <div class="tl-dot holiday far" style="left:93%"><span class="lab"><b>春节</b> 02-06</span><span class="d"></span></div>
+        </div>
+      </section>
+
+      <!-- 筛选 -->
+      <div class="filters">
+        <button class="f-pill on">全部</button>
+        <button class="f-pill">倒数</button>
+        <button class="f-pill">正数</button>
+        <button class="f-pill">节日</button>
+        <span class="cnt num">共 10 个日子</span>
+      </div>
+
+      <!-- 今天 -->
+      <section class="todayband">
+        <img src="../public/days/tea.jpg" alt="" />
+        <div class="tx">
+          <p class="t1">领证纪念日</p>
+          <p class="t2 num">2021-09-16 起 · 每年 09-16</p>
+        </div>
+        <div class="big">
+          <div class="n">就是今天</div>
+          <div class="u">第 5 年</div>
+        </div>
+      </section>
+
+      <!-- 倒数 -->
+      <div class="sec">
+        <span class="lab">倒数</span><span class="n num">6</span><span class="rule"></span>
+      </div>
+      <div class="grid2">
+        <article class="dcard">
+          <img src="../public/days/moon.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">中秋
+              <svg class="pin-ic" viewBox="0 0 24 24" fill="currentColor"><path d="M16 3a1 1 0 0 0-.8.4l-2.4 3.2-4.6 1.1a1 1 0 0 0-.5 1.7l3.2 3.2-4.4 5.1a1 1 0 1 0 1.5 1.3l4.4-5.1 3.2 3.2a1 1 0 0 0 1.7-.5l1.1-4.6 3.2-2.4A1 1 0 0 0 22 8.6l-5.2-5.2A1 1 0 0 0 16 3Z"/></svg>
+            </p>
+            <p class="mt num">09-25 · 八月十五 · <span class="holiday">放假 3 天</span></p>
+          </div>
+          <div class="ct"><div class="n num">9</div><div class="u">天后</div></div>
+        </article>
+        <article class="dcard">
+          <img src="../public/days/lantern.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">国庆</p>
+            <p class="mt num">10-01 · 周四 · <span class="holiday">放假 10-01 – 10-07</span></p>
+          </div>
+          <div class="ct"><div class="n num">15</div><div class="u">天后</div></div>
+        </article>
+        <article class="dcard">
+          <img src="../public/days/blossom.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">妈妈生日</p>
+            <p class="mt num">11-08 · 周日 · 农历九月廿九</p>
+          </div>
+          <div class="ct"><div class="n num">53</div><div class="u">天后</div></div>
+        </article>
+        <article class="dcard">
+          <img src="../public/days/snow.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">元旦</p>
+            <p class="mt num">2027-01-01 · 周五</p>
+          </div>
+          <div class="ct"><div class="n num">107</div><div class="u">天后</div></div>
+        </article>
+        <article class="dcard">
+          <img src="../public/days/paper.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">春节</p>
+            <p class="mt num">2027-02-06 · 正月初一 · <span class="holiday">放假 02-05 – 02-11</span></p>
+          </div>
+          <div class="ct"><div class="n num">143</div><div class="u">天后</div></div>
+        </article>
+        <article class="dcard">
+          <img src="../public/days/night.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">签证到期</p>
+            <p class="mt num">2027-03-02 · 单次不重复</p>
+          </div>
+          <div class="ct"><div class="n num">167</div><div class="u">天后</div></div>
+        </article>
+      </div>
+
+      <!-- 正数 -->
+      <div class="sec">
+        <span class="lab">正数</span><span class="n num">3</span><span class="rule"></span>
+      </div>
+      <div class="ulist">
+        <article class="urow">
+          <img src="../public/days/river.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">在一起</p>
+            <p class="mt num">2019-06-01 起</p>
+          </div>
+          <span class="yrchip">第 8 年</span>
+          <div class="ct"><span class="n num">2,664</span><span class="u">天</span></div>
+        </article>
+        <article class="urow">
+          <img src="../public/days/silk.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">宝宝出生</p>
+            <p class="mt num">2023-08-20 起</p>
+          </div>
+          <span class="yrchip">第 3 年</span>
+          <div class="ct"><span class="n num">1,123</span><span class="u">天</span></div>
+        </article>
+        <article class="urow">
+          <img src="../public/days/field.jpg" alt="" />
+          <div class="tx">
+            <p class="nm">出发去杭州</p>
+            <p class="mt num">2024-03-18 起</p>
+          </div>
+          <div class="ct"><span class="n num">912</span><span class="u">天</span></div>
+        </article>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="art-label">画板 2 · 编辑日子（点卡片弹出）· 封面预设内联切换</div>
+<div class="board">
+  <div class="page" aria-hidden="true" style="filter:saturate(.85)">
+    <div class="col">
+      <div class="pagehead">
+        <div><h1 class="fd">日子</h1><p class="hint">记下想倒数、想记得的日子。</p></div>
+        <div class="acts"><button class="btn btn-ghost">节日目录</button><button class="btn btn-primary">＋ 添加</button></div>
+      </div>
+      <div class="grid2" style="margin-top:24px">
+        <article class="dcard"><img src="../public/days/moon.jpg" alt="" /><div class="tx"><p class="nm">中秋</p><p class="mt num">09-25 · 八月十五</p></div><div class="ct"><div class="n num">9</div><div class="u">天后</div></div></article>
+        <article class="dcard"><img src="../public/days/lantern.jpg" alt="" /><div class="tx"><p class="nm">国庆</p><p class="mt num">10-01 · 周四</p></div><div class="ct"><div class="n num">15</div><div class="u">天后</div></div></article>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim">
+    <div class="sheet" role="dialog" aria-label="编辑日子">
+      <div class="sheet-cover">
+        <img src="../public/days/moon.jpg" alt="" />
+        <div class="grad"></div>
+        <div class="ct">
+          <div class="t">中秋</div>
+          <div class="m num">2026-09-25 · 农历八月十五 · 还有 9 天</div>
+        </div>
+        <div class="preset-row">
+          <img class="preset-dot on" src="../public/days/moon.jpg" alt="月色" />
+          <img class="preset-dot" src="../public/days/lantern.jpg" alt="灯" />
+          <img class="preset-dot" src="../public/days/paper.jpg" alt="纸" />
+          <img class="preset-dot" src="../public/days/mist.jpg" alt="雾" />
+        </div>
+      </div>
+      <div class="sheet-body">
+        <div class="field">
+          <p class="fl">名称</p>
+          <div class="input">中秋</div>
+        </div>
+        <div class="field">
+          <p class="fl">历法</p>
+          <div class="seg">
+            <span class="o">公历</span><span class="o on">农历</span>
+          </div>
+        </div>
+        <div class="field">
+          <p class="fl">日期</p>
+          <div class="input num">八月十五 · 每年重复</div>
+        </div>
+        <div class="field">
+          <p class="fl">显示方式</p>
+          <div class="seg">
+            <span class="o on">自动</span><span class="o">倒数</span><span class="o">正数</span>
+          </div>
+        </div>
+        <div class="field">
+          <p class="fl">提醒</p>
+          <div class="chips-row">
+            <span class="rchip">当天</span>
+            <span class="rchip">提前 1 天</span>
+            <span class="rchip on">提前 3 天</span>
+            <span class="rchip">提前 7 天</span>
+            <span class="rchip">提前 30 天</span>
+          </div>
+        </div>
+        <div class="field">
+          <div class="switch-row">
+            <span class="st">置顶到最前</span>
+            <span class="sw"></span>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn btn-danger">隐藏</button>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-ghost">取消</button>
+          <button class="btn btn-primary">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

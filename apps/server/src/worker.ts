@@ -3,6 +3,7 @@ import { runAgentScheduler } from './agent/scheduler.js';
 import { config } from './config.js';
 import { pool } from './db/index.js';
 import { healTaskNotifications, processDueNotifications } from './notifications/dispatch.js';
+import { healDayNotifications } from './days/outbox.js';
 import { startSweeper } from './uploads/sweeper.js';
 import { logger } from './utils/logger.js';
 
@@ -40,6 +41,12 @@ async function heal(): Promise<void> {
     if (n > 0) logger.info('worker.heal', { scanned: n });
   } catch (err) {
     logger.error('worker.heal.failed', err);
+  }
+  try {
+    const n = await healDayNotifications();
+    if (n > 0) logger.info('worker.heal.days', { scanned: n });
+  } catch (err) {
+    logger.error('worker.heal.days.failed', err);
   }
   try {
     const n = await recoverStuckAgentJobs();

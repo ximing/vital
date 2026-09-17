@@ -89,7 +89,7 @@ describe('primary rail', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('puts today first, then todos, capture, habits, threads, reflect, and a palette search button', () => {
+  it('puts today first, then todos, capture, habits, days, threads, reflect, and a palette search button', () => {
     renderShell();
     const rail = screen.getByLabelText('主导航');
     const nav = within(rail).getByRole('navigation');
@@ -99,6 +99,7 @@ describe('primary rail', () => {
       TODOS_HOME_PATH,
       '/inbox',
       '/habits',
+      '/days',
       '/threads',
       '/reports',
       '/activity',

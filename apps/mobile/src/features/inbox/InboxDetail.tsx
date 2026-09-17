@@ -10,7 +10,6 @@ import {
   Copy,
   Ellipsis,
   Link2,
-  Paperclip,
   Star,
   Target,
 } from 'lucide-react-native';
@@ -201,25 +200,6 @@ const InboxDetailContent = observer(function InboxDetailContent({ inboxId }: { i
         <View style={styles.reader}>
           <InboxReader item={item} size={fontSize} />
         </View>
-        {item.assets.length > 0 ? (
-          <View style={styles.assets}>
-            {item.assets.map((asset) => (
-              <Pressable
-                key={asset.id}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.assetRow, pressed && styles.pressed]}
-                onPress={() => {
-                  if (asset.url) void Linking.openURL(asset.url).catch(() => undefined);
-                }}
-              >
-                <Icon icon={Paperclip} size={16} color={t.fgMuted} />
-                <Text style={styles.assetName} numberOfLines={1}>
-                  {asset.originalSrc.split('/').pop() ?? asset.mime}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
       </ScrollView>
       <ActionBar safeBottom>
         {isUnread(item) ? (
@@ -378,17 +358,6 @@ const createStyles = (t: Theme) =>
     outcomeLabel: { fontSize: t.type.meta.fontSize, color: t.textTertiary },
     outcomeLabelSet: { color: t.accentPrimary, fontWeight: '500' },
     reader: { marginTop: t.space[5] },
-    assets: { marginTop: t.space[5], gap: t.space[2] },
-    assetRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: t.space[2],
-      minHeight: 40,
-      borderRadius: t.radius.md,
-      backgroundColor: t.bgSurfaceMuted,
-      paddingHorizontal: t.space[3],
-    },
-    assetName: { flex: 1, minWidth: 0, fontSize: t.type.meta.fontSize, color: t.fgMuted },
     pressed: { opacity: 0.7 },
     option: {
       minHeight: t.space[12],

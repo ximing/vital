@@ -58,6 +58,8 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 | `LLM_TIMEOUT` | 模型响应超时，请降低推理强度后重试 |
 | `LLM_UNAVAILABLE` | 大模型暂时不可用，请检查 API Base、密钥和模型名称 |
 | `TOKEN_LIMIT_REACHED` | 访问令牌数量已达上限 |
+| `DAY_LIMIT_REACHED` | 日子数量已达上限 |
+| `DAY_NOT_DELETABLE` | 系统节日不能删除，可以隐藏 |
 
 ## Types
 
@@ -290,6 +292,100 @@ export interface AuthResponse {
 ```
 
 ```ts
+export interface DayHeadline {
+  kind: DayHeadlineKind;
+  /** Calendar days (0 on the day itself). */
+  days: number;
+  /** Completed yearly cycles; null when not yearly or still year 0. */
+  years: number | null;
+}
+```
+
+```ts
+export interface DayHolidayRange {
+  from: string;
+  to: string;
+}
+```
+
+```ts
+export interface Day {
+  id: string;
+  name: string;
+  note: string;
+  source: DaySource;
+  catalogKey: string | null;
+  catalogKind: DayCatalogKind | null;
+  calendar: DayCalendar;
+  repeat: DayRepeat;
+  displayMode: DayDisplayMode;
+  /** First occurrence as a solar YYYY-MM-DD (count-up origin). */
+  anchorYmd: string;
+  /** Next occurrence on or after today; null when a one-shot date is already past. */
+  nextYmd: string | null;
+  /** Latest occurrence on or before today (anchor when still in the future). */
+  prevYmd: string;
+  lunarMonth: number | null;
+  lunarDay: number | null;
+  lunarLeap: boolean;
+  lunarLabel: string | null;
+  solarLabel: string;
+  timeHm: string | null;
+  coverPreset: CoverPreset;
+  coverAttachmentId: string | null;
+  /** Preset public URL or a 6-hour signed upload URL. */
+  coverUrl: string;
+  reminderOffsets: DayReminderOffset[];
+  pinned: boolean;
+  hidden: boolean;
+  canDelete: boolean;
+  headline: DayHeadline;
+  holidayRange: DayHolidayRange | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+```ts
+export interface DayCollection {
+  items: Day[];
+}
+```
+
+```ts
+export interface DayCatalogItem {
+  key: string;
+  name: string;
+  kind: DayCatalogKind;
+  calendar: DayCalendar;
+  defaultCover: CoverPreset;
+  added: boolean;
+  hidden: boolean;
+}
+```
+
+```ts
+export interface DayCatalogResponse {
+  items: DayCatalogItem[];
+}
+```
+
+```ts
+export interface DayCalendarMeta {
+  year: number;
+  leapMonth: number | null;
+}
+```
+
+```ts
+export interface UpcomingDay {
+  id: string;
+  name: string;
+  daysUntil: number;
+}
+```
+
+```ts
 export interface ErrorBody {
   code: string;
   message: string;
@@ -323,6 +419,28 @@ export interface Habit {
   /** Computed at read time for the dashboard. */
   todayDone: number;
   todayTotal: number;
+}
+```
+
+```ts
+export interface HabitCheckinDay {
+  /** YYYY-MM-DD in the user's timezone (from habit_key). */
+  date: string;
+  /** Completed instances that day (count habits can be > 1). */
+  done: number;
+}
+```
+
+```ts
+export interface HabitCheckin {
+  habitId: string;
+  days: HabitCheckinDay[];
+}
+```
+
+```ts
+export interface HabitCheckinsResponse {
+  items: HabitCheckin[];
 }
 ```
 
@@ -407,12 +525,60 @@ export interface ListCollection {
 ```
 
 ```ts
+export interface LlmResolvedCost {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+```
+
+```ts
+export interface LlmCostWindow extends LlmCostRates {
+  /** Inclusive start, `HH:mm` in the account timezone. */
+  start: string;
+  /** Exclusive end, `HH:mm`. `start > end` wraps past midnight. */
+  end: string;
+}
+```
+
+```ts
+export interface LlmModelPricing extends LlmCostRates {
+  windows?: LlmCostWindow[] | undefined;
+}
+```
+
+```ts
+export interface LlmCostRatesDraft {
+  input: string;
+  output: string;
+  cacheRead: string;
+  cacheWrite: string;
+}
+```
+
+```ts
+export interface LlmCostWindowDraft extends LlmCostRatesDraft {
+  start: string;
+  end: string;
+}
+```
+
+```ts
+export interface LlmModelPricingDraft extends LlmCostRatesDraft {
+  windows: LlmCostWindowDraft[];
+}
+```
+
+```ts
 export interface LlmCatalogModel {
   id: string;
   name: string;
   api?: string;
   reasoning?: boolean;
   thinkingLevels?: string[];
+  /** Catalog list price, USD / million tokens. All zeros when unknown. */
+  cost?: LlmResolvedCost;
 }
 ```
 
@@ -432,6 +598,7 @@ export interface LlmProviderPublic {
   baseUrl: string | null;
   models: string[];
   modelParameters?: Record<string, LlmParameters>;
+  modelPricing?: Record<string, LlmModelPricing>;
   apiKeySet: boolean;
 }
 ```
@@ -501,6 +668,8 @@ export interface TodayPulse {
   reportStreak: number;
   /** Current day's daily report id when it exists (has content), else null. */
   todayReportId: string | null;
+  /** Nearest visible day within the next 7 local days (including today). */
+  upcomingDay: UpcomingDay | null;
 }
 ```
 
@@ -1044,7 +1213,7 @@ export interface UploadCompleteResponse {
 export interface UploadBindResponse {
   id: string;
   status: 'ready';
-  ownerType: 'task' | 'inbox' | 'report' | 'user' | 'list';
+  ownerType: 'task' | 'inbox' | 'report' | 'user' | 'list' | 'day';
   ownerId: string;
 }
 ```
@@ -1218,6 +1387,7 @@ Request body (`updateMeInputSchema`):
   - `taskRemind`: boolean (optional)
   - `taskDue`: boolean (optional)
   - `agentInsights`: boolean (optional)
+  - `dayRemind`: boolean (optional)
   - `quietHoursStart`: string pattern (optional, nullable)
   - `quietHoursEnd`: string pattern (optional, nullable)
   - `allDayNotifyTime`: string pattern (optional)
@@ -1965,7 +2135,7 @@ Path params:
 
 Request body (`uploadBindInputSchema`):
 
-- `ownerType`: "task" | "inbox" | "report" | "user" | "list"
+- `ownerType`: "task" | "inbox" | "report" | "user" | "list" | "day"
 - `ownerId`: uuid
 
 #### `POST /api/v1/uploads/:id/complete`
@@ -2105,6 +2275,7 @@ Request body (`llmProviderInputSchema`):
 - `apiKey`: string 1–512
 - `models`: string 1–128[]
 - `modelParameters`: object (optional)
+- `modelPricing`: object (optional)
 
 #### `DELETE /api/v1/llm/providers/:id`
 
@@ -2137,6 +2308,7 @@ Request body (`patchLlmProviderInputSchema`):
 - `apiKey`: string 1–512 (optional)
 - `models`: string 1–128[] (optional)
 - `modelParameters`: object (optional)
+- `modelPricing`: object (optional)
 
 #### `POST /api/v1/llm/providers/:id/test`
 
@@ -2363,6 +2535,119 @@ Query (`agentUsageQuerySchema`):
 
 - `days`: number int min 1
 
+### days
+
+#### `GET /api/v1/days`
+
+List Days
+
+- Auth: Bearer required
+- Client: `listDays`
+- Response: `DayCollection`
+
+#### `POST /api/v1/days`
+
+Create Day
+
+- Auth: Bearer required
+- Client: `createDay`
+- Status: 201
+- Response: `Day`
+
+Request body (`createDayInputSchema`):
+
+- `catalogKey`: string 1–64 (optional)
+- `name`: string 1–80 (optional)
+- `note`: string 0–200 (optional)
+- `calendar`: "solar" | "lunar" (optional)
+- `anchorYmd`: string pattern (optional)
+- `lunarYear`: number int min 1900 max 2100 (optional)
+- `lunarMonth`: number int min 1 max 12 (optional)
+- `lunarDay`: number int min 1 max 30 (optional)
+- `lunarLeap`: boolean (optional)
+- `repeat`: "none" | "yearly" (optional)
+- `displayMode`: "auto" | "countdown" | "countup" (optional)
+- `timeHm`: string pattern (optional, nullable)
+- `coverPreset`: "mist" | "night" | "blossom" | "paper" | "lantern" | "silk" | "moon" | "willow" | "river" | "field" | "tea" | "snow" (optional)
+- `coverAttachmentId`: uuid (optional, nullable)
+- `reminderOffsets`: 0 | 1 | 3 | 7 | 30[] (optional)
+- `pinned`: boolean (optional)
+
+#### `DELETE /api/v1/days/:id`
+
+Delete Day
+
+- Auth: Bearer required
+- Client: `deleteDay`
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+#### `GET /api/v1/days/:id`
+
+Get Day
+
+- Auth: Bearer required
+- Client: `getDay`
+- Response: `Day`
+
+Path params:
+
+- `id`: uuid
+
+#### `PATCH /api/v1/days/:id`
+
+Patch Day
+
+- Auth: Bearer required
+- Client: `patchDay`
+- Response: `Day`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchDayInputSchema`):
+
+- `name`: string 1–80 (optional)
+- `note`: string 0–200 (optional, nullable)
+- `calendar`: "solar" | "lunar" (optional)
+- `anchorYmd`: string pattern (optional)
+- `lunarYear`: number int min 1900 max 2100 (optional)
+- `lunarMonth`: number int min 1 max 12 (optional, nullable)
+- `lunarDay`: number int min 1 max 30 (optional, nullable)
+- `lunarLeap`: boolean (optional)
+- `repeat`: "none" | "yearly" (optional)
+- `displayMode`: "auto" | "countdown" | "countup" (optional)
+- `timeHm`: string pattern (optional, nullable)
+- `coverPreset`: "mist" | "night" | "blossom" | "paper" | "lantern" | "silk" | "moon" | "willow" | "river" | "field" | "tea" | "snow" (optional)
+- `coverAttachmentId`: uuid (optional, nullable)
+- `reminderOffsets`: 0 | 1 | 3 | 7 | 30[] (optional)
+- `pinned`: boolean (optional)
+- `hidden`: boolean (optional)
+
+#### `GET /api/v1/days/catalog`
+
+List Day Catalog
+
+- Auth: Bearer required
+- Client: `listDayCatalog`
+- Response: `DayCatalogResponse`
+
+#### `GET /api/v1/days/meta`
+
+Get Day Calendar Meta
+
+- Auth: Bearer required
+- Client: `getDayCalendarMeta`
+- Response: `DayCalendarMeta`
+
+Query (`dayCalendarMetaQuerySchema`):
+
+- `year`: number int min 1900 max 2100
+
 ### habits
 
 #### `GET /api/v1/habits`
@@ -2435,6 +2720,19 @@ Tick Habit
 Path params:
 
 - `id`: uuid
+
+#### `GET /api/v1/habits/checkins`
+
+List Habit Checkins
+
+- Auth: Bearer required
+- Client: `listHabitCheckins`
+- Response: `HabitCheckinsResponse`
+
+Query (`habitCheckinsQuerySchema`):
+
+- `from`: string pattern
+- `to`: string pattern
 
 ### outcomes
 

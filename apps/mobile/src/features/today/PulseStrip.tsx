@@ -99,6 +99,21 @@ export function PulseStrip({ pulse }: { pulse: TodayPulse }) {
           </>
         )}
       </Pressable>
+      {pulse.upcomingDay ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/days')}
+          style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+        >
+          <Text style={styles.chipText}>
+            {pulse.upcomingDay.daysUntil === 0
+              ? copy.today.pulseDayToday.replace('{name}', pulse.upcomingDay.name)
+              : copy.today.pulseDaySoon
+                  .replace('{name}', pulse.upcomingDay.name)
+                  .replace('{n}', String(pulse.upcomingDay.daysUntil))}
+          </Text>
+        </Pressable>
+      ) : null}
       <AgentStatusChip />
     </ScrollView>
   );

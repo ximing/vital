@@ -441,6 +441,7 @@ export async function fillReport(
       ),
     );
   const fillTasks = openTasks.filter((task) => {
+    if (task.habitId !== null) return false;
     const anchor = task.dueAt ?? task.startAt;
     const inPeriod =
       anchor !== null &&

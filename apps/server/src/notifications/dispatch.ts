@@ -34,6 +34,16 @@ function taskUrl(listId: string, taskId: string): string {
 
 function todayUrl(): string { return `${config.WEB_ORIGIN.replace(/\/$/, '')}/today`; }
 
+function dayUrl(dayId: string): string {
+  return `${config.WEB_ORIGIN.replace(/\/$/, '')}/days?id=${dayId}`;
+}
+
+function notifyUrl(job: { eventType: string; entityId: string; payload: NotificationOutboxPayload }): string {
+  if (job.eventType === 'agent.insight') return todayUrl();
+  if (job.eventType === 'day.remind') return dayUrl(job.entityId);
+  return taskUrl(job.payload.listId, job.entityId);
+}
+
 function formatWhen(payload: NotificationOutboxPayload): string {
   const iso = payload.eventType === 'task.remind' ? payload.remindAt : payload.dueAt;
   if (!iso) return '';
@@ -45,6 +55,9 @@ function formatWhen(payload: NotificationOutboxPayload): string {
 
 export function renderMeowMessage(payload: NotificationOutboxPayload): { title: string; msg: string } {
   if (payload.eventType === 'agent.insight') return { title: '系统主动提醒', msg: payload.message ?? payload.title };
+  if (payload.eventType === 'day.remind') {
+    return { title: '日子提醒', msg: payload.message ?? `「${payload.title}」` };
+  }
   const when = formatWhen(payload);
   if (payload.eventType === 'task.remind') {
     return {
@@ -101,7 +114,7 @@ async function sendChannel(
     nickname: channel.config.nickname,
     title: copy.title,
     msg: copy.msg,
-    url: job.eventType === 'agent.insight' ? todayUrl() : taskUrl(job.payload.listId, job.entityId),
+    url: notifyUrl(job),
     imgUrl: iconUrl(),
   });
   if (result.ok) return { ok: true, permanent: false };
@@ -170,7 +183,7 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
     id: job.id,
     title: copy.title,
     body: copy.msg,
-    url: job.eventType === 'agent.insight' ? todayUrl() : taskUrl(job.payload.listId, job.entityId),
+    url: notifyUrl(job),
   });
 
   const channels = await getDb()

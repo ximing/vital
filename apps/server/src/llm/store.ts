@@ -19,6 +19,7 @@ function providerFromRow(row: UserLlmProviderRow): StoredLlmProvider {
     apiKeyEnc: row.apiKeyEnc,
     models: row.models,
     ...(row.modelParameters ? { modelParameters: row.modelParameters } : {}),
+    ...(row.modelPricing ? { modelPricing: row.modelPricing } : {}),
   };
 }
 
@@ -55,6 +56,7 @@ export function llmPublicOf(store: LlmStore): LlmSettingsPublic {
       baseUrl: p.baseUrl ?? null,
       models: p.models,
       ...(p.modelParameters ? { modelParameters: p.modelParameters } : {}),
+      ...(p.modelPricing ? { modelPricing: p.modelPricing } : {}),
       apiKeySet: Boolean(p.apiKeyEnc),
     })),
     routing: store.routing,

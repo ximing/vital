@@ -72,6 +72,12 @@ export function llmCatalog(): LlmCatalogProvider[] {
         api: m.api,
         reasoning: m.reasoning,
         thinkingLevels: getSupportedThinkingLevels(m),
+        cost: {
+          input: m.cost.input,
+          output: m.cost.output,
+          cacheRead: m.cost.cacheRead,
+          cacheWrite: m.cost.cacheWrite,
+        },
       })),
     };
   });
@@ -277,8 +283,10 @@ export async function completeText(
     messages: input.messages.map((m) => ({ ...m, timestamp: Date.now() })),
   };
   try {
+    const overlay = resolved.stored.modelPricing?.[resolved.model.id];
     const res = await completeModel({
       userId: user.id, capability, models: resolved.models, model: resolved.model, provider: resolved.stored.id,
+      timezone: user.timezone, ...(overlay ? { overlay } : {}),
     }, context, {
       ...modelOptions(resolved.model, resolved.route.parameters, input.json),
       apiKey: resolved.apiKey,
@@ -308,9 +316,12 @@ export async function testProviderModel(
   userId: string,
   stored: StoredLlmProvider,
   modelId: string,
+  timezone = 'Asia/Shanghai',
 ): Promise<{ ok: true }> {
   if (!executionContext()) {
-    return withExecution({ userId, capability: 'llm.test' }, () => testProviderModel(userId, stored, modelId));
+    return withExecution({ userId, capability: 'llm.test' }, () =>
+      testProviderModel(userId, stored, modelId, timezone),
+    );
   }
   const apiKey = decryptSecret(stored.apiKeyEnc);
   if (!apiKey) throw AppError.of(400, 'LLM_NOT_CONFIGURED');
@@ -339,8 +350,10 @@ export async function testProviderModel(
     messages: [{ role: 'user', content: 'Reply with only: pong', timestamp: Date.now() }],
   };
   try {
+    const overlay = stored.modelPricing?.[target.id];
     const result = await completeModel({
       userId, capability: 'llm.test', models, model: target, provider: stored.id,
+      timezone, ...(overlay ? { overlay } : {}),
     }, context, {
       ...modelOptions(target, route.parameters),
       apiKey,

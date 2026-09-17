@@ -6,6 +6,7 @@ import {
   Calendar,
   ChartColumn,
   CheckSquare,
+  Heart,
   Repeat,
   Search,
   Settings,
@@ -37,6 +38,7 @@ const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[]
   { id: 'todos', to: TODOS_HOME_PATH, icon: CheckSquare, label: t.rail.todos },
   { id: 'capture', to: '/inbox', icon: BookOpen, label: t.rail.capture },
   { id: 'habits', to: '/habits', icon: Repeat, label: t.rail.habits },
+  { id: 'days', to: '/days', icon: Heart, label: t.rail.days },
   { id: 'threads', to: '/threads', icon: Target, label: t.rail.threads },
   { id: 'reflect', to: '/reports', icon: Calendar, label: t.rail.reflect },
 ];

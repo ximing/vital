@@ -86,8 +86,13 @@ describe('NotificationsSection', () => {
         <NotificationsSection />
       </RabRoot>,
     );
-    expect(await screen.findByRole('button', { name: t.settings.notify.browserAsk })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: t.settings.notify.browserAsk }),
+    ).toBeInTheDocument();
     expect(screen.getByText(t.settings.notify.browser)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('checkbox', { name: t.settings.notify.sticky }),
+    ).not.toBeInTheDocument();
     await waitFor(() => expect(client.listNotificationChannels).toHaveBeenCalled());
     vi.unstubAllGlobals();
   });
@@ -103,19 +108,58 @@ describe('NotificationsSection', () => {
         <NotificationsSection />
       </RabRoot>,
     );
-    expect(await screen.findByRole('button', { name: t.settings.notify.desktopAsk })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: t.settings.notify.desktopAsk }),
+    ).toBeInTheDocument();
     expect(screen.getByText(t.settings.notify.desktop)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: t.settings.notify.sticky })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: t.settings.notify.preview }),
+    ).not.toBeInTheDocument();
     await waitFor(() => expect(client.listNotificationChannels).toHaveBeenCalled());
+    vi.mocked(isTauriRuntime).mockReturnValue(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('persists the desktop sticky overlay flag locally and reveals preview when on', async () => {
+    const user = userEvent.setup();
+    vi.mocked(isTauriRuntime).mockReturnValue(true);
+    const Ctor = function FakeNotification() {} as unknown as typeof Notification;
+    Object.defineProperty(Ctor, 'permission', { configurable: true, value: 'granted' });
+    Ctor.requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
+    vi.stubGlobal('Notification', Ctor);
+    render(
+      <RabRoot>
+        <NotificationsSection />
+      </RabRoot>,
+    );
+    const toggle = await screen.findByRole('checkbox', { name: t.settings.notify.sticky });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+    expect(toggle).toBeChecked();
+    expect(window.localStorage.getItem('vital:sticky-alert')).toBe('1');
+    expect(screen.getByRole('button', { name: t.settings.notify.preview })).toBeInTheDocument();
     vi.mocked(isTauriRuntime).mockReturnValue(false);
     vi.unstubAllGlobals();
   });
 
   it('lets the user opt out of proactive system reminders', async () => {
     const user = userEvent.setup();
-    vi.mocked(client.updateMe).mockResolvedValue({ ...mockUser, notifications: { ...DEFAULT_NOTIFICATION_PREFS, agentInsights: false } });
-    render(<RabRoot><NotificationsSection /></RabRoot>);
+    vi.mocked(client.updateMe).mockResolvedValue({
+      ...mockUser,
+      notifications: { ...DEFAULT_NOTIFICATION_PREFS, agentInsights: false },
+    });
+    render(
+      <RabRoot>
+        <NotificationsSection />
+      </RabRoot>,
+    );
     await user.click(screen.getByRole('checkbox', { name: t.settings.notify.agentInsights }));
-    await waitFor(() => expect(client.updateMe).toHaveBeenCalledWith({ notifications: { ...DEFAULT_NOTIFICATION_PREFS, agentInsights: false } }));
+    await waitFor(() =>
+      expect(client.updateMe).toHaveBeenCalledWith({
+        notifications: { ...DEFAULT_NOTIFICATION_PREFS, agentInsights: false },
+      }),
+    );
   });
 
   it('switches settings tabs', async () => {
@@ -254,13 +298,14 @@ describe('NotificationsSection', () => {
       target: { value: '{"thinking":{"type":"enabled"},"reasoning_effort":"high","top_k":20}' },
     });
     expect(screen.getByRole('button', { name: '测试 model-a' })).toBeDisabled();
-    await user.click(screen.getByRole('button', { name: '保存模型参数' }));
+    await user.click(screen.getByRole('button', { name: t.settings.llm.saveConfig }));
     await waitFor(() =>
       expect(client.patchLlmProvider).toHaveBeenCalledWith('p1', {
         modelParameters: {
           'model-a': { thinking: { type: 'enabled' }, reasoning_effort: 'high', top_k: 20 },
           'model-b': { temperature: 0.3 },
         },
+        modelPricing: {},
       }),
     );
     await waitFor(() => expect(screen.getByRole('button', { name: '测试 model-a' })).toBeEnabled());

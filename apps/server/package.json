@@ -40,6 +40,7 @@
     "fastify": "^5.2.1",
     "jsdom": "^26.1.0",
     "jsonwebtoken": "^9.0.2",
+    "lunar-typescript": "^1.8.6",
     "luxon": "^3.6.1",
     "mime-types": "^2.1.35",
     "pg": "^8.14.1",

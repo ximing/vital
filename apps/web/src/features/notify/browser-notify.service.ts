@@ -1,12 +1,21 @@
 import { resolve, Service } from '@rabjs/react';
 import type { NotificationPrefs, Task } from '@vital/dto';
 import { DEFAULT_NOTIFICATION_PREFS } from '@vital/dto';
+import { isTauriRuntime } from '@/api/client';
 import { t } from '@/copy';
 import { todoKeys } from '@/features/todos/query-keys';
 import { AuthService } from '@/services/auth.service';
 import { appQueryClient } from '@/services/query.service';
 import { appPathFromNotifyUrl } from './app-path';
 import { notifyKey, planDueNow } from './plan';
+import {
+  readStickyAlertPref,
+  resetStickyAlertForTest,
+  showStickyAlert,
+  startStickyAlertBridge,
+  stopStickyAlertBridge,
+  writeStickyAlertPref,
+} from './sticky-alert';
 
 const SHOWN_KEY = 'vital.browser-notify.shown';
 const SHOWN_CAP = 200;
@@ -42,7 +51,9 @@ function loadShown(): string[] {
     const raw = localStorage.getItem(SHOWN_KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === 'string')
+      : [];
   } catch {
     return [];
   }
@@ -61,16 +72,32 @@ function taskUrl(task: Task): string {
 }
 
 /**
- * Local OS toasts for the isomorphic web shell.
- * Browser: `window.Notification`. Tauri: plugin-notification patches that
- * constructor onto native banners, so this service does not branch.
+ * Local alerts for the isomorphic web shell.
+ * Default: `window.Notification` (Tauri plugin patches it onto OS banners/alerts).
+ * Optional desktop flag: a must-dismiss overlay window, stored only on this machine.
  */
 export class BrowserNotifyService extends Service {
   permission: BrowserNotifyPermission = 'unsupported';
+  stickyEnabled = readStickyAlertPref();
   private shown = new Set<string>(loadShown());
   private timer: ReturnType<typeof setInterval> | null = null;
   private probe: ReturnType<typeof setTimeout> | null = null;
   private started = false;
+
+  private stickyActive(): boolean {
+    return isTauriRuntime() && this.stickyEnabled;
+  }
+
+  setStickyEnabled(value: boolean): void {
+    this.stickyEnabled = value;
+    writeStickyAlertPref(value);
+    if (this.stickyActive()) {
+      void startStickyAlertBridge((url) => openNotifyUrl(url));
+      if (this.started) this.scan();
+      return;
+    }
+    stopStickyAlertBridge();
+  }
 
   get auth(): AuthService {
     return this.resolve(AuthService);
@@ -100,6 +127,9 @@ export class BrowserNotifyService extends Service {
     if (this.started) return;
     this.started = true;
     this.refreshPermission();
+    if (this.stickyActive()) {
+      void startStickyAlertBridge((url) => openNotifyUrl(url));
+    }
     this.scan();
     this.timer = setInterval(() => this.scan(), SCAN_MS);
     // Tauri's plugin probes OS permission asynchronously after patching Notification.
@@ -117,6 +147,7 @@ export class BrowserNotifyService extends Service {
     this.timer = null;
     if (this.probe) clearTimeout(this.probe);
     this.probe = null;
+    stopStickyAlertBridge();
   }
 
   showPush(raw: unknown): void {
@@ -133,7 +164,7 @@ export class BrowserNotifyService extends Service {
 
   scan(now = new Date()): void {
     this.refreshPermission();
-    if (this.permission !== 'granted') return;
+    if (this.permission !== 'granted' && !this.stickyActive()) return;
     const user = this.auth.user;
     if (!user) return;
     const prefs: NotificationPrefs = user.notifications ?? DEFAULT_NOTIFICATION_PREFS;
@@ -143,7 +174,9 @@ export class BrowserNotifyService extends Service {
       if (!plan) continue;
       const key = notifyKey(plan.eventType, task.id, plan.occurrenceAt);
       const title =
-        plan.eventType === 'task.remind' ? t.settings.notify.remindTitle : t.settings.notify.dueTitle;
+        plan.eventType === 'task.remind'
+          ? t.settings.notify.remindTitle
+          : t.settings.notify.dueTitle;
       const template =
         plan.eventType === 'task.remind' ? t.settings.notify.remindBody : t.settings.notify.dueBody;
       this.display(key, title, template.replace('{title}', task.title), taskUrl(task));
@@ -164,11 +197,15 @@ export class BrowserNotifyService extends Service {
   private display(key: string, title: string, body: string, url: string): void {
     if (this.shown.has(key)) return;
     const Ctor = notificationCtor();
-    if (!Ctor || Ctor.permission !== 'granted') return;
+    const native = Boolean(Ctor && Ctor.permission === 'granted');
+    const sticky = this.stickyActive();
+    if (!native && !sticky) return;
     this.shown.add(key);
     saveShown([...this.shown]);
+    if (sticky) void showStickyAlert({ id: key, title, body, url });
+    if (!native || !Ctor) return;
     try {
-      const popup = new Ctor(title, { body, tag: key });
+      const popup = new Ctor(title, { body, tag: key, requireInteraction: true });
       // Tauri's patched constructor does not return a Notification instance.
       if (popup && typeof popup.close === 'function') {
         popup.onclick = () => {
@@ -177,8 +214,10 @@ export class BrowserNotifyService extends Service {
         };
       }
     } catch {
-      this.shown.delete(key);
-      saveShown([...this.shown]);
+      if (!sticky) {
+        this.shown.delete(key);
+        saveShown([...this.shown]);
+      }
     }
   }
 
@@ -187,6 +226,8 @@ export class BrowserNotifyService extends Service {
     this.permission = 'unsupported';
     this.shown.clear();
     saveShown([]);
+    resetStickyAlertForTest();
+    this.stickyEnabled = false;
   }
 }
 

@@ -47,6 +47,7 @@ async function persistStore(): Promise<void> {
     apiKeyEnc: stored.apiKeyEnc,
     models: stored.models,
     modelParameters: stored.modelParameters ?? null,
+    modelPricing: stored.modelPricing ?? null,
   });
   for (const [capability, target] of Object.entries(store.routing)) {
     if (!target) continue;

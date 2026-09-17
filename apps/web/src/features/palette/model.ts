@@ -64,6 +64,7 @@ export function commandItems(): PaletteItem[] {
       href: '/todos/calendar',
     },
     { id: 'goto-settings', kind: 'goto', title: t.nav.settings, hint: t.palette.goto, href: '/settings' },
+    { id: 'goto-days', kind: 'goto', title: t.rail.days, hint: t.palette.goto, href: '/days' },
   ];
 }
 

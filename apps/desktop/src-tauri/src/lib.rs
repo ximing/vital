@@ -9,6 +9,7 @@ pub fn run() {
                     tauri_plugin_window_state::StateFlags::all()
                         - tauri_plugin_window_state::StateFlags::VISIBLE,
                 )
+                .with_denylist(&["notify-alert"])
                 .build(),
         )
         .plugin(tauri_plugin_notification::init())
@@ -31,8 +32,10 @@ pub fn run() {
 fn on_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
     #[cfg(target_os = "macos")]
     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-        api.prevent_close();
-        let _ = window.hide();
+        if window.label() == "main" {
+            api.prevent_close();
+            let _ = window.hide();
+        }
     }
     #[cfg(not(target_os = "macos"))]
     let _ = (window, event);

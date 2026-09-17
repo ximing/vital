@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, inArray, isNull, like, max, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, like, max, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type {
   CreateHabitInput,
   Habit,
+  HabitCheckin,
+  HabitCheckinsResponse,
   HabitKind,
   PatchHabitInput,
   Task,
@@ -65,6 +67,16 @@ function habitDay(now: Date, timezone: string): string {
   return day;
 }
 
+/** `{habitId}:{YYYY-MM-DD}:{seq}` — the local day the instance belongs to. */
+export function dayFromHabitKey(habitKey: string | null, habitId: string | null): string | null {
+  if (!habitKey || !habitId) return null;
+  const prefix = `${habitId}:`;
+  if (!habitKey.startsWith(prefix)) return null;
+  const day = habitKey.slice(prefix.length, prefix.length + 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  return day;
+}
+
 /** Today's progress for habits: completed instances vs spawned instances. */
 async function todayProgressByHabits(
   userId: string,
@@ -100,6 +112,7 @@ async function todayProgress(
 }
 
 export async function listHabits(userId: string, timezone: string, now = new Date()): Promise<Habit[]> {
+  await expireStaleHabitInstances(userId, timezone, now);
   const rows = await getDb()
     .select()
     .from(habits)
@@ -115,6 +128,84 @@ export async function listHabits(userId: string, timezone: string, now = new Dat
     const rec = progress.get(row.id) ?? { done: 0, total: 0 };
     return toHabitDto(row, rec.done, rec.total);
   });
+}
+
+/**
+ * Soft-delete open habit instances whose local day is before today.
+ * Daily habits (喝水 / 锻炼 / …) do not carry — a miss stays a miss.
+ */
+export async function expireStaleHabitInstances(
+  userId: string,
+  timezone: string,
+  now = new Date(),
+): Promise<number> {
+  const day = habitDay(now, timezone);
+  const open = await getDb()
+    .select()
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        isNotNull(tasks.habitId),
+        inArray(tasks.status, ['todo', 'doing']),
+        isNull(tasks.deletedAt),
+      ),
+    );
+  const stale = open.filter((task) => {
+    const keyDay = dayFromHabitKey(task.habitKey, task.habitId);
+    return keyDay !== null && keyDay < day;
+  });
+  if (stale.length === 0) return 0;
+  const user = await getUserEntity(userId);
+  const at = new Date();
+  await getDb().transaction(async (tx) => {
+    await tx
+      .update(tasks)
+      .set({ deletedAt: at, updatedAt: at })
+      .where(
+        and(eq(tasks.userId, userId), inArray(tasks.id, stale.map((row) => row.id))),
+      );
+    for (const instance of stale) {
+      await syncTaskNotifications({ ...instance, deletedAt: at }, user, at, tx);
+    }
+  });
+  return stale.length;
+}
+
+export async function listHabitCheckins(
+  userId: string,
+  from: string,
+  to: string,
+): Promise<HabitCheckinsResponse> {
+  const rows = await getDb()
+    .select({ habitId: tasks.habitId, habitKey: tasks.habitKey })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        isNotNull(tasks.habitId),
+        eq(tasks.status, 'done'),
+        isNull(tasks.deletedAt),
+      ),
+    );
+  const byHabit = new Map<string, Map<string, number>>();
+  for (const row of rows) {
+    const date = dayFromHabitKey(row.habitKey, row.habitId);
+    if (!date || !row.habitId || date < from || date > to) continue;
+    const days = byHabit.get(row.habitId) ?? new Map<string, number>();
+    days.set(date, (days.get(date) ?? 0) + 1);
+    byHabit.set(row.habitId, days);
+  }
+  const items: HabitCheckin[] = [];
+  for (const [habitId, days] of byHabit) {
+    items.push({
+      habitId,
+      days: [...days.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, done]) => ({ date, done })),
+    });
+  }
+  return { items };
 }
 
 export async function createHabit(
@@ -303,6 +394,7 @@ export async function ensureOpenTodayInstance(
  * Rule layer: skipped outside the window; idempotent via habit_key.
  */
 export async function spawnDailyHabits(userId: string, timezone: string, now = new Date()): Promise<number> {
+  await expireStaleHabitInstances(userId, timezone, now);
   const rows = await getDb()
     .select()
     .from(habits)

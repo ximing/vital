@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { char, check, index, jsonb, pgTable, primaryKey, text, timestamp, varchar } from 'drizzle-orm/pg-core';
-import type { LlmParameters, LlmRouting } from '@vital/dto';
+import type { LlmModelPricing, LlmParameters, LlmRouting } from '@vital/dto';
 
 /** Stored LLM provider config. apiKeyEnc is encryptSecret() output — never leaves the server. */
 export interface StoredLlmProvider {
@@ -12,6 +12,7 @@ export interface StoredLlmProvider {
   apiKeyEnc: string;
   models: string[];
   modelParameters?: Record<string, LlmParameters>;
+  modelPricing?: Record<string, LlmModelPricing>;
 }
 
 export interface LlmStore {
@@ -30,6 +31,7 @@ export const userLlmProviders = pgTable(
     apiKeyEnc: text('api_key_enc').notNull(),
     models: jsonb('models').$type<string[]>().notNull(),
     modelParameters: jsonb('model_parameters').$type<Record<string, LlmParameters>>(),
+    modelPricing: jsonb('model_pricing').$type<Record<string, LlmModelPricing>>(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },

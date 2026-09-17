@@ -9,6 +9,7 @@ export * from './schema/inbox.js';
 export * from './schema/outcomes.js';
 export * from './schema/agent.js';
 export * from './schema/habits.js';
+export * from './schema/days.js';
 export * from './schema/entity-links.js';
 export * from './schema/reports.js';
 export * from './schema/notifications.js';

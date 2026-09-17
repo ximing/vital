@@ -65,3 +65,36 @@ export const habitIdParamsSchema = z.object({
   id: uuidSchema,
 });
 export type HabitIdParams = z.infer<typeof habitIdParamsSchema>;
+
+const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const MS_PER_DAY = 24 * 3600 * 1000;
+
+export const habitCheckinsQuerySchema = z
+  .object({
+    from: ymdSchema,
+    to: ymdSchema,
+  })
+  .refine((value) => value.from <= value.to, { message: 'from must be <= to' })
+  .refine((value) => {
+    const start = Date.parse(`${value.from}T00:00:00.000Z`);
+    const end = Date.parse(`${value.to}T00:00:00.000Z`);
+    return Number.isFinite(start) && Number.isFinite(end) && end - start <= 366 * MS_PER_DAY;
+  }, { message: 'range too long' });
+export type HabitCheckinsQuery = z.infer<typeof habitCheckinsQuerySchema>;
+
+export interface HabitCheckinDay {
+  /** YYYY-MM-DD in the user's timezone (from habit_key). */
+  date: string;
+  /** Completed instances that day (count habits can be > 1). */
+  done: number;
+}
+
+export interface HabitCheckin {
+  habitId: string;
+  days: HabitCheckinDay[];
+}
+
+export interface HabitCheckinsResponse {
+  items: HabitCheckin[];
+}

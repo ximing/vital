@@ -49,7 +49,7 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
         <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
           {localHint}
         </p>
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {browser.permission === 'unsupported' ? (
             <p className="text-[length:var(--text-caption)] text-muted">{localUnsupported}</p>
           ) : browser.permission === 'granted' ? (
@@ -62,6 +62,38 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
             </Button>
           )}
         </div>
+        {desktop ? (
+          <div className="mt-4 border-t border-border pt-3">
+            <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+              <input
+                type="checkbox"
+                checked={browser.stickyEnabled}
+                onChange={(e) => browser.setStickyEnabled(e.target.checked)}
+              />
+              {copy.sticky}
+            </label>
+            <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              {copy.stickyHint}
+            </p>
+            {browser.stickyEnabled ? (
+              <Button
+                className="mt-3"
+                variant="ghost"
+                onClick={() =>
+                  browser.showPush({
+                    type: 'notify',
+                    id: `preview:${Date.now()}`,
+                    title: copy.remindTitle,
+                    body: copy.previewBody,
+                    url: '/today',
+                  })
+                }
+              >
+                {copy.preview}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
@@ -71,6 +103,14 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
           onChange={(e) => void page.savePrefs({ ...prefs, agentInsights: e.target.checked })}
         />
         {copy.agentInsights}
+      </label>
+      <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+        <input
+          type="checkbox"
+          checked={prefs.dayRemind}
+          onChange={(e) => void page.savePrefs({ ...prefs, dayRemind: e.target.checked })}
+        />
+        {copy.dayRemind}
       </label>
       <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
         <input
@@ -149,7 +189,12 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
         >
           {copy.saveChannel}
         </Button>
-        <Button variant="ghost" onClick={() => void page.sendTest()} loading={testing} disabled={!meow}>
+        <Button
+          variant="ghost"
+          onClick={() => void page.sendTest()}
+          loading={testing}
+          disabled={!meow}
+        >
           {testing ? copy.testing : copy.test}
         </Button>
       </div>

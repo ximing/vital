@@ -41,6 +41,9 @@ const SearchPage = lazy(() =>
   import('@/features/search/SearchPage').then((m) => ({ default: m.SearchPage })),
 );
 const HabitsPage = lazy(() => import('@/pages/ai').then((m) => ({ default: m.HabitsPage })));
+const DaysWorkspace = lazy(() =>
+  import('@/features/days/DaysWorkspace').then((m) => ({ default: m.DaysWorkspace })),
+);
 const ThreadsPage = lazy(() => import('@/pages/ai').then((m) => ({ default: m.ThreadsPage })));
 const ActivityPage = lazy(() => import('@/pages/ai').then((m) => ({ default: m.ActivityPage })));
 const MemoryPage = lazy(() => import('@/pages/ai').then((m) => ({ default: m.MemoryPage })));
@@ -111,6 +114,7 @@ export function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/library" element={<Navigate to="/search" replace />} />
           <Route path="/habits" element={<HabitsPage />} />
+          <Route path="/days" element={<DaysWorkspace />} />
           <Route path="/threads" element={<ThreadsPage />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/memory" element={<MemoryPage />} />

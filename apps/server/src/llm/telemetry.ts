@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { and, eq } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { agentJobs, agentUsage } from '../db/schema.js';
@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import { currentAgentJob, LostAgentJobLeaseError, ownsAgentJob } from '../agent/job-runtime.js';
 import { reserveBackgroundModelCall } from '../agent/model-budget.js';
 import { modelResponseError } from './model-errors.js';
+import { costMicrosFromUsage } from './pricing.js';
 
 /** Shared owner of individual model request accounting, for both completion and Agent streams. */
 export async function beginModelCall(input: {
@@ -16,6 +17,7 @@ export async function beginModelCall(input: {
   provider: string;
   model: string;
   priced: boolean;
+  pricedModel?: Model<Api>;
 }) {
   const context = executionContext();
   if (!context || context.userId !== input.userId) throw new Error('model call requires execution context');
@@ -57,7 +59,12 @@ export async function beginModelCall(input: {
           : failed ? modelResponseError(message?.stopReason ?? 'error', message?.errorMessage).code : null,
         promptTokens: known ? usage.input + usage.cacheRead + usage.cacheWrite : null,
         completionTokens: known ? usage.output : null,
-        costMicros: known && input.priced ? Math.round(usage.cost.total * 1_000_000) : null,
+        costMicros:
+          known && input.priced && input.pricedModel
+            ? costMicrosFromUsage(input.pricedModel, usage)
+            : known && input.priced
+              ? Math.round(usage.cost.total * 1_000_000)
+              : null,
         finishedAt, durationMs: finishedAt.getTime() - startedAt.getTime(),
       }).where(and(eq(agentUsage.id, id), eq(agentUsage.userId, input.userId), eq(agentUsage.status, 'running')));
     } catch (finalizeError) {

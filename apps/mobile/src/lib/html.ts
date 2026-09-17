@@ -4,6 +4,16 @@ export function decodeEntities(text: string): string {
     .replace(/&#x([0-9a-fA-F]{1,6});/g, (raw, hex: string) => codePoint(raw, parseInt(hex, 16)))
     .replace(/&#(\d{1,7});/g, (raw, dec: string) => codePoint(raw, parseInt(dec, 10)))
     .replace(/&nbsp;/g, ' ')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&hellip;/g, '…')
+    .replace(/&lsquo;/g, '‘')
+    .replace(/&rsquo;/g, '’')
+    .replace(/&ldquo;/g, '“')
+    .replace(/&rdquo;/g, '”')
+    .replace(/&bull;/g, '•')
+    .replace(/&middot;/g, '·')
+    .replace(/&copy;/g, '©')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -16,7 +26,7 @@ function codePoint(raw: string, value: number): string {
   return String.fromCodePoint(value);
 }
 
-/** RN reader has no WebView: flatten HTML to text (spec §10.5). */
+/** Flatten HTML to text. Used as a last-resort fallback, not the reader. */
 export function htmlToText(html: string): string {
   return decodeEntities(
     html

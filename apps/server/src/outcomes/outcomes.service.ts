@@ -30,12 +30,13 @@ import { getUserEntity } from '../auth/auth.service.js';
 import { summarizePayload, targetNamesFor, toAgentActionDto } from '../agent/actions.service.js';
 import { trackIndexJob } from '../retrieval/pipeline.js';
 import { indexOutcome, removeOutcomeIndex } from '../retrieval/search.js';
-import { listHabitsForOutcome } from '../habits/habits.service.js';
+import { expireStaleHabitInstances, listHabitsForOutcome } from '../habits/habits.service.js';
 import {
   linkedHabitFacts,
   loadHabitHeadlineFacts,
   type HabitHeadlineFact,
 } from '../habits/progress.js';
+import { upcomingDay } from '../days/days.service.js';
 import { listTasks } from '../tasks/tasks.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 import { computeNow } from './now-engine.js';
@@ -692,6 +693,7 @@ async function todayPulse(userId: string, timezone: string): Promise<TodayPulse>
     inboxPending: inboxRow?.n ?? 0,
     reportStreak: streak,
     todayReportId: today && written.has(today) ? (daily.find((r) => r.periodStart === today)?.id ?? null) : null,
+    upcomingDay: await upcomingDay(userId, timezone),
   };
 }
 
@@ -722,6 +724,7 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
     };
   });
 
+  await expireStaleHabitInstances(userId, timezone, now);
   const [todayTasks, pulse, habitWindowRows] = await Promise.all([
     listTasks(userId, { listId: 'smart:today', limit: 100 }).then((r) => r.items),
     todayPulse(userId, timezone),
@@ -736,17 +739,19 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
   const nowCard = computeNow({
     now,
     timezone,
-    tasks: todayTasks.map((task) => ({
-      id: task.id,
-      title: task.title,
-      status: task.status,
-      priority: task.priority,
-      estimateMinutes: task.estimateMinutes,
-      dueAt: task.dueAt ? new Date(task.dueAt) : null,
-      isAllDay: task.isAllDay,
-      outcomeId: task.outcomeId,
-      outcomeSignal: task.outcomeId ? (signalByOutcome.get(task.outcomeId) ?? null) : null,
-    })),
+    tasks: todayTasks
+      .filter((task) => task.habitId === null)
+      .map((task) => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        estimateMinutes: task.estimateMinutes,
+        dueAt: task.dueAt ? new Date(task.dueAt) : null,
+        isAllDay: task.isAllDay,
+        outcomeId: task.outcomeId,
+        outcomeSignal: task.outcomeId ? (signalByOutcome.get(task.outcomeId) ?? null) : null,
+      })),
     habitWindows: habitWindowRows.flatMap((row) =>
       row.start !== null && row.end !== null ? [{ start: row.start, end: row.end }] : [],
     ),

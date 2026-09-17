@@ -60,6 +60,9 @@ describe('Tauri desktop contract', () => {
     assert.match(lib, /CloseRequested/);
     assert.match(lib, /prevent_close/);
     assert.match(lib, /window\.hide\(\)/);
+    assert.match(lib, /label\(\) == "main"/);
+    assert.match(lib, /with_denylist/);
+    assert.match(lib, /notify-alert/);
     assert.match(lib, /RunEvent::Reopen/);
     assert.match(lib, /target_os = "macos"/);
     assert.match(lib, /StateFlags::VISIBLE/);
@@ -86,6 +89,10 @@ describe('Tauri desktop contract', () => {
     assert.ok(caps.permissions.includes('store:default'));
     assert.ok(caps.permissions.includes('window-state:default'));
     assert.ok(caps.permissions.includes('notification:default'));
+    assert.ok(caps.permissions.includes('core:webview:allow-create-webview-window'));
+    assert.ok(caps.permissions.includes('core:window:allow-set-always-on-top'));
+    assert.ok(caps.permissions.includes('core:window:allow-set-visible-on-all-workspaces'));
+    assert.deepEqual(caps.windows, ['main', 'notify-alert']);
     assert.ok(caps.remote.urls.includes('http://localhost:5180/*'));
   });
 

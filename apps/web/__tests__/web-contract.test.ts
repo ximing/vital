@@ -161,9 +161,21 @@ describe('web shell contract', () => {
   it('local notify uses window.Notification so the Tauri plugin can patch it', () => {
     const notify = read('src/features/notify/browser-notify.service.ts');
     expect(notify).toContain('new Ctor(title');
+    expect(notify).toContain('requireInteraction: true');
+    expect(notify).toContain('showStickyAlert');
+    expect(notify).toContain('stickyEnabled');
+    expect(notify).toContain('setStickyEnabled');
     expect(notify).not.toContain('@tauri-apps/plugin-notification');
+    const sticky = read('src/features/notify/sticky-alert.ts');
+    expect(sticky).toContain('STICKY_ALERT_PREF_KEY');
+    expect(sticky).toContain('vital:sticky-alert');
     const section = read('src/features/settings/NotificationsSection.tsx');
     expect(section).toContain('isTauriRuntime');
     expect(section).toContain('copy.desktop');
+    expect(section).toContain('copy.sticky');
+    expect(section).toContain('copy.preview');
+    const main = read('src/main.tsx');
+    expect(main).toContain('isNotifyAlertRuntime');
+    expect(main).toContain('NotifyAlertPage');
   });
 });

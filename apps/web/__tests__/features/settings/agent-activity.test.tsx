@@ -179,9 +179,14 @@ describe('activity page', () => {
     expect(screen.getByText(copy.actions['outcome.headline'])).toBeInTheDocument();
 
     // Content: target name + digest, or digest alone for deleted targets.
-    expect(screen.getByText('整理项目笔记：整理项目笔记')).toBeInTheDocument();
-    expect(screen.getByText('写季度总结：列大纲、填数据')).toBeInTheDocument();
-    expect(screen.getByText('梳理 Q4 采购：进展顺利')).toBeInTheDocument();
+    // The hidden measure copy (aria-hidden) may duplicate the preview text
+    // when the full body equals the digest — scope to the visible layer.
+    const visibleBody = { selector: 'p:not([aria-hidden="true"])' };
+    expect(
+      screen.getByText('整理项目笔记：整理项目笔记', visibleBody),
+    ).toBeInTheDocument();
+    expect(screen.getByText('写季度总结：列大纲、填数据', visibleBody)).toBeInTheDocument();
+    expect(screen.getByText('梳理 Q4 采购：进展顺利', visibleBody)).toBeInTheDocument();
 
     // Result labels — pending gets quick actions instead of a label.
     expect(screen.getByText(copy.results.edited)).toBeInTheDocument();
@@ -209,15 +214,22 @@ describe('activity page', () => {
         payload: { draft: '先列提纲\n第二段：完整执行步骤不应该被省略。' },
       }),
     ]);
+    // jsdom has no layout: stub metrics BEFORE render so the overflow
+    // measure (useLayoutEffect) sees a clamp and renders the toggle.
+    const scrollSpy = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(100);
+    const clientSpy = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(40);
     renderAt('/activity');
-    expect(await screen.findByText(/先列提纲/)).toBeInTheDocument();
-    expect(screen.queryByText(/完整执行步骤/)).not.toBeInTheDocument();
+    const visible = { selector: 'p:not([aria-hidden="true"])' };
+    expect(await screen.findByText(/先列提纲/, visible)).toBeInTheDocument();
+    expect(screen.queryByText(/完整执行步骤/, visible)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: t.settings.activity.expand }));
-    expect(screen.getByText(/完整执行步骤不应该被省略/)).toBeInTheDocument();
+    expect(screen.getByText(/完整执行步骤不应该被省略/, visible)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.settings.activity.collapse })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
+    scrollSpy.mockRestore();
+    clientSpy.mockRestore();
   });
 
   it('settles pending actions with the quick buttons and refreshes', async () => {

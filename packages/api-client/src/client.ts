@@ -20,7 +20,15 @@ import type {
   CompleteTaskResponse,
   ConvertInboxInput,
   ConvertInboxResponse,
+  CreateDayInput,
   CreateHabitInput,
+  Day,
+  DayCalendarMeta,
+  DayCatalogResponse,
+  DayCollection,
+  HabitCheckinsQuery,
+  HabitCheckinsResponse,
+  PatchDayInput,
   CreateAgentMemoryInput,
   CreateNotificationChannelInput,
   CreateInboxInput,
@@ -161,10 +169,18 @@ export interface VitalClient {
   undoOutcome(id: string): Promise<void>;
   refreshOutcome(id: string): Promise<void>;
   listHabits(): Promise<Habit[]>;
+  listHabitCheckins(query: HabitCheckinsQuery): Promise<HabitCheckinsResponse>;
   createHabit(input: CreateHabitInput): Promise<Habit>;
   patchHabit(id: string, input: PatchHabitInput): Promise<Habit>;
   tickHabit(id: string): Promise<Habit>;
   deleteHabit(id: string): Promise<void>;
+  listDays(): Promise<DayCollection>;
+  listDayCatalog(): Promise<DayCatalogResponse>;
+  getDayCalendarMeta(year: number): Promise<DayCalendarMeta>;
+  getDay(id: string): Promise<Day>;
+  createDay(input: CreateDayInput): Promise<Day>;
+  patchDay(id: string, input: PatchDayInput): Promise<Day>;
+  deleteDay(id: string): Promise<void>;
   getAgentUsage(days?: number): Promise<AgentUsageSummary>;
   listAgentExecutions(days?: number): Promise<AgentExecution[]>;
   organizeAgentTasks(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
@@ -390,12 +406,23 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       await http.request(`/api/v1/outcomes/${id}/refresh`, { method: 'POST' });
     },
     listHabits: () => http.request('/api/v1/habits'),
+    listHabitCheckins: (query) =>
+      http.request('/api/v1/habits/checkins', { query: { from: query.from, to: query.to } }),
     createHabit: (input) => http.request('/api/v1/habits', { method: 'POST', body: input }),
     patchHabit: (id, input) =>
       http.request(`/api/v1/habits/${id}`, { method: 'PATCH', body: input }),
     tickHabit: (id) => http.request(`/api/v1/habits/${id}/tick`, { method: 'POST' }),
     deleteHabit: async (id) => {
       await http.request(`/api/v1/habits/${id}`, { method: 'DELETE' });
+    },
+    listDays: () => http.request('/api/v1/days'),
+    listDayCatalog: () => http.request('/api/v1/days/catalog'),
+    getDayCalendarMeta: (year) => http.request('/api/v1/days/meta', { query: { year } }),
+    getDay: (id) => http.request(`/api/v1/days/${id}`),
+    createDay: (input) => http.request('/api/v1/days', { method: 'POST', body: input }),
+    patchDay: (id, input) => http.request(`/api/v1/days/${id}`, { method: 'PATCH', body: input }),
+    deleteDay: async (id) => {
+      await http.request(`/api/v1/days/${id}`, { method: 'DELETE' });
     },
     listAgentExecutions: (days) =>
       http.request(`/api/v1/agent/executions${days ? `?days=${String(days)}` : ''}`),

@@ -1,10 +1,21 @@
 import { Service } from '@rabjs/react';
-import type { CreateHabitInput, Habit, HabitKind, Outcome, PatchHabitInput } from '@vital/dto';
+import type {
+  CreateHabitInput,
+  Habit,
+  HabitCheckin,
+  HabitCheckinsResponse,
+  HabitKind,
+  Outcome,
+  PatchHabitInput,
+} from '@vital/dto';
 import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
+import { addMonthsYmd, padYmd, ymdParts } from '../../lib/calendar-grid';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
+import { localDateStamp } from '../../lib/format';
 import { pullSync, subscribeSnapshot, subscribeSync } from '../../lib/sync';
+import { AuthService } from '../../services/auth.service';
 
 const SYNC_DEBOUNCE_MS = 500;
 const HM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -75,9 +86,17 @@ function draftToPatch(draft: HabitDraft): PatchHabitInput {
   return patch;
 }
 
+function monthRange(monthCursor: string): { from: string; to: string } {
+  const { y, m } = ymdParts(monthCursor);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: padYmd(y, m, 1), to: padYmd(y, m, last) };
+}
+
 export class HabitsService extends Service {
   habits: Habit[] = [];
   outcomes: Outcome[] = [];
+  checkins: HabitCheckinsResponse = { items: [] };
+  monthCursor = '';
   loading = true;
   refreshing = false;
   error: string | null = null;
@@ -85,6 +104,30 @@ export class HabitsService extends Service {
   formError: string | null = null;
   saving = false;
   menuHabit: Habit | null = null;
+
+  get auth(): AuthService {
+    return this.resolve(AuthService);
+  }
+
+  get tz(): string {
+    return this.auth.user?.timezone ?? 'UTC';
+  }
+
+  get weekStartsOn(): 0 | 1 {
+    return this.auth.user?.weekStartsOn === 0 ? 0 : 1;
+  }
+
+  get today(): string {
+    return localDateStamp(this.tz);
+  }
+
+  get monthCursorOrNow(): string {
+    return this.monthCursor === '' ? `${this.today.slice(0, 7)}-01` : this.monthCursor;
+  }
+
+  daysFor(habitId: string): HabitCheckin['days'] {
+    return this.checkins.items.find((row) => row.habitId === habitId)?.days ?? [];
+  }
 
   private inFlight: Promise<void> | null = null;
   private hasData = false;
@@ -124,12 +167,16 @@ export class HabitsService extends Service {
       if (isRefresh) this.refreshing = true;
       else if (!this.hasData) this.loading = true;
       try {
-        const [nextHabits, nextOutcomes] = await Promise.all([
+        if (this.monthCursor === '') this.monthCursor = `${this.today.slice(0, 7)}-01`;
+        const range = monthRange(this.monthCursor);
+        const [nextHabits, nextOutcomes, nextCheckins] = await Promise.all([
           client.listHabits(),
           client.listOutcomes('open'),
+          client.listHabitCheckins(range),
         ]);
         this.habits = nextHabits;
         this.outcomes = nextOutcomes;
+        this.checkins = nextCheckins;
         this.hasData = true;
         this.error = null;
       } catch (err) {
@@ -217,5 +264,23 @@ export class HabitsService extends Service {
 
   async remove(habit: Habit): Promise<void> {
     await this.runAction(() => client.deleteHabit(habit.id).then(() => undefined));
+  }
+
+  shiftMonth(delta: number): void {
+    const cursor = this.monthCursorOrNow;
+    const todayMonth = `${this.today.slice(0, 7)}-01`;
+    const next = addMonthsYmd(cursor, delta);
+    if (delta > 0 && next > todayMonth) return;
+    this.monthCursor = next;
+    void this.loadCheckins();
+  }
+
+  private async loadCheckins(): Promise<void> {
+    const range = monthRange(this.monthCursorOrNow);
+    try {
+      this.checkins = await client.listHabitCheckins(range);
+    } catch (err) {
+      toast(humanError(err));
+    }
   }
 }

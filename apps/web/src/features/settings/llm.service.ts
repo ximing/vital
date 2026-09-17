@@ -1,6 +1,9 @@
 import {
+  llmModelPricingToDraft,
+  parseLlmModelPricingMap,
   type LlmCapability,
   type LlmCatalogProvider,
+  type LlmModelPricingDraft,
   type LlmProviderPublic,
   type LlmRouting,
   type LlmSettingsPublic,
@@ -154,6 +157,7 @@ export class AddProviderService extends Service {
 export class ProviderParametersService extends Service {
   providerId = '';
   drafts: Record<string, string> = {};
+  pricingDrafts: Record<string, LlmModelPricingDraft> = {};
   dirty = false;
 
   adopt(provider: LlmProviderPublic): void {
@@ -161,6 +165,9 @@ export class ProviderParametersService extends Service {
     this.providerId = provider.id;
     this.drafts = Object.fromEntries(
       provider.models.map((id) => [id, JSON.stringify(provider.modelParameters?.[id] ?? {}, null, 2)]),
+    );
+    this.pricingDrafts = Object.fromEntries(
+      provider.models.map((id) => [id, llmModelPricingToDraft(provider.modelPricing?.[id])]),
     );
     this.dirty = false;
   }
@@ -170,9 +177,15 @@ export class ProviderParametersService extends Service {
     this.dirty = true;
   }
 
+  setPricingDraft(modelId: string, draft: LlmModelPricingDraft): void {
+    this.pricingDrafts = { ...this.pricingDrafts, [modelId]: draft };
+    this.dirty = true;
+  }
+
   async save(provider: LlmProviderPublic): Promise<LlmSettingsPublic> {
     const next = await client.patchLlmProvider(provider.id, {
       modelParameters: parseModelParameters(provider.models, this.drafts),
+      modelPricing: parseLlmModelPricingMap(provider.models, this.pricingDrafts) ?? {},
     });
     this.dirty = false;
     return next;

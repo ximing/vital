@@ -36,6 +36,8 @@ export const ERROR_MESSAGES = {
   LLM_TIMEOUT: '模型响应超时，请降低推理强度后重试',
   LLM_UNAVAILABLE: '大模型暂时不可用，请检查 API Base、密钥和模型名称',
   TOKEN_LIMIT_REACHED: '访问令牌数量已达上限',
+  DAY_LIMIT_REACHED: '日子数量已达上限',
+  DAY_NOT_DELETABLE: '系统节日不能删除，可以隐藏',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

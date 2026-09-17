@@ -61,12 +61,6 @@ export function proposalFullText(item: AgentActionLogItem): string {
   return body;
 }
 
-function canExpand(item: AgentActionLogItem): boolean {
-  const full = proposalFullText(item);
-  const preview = detailText(item);
-  return full !== preview || full.includes('\n') || full.length > 72;
-}
-
 export function ExpandableProposalText({
   item,
   muted = false,
@@ -77,15 +71,27 @@ export function ExpandableProposalText({
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const [open, setOpen] = useState(false);
-  const expandable = canExpand(item);
-  const text = open ? proposalFullText(item) : detailText(item);
+  // The toggle only exists when the FULL body needs more than 2 lines —
+  // measured on a hidden unclamped copy at real width, not a length heuristic.
+  const [overflow, setOverflow] = useState(false);
+  const full = proposalFullText(item);
+  const text = open ? full : detailText(item);
 
   return (
     <View style={styles.wrap}>
+      <Text
+        accessibilityElementsHidden
+        importantForAccessibility="no"
+        pointerEvents="none"
+        style={[styles.body, muted && styles.muted, styles.measure]}
+        onTextLayout={(event) => setOverflow(event.nativeEvent.lines.length > 2)}
+      >
+        {full}
+      </Text>
       <Text style={[styles.body, muted && styles.muted]} numberOfLines={open ? undefined : 2}>
         {text}
       </Text>
-      {expandable ? (
+      {open || overflow ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
@@ -102,6 +108,7 @@ export function ExpandableProposalText({
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     wrap: { flex: 1, minWidth: 0 },
+    measure: { position: 'absolute', left: 0, right: 0, top: 0, opacity: 0 },
     body: { fontSize: 14, lineHeight: 21, color: t.fgPrimary, fontWeight: '500' },
     muted: { color: t.fgMuted, fontWeight: '400' },
     toggle: {

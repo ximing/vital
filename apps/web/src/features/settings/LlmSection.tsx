@@ -1,4 +1,5 @@
 import {
+  emptyLlmModelPricingDraft,
   LLM_CAPABILITIES,
   type LlmCapability,
   type LlmProviderPublic,
@@ -14,6 +15,7 @@ import { Field } from '@/ui/field';
 import { SelectField } from '@/ui/select-field';
 import { ModelSelect } from './ModelSelect';
 import { ModelParameters } from './ModelParameters';
+import { ModelPricing } from './ModelPricing';
 import {
   AddProviderService,
   LlmSectionService,
@@ -158,29 +160,38 @@ function ProviderParametersContent({
           })();
         }}
       >
-        {provider.models.map((modelId) => (
-          <div key={modelId}>
-            <ModelParameters
-              modelId={modelId}
-              model={catalog
-                .find((item) => item.id === provider.providerId)
-                ?.models.find((model) => model.id === modelId)}
-              raw={page.drafts[modelId] ?? ''}
-              onChange={(raw) => page.setDraft(modelId, raw)}
-            />
-            <Button
-              type="button"
-              variant="quiet"
-              disabled={page.dirty || saving}
-              onClick={() => onTest(modelId)}
-            >
-              测试 {modelId}
-            </Button>
-          </div>
-        ))}
+        {provider.models.map((modelId) => {
+          const catalogModel = catalog
+            .find((item) => item.id === provider.providerId)
+            ?.models.find((model) => model.id === modelId);
+          return (
+            <div key={modelId} className="flex flex-col gap-3">
+              <ModelParameters
+                modelId={modelId}
+                model={catalogModel}
+                raw={page.drafts[modelId] ?? ''}
+                onChange={(raw) => page.setDraft(modelId, raw)}
+              />
+              <ModelPricing
+                modelId={modelId}
+                model={catalogModel}
+                draft={page.pricingDrafts[modelId] ?? emptyLlmModelPricingDraft()}
+                onChange={(next) => page.setPricingDraft(modelId, next)}
+              />
+              <Button
+                type="button"
+                variant="quiet"
+                disabled={page.dirty || saving}
+                onClick={() => onTest(modelId)}
+              >
+                测试 {modelId}
+              </Button>
+            </div>
+          );
+        })}
         <div>
           <Button type="submit" loading={saving}>
-            保存模型参数
+            {t.settings.llm.saveConfig}
           </Button>
         </div>
         {page.dirty ? <p className="text-sm text-muted">保存参数后可测试连接。</p> : null}

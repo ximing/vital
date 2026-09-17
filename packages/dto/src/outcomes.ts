@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { UpcomingDay } from './days.js';
 import type { AgentActionLogItem } from './agent.js';
 import type { Habit } from './habits.js';
 import type { InboxSource, InboxStatus } from './inbox.js';
@@ -66,6 +67,8 @@ export interface TodayPulse {
   reportStreak: number;
   /** Current day's daily report id when it exists (has content), else null. */
   todayReportId: string | null;
+  /** Nearest visible day within the next 7 local days (including today). */
+  upcomingDay: UpcomingDay | null;
 }
 
 /** One recommended task inside the Now card. */

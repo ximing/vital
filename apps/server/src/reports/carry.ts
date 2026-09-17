@@ -46,8 +46,11 @@ async function openCarriedRows(
       ),
     );
   return openTasks
-    .filter((task) =>
-      isCarried(task.dueAt, task.startAt, periodStart, periodEnd, clock.timezone, bounds.end),
+    .filter(
+      (task) =>
+        // Daily habits expire with the day; they are not unfinished work.
+        task.habitId === null &&
+        isCarried(task.dueAt, task.startAt, periodStart, periodEnd, clock.timezone, bounds.end),
     )
     .sort((a, b) => {
       const da = a.dueAt?.getTime() ?? a.startAt?.getTime() ?? 0;

@@ -240,6 +240,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.3
+      lunar-typescript:
+        specifier: ^1.8.6
+        version: 1.8.6
       luxon:
         specifier: ^3.6.1
         version: 3.7.2
@@ -322,6 +325,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.14.13
         version: 3.14.13(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@tauri-apps/api':
+        specifier: ^2.9.0
+        version: 2.11.1
       '@tauri-apps/plugin-http':
         specifier: ^2.5.0
         version: 2.6.0
@@ -6167,6 +6173,9 @@ packages:
     resolution: {integrity: sha512-6lksP35l6KszDKUeRTi4LV7i6DEe0Yzl2ALJm9j4c5xEYN91GdW1xGsawGMOg2mgjF5GHBVX8pKX9kP+cWsP3Q==}
     peerDependencies:
       react: 19.1.0
+
+  lunar-typescript@1.8.6:
+    resolution: {integrity: sha512-5Eo4T/cnuXfrgO4k5LCpOGHIUOuz5hCF/IfNv0T29WY2shR36Hiz+ecN9WjnUuxUKhql9gbOkPaQoqLFKtPRNA==}
 
   luxon@3.7.2:
     resolution: {integrity: sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew==}
@@ -14108,6 +14117,8 @@ snapshots:
   lucide-react@1.41.0(react@19.1.0):
     dependencies:
       react: 19.1.0
+
+  lunar-typescript@1.8.6: {}
 
   luxon@3.7.2: {}
 

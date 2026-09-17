@@ -181,7 +181,7 @@ describe('todos workspace', () => {
     vi.mocked(client.getToday).mockResolvedValue({
       outcomes: [],
       tasks: [],
-      pulse: { inboxPending: 0, reportStreak: 0, todayReportId: null },
+      pulse: { inboxPending: 0, reportStreak: 0, todayReportId: null, upcomingDay: null },
       now: {
         continuousMinutes: 120,
         quiet: false,

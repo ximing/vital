@@ -1,12 +1,25 @@
-import type { CreateHabitInput, Habit, HabitKind, Outcome, PatchHabitInput } from '@vital/dto';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type {
+  CreateHabitInput,
+  Habit,
+  HabitCheckin,
+  HabitKind,
+  Outcome,
+  PatchHabitInput,
+} from '@vital/dto';
+import { useService } from '@rabjs/react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { HabitRing, habitTodayProgress, todayKeys, useHabitsQuery, useOutcomesQuery } from '@/features/today';
+import { formatYmd, todayYmd } from '@/features/todos/model';
+import { padYmd, ymdParts } from '@/lib/calendar-grid';
+import { AuthService } from '@/services/auth.service';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { OutcomeField } from '@/ui/outcome-field';
 import { ACTIVITY_CARD } from './ActivitySectionHead';
+import { HabitCheckinCalendar } from './HabitCheckinCalendar';
+import { HabitMonthNav } from './HabitMonthNav';
 
 const copy = t.settings.habits;
 
@@ -321,7 +334,33 @@ function AddHabitForm({ onDone, outcomes }: { onDone: () => void; outcomes: Outc
   );
 }
 
-function HabitRow({ habit, outcomes }: { habit: Habit; outcomes: Outcome[] }) {
+function monthRange(monthCursor: string): { from: string; to: string } {
+  const { y, m } = ymdParts(monthCursor);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { from: padYmd(y, m, 1), to: padYmd(y, m, last) };
+}
+
+function checkinsFor(items: HabitCheckin[] | undefined, habitId: string) {
+  return items?.find((row) => row.habitId === habitId)?.days ?? [];
+}
+
+function HabitRow({
+  habit,
+  outcomes,
+  days,
+  monthCursor,
+  weekStartsOn,
+  today,
+  createdOn,
+}: {
+  habit: Habit;
+  outcomes: Outcome[];
+  days: HabitCheckin['days'];
+  monthCursor: string;
+  weekStartsOn: 0 | 1;
+  today: string;
+  createdOn: string;
+}) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -398,71 +437,79 @@ function HabitRow({ habit, outcomes }: { habit: Habit; outcomes: Outcome[] }) {
     <li
       data-habit-row={habit.id}
       data-habit-active={habit.active ? 'true' : 'false'}
-      className={`flex flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border px-5 py-3.5 last:border-b-0 ${
-        habit.active ? '' : 'opacity-50'
-      }`}
+      className="border-b border-border px-5 py-3.5 last:border-b-0"
     >
-      <HabitRowRing habit={habit} />
-      <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 text-[length:var(--text-body)] font-semibold text-fg">
-          <span className="truncate">{habit.name}</span>
-          {habit.createdBy === 'agent' ? (
-            <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-accent-subtle px-2 text-[11px] font-semibold text-accent">
-              {copy.agentBadge}
-            </span>
-          ) : null}
-          {!habit.active ? (
-            <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-surface-muted px-2 text-[11px] text-tertiary">
-              {copy.inactive}
-            </span>
-          ) : null}
+      <div className={`flex flex-wrap items-center gap-x-3.5 gap-y-2 ${habit.active ? '' : 'opacity-50'}`}>
+        <HabitRowRing habit={habit} />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 text-[length:var(--text-body)] font-semibold text-fg">
+            <span className="truncate">{habit.name}</span>
+            {habit.createdBy === 'agent' ? (
+              <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-accent-subtle px-2 text-[11px] font-semibold text-accent">
+                {copy.agentBadge}
+              </span>
+            ) : null}
+            {!habit.active ? (
+              <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-surface-muted px-2 text-[11px] text-tertiary">
+                {copy.inactive}
+              </span>
+            ) : null}
+          </span>
+          <span className="mt-1.5 flex flex-wrap gap-1.5">
+            {habitChips(habit, outcomes).map((chip) => (
+              <span
+                key={chip.text}
+                className={`inline-flex h-5 items-center rounded-full px-2 font-mono text-[11px] tabular-nums ${
+                  chip.hot ? 'bg-accent-subtle font-semibold text-accent' : 'bg-surface-muted text-muted'
+                }`}
+              >
+                {chip.text}
+              </span>
+            ))}
+          </span>
         </span>
-        <span className="mt-1.5 flex flex-wrap gap-1.5">
-          {habitChips(habit, outcomes).map((chip) => (
-            <span
-              key={chip.text}
-              className={`inline-flex h-5 items-center rounded-full px-2 font-mono text-[11px] tabular-nums ${
-                chip.hot ? 'bg-accent-subtle font-semibold text-accent' : 'bg-surface-muted text-muted'
-              }`}
-            >
-              {chip.text}
-            </span>
-          ))}
-        </span>
-      </span>
-      <span className="flex shrink-0 items-center gap-1.5">
-        <button type="button" onClick={() => setEditing(true)} className={BTN_GHOST_SM}>
-          {copy.edit}
-        </button>
-        <ActiveSwitch
-          active={habit.active}
-          disabled={patch.isPending}
-          onToggle={() => patch.mutate({ active: !habit.active })}
-        />
-        {confirming ? (
-          <>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button type="button" onClick={() => setEditing(true)} className={BTN_GHOST_SM}>
+            {copy.edit}
+          </button>
+          <ActiveSwitch
+            active={habit.active}
+            disabled={patch.isPending}
+            onToggle={() => patch.mutate({ active: !habit.active })}
+          />
+          {confirming ? (
+            <>
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+                className={`${BTN_GHOST_SM} text-danger hover:text-danger`}
+              >
+                {copy.confirmDelete}
+              </button>
+              <button type="button" onClick={() => setConfirming(false)} className={BTN_GHOST_SM}>
+                {copy.cancel}
+              </button>
+            </>
+          ) : (
             <button
               type="button"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate()}
-              className={`${BTN_GHOST_SM} text-danger hover:text-danger`}
+              onClick={() => setConfirming(true)}
+              className={`${BTN_GHOST_SM} hover:text-danger`}
             >
-              {copy.confirmDelete}
+              {copy.del}
             </button>
-            <button type="button" onClick={() => setConfirming(false)} className={BTN_GHOST_SM}>
-              {copy.cancel}
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            className={`${BTN_GHOST_SM} hover:text-danger`}
-          >
-            {copy.del}
-          </button>
-        )}
-      </span>
+          )}
+        </span>
+      </div>
+      <HabitCheckinCalendar
+        habit={habit}
+        days={days}
+        monthCursor={monthCursor}
+        weekStartsOn={weekStartsOn}
+        today={today}
+        createdOn={createdOn}
+      />
     </li>
   );
 }
@@ -476,6 +523,16 @@ export function HabitsSection({
 }) {
   const query = useHabitsQuery();
   const outcomesQuery = useOutcomesQuery();
+  const auth = useService(AuthService);
+  const zone = auth.user?.timezone ?? 'UTC';
+  const weekStartsOn = auth.user?.weekStartsOn === 0 ? 0 : 1;
+  const today = todayYmd(zone);
+  const [monthCursor, setMonthCursor] = useState(`${today.slice(0, 7)}-01`);
+  const range = monthRange(monthCursor);
+  const checkinsQuery = useQuery({
+    queryKey: todayKeys.habitCheckins(range.from, range.to),
+    queryFn: () => client.listHabitCheckins(range),
+  });
 
   if (query.isPending) {
     return (
@@ -487,6 +544,7 @@ export function HabitsSection({
   const active = habits.filter((habit) => habit.active);
   const todayDone = active.reduce((sum, habit) => sum + todayOf(habit).done, 0);
   const todayTotal = active.reduce((sum, habit) => sum + todayOf(habit).total, 0);
+  const checkins = checkinsQuery.data?.items;
 
   return (
     <div className="flex flex-col gap-7" data-region="habits-manage">
@@ -530,9 +588,21 @@ export function HabitsSection({
         </p>
       ) : (
         <div className={ACTIVITY_CARD}>
+          <div className="border-b border-border px-3 pt-3">
+            <HabitMonthNav monthCursor={monthCursor} today={today} onChange={setMonthCursor} />
+          </div>
           <ul className="flex flex-col">
             {habits.map((habit) => (
-              <HabitRow key={habit.id} habit={habit} outcomes={outcomesQuery.data ?? []} />
+              <HabitRow
+                key={habit.id}
+                habit={habit}
+                outcomes={outcomesQuery.data ?? []}
+                days={checkinsFor(checkins, habit.id)}
+                monthCursor={monthCursor}
+                weekStartsOn={weekStartsOn}
+                today={today}
+                createdOn={formatYmd(new Date(habit.createdAt), zone)}
+              />
             ))}
           </ul>
         </div>

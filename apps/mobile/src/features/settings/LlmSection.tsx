@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
 import {
+  emptyLlmModelPricingDraft,
   LLM_CAPABILITIES,
+  llmModelPricingToDraft,
+  parseLlmModelPricingMap,
   type LlmCatalogProvider,
+  type LlmModelPricingDraft,
   type LlmProviderPublic,
   type LlmSettingsPublic,
 } from '@vital/dto';
@@ -19,6 +23,7 @@ import { useTheme } from '../../theme/use-theme';
 import { rnShadow } from '../../ui/card';
 import { parseModelParameters } from './llm';
 import { LlmSectionService } from './llm-section.service';
+import { ModelPricing } from './ModelPricing';
 
 function AddProviderForm({
   catalog,
@@ -227,6 +232,11 @@ function ProviderCard({
       ]),
     ),
   );
+  const [pricingDrafts, setPricingDrafts] = useState<Record<string, LlmModelPricingDraft>>(() =>
+    Object.fromEntries(
+      provider.models.map((id) => [id, llmModelPricingToDraft(provider.modelPricing?.[id])]),
+    ),
+  );
   const [paramsOpen, setParamsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
@@ -239,6 +249,7 @@ function ProviderCard({
       onDone(
         await client.patchLlmProvider(provider.id, {
           modelParameters: parseModelParameters(provider.models, drafts),
+          modelPricing: parseLlmModelPricingMap(provider.models, pricingDrafts) ?? {},
         }),
       );
       setDirty(false);
@@ -322,6 +333,15 @@ function ProviderCard({
                 multiline
                 placeholder="{}"
               />
+              <ModelPricing
+                modelId={modelId}
+                model={catalogModels.find((item) => item.id === modelId)}
+                draft={pricingDrafts[modelId] ?? emptyLlmModelPricingDraft()}
+                onChange={(next) => {
+                  setPricingDrafts((previous) => ({ ...previous, [modelId]: next }));
+                  setDirty(true);
+                }}
+              />
               <Button
                 size="sm"
                 variant="quiet"
@@ -338,7 +358,7 @@ function ProviderCard({
           ) : null}
           {dirty ? <Text style={styles.hint}>{copy.settings.llm.saveBeforeTest}</Text> : null}
           <Button size="sm" loading={saving} onPress={() => void saveParams()}>
-            {copy.settings.llm.saveParameters}
+            {copy.settings.llm.saveConfig}
           </Button>
         </View>
       ) : null}

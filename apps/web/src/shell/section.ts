@@ -7,6 +7,7 @@ export type AppSection =
   | 'reflect'
   | 'search'
   | 'habits'
+  | 'days'
   | 'threads'
   | 'activity'
   | 'memory'
@@ -32,6 +33,7 @@ export function sectionOf(pathname: string, _search: string): AppSection {
   if (pathname.startsWith('/reports')) return 'reflect';
   if (pathname.startsWith('/search')) return 'search';
   if (pathname.startsWith('/habits')) return 'habits';
+  if (pathname.startsWith('/days')) return 'days';
   if (pathname.startsWith('/threads')) return 'threads';
   if (pathname.startsWith('/activity')) return 'activity';
   if (pathname.startsWith('/memory')) return 'memory';

@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ONBOARDING_CHECKLIST_KEYS } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { Activity, Brain, Flame, MessagesSquare } from 'lucide-react-native';
+import { Activity, Brain, Flame, Heart, MessagesSquare } from 'lucide-react-native';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
@@ -74,6 +74,7 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
 
   const aiItems: { icon: LucideIcon; label: string; href: string; value?: string }[] = [
     { icon: Flame, label: copy.me.habits, href: '/habits' },
+    { icon: Heart, label: copy.me.days, href: '/days' },
     { icon: MessagesSquare, label: copy.me.threads, href: '/threads' },
     {
       icon: Activity,
@@ -228,6 +229,18 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
                 ios_backgroundColor={t.bgSurfaceMuted}
                 onValueChange={(v) =>
                   void s.patchPrefs({ notifications: { ...prefs, taskRemind: v } })
+                }
+              />
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.switchRow}>
+              <Text style={styles.rowLabel}>{copy.settings.notify.dayRemind}</Text>
+              <Switch
+                value={prefs.dayRemind}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
+                onValueChange={(v) =>
+                  void s.patchPrefs({ notifications: { ...prefs, dayRemind: v } })
                 }
               />
             </View>

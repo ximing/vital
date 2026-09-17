@@ -60,6 +60,7 @@ export function prefsFromUser(user: User): NotificationPrefs {
     taskRemind: user.notifyTaskRemind,
     taskDue: user.notifyTaskDue,
     agentInsights: user.notifyAgentInsights,
+    dayRemind: user.notifyDayRemind,
     quietHoursStart: user.quietHoursStart,
     quietHoursEnd: user.quietHoursEnd,
     allDayNotifyTime: user.allDayNotifyTime || DEFAULT_NOTIFICATION_PREFS.allDayNotifyTime,

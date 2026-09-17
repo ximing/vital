@@ -6,8 +6,10 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { App } from '@/App';
 import { t } from '@/copy';
-import { subscribeSystemTheme } from '@/lib/theme';
+import { applyTheme, subscribeSystemTheme } from '@/lib/theme';
+import { NotifyAlertPage } from '@/features/notify/NotifyAlertPage';
 import { browserNotify } from '@/features/notify/browser-notify.service';
+import { isNotifyAlertRuntime } from '@/features/notify/sticky-alert';
 import { startSync, stopSync } from '@/features/sync/sync-engine';
 import { AuthService } from '@/services/auth.service';
 import { appQueryClient } from '@/services/query.service';
@@ -15,9 +17,6 @@ import { registerVitalServices } from '@/services/register';
 import { Button } from '@/ui/button';
 import { VitalMark } from '@/shell/VitalMark';
 import '@/styles/app.css';
-
-registerVitalServices();
-setupWindowRootContainer();
 
 const BootScreen = observer(function BootScreen() {
   return (
@@ -76,16 +75,28 @@ const Root = observer(function Root() {
 });
 
 const rootEl = document.getElementById('root');
-if (rootEl) {
+if (rootEl && isNotifyAlertRuntime()) {
+  applyTheme();
+  subscribeSystemTheme();
   createRoot(rootEl).render(
     <StrictMode>
-      <RSRoot>
-        <QueryClientProvider client={appQueryClient}>
-          <BrowserRouter>
-            <Root />
-          </BrowserRouter>
-        </QueryClientProvider>
-      </RSRoot>
+      <NotifyAlertPage />
     </StrictMode>,
   );
+} else {
+  registerVitalServices();
+  setupWindowRootContainer();
+  if (rootEl) {
+    createRoot(rootEl).render(
+      <StrictMode>
+        <RSRoot>
+          <QueryClientProvider client={appQueryClient}>
+            <BrowserRouter>
+              <Root />
+            </BrowserRouter>
+          </QueryClientProvider>
+        </RSRoot>
+      </StrictMode>,
+    );
+  }
 }

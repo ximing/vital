@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import {
+  compactLlmModelPricingMap,
   llmRoutingSchema,
   type LlmParameters,
   type LlmProviderInput,
@@ -74,6 +75,7 @@ export async function addLlmProvider(
     apiKeyEnc: encryptSecret(input.apiKey),
     models: input.models,
     modelParameters: input.modelParameters ?? null,
+    modelPricing: compactLlmModelPricingMap(input.modelPricing, input.models) ?? null,
     createdAt: now,
     updatedAt: now,
   });
@@ -90,10 +92,21 @@ export async function patchLlmProvider(
   if (input.baseUrl !== undefined && stored.providerId === 'custom') {
     assertLlmBaseUrl(input.baseUrl);
   }
+  const nextModels = input.models ?? stored.models;
+  const pricingTouched = input.modelPricing !== undefined || input.models !== undefined;
   await getDb()
     .update(userLlmProviders)
     .set({
       ...(input.modelParameters !== undefined ? { modelParameters: input.modelParameters } : {}),
+      ...(pricingTouched
+        ? {
+            modelPricing:
+              compactLlmModelPricingMap(
+                input.modelPricing !== undefined ? input.modelPricing : stored.modelPricing,
+                nextModels,
+              ) ?? null,
+          }
+        : {}),
       ...(input.label !== undefined ? { label: input.label } : {}),
       ...(input.baseUrl !== undefined && stored.providerId === 'custom'
         ? { baseUrl: input.baseUrl }
@@ -158,5 +171,10 @@ export async function testLlmProvider(
   const store = await loadLlmStore(userId);
   const stored = findProviderOr404(store, id);
   if (!stored.models.includes(model)) throw AppError.of(400, 'VALIDATION_ERROR');
-  return testProviderModel(userId, stored, model);
+  const [row] = await getDb()
+    .select({ timezone: users.timezone })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return testProviderModel(userId, stored, model, row?.timezone ?? 'Asia/Shanghai');
 }

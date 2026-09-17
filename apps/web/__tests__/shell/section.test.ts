@@ -15,6 +15,7 @@ describe('app section', () => {
     expect(sectionOf('/reports/id', 'type=weekly')).toBe('reflect');
     expect(sectionOf('/search', '')).toBe('search');
     expect(sectionOf('/habits', '')).toBe('habits');
+    expect(sectionOf('/days', '')).toBe('days');
     expect(sectionOf('/threads', '')).toBe('threads');
     expect(sectionOf('/activity', '')).toBe('activity');
     expect(sectionOf('/memory', '')).toBe('memory');

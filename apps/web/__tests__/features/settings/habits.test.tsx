@@ -20,6 +20,7 @@ vi.mock('@/api/client', async (importOriginal) => {
     ...actual,
     client: {
       listHabits: vi.fn(),
+      listHabitCheckins: vi.fn(),
       listOutcomes: vi.fn(),
       createHabit: vi.fn(),
       patchHabit: vi.fn(),
@@ -106,10 +107,23 @@ function renderAt(path: string) {
 
 const copy = t.settings.habits;
 
+function shanghaiMonthDay(day: string): string {
+  const stamp = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  return `${stamp.slice(0, 8)}${day}`;
+}
+
 describe('habits page', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
     vi.mocked(client.listHabits).mockResolvedValue(items);
+    vi.mocked(client.listHabitCheckins).mockResolvedValue({
+      items: [{ habitId: 'h1', days: [{ date: shanghaiMonthDay('15'), done: 8 }] }],
+    });
     vi.mocked(client.listOutcomes).mockResolvedValue([]);
     vi.mocked(client.createHabit).mockResolvedValue(items[0]!);
     vi.mocked(client.patchHabit).mockResolvedValue(items[0]!);
@@ -144,6 +158,18 @@ describe('habits page', () => {
       'data-habit-active',
       'false',
     );
+  });
+
+  it('renders a check-in calendar per habit', async () => {
+    renderAt('/habits');
+    const day = shanghaiMonthDay('15');
+    await waitFor(() => {
+      expect(
+        document.querySelector(`[data-habit-calendar="h1"] [data-checkin="${day}"]`),
+      ).toHaveAttribute('data-checkin-done', '8');
+    });
+    expect(document.querySelectorAll('[data-habit-calendar]')).toHaveLength(3);
+    expect(screen.getByLabelText(copy.calendarAria.replace('{name}', '喝水'))).toBeInTheDocument();
   });
 
   it('creates a count habit through the add form', async () => {

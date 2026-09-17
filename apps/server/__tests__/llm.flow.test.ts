@@ -142,6 +142,65 @@ describe('llm providers + routing', () => {
     expect(ids).toContain('zhipu');
     const openai = res.json().providers.find((p: { id: string }) => p.id === 'openai');
     expect(openai.models.length).toBeGreaterThan(0);
+    expect(openai.models[0]?.cost).toEqual(
+      expect.objectContaining({ input: expect.any(Number), output: expect.any(Number) }),
+    );
+  });
+
+  it('persists per-model pricing overlays and uses them for usage cost', async () => {
+    const alice = await registerUser(app);
+    const added = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/llm/providers',
+      token: alice.token,
+      payload: {
+        providerId: 'custom',
+        label: '测试网关',
+        baseUrl: 'http://faux.test/v1',
+        apiKey: 'sk-secret-do-not-leak',
+        models: ['faux-1'],
+        modelPricing: {
+          'faux-1': {
+            input: 1,
+            output: 2,
+            windows: [{ start: '22:00', end: '08:00', input: 0.1, output: 0.2 }],
+          },
+        },
+      },
+    });
+    expect(added.statusCode).toBe(200);
+    const providerId = added.json().providers[0].id as string;
+    expect(added.json().providers[0].modelPricing).toEqual({
+      'faux-1': {
+        input: 1,
+        output: 2,
+        windows: [{ start: '22:00', end: '08:00', input: 0.1, output: 0.2 }],
+      },
+    });
+    installFaux(['pong']);
+    const ok = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/llm/providers/${providerId}/test`,
+      token: alice.token,
+      payload: { providerId, model: 'faux-1' },
+    });
+    expect(ok.statusCode).toBe(200);
+    const usage = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/agent/usage',
+      token: alice.token,
+    });
+    expect(usage.json().unknownCostRequests).toBe(0);
+    expect(usage.json().totalCostMicros).toBeGreaterThan(0);
+
+    const cleared = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/llm/providers/${providerId}`,
+      token: alice.token,
+      payload: { modelPricing: {} },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json().providers[0].modelPricing).toBeUndefined();
   });
 
   it.each(['zhipu', 'openai'])('saves manually entered models for %s', async (providerId) => {

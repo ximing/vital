@@ -154,9 +154,11 @@ export async function runProposalPass<T>(input: {
   const agent = new Agent({
     streamFn: async (model, context, options) => {
       try {
+        const overlay = resolved.stored.modelPricing?.[model.id];
         const tracked = await streamModel({
         userId: input.user.id, capability: input.capability,
         models: resolved.models, model, provider: resolved.stored.id,
+        timezone: input.user.timezone, ...(overlay ? { overlay } : {}),
       }, context, { ...options, ...modelOptions(model, resolved.route.parameters) });
       pendingCalls.push(tracked.finished);
       return tracked.stream;

@@ -44,7 +44,7 @@ export type NotificationOutboxPayload = {
   remindAt: string | null;
   isAllDay: boolean;
   timezone: string;
-  eventType: 'task.remind' | 'task.due' | 'agent.insight';
+  eventType: 'task.remind' | 'task.due' | 'agent.insight' | 'day.remind';
   insightKind?: 'outcome.stale' | 'task.decompose' | 'habit.window' | 'review.missing';
   message?: string;
 };
@@ -77,8 +77,11 @@ export const notificationOutbox = pgTable(
       'notification_outbox_status_check',
       sql`${t.status} IN ('preparing', 'pending', 'sending', 'sent', 'failed', 'cancelled')`,
     ),
-    check('notification_outbox_event_type_check', sql`${t.eventType} IN ('task.remind', 'task.due', 'agent.insight')`),
-    check('notification_outbox_entity_type_check', sql`${t.entityType} IN ('task', 'outcome', 'habit')`),
+    check(
+      'notification_outbox_event_type_check',
+      sql`${t.eventType} IN ('task.remind', 'task.due', 'agent.insight', 'day.remind')`,
+    ),
+    check('notification_outbox_entity_type_check', sql`${t.entityType} IN ('task', 'outcome', 'habit', 'day')`),
   ],
 );
 

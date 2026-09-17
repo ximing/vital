@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { llmParametersSchema, type LlmParameters } from './auth.js';
+import { llmModelPricingMapSchema, type LlmModelPricing, type LlmResolvedCost } from './llm-pricing.js';
 
 /** Capabilities that can each be routed to a provider+model. 'default' is the fallback. */
 export const LLM_CAPABILITIES = [
@@ -23,6 +24,8 @@ export interface LlmCatalogModel {
   api?: string;
   reasoning?: boolean;
   thinkingLevels?: string[];
+  /** Catalog list price, USD / million tokens. All zeros when unknown. */
+  cost?: LlmResolvedCost;
 }
 export interface LlmCatalogProvider {
   id: string;
@@ -52,6 +55,8 @@ export const llmProviderInputSchema = z.object({
   /** Enabled model ids, selected from the catalog or entered manually. */
   models: z.array(modelIdSchema).min(1).max(50),
   modelParameters: modelParametersSchema.optional(),
+  /** Per-model USD/million-token overlay; missing models fall back to the catalog. */
+  modelPricing: llmModelPricingMapSchema.optional(),
 });
 export type LlmProviderInput = z.infer<typeof llmProviderInputSchema>;
 
@@ -68,6 +73,8 @@ export const patchLlmProviderInputSchema = z
     apiKey: z.string().min(1).max(512).optional(),
     models: z.array(modelIdSchema).min(1).max(50).optional(),
     modelParameters: modelParametersSchema.optional(),
+    /** Full replacement; `{}` clears every overlay on this provider. */
+    modelPricing: llmModelPricingMapSchema.optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',
@@ -82,6 +89,7 @@ export interface LlmProviderPublic {
   baseUrl: string | null;
   models: string[];
   modelParameters?: Record<string, LlmParameters>;
+  modelPricing?: Record<string, LlmModelPricing>;
   apiKeySet: boolean;
 }
 

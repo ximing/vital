@@ -75,6 +75,15 @@ export function PulseStrip({ pulse }: { pulse: TodayPulse }) {
           <span className="font-semibold text-accent">{t.today.pulseGo}</span>
         </Link>
       )}
+      {pulse.upcomingDay ? (
+        <Link to={`/days?id=${pulse.upcomingDay.id}`} className={CHIP}>
+          {pulse.upcomingDay.daysUntil === 0
+            ? t.today.pulseDayToday.replace('{name}', pulse.upcomingDay.name)
+            : t.today.pulseDaySoon
+                .replace('{name}', pulse.upcomingDay.name)
+                .replace('{n}', String(pulse.upcomingDay.daysUntil))}
+        </Link>
+      ) : null}
       <AgentStatusChip />
     </div>
   );
