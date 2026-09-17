@@ -82,7 +82,10 @@ describe('inwit config', () => {
   it('test verifies the key against inwit and returns topics', async () => {
     const alice = await registerUser(app);
     await saveConfig(alice.token);
-    undiciReply(200, { items: [{ id: 't1', title: '机器学习' }] });
+    undiciReply(200, [
+      { id: 't1', title: '机器学习', status: 'active' },
+      { id: 't2', title: '旧主题', status: 'archived' },
+    ]);
 
     const res = await injectJson(app, {
       method: 'POST',

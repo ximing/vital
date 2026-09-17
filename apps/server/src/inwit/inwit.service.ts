@@ -144,13 +144,25 @@ export async function testInwitConfig(userId: string): Promise<InwitTestResponse
   if (res.status === 401) throw AppError.of(401, 'INWIT_KEY_INVALID');
   if (res.status === 403) throw AppError.of(403, 'INWIT_KEY_FORBIDDEN');
   if (res.status !== 200) throw AppError.of(502, 'INWIT_UNREACHABLE');
-  const items = Array.isArray((res.body as { items?: unknown }).items)
-    ? ((res.body as { items: unknown[] }).items as Array<Record<string, unknown>>)
-    : [];
+  // inwit returns a bare Topic[]; tolerate an {items: []} envelope just in case.
+  const raw: unknown[] = Array.isArray(res.body)
+    ? res.body
+    : Array.isArray((res.body as { items?: unknown[] }).items)
+      ? (res.body as { items: unknown[] }).items
+      : [];
+  const topics = raw.filter(
+    (item): item is Record<string, unknown> =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as { id?: unknown }).id === 'string' &&
+      typeof (item as { title?: unknown }).title === 'string' &&
+      (item as { status?: unknown }).status !== 'archived',
+  );
   return {
     ok: true,
-    topics: items
-      .filter((item) => typeof item.id === 'string' && typeof item.title === 'string')
-      .map((item) => ({ id: item.id as string, title: item.title as string })),
+    topics: topics.map((item) => ({
+      id: item.id as string,
+      title: item.title as string,
+    })),
   };
 }
