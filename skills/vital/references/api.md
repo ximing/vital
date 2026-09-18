@@ -1853,6 +1853,7 @@ Request body (`createInboxInputSchema`):
 - `contentJson` (optional, nullable):
   - `type`: "doc"
   - `content`: lazy[]
+- `extractedHtml`: string 0–2097152 (optional, nullable)
 - `excerpt`: string 0–500 (optional, nullable)
 - `byline`: string 0–200 (optional, nullable)
 - `siteName`: string 0–200 (optional, nullable)
