@@ -1,6 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { cpSync, createReadStream, existsSync, statSync } from 'node:fs';
+import { cpSync, createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,9 @@ import { defineConfig } from 'vite';
 import svgr from 'vite-plugin-svgr';
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(path.resolve(rootDir, 'package.json'), 'utf8')) as {
+  version: string;
+};
 const require = createRequire(import.meta.url);
 // Pin one physical React (root overrides 19.1.0; Expo later must not duplicate dispatcher).
 const reactRoot = path.dirname(require.resolve('react/package.json'));
@@ -41,6 +44,9 @@ function emojibasePlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), svgr(), tailwindcss(), emojibasePlugin()],
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
+  },
   resolve: {
     alias: {
       '@': path.resolve(rootDir, './src'),

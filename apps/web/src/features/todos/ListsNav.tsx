@@ -7,6 +7,7 @@ import { t } from '@/copy';
 import { RAIL_NAV, railNavClass } from '@/shell/rail-nav';
 import { listIdFrom, rhythmHref } from '@/shell/section';
 import { pointAnchor, type MenuAnchor } from '@/ui/anchor-menu';
+import { ConfirmDialog } from '@/ui/confirm-dialog';
 import { Icon } from '@/ui/icon';
 import { ListContextMenu } from './ListContextMenu';
 import { ListIconPopover } from './ListIconPopover';
@@ -96,6 +97,7 @@ export function UserListsNav({
   const [folded, setFolded] = useState<Set<string>>(() => loadFolded());
   const [menu, setMenu] = useState<{ list: List; x: number; y: number } | null>(null);
   const [iconFor, setIconFor] = useState<{ list: List; anchor: MenuAnchor } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<List | null>(null);
   const lists = data ?? [];
   const roots = listRoots(lists);
 
@@ -296,10 +298,8 @@ export function UserListsNav({
             void patchList.mutateAsync({ id: menu.list.id, input: { isArchived: true } });
           }}
           onDelete={() => {
-            if (!window.confirm(t.todos.deleteListConfirm)) return;
-            void deleteList.mutateAsync(menu.list.id).then(() => {
-              if (current === menu.list.id) navigate('/todos/lists/smart:today');
-            });
+            setPendingDelete(menu.list);
+            setMenu(null);
           }}
         />
       ) : null}
@@ -309,6 +309,23 @@ export function UserListsNav({
           anchor={iconFor.anchor}
           onClose={() => setIconFor(null)}
           onPicked={() => setIconFor(null)}
+        />
+      ) : null}
+      {pendingDelete ? (
+        <ConfirmDialog
+          title={t.todos.deleteList}
+          body={t.todos.deleteListConfirm}
+          confirmLabel={t.todos.deleteList}
+          cancelLabel={t.dialog.cancel}
+          danger
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const list = pendingDelete;
+            setPendingDelete(null);
+            void deleteList.mutateAsync(list.id).then(() => {
+              if (current === list.id) navigate('/todos/lists/smart:today');
+            });
+          }}
         />
       ) : null}
     </div>

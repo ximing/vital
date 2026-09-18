@@ -88,6 +88,8 @@ export const createInboxInputSchema = z.object({
   originalUrl: httpUrlSchema.nullable().optional(),
   extractedText: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
   contentJson: articleDocSchema.nullable().optional(),
+  /** Legacy capture field (extension ≤0.2.0); converted to `contentJson` server-side. */
+  extractedHtml: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
   excerpt: z.string().trim().max(500).nullable().optional(),
   byline: z.string().trim().max(200).nullable().optional(),
   siteName: z.string().trim().max(200).nullable().optional(),

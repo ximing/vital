@@ -30,3 +30,5 @@ Typical parent → child cleanup (same transaction):
 ## Other
 
 Engineering conventions: `docs/project-standards.md`.
+
+Before a web/desktop release, bump `apps/web/package.json` `version`, then build. Vite inlines it as `VITE_APP_VERSION`; the settings footer shows that string. Do not hardcode the version in source — changing `package.json` after a build does not update the bundle.

@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { PromptDialog } from '@/ui/prompt-dialog';
 
 function asPm(md: string): PmNode {
   return parseMarkdownToPmJSON(md);
@@ -34,6 +35,7 @@ export function NotesEditor({
   const onChangeRef = useRef(onChange);
   const skip = useRef(true);
   const [, bump] = useState(0);
+  const [linkDraft, setLinkDraft] = useState<string | null>(null);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -72,6 +74,27 @@ export function NotesEditor({
     editor.commands.setContent(asPm(value));
     skip.current = false;
   }, [editor, value]);
+
+  function openLink(instance: Editor | null): void {
+    if (!instance) return;
+    if (instance.isActive('link')) {
+      instance.chain().focus().unsetLink().run();
+      return;
+    }
+    const previous = instance.getAttributes('link').href;
+    setLinkDraft(typeof previous === 'string' ? previous : 'https://');
+  }
+
+  function applyLink(instance: Editor | null, href: string): void {
+    setLinkDraft(null);
+    if (!instance) return;
+    const trimmed = href.trim();
+    if (trimmed === '') {
+      instance.chain().focus().unsetLink().run();
+      return;
+    }
+    instance.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
+  }
 
   return (
     <div className="group/notes min-h-[6rem]">
@@ -152,31 +175,24 @@ export function NotesEditor({
         <ToolbarBtn
           label="链接"
           active={editor?.isActive('link') === true}
-          onClick={() => setLink(editor)}
+          onClick={() => openLink(editor)}
         >
           <Icon icon={LinkIcon} size={14} />
         </ToolbarBtn>
       </div>
       <EditorContent editor={editor} />
+      {linkDraft !== null ? (
+        <PromptDialog
+          title={t.reports.linkPrompt}
+          defaultValue={linkDraft}
+          confirmLabel={t.dialog.ok}
+          cancelLabel={t.dialog.cancel}
+          onConfirm={(href) => applyLink(editor, href)}
+          onCancel={() => setLinkDraft(null)}
+        />
+      ) : null}
     </div>
   );
-}
-
-function setLink(editor: Editor | null): void {
-  if (!editor) return;
-  if (editor.isActive('link')) {
-    editor.chain().focus().unsetLink().run();
-    return;
-  }
-  const previous = editor.getAttributes('link').href;
-  const href = window.prompt('链接地址', typeof previous === 'string' ? previous : 'https://');
-  if (href === null) return;
-  const trimmed = href.trim();
-  if (trimmed === '') {
-    editor.chain().focus().unsetLink().run();
-    return;
-  }
-  editor.chain().focus().extendMarkRange('link').setLink({ href: trimmed }).run();
 }
 
 function ToolbarBtn({

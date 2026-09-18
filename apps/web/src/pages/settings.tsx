@@ -2,6 +2,7 @@ import { Bell, BookMarked, KeyRound, Palette, SlidersHorizontal, Sparkles, User 
 import type { ReactNode } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
+import { APP_VERSION } from '@/lib/app-version';
 import { AccountSection } from '@/features/settings/AccountSection';
 import { LlmSection } from '@/features/settings/LlmSection';
 import { InwitSection } from '@/features/settings/InwitSection';
@@ -136,7 +137,7 @@ export function SettingsPage() {
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:p-8 lg:px-12">
         <div
           id="settings-panel"
-          className="mx-auto w-full max-w-4xl"
+          className="mx-auto flex min-h-full w-full max-w-4xl flex-col"
           role="tabpanel"
           aria-label={TABS.find((item) => item.id === tab)?.label}
         >
@@ -175,6 +176,12 @@ export function SettingsPage() {
               <TokensSection />
             </SettingsBlock>
           ) : null}
+          <p
+            className="mt-auto pt-10 text-center font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums text-tertiary"
+            data-region="settings-version"
+          >
+            {t.settings.version.replace('{v}', APP_VERSION)}
+          </p>
         </div>
       </div>
     </div>

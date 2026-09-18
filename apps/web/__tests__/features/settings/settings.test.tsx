@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client, isTauriRuntime } from '@/api/client';
 import { t } from '@/copy';
+import { APP_VERSION } from '@/lib/app-version';
 import { NotificationsSection } from '../../../src/features/settings/NotificationsSection';
 import { SettingsPage } from '../../../src/pages/settings';
 import { resetBrowserNotify } from '@/features/notify/browser-notify.service';
@@ -186,6 +187,7 @@ describe('NotificationsSection', () => {
       'aria-selected',
       'true',
     );
+    expect(screen.getByText(t.settings.version.replace('{v}', APP_VERSION))).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: t.settings.tabs.appearance }));
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: t.settings.tabs.appearance })).toHaveAttribute(
@@ -213,6 +215,7 @@ describe('NotificationsSection', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(t.settings.tokens.name)).toBeInTheDocument();
     });
+    expect(screen.getByText(t.settings.version.replace('{v}', APP_VERSION))).toBeInTheDocument();
   });
 
   it('adds a custom OpenAI-compatible provider', async () => {

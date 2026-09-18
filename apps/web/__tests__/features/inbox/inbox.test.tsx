@@ -385,6 +385,24 @@ describe('inbox workspace', () => {
     expect(client.patchInbox).toHaveBeenCalledWith('i1', { tagIds: [workTag.id] });
   });
 
+  it('asks in a dialog before deleting an inbox item', async () => {
+    vi.mocked(client.deleteInbox).mockResolvedValue(undefined);
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: [makeItem({ id: 'i1', title: '未读文章' })],
+      nextCursor: null,
+    });
+    renderAt('/inbox');
+    fireEvent.contextMenu(await screen.findByRole('link', { name: /未读文章/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: t.inbox.deleteItem }));
+    expect(screen.getByRole('dialog', { name: t.inbox.deleteItem })).toBeInTheDocument();
+    expect(screen.getByText(t.inbox.deleteItemConfirm)).toBeInTheDocument();
+    expect(client.deleteInbox).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: t.inbox.deleteItem }));
+    await waitFor(() => {
+      expect(client.deleteInbox).toHaveBeenCalledWith('i1');
+    });
+  });
+
   it('previews a pasted URL then creates with originalUrl', async () => {
     const created = makeItem({ id: 'i1', title: 'Example Domain' });
     vi.mocked(client.extractInbox).mockResolvedValue(preview);

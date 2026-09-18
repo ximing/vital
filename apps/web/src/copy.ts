@@ -9,6 +9,10 @@ export const t = {
     palette: '命令面板',
     searchHint: '搜索 ⌘K',
   },
+  dialog: {
+    ok: '确定',
+    cancel: '取消',
+  },
   lists: zhCN.lists,
   reports: {
     ...zhCN.reports,
@@ -615,6 +619,7 @@ export const t = {
     account: '账户',
     appearance: '外观',
     prefs: '偏好',
+    version: '版本 {v}',
     tabs: {
       account: '账户',
       appearance: '外观',

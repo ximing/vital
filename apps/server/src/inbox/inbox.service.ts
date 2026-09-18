@@ -38,6 +38,7 @@ import { getStorage, type StorageMetadata } from '../storage/factory.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import { idempotencyKeyForUrl } from './canonical.js';
 import {
+  htmlToArticleDoc,
   rebindDocMedia,
   textToArticleDoc,
   type ArticleDoc,
@@ -76,15 +77,22 @@ function clip(value: string | null | undefined, max: number): string | null {
 }
 
 /**
- * Body doc on write: client-supplied doc wins; text-only input becomes a
- * paragraph doc. Media srcs are bound to the item's current assets.
+ * Body doc on write: client-supplied doc wins; legacy `extractedHtml` (pre-0.3.0
+ * extension) is converted at the boundary; text-only input becomes a paragraph
+ * doc. Media srcs are bound to the item's current assets.
  */
 function docOnWrite(
   contentJson: ArticleDoc | null | undefined,
   extractedText: string | null,
   assets: readonly DocAssetRef[],
+  extractedHtml?: string | null,
 ): ArticleDoc | null {
-  const doc = contentJson ?? (extractedText !== null && extractedText !== '' ? textToArticleDoc(extractedText) : null);
+  const html = clip(extractedHtml ?? null, 2 * 1024 * 1024);
+  const fromHtml = html !== null ? htmlToArticleDoc(html) : null;
+  const doc =
+    contentJson ??
+    (fromHtml !== null && fromHtml.content.length > 0 ? fromHtml : null) ??
+    (extractedText !== null && extractedText !== '' ? textToArticleDoc(extractedText) : null);
   if (doc === null) return null;
   return rebindDocMedia(doc, assets);
 }
@@ -399,7 +407,7 @@ export async function createInbox(
 
   const extractedText = clip(input.extractedText ?? null, 2 * 1024 * 1024);
   // New items have no assets yet; patchInboxAssets rebinds media once uploads land.
-  const contentJson = docOnWrite(input.contentJson ?? null, extractedText, []);
+  const contentJson = docOnWrite(input.contentJson ?? null, extractedText, [], input.extractedHtml);
   const excerpt = clip(input.excerpt ?? extractedText, 500);
   const now = new Date();
   const id = randomUUID();

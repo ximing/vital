@@ -18,6 +18,11 @@ main { display: flex; flex-direction: column; min-height: 320px; max-height: 580
 .brand-mark { width: 28px; height: 28px; color: var(--accent-primary); }
 .brand-name { font: 600 19px/28px var(--font-display); letter-spacing: -0.6px; }
 .brand-caption { margin-left: auto; color: var(--fg-muted); font-size: var(--text-caption); }
+.brand-version {
+  flex-shrink: 0; padding: 1px 7px; border-radius: 999px;
+  background: var(--bg-surface-muted); color: var(--text-tertiary);
+  font-size: var(--text-caption); font-variant-numeric: tabular-nums;
+}
 section { padding: 20px; overflow-y: auto; min-height: 0; }
 h1, .saved-title { margin: 0 0 8px; font: 600 var(--text-title)/var(--text-title-lh) var(--font-display); letter-spacing: -0.02em; }
 .muted { color: var(--fg-muted); font-size: var(--text-meta); line-height: 1.7; }

@@ -280,6 +280,7 @@ async function boot(): Promise<void> {
 }
 
 applyModeLabels();
+$('brand-version').textContent = `v${chrome.runtime.getManifest().version}`;
 for (const m of MODES) {
   $(`mode-${m}`).addEventListener('click', () => {
     mode = m;

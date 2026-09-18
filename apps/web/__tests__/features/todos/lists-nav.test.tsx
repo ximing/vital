@@ -118,6 +118,23 @@ describe('UserListsNav', () => {
     expect(screen.getByRole('dialog', { name: t.todos.setListIcon })).toBeInTheDocument();
   });
 
+  it('asks in a dialog before deleting a collection', async () => {
+    vi.mocked(client.deleteList).mockResolvedValue(undefined);
+    renderNav([makeList({ id: 'p', name: '工作', sortOrder: 1 })]);
+    fireEvent.contextMenu(await screen.findByRole('link', { name: /工作/ }), {
+      clientX: 20,
+      clientY: 20,
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: t.todos.deleteList }));
+    expect(screen.getByRole('dialog', { name: t.todos.deleteList })).toBeInTheDocument();
+    expect(screen.getByText(t.todos.deleteListConfirm)).toBeInTheDocument();
+    expect(client.deleteList).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: t.todos.deleteList }));
+    await waitFor(() => {
+      expect(client.deleteList).toHaveBeenCalledWith('p');
+    });
+  });
+
   it('keeps the icon panel open for internal scrolling and closes for outside scrolling', async () => {
     renderNav([makeList({ id: 'p', name: '工作', sortOrder: 1 })]);
     fireEvent.click(await screen.findByRole('button', { name: t.todos.setListIcon }));

@@ -30,6 +30,7 @@ import {
 import { useEffect, useRef, useState, type ChangeEvent, type FC, type MouseEvent } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { PromptDialog } from '@/ui/prompt-dialog';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { VitalEntity } from './entity-extension';
 import { isImageMime, uploadReportFile } from './media';
@@ -129,6 +130,7 @@ export const WysiwygEditor: FC<{
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [linkDraft, setLinkDraft] = useState<string | null>(null);
   const [liveMd, setLiveMd] = useState(bodyMd);
   const [, bump] = useState(0);
   const ingestRef = useRef<(files: FileList | File[]) => Promise<void>>(async () => undefined);
@@ -311,8 +313,12 @@ export const WysiwygEditor: FC<{
   function setLink(): void {
     if (!editor) return;
     const previous = editor.getAttributes('link').href;
-    const href = window.prompt(t.reports.linkPrompt, typeof previous === 'string' ? previous : 'https://');
-    if (href === null) return;
+    setLinkDraft(typeof previous === 'string' ? previous : 'https://');
+  }
+
+  function applyLink(href: string): void {
+    setLinkDraft(null);
+    if (!editor) return;
     const trimmed = href.trim();
     if (trimmed === '') {
       editor.chain().focus().unsetLink().run();
@@ -482,6 +488,16 @@ export const WysiwygEditor: FC<{
           slash={reportsUi.slash}
           onPick={pick}
           onClose={() => reportsUi.setSlash(null)}
+        />
+      ) : null}
+      {linkDraft !== null ? (
+        <PromptDialog
+          title={t.reports.linkPrompt}
+          defaultValue={linkDraft}
+          confirmLabel={t.dialog.ok}
+          cancelLabel={t.dialog.cancel}
+          onConfirm={applyLink}
+          onCancel={() => setLinkDraft(null)}
         />
       ) : null}
     </div>

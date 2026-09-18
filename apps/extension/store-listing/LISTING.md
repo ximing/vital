@@ -2,7 +2,7 @@
 
 Fill the developer dashboard **in English**. Reviewers are not Chinese speakers. Product UI stays Chinese; that is expected and noted below.
 
-Do not claim features the **0.2.0** package does not have (toolbar popup: article / selection / task / file; context menus; Alt+Shift+V).
+Do not claim features the **0.4.0** package does not have (toolbar popup: article / selection / task / file; context menus; Alt+Shift+V).
 
 This is a **new item** (Add new item), not an update.
 
@@ -11,10 +11,10 @@ This is a **new item** (Add new item), not an update.
 ## 0. Package
 
 ```
-apps/extension/store-listing/vital-0.2.0-chrome.zip
+apps/extension/store-listing/vital-0.4.0-chrome.zip
 ```
 
-`manifest.json` is at the zip root. Version `0.2.0`. Manifest strings are English.
+`manifest.json` is at the zip root. Version `0.4.0`. Manifest strings are English.
 
 Rebuild the store package (does not overwrite local `dist/`):
 
@@ -269,7 +269,7 @@ The extension has no email/password form. After website login, a one-time code i
 
 ## 7. Checklist
 
-- [ ] Zip root is `manifest.json`, version `0.2.0`
+- [ ] Zip root is `manifest.json`, version `0.4.0`
 - [ ] Store `host_permissions` are only `https://vital.aimo.plus/*` and `https://s3.aimo.plus/*`
 - [ ] `externally_connectable` is only `https://vital.aimo.plus/*`
 - [ ] Privacy policy URL opens in Incognito and is **English**

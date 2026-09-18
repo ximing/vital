@@ -25,6 +25,11 @@
 - 图片加载失败必须回退到安全的本地占位内容；头像回退为用户显示名首字母。
 - 新增任何包含附件的业务 DTO 时，必须同时定义并测试签名 URL 字段。
 
+## 发版版本号
+
+- 发布 Web / 桌面前，先改 `apps/web/package.json` 的 `version`，再构建。Vite 把该字段内联为 `VITE_APP_VERSION`，设置页底部展示的就是这个值。
+- 不要在源码里写死版本号；构建完成后再改 `package.json` 不会进包。
+
 ## 视觉实现
 
 - 工作区保持 rail / library / canvas 结构；library 与 canvas 必须以 `min-h-0 flex-1` 填满可用高度。

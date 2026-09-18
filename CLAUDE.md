@@ -14,3 +14,7 @@ Tables have **no PostgreSQL foreign keys**. Do not add `.references()` in Drizzl
 After editing `apps/server/src/db/schema/**`, restart the **worker** as well as relying on API `tsx watch`. A live worker that still `SELECT`s dropped columns (`llm_providers`, …) will fail the agent scheduler and notification dispatch on every tick.
 
 Inbox article body lives in `inbox_item_bodies` as an article-doc JSON (`content_json`, from `@vital/article-doc`) plus plain `extracted_text` — there is no stored HTML. Sync payloads omit the body; merge with `coalesceInboxBody` so a list/sync row cannot blank the reader cache.
+
+Engineering conventions: `docs/project-standards.md`.
+
+Before a web/desktop release, bump `apps/web/package.json` `version`, then build. Vite inlines it as `VITE_APP_VERSION`; the settings footer shows that string. Do not hardcode the version in source — changing `package.json` after a build does not update the bundle.

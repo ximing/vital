@@ -181,6 +181,30 @@ describe('inbox', () => {
     expect(second.json().title).toBe('Second');
   });
 
+  it('legacy extractedHtml (extension ≤0.2.0) is converted to a structured doc', async () => {
+    const alice = await registerUser(app);
+    const url = 'https://news.example.com/legacy-html';
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      headers: { 'idempotency-key': keyFor(url) },
+      payload: {
+        title: 'Legacy',
+        originalUrl: url,
+        source: 'extension',
+        extractedText: '标题\n正文第一段',
+        extractedHtml:
+          '<h2>标题</h2><p>正文第一段</p><img src="https://img.example.com/a.png"><ul><li>要点一</li></ul>',
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const doc = res.json().contentJson;
+    expect(doc).toBeTruthy();
+    const types = doc.content.map((block: { type: string }) => block.type);
+    expect(types).toEqual(['heading', 'paragraph', 'image', 'bulletList']);
+  });
+
   it('forever canonical URL idempotency returns stored response', async () => {
     const alice = await registerUser(app);
     const url = 'https://News.Example.com/path/?utm_source=x#frag';

@@ -21,6 +21,7 @@ import {
 } from '@/shell/chrome';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
+import { ConfirmDialog } from '@/ui/confirm-dialog';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { usePopover } from '@/ui/use-popover';
@@ -164,6 +165,7 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
   const pasteBtnRef = useRef<HTMLButtonElement>(null);
   const pastePopover = usePopover(pasteRef);
   const [pasteAnchor, setPasteAnchor] = useState<{ right: number; top: number } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<InboxItem | null>(null);
   const actionError = page.actionError;
   const statusNote = page.statusNote;
   const menu = page.itemMenu;
@@ -416,11 +418,26 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
           }}
           onCreateTag={(name) => actions.createTag.mutateAsync(name)}
           onDelete={() => {
-            if (!window.confirm(t.inbox.deleteItemConfirm)) return;
+            setPendingDelete(menuItem);
+            page.closeItemMenu();
+          }}
+        />
+      ) : null}
+      {pendingDelete ? (
+        <ConfirmDialog
+          title={t.inbox.deleteItem}
+          body={t.inbox.deleteItemConfirm}
+          confirmLabel={t.inbox.deleteItem}
+          cancelLabel={t.inbox.cancel}
+          danger
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const item = pendingDelete;
+            setPendingDelete(null);
             void actions.remove
-              .mutateAsync(menuItem.id)
+              .mutateAsync(item.id)
               .then(() => {
-                if (selectedId === menuItem.id) navigate('/inbox');
+                if (selectedId === item.id) navigate('/inbox');
               })
               .catch((err) => {
                 page.setActionError(humanError(err));

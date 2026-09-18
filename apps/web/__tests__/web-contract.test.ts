@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -22,6 +22,15 @@ describe('web shell contract', () => {
     expect(config).toContain("target: 'http://127.0.0.1:3010'");
     expect(config).toContain("'/api'");
     expect(config).toContain('strictPort: true');
+  });
+
+  it('bakes package.json version into the client as VITE_APP_VERSION', () => {
+    const config = read('vite.config.ts');
+    expect(config).toContain('VITE_APP_VERSION');
+    expect(config).toContain('package.json');
+    expect(read('src/vite-env.d.ts')).toContain('VITE_APP_VERSION');
+    expect(read('src/lib/app-version.ts')).toContain('import.meta.env.VITE_APP_VERSION');
+    expect(read('src/pages/settings.tsx')).toContain('APP_VERSION');
   });
 
   it('pins React 19.1.0 and Vite 6', () => {
@@ -178,5 +187,16 @@ describe('web shell contract', () => {
     const main = read('src/main.tsx');
     expect(main).toContain('isNotifyAlertRuntime');
     expect(main).toContain('NotifyAlertPage');
+  });
+
+  it('does not use native window.alert, window.prompt, or window.confirm', () => {
+    const srcRoot = path.resolve(webRoot, 'src');
+    const files = readdirSync(srcRoot, { recursive: true, encoding: 'utf8' }).filter(
+      (file) => file.endsWith('.ts') || file.endsWith('.tsx'),
+    );
+    const hits = files.filter((file) =>
+      /\bwindow\.(alert|prompt|confirm)\s*\(/.test(readFileSync(path.join(srcRoot, file), 'utf8')),
+    );
+    expect(hits).toEqual([]);
   });
 });

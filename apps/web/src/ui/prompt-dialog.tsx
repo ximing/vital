@@ -1,25 +1,32 @@
+import { useState, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/ui/button';
+import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { Overlay } from '@/ui/overlay';
 
-/** Centered confirm: scrim, Esc to dismiss, no click-outside. */
-export function ConfirmDialog({
+/** Centered prompt: scrim, Esc to dismiss, Enter to confirm, no click-outside. */
+export function PromptDialog({
   title,
-  body,
+  defaultValue = '',
   confirmLabel,
   cancelLabel,
-  danger = false,
   onConfirm,
   onCancel,
 }: {
   title: string;
-  body: string;
+  defaultValue?: string;
   confirmLabel: string;
   cancelLabel: string;
-  danger?: boolean;
-  onConfirm: () => void;
+  onConfirm: (value: string) => void;
   onCancel: () => void;
 }) {
+  const [value, setValue] = useState(defaultValue);
+
+  function submit(event: FormEvent): void {
+    event.preventDefault();
+    onConfirm(value);
+  }
+
   return createPortal(
     <Overlay
       tone="scrim"
@@ -30,25 +37,32 @@ export function ConfirmDialog({
       lockFocus
       restoreFocus
     >
-      <div
+      <form
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className="w-full max-w-[440px] rounded-xl border border-border bg-elevated p-6 shadow-[var(--shadow)]"
+        onSubmit={submit}
       >
         <h2 className="font-display text-[length:var(--text-section)] font-semibold">{title}</h2>
-        <p className="mt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
-          {body}
-        </p>
+        <input
+          className={`${FIELD_CONTROL_CLASS} mt-4 w-full`}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          aria-label={title}
+          autoComplete="off"
+          spellCheck={false}
+          onFocus={(event) => event.currentTarget.select()}
+        />
         <div className="mt-5 flex justify-end gap-2">
-          <Button variant="quiet" onClick={onCancel}>
+          <Button variant="quiet" type="button" onClick={onCancel}>
             {cancelLabel}
           </Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>
+          <Button variant="primary" type="submit">
             {confirmLabel}
           </Button>
         </div>
-      </div>
+      </form>
     </Overlay>,
     document.body,
   );
