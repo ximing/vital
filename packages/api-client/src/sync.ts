@@ -47,15 +47,15 @@ export function nextSyncSince(
   return page.truncated ? (latestUpdatedAt(page) ?? page.serverTime) : page.serverTime;
 }
 
-/** Sync/list payloads omit article HTML. Keep a cached body when the incoming row has none. */
+/** Sync/list payloads omit the article body. Keep a cached body when the incoming row has none. */
 export function coalesceInboxBody(prev: InboxItem | undefined, incoming: InboxItem): InboxItem {
   if (!prev) return incoming;
   const incomingHasBody =
-    (incoming.extractedHtml != null && incoming.extractedHtml !== '') ||
+    incoming.contentJson !== null ||
     (incoming.extractedText != null && incoming.extractedText !== '');
   if (incomingHasBody) return incoming;
-  if (prev.extractedHtml == null && prev.extractedText == null) return incoming;
-  return { ...incoming, extractedHtml: prev.extractedHtml, extractedText: prev.extractedText };
+  if (prev.contentJson === null && prev.extractedText == null) return incoming;
+  return { ...incoming, contentJson: prev.contentJson, extractedText: prev.extractedText };
 }
 
 function upsertById<T extends { id: string }>(items: T[], next: T): T[] {

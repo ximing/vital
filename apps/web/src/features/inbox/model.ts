@@ -101,7 +101,7 @@ export function createInputFromPreview(preview: InboxPreview, title?: string): C
     title: nextTitle === '' ? preview.title : nextTitle,
     originalUrl: preview.originalUrl,
     extractedText: preview.extractedText,
-    extractedHtml: preview.extractedHtml,
+    contentJson: preview.contentJson,
     excerpt: preview.excerpt,
     byline: preview.byline,
     siteName: preview.siteName,

@@ -474,7 +474,8 @@ export interface InboxItem {
   originalUrl: string | null;
   canonicalUrl: string | null;
   extractedText: string | null;
-  extractedHtml: string | null;
+  /** Article body as an article-doc (the only body format; null = no body). */
+  contentJson: ArticleDoc | null;
   excerpt: string | null;
   byline: string | null;
   siteName: string | null;
@@ -1849,7 +1850,9 @@ Request body (`createInboxInputSchema`):
 - `title`: string 1–500
 - `originalUrl`: string 0–2048 url (optional, nullable)
 - `extractedText`: string 0–2097152 (optional, nullable)
-- `extractedHtml`: string 0–2097152 (optional, nullable)
+- `contentJson` (optional, nullable):
+  - `type`: "doc"
+  - `content`: lazy[]
 - `excerpt`: string 0–500 (optional, nullable)
 - `byline`: string 0–200 (optional, nullable)
 - `siteName`: string 0–200 (optional, nullable)
@@ -1898,7 +1901,9 @@ Request body (`patchInboxInputSchema`):
 - `title`: string 1–500 (optional)
 - `status`: "unread" | "later" | "archived" (optional)
 - `extractedText`: string 0–2097152 (optional, nullable)
-- `extractedHtml`: string 0–2097152 (optional, nullable)
+- `contentJson` (optional, nullable):
+  - `type`: "doc"
+  - `content`: lazy[]
 - `excerpt`: string 0–500 (optional, nullable)
 - `byline`: string 0–200 (optional, nullable)
 - `siteName`: string 0–200 (optional, nullable)

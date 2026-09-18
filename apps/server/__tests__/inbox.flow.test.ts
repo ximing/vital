@@ -107,7 +107,7 @@ describe('inbox', () => {
     expect(preview.id).toBeUndefined();
     expect(preview.createdAt).toBeUndefined();
     expect(preview.title).toBeTruthy();
-    expect(preview.extractedHtml).toBeTruthy();
+    expect(preview.contentJson).toBeTruthy();
     expect(preview.canonicalUrl).toBe('https://news.example.com/a');
 
     const listed = await injectJson(app, {
@@ -125,28 +125,28 @@ describe('inbox', () => {
       payload: {
         title: preview.title,
         originalUrl: 'https://news.example.com/a',
-        extractedHtml: preview.extractedHtml,
+        contentJson: preview.contentJson,
         extractedText: preview.extractedText,
         source: 'web',
       },
     });
     expect(created.statusCode).toBe(201);
     expect(created.json().id).toBeTruthy();
-    expect(created.json().extractedHtml).toBeTruthy();
+    expect(created.json().contentJson).toBeTruthy();
     const get = await injectJson(app, {
       method: 'GET',
       url: `/api/v1/inbox/${created.json().id}`,
       token: alice.token,
     });
     expect(get.statusCode).toBe(200);
-    expect(get.json().extractedHtml).toBeTruthy();
+    expect(get.json().contentJson).toBeTruthy();
     const listedAfter = await injectJson(app, {
       method: 'GET',
       url: '/api/v1/inbox',
       token: alice.token,
     });
     expect(listedAfter.statusCode).toBe(200);
-    expect(listedAfter.json().items[0].extractedHtml).toBeNull();
+    expect(listedAfter.json().items[0].contentJson).toBeNull();
     expect(listedAfter.json().items[0].extractedText).toBeNull();
     expect(listedAfter.json().items[0].title).toBe(created.json().title);
   });
@@ -225,7 +225,7 @@ describe('inbox', () => {
       payload: {
         title: 'Snap',
         originalUrl: url,
-        extractedHtml: `<p>${'body-for-snapshot'.repeat(20)}</p>`,
+        extractedText: 'body-for-snapshot '.repeat(20),
         source: 'extension',
       },
     });
@@ -295,7 +295,6 @@ describe('inbox', () => {
       payload: {
         title: selection.slice(0, 80),
         extractedText: selection,
-        extractedHtml: `<p>${selection}</p>`,
         originalUrl: page,
         source: 'extension',
       },
@@ -303,7 +302,7 @@ describe('inbox', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().source).toBe('extension');
     expect(res.json().extractedText).toBe(selection);
-    expect(res.json().extractedHtml).toContain(selection);
+    expect(JSON.stringify(res.json().contentJson)).toContain(selection);
   });
 
   it('other user GET is 404 INBOX_NOT_FOUND', async () => {
@@ -616,15 +615,21 @@ describe('inbox', () => {
 
   it('1.2MB extract preview POSTs back as persist 201', async () => {
     const alice = await registerUser(app);
-    const html = `<p>${'x'.repeat(1_200_000)}</p>`;
+    const doc = {
+      type: 'doc',
+      content: Array.from({ length: 13 }, () => ({
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'x'.repeat(100_000) }],
+      })),
+    };
     const persist = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/inbox',
       token: alice.token,
-      payload: { title: 'Long', extractedHtml: html, source: 'web' },
+      payload: { title: 'Long', contentJson: doc, source: 'web' },
     });
     expect(persist.statusCode).toBe(201);
-    expect((persist.json().extractedHtml as string).length).toBeGreaterThan(1_000_000);
+    expect(JSON.stringify(persist.json().contentJson).length).toBeGreaterThan(1_000_000);
   });
 
   it('JSON over inbox bodyLimit is 413 VALIDATION_ERROR not 500', async () => {
@@ -633,7 +638,7 @@ describe('inbox', () => {
       method: 'POST',
       url: '/api/v1/inbox',
       token: alice.token,
-      payload: { title: 'Huge', extractedHtml: 'x'.repeat(INBOX_JSON_BODY_LIMIT_BYTES) },
+      payload: { title: 'Huge', extractedText: 'x'.repeat(INBOX_JSON_BODY_LIMIT_BYTES) },
     });
     expect(res.statusCode).toBe(413);
     expect(res.json().error.code).toBe('VALIDATION_ERROR');

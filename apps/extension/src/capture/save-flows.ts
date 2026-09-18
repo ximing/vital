@@ -1,3 +1,4 @@
+import { htmlToArticleDoc } from '@vital/article-doc';
 import { partSizeFor, totalPartsFor, type CreateInboxInput, type InboxItem } from '@vital/dto';
 import { idempotencyKeyForUrl } from '../canonical.js';
 import {
@@ -7,7 +8,7 @@ import {
 } from '../capture-helpers.js';
 import { getClient } from '../client.js';
 import { fileKindOf, fileModeFromResponse, type DirectFile } from '../file-kind.js';
-import { clip, escapeParagraph, hostnameOf, isHttpUrl } from '../html.js';
+import { clip, hostnameOf, isHttpUrl } from '../html.js';
 import { copy } from '../i18n.js';
 import { isTrackingPixel } from '../images.js';
 import type { CapturePayload, PopupMode } from '../messages.js';
@@ -93,7 +94,6 @@ export async function savePage(
       title,
       originalUrl,
       extractedText: clip(selection, 2 * 1024 * 1024),
-      extractedHtml: escapeParagraph(selection),
       source: 'extension',
     });
     const outcome = { kind: result.created ? 'created' : 'existing', id: result.item.id } as const;
@@ -111,7 +111,10 @@ export async function savePage(
     title: parsed.title,
     originalUrl,
     extractedText: parsed.extractedText,
-    extractedHtml: parsed.extractedHtml,
+    contentJson:
+      parsed.extractedHtml !== null && parsed.extractedHtml !== ''
+        ? htmlToArticleDoc(parsed.extractedHtml)
+        : null,
     excerpt: parsed.excerpt,
     byline: parsed.byline,
     siteName: parsed.siteName,

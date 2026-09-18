@@ -358,7 +358,7 @@ export class InboxComposeService extends Service {
         title: trimmedTitle,
         originalUrl: href.startsWith('http://') || href.startsWith('https://') ? href : null,
         extractedText: this.preview?.extractedText ?? null,
-        extractedHtml: this.preview?.extractedHtml ?? null,
+        contentJson: this.preview?.contentJson ?? null,
         excerpt: this.preview?.excerpt ?? null,
         byline: this.preview?.byline ?? null,
         siteName: this.preview?.siteName ?? null,

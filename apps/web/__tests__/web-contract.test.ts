@@ -97,7 +97,8 @@ describe('web shell contract', () => {
     expect(app).toContain('lazy(');
     expect(app).toContain('Suspense');
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
-    expect(pkg.dependencies.dompurify).toBeTruthy();
+    // Sanitize/bundle lives in the shared @vital/article-doc package now.
+    expect(pkg.dependencies['@vital/article-doc']).toBeTruthy();
     const copy = read('src/copy.ts');
     expect(copy).toContain('把值得重读的东西，先安静地放在这里。');
     expect(copy).toContain('打开一条稍后再读。');

@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { beforeEach, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildFastify } from '../src/app.js';
+import { setStorageAdapter } from '../src/storage/factory.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { registerUser } from './helpers/session.js';
+import { installMockStorage, type MockStorage } from './helpers/storage.js';
 
 vi.mock('undici', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -21,6 +23,7 @@ function undiciReply(status: number, body: unknown): void {
 }
 
 let app: FastifyInstance;
+let storage: MockStorage;
 
 beforeAll(async () => {
   app = await buildFastify();
@@ -28,10 +31,12 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await resetDb();
+  storage = installMockStorage();
   requestMock.mockReset();
 });
 
 afterAll(async () => {
+  setStorageAdapter(null);
   await app.close();
 });
 
@@ -126,7 +131,7 @@ describe('inbox export to inwit', () => {
   it('sends html, stores the document id, and is idempotent', async () => {
     const alice = await registerUser(app);
     await saveConfig(alice.token, { defaultTopicId: null });
-    const id = await createItem(alice.token, { extractedHtml: '<p>正文</p>' });
+    const id = await createItem(alice.token, { extractedText: '正文' });
 
     undiciReply(201, { id: '0f9c2c1e-1111-4222-8333-444455556666' });
     const res = await injectJson(app, {
@@ -156,7 +161,7 @@ describe('inbox export to inwit', () => {
     expect(requestMock.mock.calls.length).toBe(1);
   });
 
-  it('falls back to extractedText when no html', async () => {
+  it('serializes a text-only body to paragraphs', async () => {
     const alice = await registerUser(app);
     await saveConfig(alice.token);
     const id = await createItem(alice.token, { extractedText: '纯文本第一行' });
@@ -177,7 +182,7 @@ describe('inbox export to inwit', () => {
   it('maps 401 to INWIT_KEY_INVALID and empty body to INWIT_EMPTY_BODY', async () => {
     const alice = await registerUser(app);
     await saveConfig(alice.token);
-    const bad = await createItem(alice.token, { extractedHtml: '<p>x</p>' });
+    const bad = await createItem(alice.token, { extractedText: 'x' });
     undiciReply(401, {});
     const res = await injectJson(app, {
       method: 'POST',
@@ -197,9 +202,76 @@ describe('inbox export to inwit', () => {
     expect(res2.json().error.code).toBe('INWIT_EMPTY_BODY');
   });
 
+  it('exports asset-bound media with hosted storage URLs', async () => {
+    const alice = await registerUser(app);
+    await saveConfig(alice.token, { defaultTopicId: null });
+    const id = await createItem(alice.token, {
+      contentJson: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: '有图' }] },
+          { type: 'image', attrs: { src: 'https://mmbiz.qpic.cn/abc/640?wx_fmt=png' } },
+          { type: 'image', attrs: { src: 'https://other.example.com/keep.png' } },
+        ],
+      },
+    });
+
+    const init = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/uploads',
+      token: alice.token,
+      payload: { mime: 'image/jpeg', size: 1024 },
+    });
+    expect(init.statusCode).toBe(201);
+    const { id: attachmentId, totalParts } = init.json();
+    storage.headObject.mockResolvedValue({
+      size: 1024,
+      contentType: 'image/jpeg',
+      lastModified: new Date(),
+    });
+    const complete = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${attachmentId}/complete`,
+      token: alice.token,
+      payload: {
+        parts: Array.from({ length: totalParts }, (_, i) => ({ partNumber: i + 1, etag: `"e${i + 1}"` })),
+      },
+    });
+    expect(complete.statusCode).toBe(200);
+
+    const patched = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/inbox/${id}/assets`,
+      token: alice.token,
+      payload: {
+        assets: [
+          { attachmentId, originalSrc: 'https://mmbiz.qpic.cn/abc/640?wx_fmt=png', sortOrder: 0 },
+        ],
+      },
+    });
+    expect(patched.statusCode).toBe(200);
+    // The doc's media node was rebound to the upload ref on asset patch.
+    expect(JSON.stringify(patched.json().contentJson)).toContain(`/api/v1/uploads/${attachmentId}`);
+
+    undiciReply(201, { id: '0f9c2c1e-2222-4222-8333-444455556666' });
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/inbox/${id}/export-inwit`,
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(201);
+
+    const [, opts] = requestMock.mock.calls[0] as [string, { body: string }];
+    const payload = JSON.parse(opts.body) as { html: string };
+    // Bound media → hosted storage URL (mock adapter); unmatched external src kept.
+    expect(payload.html).toContain('https://fake.local/presigned-get');
+    expect(payload.html).toContain('https://other.example.com/keep.png');
+    expect(payload.html).not.toContain('mmbiz.qpic.cn');
+  });
+
   it('409 when not configured', async () => {
     const alice = await registerUser(app);
-    const id = await createItem(alice.token, { extractedHtml: '<p>x</p>' });
+    const id = await createItem(alice.token, { extractedText: 'x' });
     const res = await injectJson(app, {
       method: 'POST',
       url: `/api/v1/inbox/${id}/export-inwit`,

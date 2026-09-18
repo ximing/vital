@@ -143,7 +143,7 @@ describe('GET /api/v1/outcomes/:id/detail', () => {
     expect(body.habits).toEqual([]);
     expect(body.materials).toHaveLength(1);
     expect(body.materials[0]).toMatchObject({ title: '简历反馈要点' });
-    expect(body.materials[0].extractedHtml).toBeUndefined();
+    expect(body.materials[0].contentJson).toBeUndefined();
 
     expect(body.agentActions).toHaveLength(2);
     // Newest first.

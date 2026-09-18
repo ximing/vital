@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   collectArticleImages,
   isTrackingPixel,
-  rewriteExtractedImageSrcs,
   shouldConvertImage,
   sniffMime,
 } from '../src/images.js';
@@ -79,55 +78,6 @@ describe('collectArticleImages', () => {
   });
 });
 
-describe('rewriteExtractedImageSrcs', () => {
-  it('rewrites img src to our upload path so the reader never hotlinks', () => {
-    const html = '<p><img src="https://cdn.ex.com/hero.jpg" alt="h"></p>';
-    const out = rewriteExtractedImageSrcs(html, [
-      { originalSrc: 'https://cdn.ex.com/hero.jpg', uploadPath: '/api/v1/uploads/att-1' },
-    ]);
-    expect(out).toContain('src="/api/v1/uploads/att-1"');
-    expect(out).not.toContain('cdn.ex.com');
-  });
-
-  it('matches WeChat srcs that differ only by #imgIndex', () => {
-    const html =
-      '<img src="https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&from=appmsg#imgIndex=2">';
-    const out = rewriteExtractedImageSrcs(html, [
-      {
-        originalSrc: 'https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&from=appmsg',
-        uploadPath: '/api/v1/uploads/att-1',
-      },
-    ]);
-    expect(out).toContain('/api/v1/uploads/att-1');
-    expect(out).not.toContain('mmbiz.qpic.cn');
-  });
-
-  it('rewrites video src and poster onto upload paths', () => {
-    const html =
-      '<video src="https://cdn.ex.com/clip.mp4" poster="https://cdn.ex.com/poster.jpg" controls></video>';
-    const out = rewriteExtractedImageSrcs(html, [
-      { originalSrc: 'https://cdn.ex.com/clip.mp4', uploadPath: '/api/v1/uploads/vid-1' },
-      { originalSrc: 'https://cdn.ex.com/poster.jpg', uploadPath: '/api/v1/uploads/pos-1' },
-    ]);
-    expect(out).toContain('src="/api/v1/uploads/vid-1"');
-    expect(out).toContain('poster="/api/v1/uploads/pos-1"');
-    expect(out).not.toContain('cdn.ex.com');
-  });
-
-  it('rewrites HTML-entity srcs and data-src without DOMParser', () => {
-    const html =
-      '<img data-src="https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&amp;from=appmsg" alt="图">';
-    const out = rewriteExtractedImageSrcs(html, [
-      {
-        originalSrc: 'https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&from=appmsg',
-        uploadPath: '/api/v1/uploads/att-1',
-      },
-    ]);
-    expect(out).toContain('src="/api/v1/uploads/att-1"');
-    expect(out).not.toContain('data-src');
-    expect(out).not.toContain('mmbiz.qpic.cn');
-  });
-});
 
 describe('shouldConvertImage', () => {
   it('passes through jpeg/png/webp/gif and converts other rasters', () => {

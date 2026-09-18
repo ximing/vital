@@ -34,7 +34,7 @@ describe('search page', () => {
             byline: null,
             siteName: null,
             extractedText: null,
-            extractedHtml: null,
+            contentJson: null,
             status: 'unread',
             source: 'manual',
             capturedAt: '2026-01-01T00:00:00.000Z',

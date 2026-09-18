@@ -288,6 +288,20 @@
       "when": 1789642465110,
       "tag": "0040_real_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1789661727574,
+      "tag": "0041_hesitant_romulus",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1789661825211,
+      "tag": "0042_steady_blonde_phantom",
+      "breakpoints": true
     }
   ]
 }

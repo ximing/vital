@@ -13,4 +13,4 @@ Tables have **no PostgreSQL foreign keys**. Do not add `.references()` in Drizzl
 
 After editing `apps/server/src/db/schema/**`, restart the **worker** as well as relying on API `tsx watch`. A live worker that still `SELECT`s dropped columns (`llm_providers`, …) will fail the agent scheduler and notification dispatch on every tick.
 
-Inbox article HTML/text lives in `inbox_item_bodies`, not on `inbox_items`. Sync payloads omit the body; merge with `coalesceInboxBody` so a list/sync row cannot blank the reader cache.
+Inbox article body lives in `inbox_item_bodies` as an article-doc JSON (`content_json`, from `@vital/article-doc`) plus plain `extracted_text` — there is no stored HTML. Sync payloads omit the body; merge with `coalesceInboxBody` so a list/sync row cannot blank the reader cache.

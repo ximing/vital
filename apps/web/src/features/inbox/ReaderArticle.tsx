@@ -1,39 +1,20 @@
+import type { ArticleDoc } from '@vital/article-doc';
 import type { InboxAsset } from '@vital/dto';
-import { useEffect, useState } from 'react';
 import { t } from '@/copy';
 import { type ReaderSize } from './model';
-import { prepareReaderHtml, purifyInboxHtml, readerSourceHtml } from './purify';
+import { renderDoc } from './ReaderDoc';
 import { isFileAsset, ReaderFileAsset } from './ReaderFileAsset';
 
 function ReaderArticleBody({
-  html,
-  text,
+  doc,
   assets,
   size,
 }: {
-  html: string | null;
-  text: string | null;
+  doc: ArticleDoc | null;
   assets: InboxAsset[];
   size: ReaderSize;
 }) {
-  const [out, setOut] = useState(() => purifyInboxHtml(readerSourceHtml(html, text)));
-
-  useEffect(() => {
-    let cancelled = false;
-    const urls: string[] = [];
-    void prepareReaderHtml(html, text, assets).then(
-      (result) => {
-        urls.push(...result.objectUrls);
-        if (!cancelled) setOut(result.html);
-      },
-    );
-    return () => {
-      cancelled = true;
-      for (const url of urls) URL.revokeObjectURL(url);
-    };
-  }, [html, text, assets]);
-
-  if (out === '') {
+  if (doc === null || doc.content.length === 0) {
     return (
       <p className="text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
         {t.inbox.noBody}
@@ -42,24 +23,17 @@ function ReaderArticleBody({
   }
 
   return (
-    <article
-      className="reader-article"
-      data-size={size}
-      // Purified in prepareReaderHtml (DOMPurify + asset rewrite).
-      dangerouslySetInnerHTML={{ __html: out }}
-    />
+    <article className="reader-article" data-size={size}>
+      {renderDoc(doc, assets)}
+    </article>
   );
 }
 
 export function ReaderArticle(props: {
-  html: string | null;
-  text: string | null;
+  doc: ArticleDoc | null;
   assets: InboxAsset[];
   size: ReaderSize;
 }) {
-  const assetKey = props.assets
-    .map((asset) => `${asset.attachmentId}:${asset.originalSrc}`)
-    .join('|');
   const fileAssets = props.assets.filter(isFileAsset);
   return (
     <>
@@ -70,13 +44,7 @@ export function ReaderArticle(props: {
           ))}
         </div>
       ) : null}
-      <ReaderArticleBody
-        key={`${props.html ?? ''}\n${props.text ?? ''}\n${assetKey}`}
-        html={props.html}
-        text={props.text}
-        assets={props.assets}
-        size={props.size}
-      />
+      <ReaderArticleBody doc={props.doc} assets={props.assets} size={props.size} />
     </>
   );
 }

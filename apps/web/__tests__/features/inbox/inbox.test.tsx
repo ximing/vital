@@ -1,3 +1,4 @@
+import { htmlToArticleDoc } from '@vital/article-doc';
 import {
   DEFAULT_LLM_SETTINGS,
   DEFAULT_NOTIFICATION_PREFS,
@@ -116,13 +117,15 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
   };
 }
 
+const DOC = htmlToArticleDoc('<p>Hello</p>');
+
 function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): InboxItem {
   return {
     outcomeId: null,
     originalUrl: 'https://example.com/a',
     canonicalUrl: 'https://example.com/a',
     extractedText: 'Hello',
-    extractedHtml: '<p>Hello</p>',
+    contentJson: DOC,
     excerpt: 'Hello',
     byline: null,
     siteName: 'example.com',
@@ -148,7 +151,7 @@ const preview: InboxPreview = {
   originalUrl: 'https://example.com/a',
   canonicalUrl: 'https://example.com/a',
   extractedText: 'Hello',
-  extractedHtml: '<p>Hello</p>',
+  contentJson: DOC,
   excerpt: 'Hello',
   byline: null,
   siteName: 'example.com',
@@ -386,10 +389,7 @@ describe('inbox workspace', () => {
     const created = makeItem({ id: 'i1', title: 'Example Domain' });
     vi.mocked(client.extractInbox).mockResolvedValue(preview);
     vi.mocked(client.createInbox).mockResolvedValue(created);
-    vi.mocked(client.getInbox).mockResolvedValue({
-      ...created,
-      extractedHtml: '<p>Hello</p><script>alert(1)</script>',
-    });
+    vi.mocked(client.getInbox).mockResolvedValue(created);
     const user = userEvent.setup();
     renderAt('/inbox');
     await user.click((await screen.findAllByRole('button', { name: t.inbox.pasteUrl }))[0]!);
@@ -406,7 +406,7 @@ describe('inbox workspace', () => {
           title: 'Example Domain',
           originalUrl: 'https://example.com/a',
           source: 'web',
-          extractedHtml: '<p>Hello</p>',
+          contentJson: DOC,
         }),
       );
     });
@@ -490,12 +490,11 @@ describe('inbox reader', () => {
     resetTodosUi();
   });
 
-  it('purifies html, keeps original URL, and converts without dropping it', async () => {
+  it('renders the body doc, keeps original URL, and converts without dropping it', async () => {
     const item = makeItem({
       id: 'i1',
       title: 'Example Domain',
-      extractedHtml:
-        '<p>safe-text</p><script>alert(1)</script><img src="https://x.test/a.png" onerror="alert(1)">',
+      contentJson: htmlToArticleDoc('<p>safe-text</p><img src="https://x.test/a.png">'),
     });
     vi.mocked(client.getInbox).mockResolvedValue(item);
     vi.mocked(client.convertInbox).mockImplementation(async () => {

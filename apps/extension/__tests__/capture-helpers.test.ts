@@ -1,3 +1,4 @@
+import { htmlToArticleDoc } from '@vital/article-doc';
 import { describe, expect, it } from 'vitest';
 import type { CapturePayload } from '../src/messages.js';
 import type { ParsedArticle } from '../src/parse-article.js';
@@ -98,7 +99,7 @@ describe('inboxInputFromCapture', () => {
       title: '新标题',
       originalUrl: 'https://ex.com/a',
       extractedText: '正文',
-      extractedHtml: '<p>正文</p>',
+      contentJson: htmlToArticleDoc('<p>正文</p>'),
       excerpt: '备注',
       byline: '作者',
       siteName: 'Example',
@@ -115,7 +116,7 @@ describe('inboxInputFromCapture', () => {
       title: '新标题',
       originalUrl: 'https://ex.com/a',
       extractedText: '整页正文',
-      extractedHtml: '<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>',
+      contentJson: htmlToArticleDoc('<div class="wrap"><p>整页正文</p><aside>侧栏</aside></div>'),
       excerpt: '整页正文',
       byline: '作者',
       siteName: 'Example',
@@ -125,12 +126,11 @@ describe('inboxInputFromCapture', () => {
 });
 
 describe('selectionInputFromCapture', () => {
-  it('escapes the selection into one paragraph and drops article fields', () => {
+  it('sends the selection as plain text and drops article fields', () => {
     expect(selectionInputFromCapture(capture, '选区标题')).toEqual({
       title: '选区标题',
       originalUrl: 'https://ex.com/a',
       extractedText: '一段<script>选区',
-      extractedHtml: '<p>一段&lt;script&gt;选区</p>',
       excerpt: '一段<script>选区',
       byline: null,
       siteName: 'Example',

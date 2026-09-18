@@ -1,3 +1,4 @@
+import { htmlToArticleDoc } from '@vital/article-doc';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CapturePayload } from '../src/messages.js';
 import type { ParsedArticle } from '../src/parse-article.js';
@@ -118,7 +119,7 @@ describe('commitCapture page mode', () => {
       expect.objectContaining({
         title: '新标题',
         extractedText: '整页正文',
-        extractedHtml: '<div class="wrap"><p>整页正文</p></div>',
+        contentJson: htmlToArticleDoc('<div class="wrap"><p>整页正文</p></div>'),
         excerpt: '整页正文',
         byline: '作者',
         siteName: 'Example',
@@ -135,7 +136,7 @@ describe('commitCapture page mode', () => {
     expect(createInboxResult).toHaveBeenCalledWith(
       expect.objectContaining({
         extractedText: '整页正文',
-        extractedHtml: '<div class="wrap"><p>整页正文</p></div>',
+        contentJson: htmlToArticleDoc('<div class="wrap"><p>整页正文</p></div>'),
       }),
       expect.any(String),
     );
@@ -147,7 +148,7 @@ describe('commitCapture page mode', () => {
     expect(createInboxResult).toHaveBeenCalledWith(
       expect.objectContaining({
         extractedText: '正文',
-        extractedHtml: '<p>正文</p>',
+        contentJson: htmlToArticleDoc('<p>正文</p>'),
         excerpt: '旧摘',
       }),
       expect.any(String),

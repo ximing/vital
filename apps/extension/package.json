@@ -19,7 +19,8 @@
     "@vital/api-client": "workspace:*",
     "@vital/article-html": "workspace:*",
     "@vital/dto": "workspace:*",
-    "@vital/tokens": "workspace:*"
+    "@vital/tokens": "workspace:*",
+    "@vital/article-doc": "workspace:*"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.24",

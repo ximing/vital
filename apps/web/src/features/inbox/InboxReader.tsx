@@ -401,11 +401,10 @@ function InboxReaderContent() {
                 onCreate={(name) => actions.createTag.mutateAsync(name)}
               />
             </div>
-            {item.extractedHtml || item.extractedText || item.assets.length > 0 ? (
+            {item.contentJson !== null || item.assets.length > 0 ? (
               <div className="mt-7">
                 <ReaderArticle
-                  html={item.extractedHtml}
-                  text={item.extractedText}
+                  doc={item.contentJson}
                   assets={item.assets}
                   size={fontSize}
                 />

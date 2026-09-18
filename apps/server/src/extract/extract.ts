@@ -1,9 +1,9 @@
 import { Readability } from '@mozilla/readability';
-import type { InboxPreview } from '@vital/dto';
+import { htmlToArticleDoc, textToArticleDoc, type ArticleDoc } from '@vital/article-doc';
+import { MAX_EXTRACT_HTML_BYTES, type InboxPreview } from '@vital/dto';
 import { JSDOM } from 'jsdom';
 import { AppError } from '../errors.js';
 import { idempotencyKeyForUrl } from '../inbox/canonical.js';
-import { sanitizeExtractedHtml } from '../inbox/sanitize.js';
 import { logger } from '../utils/logger.js';
 import { fetchHtml } from './fetch.js';
 import { EXTRACT_TIMEOUT_MS } from './ssrf.js';
@@ -19,7 +19,7 @@ function clip(value: string | null | undefined, max: number): string | null {
 function parseArticle(html: string, url: URL): {
   title: string;
   text: string | null;
-  html: string | null;
+  doc: ArticleDoc | null;
   excerpt: string | null;
   byline: string | null;
   siteName: string | null;
@@ -30,13 +30,19 @@ function parseArticle(html: string, url: URL): {
     const article = new Readability(document).parse();
     const title =
       clip(article?.title, 500) ?? clip(document.title, 500) ?? clip(url.hostname, 500) ?? url.href;
-    const text = clip(article?.textContent ?? null, 2 * 1024 * 1024);
-    const rawHtml = article?.content ?? null;
-    const extractedHtml = rawHtml ? sanitizeExtractedHtml(rawHtml) : null;
+    const text = clip(article?.textContent ?? null, MAX_EXTRACT_HTML_BYTES);
+    const rawHtml = clip(article?.content ?? null, MAX_EXTRACT_HTML_BYTES);
+    // The converter's own whitelist is the sanitizer — no separate HTML sanitize pass.
+    const doc =
+      rawHtml !== null
+        ? htmlToArticleDoc(rawHtml)
+        : text !== null
+          ? textToArticleDoc(text)
+          : null;
     return {
       title,
       text,
-      html: extractedHtml === '' ? null : extractedHtml,
+      doc: doc !== null && doc.content.length > 0 ? doc : null,
       excerpt: clip(article?.excerpt, 500),
       byline: clip(article?.byline, 200),
       siteName: clip(article?.siteName, 200),
@@ -70,7 +76,7 @@ export async function extractUrl(rawUrl: string): Promise<InboxPreview> {
       originalUrl: rawUrl,
       canonicalUrl,
       extractedText: article.text,
-      extractedHtml: article.html,
+      contentJson: article.doc,
       excerpt: article.excerpt ?? clip(article.text, 500),
       byline: article.byline,
       siteName: article.siteName,

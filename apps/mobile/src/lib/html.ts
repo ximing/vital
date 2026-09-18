@@ -25,25 +25,3 @@ function codePoint(raw: string, value: number): string {
   if (!Number.isFinite(value) || value <= 0 || value > 0x10ffff) return raw;
   return String.fromCodePoint(value);
 }
-
-/** Flatten HTML to text. Used as a last-resort fallback, not the reader. */
-export function htmlToText(html: string): string {
-  return decodeEntities(
-    html
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n\n')
-      .replace(/<\/h[1-6]>/gi, '\n\n')
-      .replace(/<\/div>/gi, '\n')
-      .replace(/<\/li>/gi, '\n')
-      .replace(/<li[^>]*>/gi, '· ')
-      .replace(/<[^>]+>/g, ''),
-  )
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-export function looksLikeMarkdown(text: string): boolean {
-  return /(?:^|\n)#{1,3} |\*\*|^\s*[-*] /m.test(text);
-}

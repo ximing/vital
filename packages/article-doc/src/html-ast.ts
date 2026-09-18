@@ -1,4 +1,4 @@
-import { decodeEntities } from './html';
+import { decodeEntities } from './entities.js';
 
 export type HtmlAttrs = Record<string, string>;
 

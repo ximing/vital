@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { articleDocSchema, type ArticleDoc } from '@vital/article-doc';
 import { uuidSchema } from './lists.js';
 import { tagIdsSchema } from './tags.js';
 import type { SimilarTaskHit, Task } from './tasks.js';
@@ -46,7 +47,8 @@ export interface InboxItem {
   originalUrl: string | null;
   canonicalUrl: string | null;
   extractedText: string | null;
-  extractedHtml: string | null;
+  /** Article body as an article-doc (the only body format; null = no body). */
+  contentJson: ArticleDoc | null;
   excerpt: string | null;
   byline: string | null;
   siteName: string | null;
@@ -85,7 +87,7 @@ export const createInboxInputSchema = z.object({
   title: z.string().trim().min(1).max(500),
   originalUrl: httpUrlSchema.nullable().optional(),
   extractedText: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
-  extractedHtml: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
+  contentJson: articleDocSchema.nullable().optional(),
   excerpt: z.string().trim().max(500).nullable().optional(),
   byline: z.string().trim().max(200).nullable().optional(),
   siteName: z.string().trim().max(200).nullable().optional(),
@@ -99,7 +101,7 @@ export const patchInboxInputSchema = z
     title: z.string().trim().min(1).max(500).optional(),
     status: z.enum(['unread', 'later', 'archived']).optional(),
     extractedText: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
-    extractedHtml: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
+    contentJson: articleDocSchema.nullable().optional(),
     excerpt: z.string().trim().max(500).nullable().optional(),
     byline: z.string().trim().max(200).nullable().optional(),
     siteName: z.string().trim().max(200).nullable().optional(),

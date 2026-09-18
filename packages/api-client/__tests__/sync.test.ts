@@ -49,7 +49,7 @@ const inbox = (over: Partial<InboxItem> & Pick<InboxItem, 'id'>): InboxItem => (
   originalUrl: null,
   canonicalUrl: null,
   extractedText: null,
-  extractedHtml: null,
+  contentJson: null,
   excerpt: null,
   byline: null,
   siteName: null,
@@ -146,17 +146,18 @@ describe('mergeInboxItems + reports + latestUpdatedAt', () => {
   });
 
   it('keeps a cached article body when the incoming sync row omits it', () => {
-    const cached = inbox({ id: 'a', extractedHtml: '<p>hi</p>', extractedText: 'hi', title: 'old' });
+    const body = { type: 'doc' as const, content: [{ type: 'paragraph' as const, content: [{ type: 'text' as const, text: 'hi' }] }] };
+    const cached = inbox({ id: 'a', contentJson: body, extractedText: 'hi', title: 'old' });
     const incoming = inbox({ id: 'a', title: 'new', status: 'later' });
     expect(coalesceInboxBody(cached, incoming)).toMatchObject({
       title: 'new',
       status: 'later',
-      extractedHtml: '<p>hi</p>',
+      contentJson: body,
       extractedText: 'hi',
     });
     expect(mergeInboxItems([cached], [incoming])[0]).toMatchObject({
       title: 'new',
-      extractedHtml: '<p>hi</p>',
+      contentJson: body,
     });
   });
 

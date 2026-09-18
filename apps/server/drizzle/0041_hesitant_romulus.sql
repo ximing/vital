@@ -1,0 +1,1 @@
+ALTER TABLE "inbox_item_bodies" DROP COLUMN "extracted_html";

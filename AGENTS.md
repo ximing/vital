@@ -25,7 +25,7 @@ Typical parent → child cleanup (same transaction):
 | agent-created outcome (undo) | null `outcome_id` on tasks / inbox / habits |
 | user (tests / eval only) | every table that stores `user_id` |
 
-`inbox_item_bodies` is 1:1 with `inbox_items`. List/sync/search omit the body; `GET /inbox/:id` and create/patch load it. Do not let a body-less sync payload overwrite a cached full item (see `coalesceInboxBody`).
+`inbox_item_bodies` is 1:1 with `inbox_items` and stores the article body as an article-doc JSON (`content_json`, `@vital/article-doc`) plus plain `extracted_text` — no HTML is stored. List/sync/search omit the body; `GET /inbox/:id` and create/patch load it. Do not let a body-less sync payload overwrite a cached full item (see `coalesceInboxBody`).
 
 ## Other
 

@@ -1,4 +1,5 @@
 import { type SQL, sql } from 'drizzle-orm';
+import type { ArticleDoc } from '@vital/article-doc';
 import {
   char,
   check,
@@ -84,7 +85,8 @@ export const inboxItems = pgTable(
 export const inboxItemBodies = pgTable('inbox_item_bodies', {
   inboxItemId: char('inbox_item_id', { length: 36 }).primaryKey(),
   extractedText: text('extracted_text'),
-  extractedHtml: text('extracted_html'),
+  /** Article body (article-doc JSON) — the only body format. */
+  contentJson: jsonb('content_json').$type<ArticleDoc>(),
 });
 
 /** Replay snapshot for POST /inbox. Loaded only on idempotent replay, never on list/sync. */

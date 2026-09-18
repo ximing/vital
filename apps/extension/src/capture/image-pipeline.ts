@@ -12,7 +12,6 @@ import {
   MIN_IMAGE_BYTES,
   bytesToArrayBuffer,
   normalizeMime,
-  rewriteExtractedImageSrcs,
   shouldConvertImage,
 } from '../images.js';
 import { requestImageHostAccess } from '../image-hosts.js';
@@ -165,20 +164,8 @@ export async function rehostImages(
     await onProgress?.(i + 1, pending.length);
   }
   if (assets.length === 0) return { item, failed };
-  const mapping = assets.map((asset) => ({
-    originalSrc: asset.originalSrc,
-    uploadPath: `/api/v1/uploads/${asset.attachmentId}`,
-  }));
+  // patchInboxAssets rebinds the body doc's media nodes to these attachments server-side.
   const bound = pending.length > 0 ? await client.patchInboxAssets(item.id, { assets }) : item;
-  const html = bound.extractedHtml ?? item.extractedHtml ?? '';
-  try {
-    const rewritten = rewriteExtractedImageSrcs(html, mapping);
-    if (rewritten !== '' && rewritten !== html) {
-      return { item: await client.patchInbox(bound.id, { extractedHtml: rewritten }), failed };
-    }
-  } catch {
-    // Reader maps originalSrc via assets.
-  }
   return { item: bound, failed };
 }
 

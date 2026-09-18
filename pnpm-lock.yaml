@@ -52,6 +52,9 @@ importers:
       '@vital/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@vital/article-doc':
+        specifier: workspace:*
+        version: link:../../packages/article-doc
       '@vital/article-html':
         specifier: workspace:*
         version: link:../../packages/article-html
@@ -98,6 +101,9 @@ importers:
       '@vital/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@vital/article-doc':
+        specifier: workspace:*
+        version: link:../../packages/article-doc
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
@@ -216,9 +222,9 @@ importers:
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
-      '@vital/article-html':
+      '@vital/article-doc':
         specifier: workspace:*
-        version: link:../../packages/article-html
+        version: link:../../packages/article-doc
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
@@ -373,9 +379,9 @@ importers:
       '@vital/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
-      '@vital/article-html':
+      '@vital/article-doc':
         specifier: workspace:*
-        version: link:../../packages/article-html
+        version: link:../../packages/article-doc
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
@@ -385,9 +391,6 @@ importers:
       '@vital/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens
-      dompurify:
-        specifier: ^3.4.14
-        version: 3.4.14
       emojibase-data:
         specifier: ^17.0.0
         version: 17.0.0(emojibase@17.0.0)
@@ -487,6 +490,28 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@25.9.5)(jsdom@26.1.0)(vite@8.2.2(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
 
+  packages/article-doc:
+    dependencies:
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      '@vital/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@vital/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      eslint:
+        specifier: ^9.19.0
+        version: 9.39.5(jiti@2.7.0)
+      typescript:
+        specifier: ^7.0.0
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.5)(jsdom@26.1.0)(vite@8.2.2(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
   packages/article-html:
     devDependencies:
       '@types/sanitize-html':
@@ -519,6 +544,9 @@ importers:
 
   packages/dto:
     dependencies:
+      '@vital/article-doc':
+        specifier: workspace:*
+        version: link:../article-doc
       zod:
         specifier: ^3.24.2
         version: 3.25.76

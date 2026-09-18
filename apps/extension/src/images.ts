@@ -60,23 +60,6 @@ export function imageSrcKey(src: string): string {
   return imageSrcKeys(src)[0] ?? src;
 }
 
-function htmlDecode(value: string): string {
-  return value
-    .replaceAll('&amp;', '&')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&#39;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>');
-}
-
-function lookupMappedSrc(src: string, index: Map<string, string>): string | undefined {
-  for (const key of imageSrcKeys(src)) {
-    const hit = index.get(key);
-    if (hit !== undefined) return hit;
-  }
-  return undefined;
-}
-
 export function promoteLazyImages(root: ParentNode, pageUrl?: string): void {
   for (const img of root.querySelectorAll('img')) {
     const raw = imageSrcFrom(img);
@@ -121,56 +104,6 @@ export function promoteMedia(root: ParentNode, pageUrl?: string): void {
     const poster = httpMediaSrc(video.getAttribute('poster'), pageUrl);
     if (poster !== null) video.setAttribute('poster', poster);
   }
-}
-
-const IMG_TAG_RE = /<img\b[^>]*>/gi;
-const SRC_ATTR_RE =
-  /\s(?:src|data-src|data-original|data-lazy-src|data-actualsrc)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
-const DROP_LAZY_ATTR_RE =
-  /\s(?:srcset|data-src|data-original|data-lazy-src|data-actualsrc|data-srcset)\s*=\s*(?:"[^"]*"|'[^']*')/gi;
-
-/** String rewrite — the extension service worker has no DOMParser. */
-export function rewriteExtractedImageSrcs(
-  html: string,
-  mapping: Array<{ originalSrc: string; uploadPath: string }>,
-): string {
-  if (html === '' || mapping.length === 0) return html;
-  const index = new Map<string, string>();
-  for (const row of mapping) {
-    for (const key of imageSrcKeys(row.originalSrc)) {
-      if (!index.has(key)) index.set(key, row.uploadPath);
-    }
-  }
-  return html.replace(new RegExp(IMG_TAG_RE.source, 'gi'), (tag) => {
-    let found: string | undefined;
-    for (const match of tag.matchAll(new RegExp(SRC_ATTR_RE.source, 'gi'))) {
-      const raw = match[1] ?? match[2] ?? '';
-      found = lookupMappedSrc(htmlDecode(raw), index);
-      if (found !== undefined) break;
-    }
-    if (found === undefined) return tag;
-    let next = tag.replace(new RegExp(DROP_LAZY_ATTR_RE.source, 'gi'), '');
-    if (/\ssrc\s*=/i.test(next)) {
-      next = next.replace(/\ssrc\s*=\s*(?:"[^"]*"|'[^']*')/i, ` src="${found}"`);
-    } else {
-      next = next.replace(/^<img\b/i, `<img src="${found}"`);
-    }
-    return next;
-  }).replace(/<(video|source)\b[^>]*>/gi, (tag) => {
-    let next = rewriteTagAttr(tag, 'src', index);
-    next = rewriteTagAttr(next, 'poster', index);
-    return next;
-  });
-}
-
-function rewriteTagAttr(tag: string, attr: string, index: Map<string, string>): string {
-  const re = new RegExp(`\\s${attr}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i');
-  const match = re.exec(tag);
-  if (match === null) return tag;
-  const raw = match[1] ?? match[2] ?? '';
-  const found = lookupMappedSrc(htmlDecode(raw), index);
-  if (found === undefined) return tag;
-  return tag.replace(re, ` ${attr}="${found}"`);
 }
 
 export function isTrackingPixel(img: {

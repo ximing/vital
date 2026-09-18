@@ -1,3 +1,4 @@
+import { htmlToArticleDoc } from '@vital/article-doc';
 import type { InboxItem, InboxPreview } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import {
@@ -13,13 +14,15 @@ import {
   visibleSaves,
 } from '../../../src/features/inbox/model';
 
+const DOC = htmlToArticleDoc('<p>Hello</p>');
+
 function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): InboxItem {
   return {
     outcomeId: null,
     originalUrl: 'https://example.com/a',
     canonicalUrl: 'https://example.com/a',
     extractedText: 'Hello',
-    extractedHtml: '<p>Hello</p>',
+    contentJson: DOC,
     excerpt: 'Hello',
     byline: null,
     siteName: 'example.com',
@@ -134,7 +137,7 @@ describe('createInputFromPreview', () => {
       originalUrl: 'https://example.com/a',
       canonicalUrl: 'https://example.com/a',
       extractedText: 'Hello',
-      extractedHtml: '<p>Hello</p>',
+      contentJson: DOC,
       excerpt: 'Hello',
       byline: null,
       siteName: 'example.com',
@@ -151,7 +154,7 @@ describe('createInputFromPreview', () => {
       title: 'New',
       originalUrl: 'https://example.com/a',
       extractedText: 'Hello',
-      extractedHtml: '<p>Hello</p>',
+      contentJson: DOC,
       excerpt: 'Hello',
       byline: null,
       siteName: 'example.com',

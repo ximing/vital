@@ -11,51 +11,40 @@ import {
   type TextStyle,
 } from 'react-native';
 import { Paperclip } from 'lucide-react-native';
+import {
+  resolveDocMediaUrl,
+  type ArticleBlockNode,
+  type ArticleInlineNode,
+  type ArticleMark,
+} from '@vital/article-doc';
 import type { InboxAsset, InboxItem } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { isFileAsset, isSafeHref, isSafeHttpUrl, prepareArticleNodes } from '../lib/article';
-import { isElement, textContent, type HtmlNode } from '../lib/html-ast';
 import { copy } from '../lib/copy';
 import { useTheme } from '../theme/use-theme';
 import { Icon } from '../ui/icon';
 import { READER_FONT_STEPS, type ReaderFontSize } from '../ui/reader-font';
 
-const INLINE_TAGS = new Set([
-  'strong',
-  'em',
-  'b',
-  'i',
-  'u',
-  's',
-  'del',
-  'ins',
-  'mark',
-  'code',
-  'a',
-  'br',
-  'sub',
-  'sup',
-  'abbr',
-  'q',
-  'cite',
-  'small',
-  'time',
-  'kbd',
-  'span',
-]);
+function isFileAsset(asset: InboxAsset): boolean {
+  return (
+    asset.mime === 'application/pdf' ||
+    asset.mime.startsWith('video/') ||
+    asset.mime.startsWith('audio/')
+  );
+}
+
+function isSafeHttpUrl(src: string): boolean {
+  return /^https?:\/\//i.test(src.trim());
+}
 
 export function InboxReader({ item, size = 'md' }: { item: InboxItem; size?: ReaderFontSize }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const step = READER_FONT_STEPS[size];
-  const nodes = useMemo(
-    () => prepareArticleNodes(item.extractedHtml, item.extractedText, item.assets),
-    [item.extractedHtml, item.extractedText, item.assets],
-  );
+  const doc = item.contentJson;
   const fileAssets = item.assets.filter(isFileAsset);
   const body = step as TextStyle;
 
-  if (nodes.length === 0 && fileAssets.length === 0) {
+  if ((doc === null || doc.content.length === 0) && fileAssets.length === 0) {
     return <Text style={[styles.muted, body]}>{copy.inbox.noBody}</Text>;
   }
 
@@ -64,7 +53,7 @@ export function InboxReader({ item, size = 'md' }: { item: InboxItem; size?: Rea
       {fileAssets.map((asset) => (
         <ReaderFileAsset key={asset.id} asset={asset} styles={styles} />
       ))}
-      {renderFlow(nodes, styles, body, 'r')}
+      {doc !== null ? renderBlocks(doc.content, item.assets, styles, body, 'r') : null}
     </View>
   );
 }
@@ -94,168 +83,116 @@ function ReaderFileAsset({
   );
 }
 
-function renderFlow(
-  nodes: HtmlNode[],
+function renderBlocks(
+  blocks: ArticleBlockNode[],
+  assets: InboxAsset[],
   styles: ReturnType<typeof createStyles>,
   body: TextStyle,
   keyPrefix: string,
 ): ReactNode[] {
-  const out: ReactNode[] = [];
-  let inline: HtmlNode[] = [];
-
-  const flush = (key: string): void => {
-    if (inline.length === 0) return;
-    out.push(
-      <Text key={key} style={[styles.body, body]}>
-        {renderInline(inline, styles, body)}
-      </Text>,
-    );
-    inline = [];
-  };
-
-  nodes.forEach((node, i) => {
-    const key = `${keyPrefix}.${i}`;
-    if (node.type === 'text' || (isElement(node) && INLINE_TAGS.has(node.tag))) {
-      inline.push(node);
-      return;
-    }
-    flush(`${key}.t`);
-    out.push(renderBlock(node, styles, body, key));
-  });
-  flush(`${keyPrefix}.end`);
-  return out;
+  return blocks.map((block, i) =>
+    renderBlock(block, assets, styles, body, `${keyPrefix}.${String(i)}`),
+  );
 }
 
 function renderBlock(
-  node: HtmlNode,
+  block: ArticleBlockNode,
+  assets: InboxAsset[],
   styles: ReturnType<typeof createStyles>,
   body: TextStyle,
   key: string,
 ): ReactNode {
-  if (node.type === 'text') {
-    return (
-      <Text key={key} style={[styles.body, body]}>
-        {node.value}
-      </Text>
-    );
-  }
-  switch (node.tag) {
-    case 'p':
+  switch (block.type) {
+    case 'paragraph':
       return (
         <View key={key} style={styles.paragraph}>
-          {renderFlow(node.children, styles, body, key)}
+          <Text style={[styles.body, body]}>{renderInline(block.content, styles)}</Text>
         </View>
       );
-    case 'h1':
-    case 'h2':
-    case 'h3':
-    case 'h4':
-    case 'h5':
-    case 'h6':
+    case 'heading':
       return (
-        <Text key={key} style={headingStyle(node.tag, styles)}>
-          {renderInline(node.children, styles, body)}
+        <Text key={key} style={headingStyle(block.attrs.level, styles)}>
+          {renderInline(block.content, styles)}
         </Text>
       );
     case 'blockquote':
       return (
         <View key={key} style={styles.quote}>
-          {renderFlow(node.children, styles, { ...body, ...styles.quoteText }, key)}
+          {renderBlocks(block.content, assets, styles, { ...body, ...styles.quoteText }, key)}
         </View>
       );
-    case 'ul':
-    case 'ol':
-      return renderList(node, styles, body, key);
-    case 'li':
-      return (
-        <View key={key} style={styles.paragraph}>
-          {renderFlow(node.children, styles, body, key)}
-        </View>
-      );
-    case 'pre':
+    case 'bulletList':
+    case 'orderedList':
+      return renderList(block, assets, styles, body, key);
+    case 'codeBlock':
       return (
         <ScrollView key={key} horizontal nestedScrollEnabled style={styles.pre}>
-          <Text style={[styles.code, body]}>{textContent(node.children)}</Text>
+          <Text style={[styles.code, body]}>{block.content.map((node) => node.text).join('')}</Text>
         </ScrollView>
       );
-    case 'hr':
+    case 'horizontalRule':
       return <View key={key} style={styles.hr} />;
-    case 'img':
-      return <ArticleImage key={key} node={node} styles={styles} />;
-    case 'figure':
+    case 'image':
+      return <ArticleImage key={key} block={block} assets={assets} styles={styles} />;
+    case 'video': {
+      const href = resolveDocMediaUrl(block.attrs.src, assets);
       return (
-        <View key={key} style={styles.figure}>
-          {renderFlow(node.children, styles, body, key)}
-        </View>
+        <MediaLink key={key} href={href ?? undefined} label="视频" styles={styles} body={body} />
       );
-    case 'figcaption':
-      return (
-        <Text key={key} style={[styles.caption, body]}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
+    }
     case 'table':
-      return renderTable(node, styles, body, key);
-    case 'dl':
       return (
-        <View key={key} style={styles.paragraph}>
-          {renderFlow(node.children, styles, body, key)}
-        </View>
-      );
-    case 'dt':
-      return (
-        <Text key={key} style={[styles.body, styles.bold, body]}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    case 'dd':
-      return (
-        <Text key={key} style={[styles.body, styles.muted, styles.dd, body]}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    case 'details':
-    case 'summary':
-      return (
-        <View key={key} style={node.tag === 'details' ? styles.details : undefined}>
-          {renderFlow(node.children, styles, body, key)}
-        </View>
-      );
-    case 'video':
-      return (
-        <MediaLink key={key} href={videoSrc(node)} label="视频" styles={styles} body={body} />
-      );
-    default:
-      return (
-        <View key={key} style={styles.paragraph}>
-          {renderFlow(node.children, styles, body, key)}
-        </View>
+        <ScrollView key={key} horizontal nestedScrollEnabled style={styles.tableWrap}>
+          <View>
+            {block.content.map((row, ri) => (
+              <View key={`${key}.${String(ri)}`} style={styles.tr}>
+                {row.content.map((cell, ci) => (
+                  <View
+                    key={`${key}.${String(ri)}.${String(ci)}`}
+                    style={[styles.td, cell.type === 'tableHeader' && styles.th]}
+                  >
+                    {cell.content.map((child, bi) =>
+                      child.type === 'paragraph' ? (
+                        <Text
+                          key={`${key}.${String(ri)}.${String(ci)}.${String(bi)}`}
+                          style={[styles.body, body, cell.type === 'tableHeader' && styles.bold]}
+                        >
+                          {renderInline(child.content, styles)}
+                        </Text>
+                      ) : (
+                        renderBlock(child, assets, styles, body, `${key}.${String(ri)}.${String(ci)}.${String(bi)}`)
+                      ),
+                    )}
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       );
   }
 }
 
 function renderList(
-  node: Extract<HtmlNode, { type: 'element' }>,
+  block: Extract<ArticleBlockNode, { type: 'bulletList' | 'orderedList' }>,
+  assets: InboxAsset[],
   styles: ReturnType<typeof createStyles>,
   body: TextStyle,
   key: string,
 ): ReactNode {
-  const ordered = node.tag === 'ol';
-  const start = Number(node.attrs.start ?? '1');
-  let n = Number.isFinite(start) && start > 0 ? start : 1;
-  const items = node.children.filter(
-    (child): child is Extract<HtmlNode, { type: 'element' }> =>
-      isElement(child) && child.tag === 'li',
-  );
+  const ordered = block.type === 'orderedList';
+  let n = block.type === 'orderedList' ? (block.attrs?.start ?? 1) : 1;
   return (
     <View key={key} style={styles.list}>
-      {items.map((item, i) => {
+      {block.content.map((item, i) => {
         const mark = ordered ? `${n}.` : '·';
         n += 1;
         return (
-          <View key={`${key}.${i}`} style={styles.li}>
+          <View key={`${key}.${String(i)}`} style={styles.li}>
             <Text style={[styles.body, styles.bullet, body]}>{mark}</Text>
-            <View style={styles.liBody}>{renderFlow(item.children, styles, body, `${key}.${i}`)}</View>
+            <View style={styles.liBody}>
+              {renderBlocks(item.content, assets, styles, body, `${key}.${String(i)}`)}
+            </View>
           </View>
         );
       })}
@@ -263,163 +200,77 @@ function renderList(
   );
 }
 
-function renderTable(
-  node: Extract<HtmlNode, { type: 'element' }>,
-  styles: ReturnType<typeof createStyles>,
-  body: TextStyle,
-  key: string,
-): ReactNode {
-  const rows = collectRows(node);
-  return (
-    <ScrollView key={key} horizontal nestedScrollEnabled style={styles.tableWrap}>
-      <View>
-        {rows.map((row, ri) => (
-          <View key={`${key}.${ri}`} style={styles.tr}>
-            {row.map((cell, ci) => (
-              <View key={`${key}.${ri}.${ci}`} style={[styles.td, cell.header && styles.th]}>
-                <Text style={[styles.body, body, cell.header && styles.bold]}>
-                  {renderInline(cell.children, styles, body)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-    </ScrollView>
-  );
-}
-
-function collectRows(
-  node: Extract<HtmlNode, { type: 'element' }>,
-): Array<Array<{ header: boolean; children: HtmlNode[] }>> {
-  const rows: Array<Array<{ header: boolean; children: HtmlNode[] }>> = [];
-  const walk = (nodes: HtmlNode[], header: boolean): void => {
-    for (const child of nodes) {
-      if (!isElement(child)) continue;
-      if (child.tag === 'tr') {
-        rows.push(
-          child.children
-            .filter(isElement)
-            .filter((cell) => cell.tag === 'td' || cell.tag === 'th')
-            .map((cell) => ({
-              header: header || cell.tag === 'th',
-              children: cell.children,
-            })),
-        );
-        continue;
-      }
-      if (child.tag === 'thead' || child.tag === 'tbody' || child.tag === 'tfoot') {
-        walk(child.children, child.tag === 'thead');
-      }
-    }
-  };
-  walk(node.children, false);
-  return rows;
-}
-
 function renderInline(
-  nodes: HtmlNode[],
+  nodes: ArticleInlineNode[],
   styles: ReturnType<typeof createStyles>,
-  body: TextStyle,
 ): ReactNode[] {
   return nodes.map((node, i) => {
-    if (node.type === 'text') return node.value;
-    if (node.tag === 'br') return '\n';
-    if (node.tag === 'strong' || node.tag === 'b') {
-      return (
-        <Text key={i} style={styles.bold}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    }
-    if (node.tag === 'em' || node.tag === 'i') {
-      return (
-        <Text key={i} style={styles.italic}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    }
-    if (node.tag === 'u' || node.tag === 'ins') {
-      return (
-        <Text key={i} style={styles.underline}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    }
-    if (node.tag === 's' || node.tag === 'del') {
-      return (
-        <Text key={i} style={styles.strike}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    }
-    if (node.tag === 'code' || node.tag === 'kbd') {
-      return (
-        <Text key={i} style={styles.code}>
-          {textContent(node.children)}
-        </Text>
-      );
-    }
-    if (node.tag === 'a') {
-      const href = node.attrs.href;
-      const open = href !== undefined && isSafeHref(href);
-      return (
-        <Text
-          key={i}
-          style={styles.link}
-          onPress={open ? () => void Linking.openURL(href).catch(() => undefined) : undefined}
-          accessibilityRole={open ? 'link' : undefined}
-        >
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    }
-    if (node.tag === 'mark') {
-      return (
-        <Text key={i} style={styles.mark}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    }
-    if (node.tag === 'sub' || node.tag === 'sup') {
-      return (
-        <Text key={i} style={node.tag === 'sup' ? styles.sup : styles.sub}>
-          {renderInline(node.children, styles, body)}
-        </Text>
-      );
-    }
-    return (
-      <Text key={i}>{renderInline(node.children, styles, body)}</Text>
-    );
+    if (node.type === 'hardBreak') return '\n';
+    return applyMarks(node.text, node.marks ?? [], styles, i);
   });
 }
 
-function videoSrc(node: Extract<HtmlNode, { type: 'element' }>): string | undefined {
-  if (node.attrs.src) return node.attrs.src;
-  for (const child of node.children) {
-    if (isElement(child) && child.tag === 'source' && child.attrs.src) return child.attrs.src;
+function applyMarks(
+  text: string,
+  marks: ArticleMark[],
+  styles: ReturnType<typeof createStyles>,
+  key: number,
+): ReactNode {
+  if (marks.length === 0) return text;
+  const [head, ...rest] = marks;
+  if (head === undefined) return text;
+  const inner = <>{applyMarks(text, rest, styles, key)}</>;
+  switch (head.type) {
+    case 'bold':
+      return <Text key={key} style={styles.bold}>{inner}</Text>;
+    case 'italic':
+      return <Text key={key} style={styles.italic}>{inner}</Text>;
+    case 'underline':
+      return <Text key={key} style={styles.underline}>{inner}</Text>;
+    case 'strike':
+      return <Text key={key} style={styles.strike}>{inner}</Text>;
+    case 'code':
+      return <Text key={key} style={styles.code}>{inner}</Text>;
+    case 'highlight':
+      return <Text key={key} style={styles.mark}>{inner}</Text>;
+    case 'subscript':
+      return <Text key={key} style={styles.sub}>{inner}</Text>;
+    case 'superscript':
+      return <Text key={key} style={styles.sup}>{inner}</Text>;
+    case 'link':
+      return (
+        <Text
+          key={key}
+          style={styles.link}
+          onPress={() => void Linking.openURL(head.attrs.href).catch(() => undefined)}
+          accessibilityRole="link"
+        >
+          {inner}
+        </Text>
+      );
   }
-  return undefined;
 }
 
-function headingStyle(tag: string, styles: ReturnType<typeof createStyles>): TextStyle {
-  if (tag === 'h1') return styles.h1;
-  if (tag === 'h2') return styles.h2;
+function headingStyle(level: number, styles: ReturnType<typeof createStyles>): TextStyle {
+  if (level <= 1) return styles.h1;
+  if (level === 2) return styles.h2;
   return styles.h3;
 }
 
 function ArticleImage({
-  node,
+  block,
+  assets,
   styles,
 }: {
-  node: Extract<HtmlNode, { type: 'element' }>;
+  block: Extract<ArticleBlockNode, { type: 'image' }>;
+  assets: InboxAsset[];
   styles: ReturnType<typeof createStyles>;
 }) {
-  const uri = node.attrs.src ?? '';
-  const width = Number(node.attrs.width);
-  const height = Number(node.attrs.height);
+  const uri = resolveDocMediaUrl(block.attrs.src, assets) ?? '';
+  const width = block.attrs.width;
+  const height = block.attrs.height;
   const initial =
-    Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0
+    width !== undefined && height !== undefined && width > 0 && height > 0
       ? width / height
       : 16 / 9;
   const [ratio, setRatio] = useState(initial);
@@ -428,7 +279,7 @@ function ArticleImage({
   return (
     <Image
       source={{ uri }}
-      accessibilityLabel={node.attrs.alt || undefined}
+      accessibilityLabel={block.attrs.alt ?? undefined}
       style={[styles.image, { aspectRatio: ratio }]}
       resizeMode="contain"
       onLoad={(event) => {
@@ -523,8 +374,6 @@ const createStyles = (t: Theme) =>
       borderRadius: t.radius.md,
       backgroundColor: t.bgSurfaceMuted,
     },
-    figure: { gap: t.space[2] },
-    caption: { color: t.fgMuted, fontSize: 13 },
     tableWrap: { maxWidth: '100%' },
     tr: { flexDirection: 'row' },
     td: {
@@ -536,13 +385,6 @@ const createStyles = (t: Theme) =>
       maxWidth: 220,
     },
     th: { backgroundColor: t.bgSurfaceMuted },
-    dd: { paddingLeft: t.space[6] },
-    details: {
-      backgroundColor: t.bgSurfaceMuted,
-      borderRadius: t.radius.md,
-      padding: t.space[3],
-      gap: t.space[2],
-    },
     link: { color: t.accentPrimary, textDecorationLine: 'underline' },
     fileRow: {
       flexDirection: 'row',

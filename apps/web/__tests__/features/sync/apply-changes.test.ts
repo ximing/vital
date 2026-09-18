@@ -1,3 +1,4 @@
+import { htmlToArticleDoc } from '@vital/article-doc';
 import type { InboxItem, ReportListItem, SyncChanges, SyncHead, Task } from '@vital/dto';
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
@@ -54,7 +55,7 @@ function inbox(over: Partial<InboxItem> & Pick<InboxItem, 'id'>): InboxItem {
     originalUrl: null,
     canonicalUrl: null,
     extractedText: null,
-    extractedHtml: null,
+    contentJson: null,
     excerpt: null,
     byline: null,
     siteName: null,
@@ -150,15 +151,20 @@ describe('applySyncChanges', () => {
     expect(qc.getQueryData(inboxKeys.item('i1'))).toBeUndefined();
   });
 
-  it('does not wipe a cached inbox body when sync omits extracted html', () => {
+  it('does not wipe a cached inbox body when sync omits the body', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const full = inbox({ id: 'i1', title: 'old', extractedHtml: '<p>body</p>', extractedText: 'body' });
+    const full = inbox({
+      id: 'i1',
+      title: 'old',
+      contentJson: htmlToArticleDoc('<p>body</p>'),
+      extractedText: 'body',
+    });
     qc.setQueryData(inboxKeys.item('i1'), full);
     applySyncChanges(qc, changes({ inbox: [inbox({ id: 'i1', title: 'next', status: 'later' })] }));
     const cached = qc.getQueryData<InboxItem>(inboxKeys.item('i1'));
     expect(cached?.title).toBe('next');
     expect(cached?.status).toBe('later');
-    expect(cached?.extractedHtml).toBe('<p>body</p>');
+    expect(cached?.contentJson).toEqual(htmlToArticleDoc('<p>body</p>'));
     expect(cached?.extractedText).toBe('body');
   });
 

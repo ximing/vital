@@ -1,5 +1,6 @@
+import { htmlToArticleDoc } from '@vital/article-doc';
 import type { CreateInboxInput } from '@vital/dto';
-import { clip, escapeParagraph } from './html.js';
+import { clip } from './html.js';
 import { copy } from './i18n.js';
 import type { CapturePayload } from './messages.js';
 import type { ParsedArticle } from './parse-article.js';
@@ -113,7 +114,8 @@ export function inboxInputFromCapture(
     title,
     originalUrl: capture.originalUrl,
     extractedText,
-    extractedHtml,
+    // The wire format is the article doc; captured HTML is converted at the boundary.
+    contentJson: extractedHtml !== null && extractedHtml !== '' ? htmlToArticleDoc(extractedHtml) : null,
     excerpt: clip(note, 500) ?? (page != null ? clip(extractedText, 500) : capture.excerpt),
     byline: capture.byline,
     siteName: capture.siteName,
@@ -129,7 +131,6 @@ export function selectionInputFromCapture(
     title,
     originalUrl: capture.originalUrl,
     extractedText: clip(capture.selection, 2 * 1024 * 1024),
-    extractedHtml: escapeParagraph(capture.selection),
     excerpt: clip(capture.selection, 500),
     byline: null,
     siteName: capture.siteName,

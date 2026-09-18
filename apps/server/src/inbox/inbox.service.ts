@@ -37,7 +37,12 @@ import { bindUpload } from '../uploads/uploads.service.js';
 import { getStorage, type StorageMetadata } from '../storage/factory.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import { idempotencyKeyForUrl } from './canonical.js';
-import { escapeParagraph, sanitizeExtractedHtml } from './sanitize.js';
+import {
+  rebindDocMedia,
+  textToArticleDoc,
+  type ArticleDoc,
+  type DocAssetRef,
+} from '@vital/article-doc';
 
 function asStatus(value: string): InboxStatus {
   if (value === 'unread' || value === 'later' || value === 'archived' || value === 'converted') {
@@ -70,19 +75,21 @@ function clip(value: string | null | undefined, max: number): string | null {
   return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
 }
 
-function htmlOnWrite(
-  html: string | null | undefined,
-  text: string | null | undefined,
-): string | null {
-  if (html !== undefined && html !== null) {
-    const clean = sanitizeExtractedHtml(html);
-    return clean === '' ? null : clean;
-  }
-  if (text !== undefined && text !== null && text !== '') return escapeParagraph(text);
-  return null;
+/**
+ * Body doc on write: client-supplied doc wins; text-only input becomes a
+ * paragraph doc. Media srcs are bound to the item's current assets.
+ */
+function docOnWrite(
+  contentJson: ArticleDoc | null | undefined,
+  extractedText: string | null,
+  assets: readonly DocAssetRef[],
+): ArticleDoc | null {
+  const doc = contentJson ?? (extractedText !== null && extractedText !== '' ? textToArticleDoc(extractedText) : null);
+  if (doc === null) return null;
+  return rebindDocMedia(doc, assets);
 }
 
-type InboxBody = { extractedText: string | null; extractedHtml: string | null };
+type InboxBody = { extractedText: string | null; contentJson: ArticleDoc | null };
 
 type InboxDtoRow = Pick<
   InboxItemRow,
@@ -143,7 +150,7 @@ export function toInboxDto(
     originalUrl: row.originalUrl,
     canonicalUrl: row.canonicalUrl,
     extractedText: body?.extractedText ?? null,
-    extractedHtml: body?.extractedHtml ?? null,
+    contentJson: body?.contentJson ?? null,
     excerpt: row.excerpt,
     byline: row.byline,
     siteName: row.siteName,
@@ -245,7 +252,7 @@ export async function loadBodiesByItemIds(ids: string[]): Promise<Map<string, In
   for (const row of rows) {
     map.set(row.inboxItemId, {
       extractedText: row.extractedText,
-      extractedHtml: row.extractedHtml,
+      contentJson: row.contentJson,
     });
   }
   return map;
@@ -254,15 +261,15 @@ export async function loadBodiesByItemIds(ids: string[]): Promise<Map<string, In
 async function writeInboxBody(
   inboxItemId: string,
   extractedText: string | null,
-  extractedHtml: string | null,
+  contentJson: ArticleDoc | null,
   db: Pick<ReturnType<typeof getDb>, 'insert'> = getDb(),
 ): Promise<void> {
   await db
     .insert(inboxItemBodies)
-    .values({ inboxItemId, extractedText, extractedHtml })
+    .values({ inboxItemId, extractedText, contentJson })
     .onConflictDoUpdate({
       target: inboxItemBodies.inboxItemId,
-      set: { extractedText, extractedHtml },
+      set: { extractedText, contentJson },
     });
 }
 
@@ -391,7 +398,8 @@ export async function createInbox(
   }
 
   const extractedText = clip(input.extractedText ?? null, 2 * 1024 * 1024);
-  const extractedHtml = htmlOnWrite(input.extractedHtml, extractedText);
+  // New items have no assets yet; patchInboxAssets rebinds media once uploads land.
+  const contentJson = docOnWrite(input.contentJson ?? null, extractedText, []);
   const excerpt = clip(input.excerpt ?? extractedText, 500);
   const now = new Date();
   const id = randomUUID();
@@ -418,7 +426,7 @@ export async function createInbox(
   if (key === null) {
     await getDb().transaction(async (tx) => {
       await tx.insert(inboxItems).values(row);
-      await writeInboxBody(id, extractedText, extractedHtml, tx);
+      await writeInboxBody(id, extractedText, contentJson, tx);
       if (input.tagIds !== undefined) await replaceInboxTags(id, input.tagIds, tx);
     });
     const stored = await getOwnedInboxOr404(userId, id);
@@ -460,9 +468,9 @@ export async function createInbox(
       const current = await dtoOf(stored);
       return { status: 200 as const, item: current, createdRow: null };
     }
-    await writeInboxBody(stored.id, extractedText, extractedHtml, tx);
+    await writeInboxBody(stored.id, extractedText, contentJson, tx);
     if (input.tagIds !== undefined) await replaceInboxTags(stored.id, input.tagIds, tx);
-    const created = toInboxDto(stored, [], input.tagIds ?? [], { extractedText, extractedHtml });
+    const created = toInboxDto(stored, [], input.tagIds ?? [], { extractedText, contentJson });
     const payload: InboxIdempotencyResponse = { status: 201, body: created };
     await writeIdempotencyResponse(stored.id, payload, tx);
     return { status: 201 as const, item: created, createdRow: stored };
@@ -494,7 +502,7 @@ export async function patchInbox(
   }
   await getDb().transaction(async (tx) => {
     await tx.update(inboxItems).set(patch).where(eq(inboxItems.id, row.id));
-    if (input.extractedText !== undefined || input.extractedHtml !== undefined) {
+    if (input.extractedText !== undefined || input.contentJson !== undefined) {
       const [current] = await tx
         .select()
         .from(inboxItemBodies)
@@ -502,13 +510,18 @@ export async function patchInbox(
         .limit(1);
       const extractedText =
         input.extractedText !== undefined ? input.extractedText : (current?.extractedText ?? null);
-      const extractedHtml =
-        input.extractedHtml !== undefined
-          ? input.extractedHtml === null
-            ? null
-            : sanitizeExtractedHtml(input.extractedHtml)
-          : (current?.extractedHtml ?? null);
-      await writeInboxBody(row.id, extractedText, extractedHtml, tx);
+      const nextDoc =
+        input.contentJson !== undefined
+          ? input.contentJson
+          : (current?.contentJson ?? null);
+      const assetRefs = await tx
+        .select({
+          attachmentId: inboxAssets.attachmentId,
+          originalSrc: inboxAssets.originalSrc,
+        })
+        .from(inboxAssets)
+        .where(eq(inboxAssets.inboxItemId, row.id));
+      await writeInboxBody(row.id, extractedText, docOnWrite(nextDoc, extractedText, assetRefs), tx);
     }
     if (input.tagIds !== undefined) await replaceInboxTags(row.id, input.tagIds, tx);
   });
@@ -562,16 +575,32 @@ export async function patchInboxAssets(
   }
   await getDb().transaction(async (tx) => {
     await tx.delete(inboxAssets).where(eq(inboxAssets.inboxItemId, item.id));
-    if (input.assets.length === 0) return;
-    await tx.insert(inboxAssets).values(
-      input.assets.map((asset) => ({
-        id: randomUUID(),
-        inboxItemId: item.id,
-        attachmentId: asset.attachmentId,
-        originalSrc: asset.originalSrc,
-        sortOrder: asset.sortOrder,
-      })),
-    );
+    if (input.assets.length > 0) {
+      await tx.insert(inboxAssets).values(
+        input.assets.map((asset) => ({
+          id: randomUUID(),
+          inboxItemId: item.id,
+          attachmentId: asset.attachmentId,
+          originalSrc: asset.originalSrc,
+          sortOrder: asset.sortOrder,
+        })),
+      );
+    }
+    // Uploads arrived after the body: bind media srcs to the new attachments.
+    const [body] = await tx
+      .select()
+      .from(inboxItemBodies)
+      .where(eq(inboxItemBodies.inboxItemId, item.id))
+      .limit(1);
+    if (body?.contentJson != null) {
+      const rebound = rebindDocMedia(body.contentJson, input.assets);
+      if (rebound !== body.contentJson) {
+        await tx
+          .update(inboxItemBodies)
+          .set({ contentJson: rebound })
+          .where(eq(inboxItemBodies.inboxItemId, item.id));
+      }
+    }
     await tx.update(inboxItems).set({ updatedAt: new Date() }).where(eq(inboxItems.id, item.id));
   });
   return dtoOf(await getOwnedInboxOr404(userId, id));
