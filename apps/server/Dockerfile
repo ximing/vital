@@ -51,7 +51,7 @@ COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
 COPY apps/mobile/package.json apps/mobile/
 COPY apps/extension/package.json apps/extension/
-RUN pnpm install --frozen-lockfile --filter=@vital/web...
+RUN pnpm install --frozen-lockfile --filter=@vital/web... --filter=@vital/tsconfig --filter=@vital/eslint-config
 COPY packages/tsconfig packages/tsconfig
 COPY packages/eslint-config packages/eslint-config
 COPY packages/article-doc packages/article-doc
