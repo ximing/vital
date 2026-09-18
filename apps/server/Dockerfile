@@ -32,7 +32,7 @@ COPY packages/dto packages/dto
 COPY packages/markdown packages/markdown
 COPY packages/article-html packages/article-html
 COPY apps/server apps/server
-RUN pnpm --filter @vital/article-doc build && pnpm --filter @vital/dto build && pnpm --filter @vital/markdown build && pnpm --filter @vital/article-html build && pnpm --filter @vital/server build
+RUN pnpm --filter @vital/article-doc build && pnpm --filter @vital/dto build && pnpm --filter @vital/markdown build && pnpm --filter @vital/server build
 
 # web 构建需要 web 自己的 devDependencies（vite 等），单独装一份；
 # 产物由 server 运行时直接托管（入口 nginx → server，无独立 web 容器）
@@ -66,7 +66,6 @@ ENV VITE_API_BASE_URL=
 RUN pnpm --filter @vital/article-doc build \
  && pnpm --filter @vital/dto build \
  && pnpm --filter @vital/markdown build \
- && pnpm --filter @vital/article-html build \
  && pnpm --filter @vital/tokens build \
  && pnpm --filter @vital/api-client build \
  && pnpm --filter @vital/web build
