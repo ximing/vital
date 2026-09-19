@@ -27,7 +27,7 @@ export function HabitsPage() {
   const [adding, setAdding] = useState(false);
   return (
     <div className="h-full min-h-0 w-full overflow-y-auto px-4 py-6 sm:p-8 lg:px-12">
-      <div className="mx-auto w-full max-w-4xl">
+      <div className="mx-auto w-full max-w-5xl">
         <div className="flex flex-wrap items-start gap-4">
           <div>
             <h1 className="font-display text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)]">
@@ -50,7 +50,11 @@ export function HabitsPage() {
           </div>
         </div>
         <div className="mt-6">
-          <HabitsSection adding={adding} onDoneAdding={() => setAdding(false)} />
+          <HabitsSection
+            adding={adding}
+            onStartAdding={() => setAdding(true)}
+            onDoneAdding={() => setAdding(false)}
+          />
         </div>
       </div>
     </div>

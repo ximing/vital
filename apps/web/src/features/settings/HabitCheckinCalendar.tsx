@@ -21,6 +21,7 @@ function dayLabel(ymd: string, done: number, total: number, state: 'done' | 'mis
   return copy.checkinEmpty.replace('{m}', m).replace('{d}', d);
 }
 
+/** Month grid inside a habit card. Paused habits never mark days as missed. */
 export function HabitCheckinCalendar({
   habit,
   days,
@@ -28,6 +29,7 @@ export function HabitCheckinCalendar({
   weekStartsOn,
   today,
   createdOn,
+  paused = false,
 }: {
   habit: Habit;
   days: HabitCheckinDay[];
@@ -35,6 +37,7 @@ export function HabitCheckinCalendar({
   weekStartsOn: 0 | 1;
   today: string;
   createdOn: string;
+  paused?: boolean;
 }) {
   const { y, m } = ymdParts(monthCursor);
   const cells = monthGrid(y, m, weekStartsOn);
@@ -50,24 +53,26 @@ export function HabitCheckinCalendar({
     <div
       data-habit-calendar={habit.id}
       aria-label={copy.calendarAria.replace('{name}', habit.name)}
-      className="mt-3 max-w-[20rem]"
+      className="mt-3 w-full"
     >
       <div className="grid grid-cols-7 justify-items-center text-center">
         {labels.map((label) => (
-          <span key={label} className="pb-1 text-[10px] leading-4 text-muted">
+          <span key={label} className="pb-0.5 text-[10px] leading-4 text-tertiary">
             {label}
           </span>
         ))}
         {cells.map((ymd, index) => {
-          if (ymd === null) return <span key={`e-${String(index)}`} className="h-8" />;
+          if (ymd === null) return <span key={`e-${String(index)}`} className="h-[34px]" />;
           const done = doneByDate.get(ymd) ?? 0;
           const isToday = ymd === today;
           const future = ymd > today;
           const beforeStart = ymd < createdOn;
           const complete = done > 0 && done >= total;
           const partial = done > 0 && done < total;
-          const missed = !future && !beforeStart && done === 0 && ymd !== today;
-          const state: 'done' | 'missed' | 'empty' = complete || partial ? 'done' : missed ? 'missed' : 'empty';
+          const missed =
+            !paused && !future && !beforeStart && done === 0 && ymd !== today;
+          const state: 'done' | 'missed' | 'empty' =
+            complete || partial ? 'done' : missed ? 'missed' : 'empty';
           const fill = complete ? 1 : partial ? Math.max(0.22, done / Math.max(total, 1)) : 0;
           return (
             <span
@@ -77,16 +82,16 @@ export function HabitCheckinCalendar({
               title={dayLabel(ymd, done, total, state)}
               aria-label={dayLabel(ymd, done, total, state)}
               aria-current={isToday ? 'date' : undefined}
-              className="flex h-8 w-8 items-center justify-center"
+              className="flex h-[34px] w-full items-center justify-center"
             >
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-[11px] tabular-nums ${
+                className={`flex h-[30px] w-[30px] items-center justify-center rounded-full text-[11px] tabular-nums ${
                   complete
-                    ? 'bg-accent font-semibold text-on-accent'
-                    : future || beforeStart
+                    ? `bg-accent font-semibold text-on-accent ${isToday ? 'ring-1 ring-accent-deep ring-offset-1 ring-offset-surface' : ''}`
+                    : future || beforeStart || (paused && done === 0)
                       ? 'text-muted/40'
                       : isToday
-                        ? 'ring-1 ring-accent/70 text-fg'
+                        ? 'text-fg ring-1 ring-accent/70'
                         : missed
                           ? 'text-muted'
                           : 'text-fg'
@@ -95,7 +100,7 @@ export function HabitCheckinCalendar({
                   partial
                     ? {
                         backgroundColor: `color-mix(in srgb, var(--accent-primary) ${Math.round(fill * 100)}%, var(--bg-surface-muted))`,
-                        color: 'var(--accent-primary)',
+                        color: 'var(--accent-deep)',
                         fontWeight: 600,
                       }
                     : undefined

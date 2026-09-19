@@ -1,4 +1,4 @@
-export const RAIL_EXPANDED = 56;
+export const RAIL_EXPANDED = 116;
 export const RAIL_COLLAPSED = 56;
 export const RAIL_WIDTH = 56;
 export const LIBRARY_MIN = 224;
@@ -58,9 +58,12 @@ export function clampPaneWidth(n: number, section: PaneSection = 'todos'): numbe
 
 export function loadRailCollapsed(): boolean {
   try {
-    return localStorage.getItem(RAIL_KEY) === '1';
+    const raw = localStorage.getItem(RAIL_KEY);
+    // 默认收起（图标栏），与老版界面一致；用户可展开出文字。
+    if (raw === null) return true;
+    return raw === '1';
   } catch {
-    return false;
+    return true;
   }
 }
 

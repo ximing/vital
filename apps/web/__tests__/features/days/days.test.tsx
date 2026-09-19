@@ -245,6 +245,21 @@ describe('DaysWorkspace', () => {
     expect(within(create).getByRole('button', { name: t.days.save })).toBeDisabled();
   });
 
+  it('jumps the solar date picker to a past year from the header', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.listDays).mockResolvedValue({ items: [] });
+    renderDays();
+    await user.click(await screen.findByRole('button', { name: `+ ${t.days.add}` }));
+    const create = await screen.findByRole('dialog', { name: t.days.creating });
+    await user.click(within(create).getByRole('button', { name: t.days.date }));
+    const picker = screen.getByRole('dialog', { name: t.calendar.picker });
+    await user.click(within(picker).getByRole('button', { name: t.calendar.selectYear }));
+    await user.click(within(picker).getByRole('button', { name: '2019年' }));
+    await user.click(within(picker).getByRole('button', { name: '6月' }));
+    await user.click(within(picker).getByRole('button', { name: '6月1日' }));
+    expect(within(create).getByRole('button', { name: t.days.date })).toHaveTextContent('2019年6月1日');
+  });
+
   it('keeps a today headline out of the hero and on the today banner', async () => {
     vi.mocked(client.listDays).mockResolvedValue({
       items: [

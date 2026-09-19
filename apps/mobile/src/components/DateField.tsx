@@ -1,12 +1,10 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import type { Theme } from '@vital/tokens';
-import { addMonthsYmd, monthGrid, ymdParts } from '../lib/calendar-grid';
 import { copy } from '../lib/copy';
 import { formatHumanDay, localDateStamp } from '../lib/format';
 import { useTheme } from '../theme/use-theme';
-import { Icon } from '../ui/icon';
+import { CalendarPanel } from './CalendarPanel';
 import { PickerSheet } from './PickerSheet';
 import { TimePicker } from './TimeField';
 
@@ -33,14 +31,7 @@ export function DateField({
   const selectedYmd = value === '' ? '' : value.slice(0, 10);
   const selectedTime = value.includes('T') ? value.slice(11, 16) : '09:00';
   const [open, setOpen] = useState(false);
-  const [monthCursor, setMonthCursor] = useState((selectedYmd || today).slice(0, 7) + '-01');
-  const { y, m } = ymdParts(monthCursor);
-  const cells = monthGrid(y, m, weekStartsOn);
-  const weekday = copy.todos.weekday;
-  const labels =
-    weekStartsOn === 1
-      ? [weekday[1], weekday[2], weekday[3], weekday[4], weekday[5], weekday[6], weekday[0]]
-      : weekday;
+  const [panelKey, setPanelKey] = useState(0);
 
   const summary =
     selectedYmd === ''
@@ -59,7 +50,7 @@ export function DateField({
   }
 
   function openPicker(): void {
-    setMonthCursor((selectedYmd || today).slice(0, 7) + '-01');
+    setPanelKey((key) => key + 1);
     setOpen(true);
   }
 
@@ -103,48 +94,15 @@ export function DateField({
         </>
       )}
       <PickerSheet visible={open} title={label} onClose={() => setOpen(false)}>
-        <View style={styles.monthNav}>
-          <Pressable
-            accessibilityLabel={copy.todos.views.week}
-            onPress={() => setMonthCursor(addMonthsYmd(monthCursor, -1))}
-            hitSlop={8}
-          >
-            <Icon icon={ChevronLeft} size={18} color={t.fgMuted} />
-          </Pressable>
-          <Text style={styles.monthLabel}>
-            {y}年{m}月
-          </Text>
-          <Pressable onPress={() => setMonthCursor(addMonthsYmd(monthCursor, 1))} hitSlop={8}>
-            <Icon icon={ChevronRight} size={18} color={t.fgMuted} />
-          </Pressable>
-        </View>
-        <View style={styles.grid}>
-          {labels.map((item) => (
-            <Text key={item} style={styles.dow}>
-              {item}
-            </Text>
-          ))}
-          {cells.map((ymd, i) => {
-            if (ymd === null) return <View key={`e-${i}`} style={styles.day} />;
-            const isToday = ymd === today;
-            const isSel = ymd === selectedYmd;
-            return (
-              <Pressable
-                key={ymd}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isSel }}
-                onPress={() => pickDay(ymd)}
-                style={styles.day}
-              >
-                <View style={[styles.dayInner, isSel && styles.daySel, isToday && !isSel && styles.dayToday]}>
-                  <Text style={[styles.dayNum, isSel && styles.dayNumOn, isToday && !isSel && styles.dayTodayNum]}>
-                    {Number(ymd.slice(8))}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+        {open ? (
+          <CalendarPanel
+            key={panelKey}
+            selectedYmd={selectedYmd}
+            today={today}
+            weekStartsOn={weekStartsOn}
+            onPickDay={pickDay}
+          />
+        ) : null}
         {kind === 'datetime-local' && selectedYmd !== '' ? (
           <View style={styles.timeBlock}>
             <Text style={styles.label}>{copy.todos.remindTime}</Text>
@@ -179,33 +137,5 @@ const createStyles = (t: Theme) =>
       borderRadius: t.radius.md,
     },
     clearLabel: { fontSize: t.type.title.fontSize, color: t.fgMuted, lineHeight: t.space[8] },
-    monthNav: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: t.space[3],
-    },
-    monthLabel: { fontSize: t.type.meta.fontSize, fontWeight: '600', color: t.fgPrimary },
-    grid: { flexDirection: 'row', flexWrap: 'wrap' },
-    dow: {
-      width: '14.28%',
-      textAlign: 'center',
-      fontSize: t.type.caption.fontSize,
-      color: t.fgMuted,
-      marginBottom: t.space[1],
-    },
-    day: { width: '14.28%', alignItems: 'center', paddingVertical: 2 },
-    dayInner: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    daySel: { backgroundColor: t.accentPrimary },
-    dayToday: { borderWidth: 1, borderColor: t.accentPrimary },
-    dayNum: { fontSize: t.type.caption.fontSize, color: t.fgPrimary },
-    dayNumOn: { color: t.fgOnAccent, fontWeight: '600' },
-    dayTodayNum: { color: t.accentPrimary, fontWeight: '600' },
     timeBlock: { marginTop: t.space[4], gap: t.space[2] },
   });

@@ -89,7 +89,7 @@ describe('primary rail', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('puts today first, then todos, capture, habits, days, threads, reflect, and a palette search button', () => {
+  it('puts today first, then todos, capture, habits, reflect, days, threads, activity, memory, and a palette search button', () => {
     renderShell();
     const rail = screen.getByLabelText('主导航');
     const nav = within(rail).getByRole('navigation');
@@ -99,9 +99,9 @@ describe('primary rail', () => {
       TODOS_HOME_PATH,
       '/inbox',
       '/habits',
+      '/reports',
       '/days',
       '/threads',
-      '/reports',
       '/activity',
       '/memory',
     ]);
@@ -117,18 +117,44 @@ describe('primary rail', () => {
     expect(await screen.findByRole('dialog', { name: t.nav.palette })).toBeInTheDocument();
   });
 
-  it('groups usage, theme, settings, and avatar at the bottom of the rail', () => {
+  it('groups rail toggle, usage, theme, settings, and avatar at the bottom of the rail', () => {
     renderShell();
     const group = document.querySelector('[data-region="rail-account"]');
     expect(group).not.toBeNull();
     expect(group).toHaveClass('gap-1');
     const kids = [...(group as HTMLElement).children];
-    expect(kids[0]).toHaveAttribute('href', '/usage');
-    expect(kids[1]).toHaveAttribute('aria-label', t.theme.switch);
-    expect(kids[2]).toHaveAttribute('href', '/settings');
-    const avatar = kids[3]?.querySelector('[aria-haspopup="menu"]');
+    expect(kids[0]).toHaveAttribute('aria-label', t.rail.expand);
+    expect(kids[1]).toHaveAttribute('href', '/usage');
+    expect(kids[2]).toHaveAttribute('aria-label', t.theme.switch);
+    expect(kids[3]).toHaveAttribute('href', '/settings');
+    const avatar = kids[4]?.querySelector('[aria-haspopup="menu"]');
     expect(avatar).not.toBeNull();
     expect(avatar).toHaveClass('w-full', 'justify-center');
+  });
+
+  it('starts collapsed as an icon rail and expands to labeled items, persisted across renders', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderShell();
+    const rail = screen.getByLabelText('主导航');
+    // 默认收起：纯图标窄栏，项内无文字。
+    expect(rail).toHaveStyle({ width: '56px' });
+    expect(within(rail).queryByText(t.rail.habits)).toBeNull();
+
+    await user.click(within(rail).getByRole('button', { name: t.rail.expand }));
+    expect(rail).toHaveStyle({ width: '116px' });
+    expect(within(rail).getByText(t.rail.habits)).toBeInTheDocument();
+    expect(within(rail).getByText(t.rail.collapse)).toBeInTheDocument();
+    expect(localStorage.getItem('vital:rail-collapsed')).toBe('0');
+
+    unmount();
+    renderShell();
+    const again = screen.getByLabelText('主导航');
+    expect(again).toHaveStyle({ width: '116px' });
+    expect(within(again).getByText(t.rail.habits)).toBeInTheDocument();
+
+    await user.click(within(again).getByRole('button', { name: t.rail.collapse }));
+    expect(again).toHaveStyle({ width: '56px' });
+    expect(localStorage.getItem('vital:rail-collapsed')).toBe('1');
   });
 
   it('renders the saved avatar photo in the rail', () => {

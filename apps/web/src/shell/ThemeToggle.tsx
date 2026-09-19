@@ -21,9 +21,8 @@ function persistTheme(theme: ThemeService, next: ThemeChoice, signedIn: boolean)
   }
 }
 
-export const ThemeSwitch: FC<{ variant?: 'menu' | 'rail' }> = observer(function ThemeSwitch({
-  variant = 'menu',
-}) {
+export const ThemeSwitch: FC<{ variant?: 'menu' | 'rail'; expanded?: boolean }> = observer(
+  function ThemeSwitch({ variant = 'menu', expanded = false }) {
   const user = useService(AuthService).user;
   const theme = useService(ThemeService);
   const choice = theme.choice;
@@ -41,11 +40,16 @@ export const ThemeSwitch: FC<{ variant?: 'menu' | 'rail' }> = observer(function 
         role="switch"
         aria-checked={dark}
         aria-label={t.theme.switch}
-        title={dark ? t.theme.dark : t.theme.light}
+        title={expanded ? undefined : dark ? t.theme.dark : t.theme.light}
         onClick={toggle}
-        className="relative mx-1 flex h-9 items-center justify-center rounded-md text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg"
+        className={`relative mx-1 flex h-9 items-center rounded-md text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg ${
+          expanded ? 'gap-2 px-3' : 'justify-center'
+        }`}
       >
         <Icon icon={dark ? Moon : Sun} className="shrink-0" />
+        {expanded ? (
+          <span className="truncate">{dark ? t.theme.dark : t.theme.light}</span>
+        ) : null}
       </button>
     );
   }

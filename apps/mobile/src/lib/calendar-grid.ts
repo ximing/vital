@@ -48,3 +48,30 @@ export function monthGrid(year: number, month: number, weekStartsOn: 0 | 1): (st
   }
   return cells;
 }
+
+export type CalendarView = 'date' | 'month' | 'year';
+
+const MONTHS_BY_VIEW: Record<CalendarView, { inner: number; super: number }> = {
+  date: { inner: 1, super: 12 },
+  month: { inner: 12, super: 120 },
+  year: { inner: 120, super: 1200 },
+};
+
+export function shiftCalendarCursor(
+  ymd: string,
+  view: CalendarView,
+  step: 'inner' | 'super',
+  dir: -1 | 1,
+): string {
+  return addMonthsYmd(ymd, MONTHS_BY_VIEW[view][step] * dir);
+}
+
+export function decadeStart(year: number): number {
+  return Math.floor(year / 10) * 10;
+}
+
+/** Decade years plus one neighbour on each side (12 cells). */
+export function yearPanelYears(year: number): number[] {
+  const start = decadeStart(year);
+  return Array.from({ length: 12 }, (_, i) => start - 1 + i);
+}

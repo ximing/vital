@@ -5,7 +5,7 @@ import {
   type UserProfile,
 } from '@vital/dto';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
@@ -153,8 +153,10 @@ describe('habits page', () => {
     expect(screen.getByText(copy.countChip.replace('{n}', '8'))).toBeInTheDocument();
     expect(screen.getByText('08:00–22:00')).toBeInTheDocument();
     expect(screen.getByText(copy.agentBadge)).toBeInTheDocument();
-    expect(screen.getByText(copy.inactive)).toBeInTheDocument();
-    expect(document.querySelector('[data-habit-row="h3"]')).toHaveAttribute(
+    // '已停用' also labels a filter pill; scope the badge assertion to the paused row.
+    const pausedRow = document.querySelector('[data-habit-row="h3"]') as HTMLElement;
+    expect(within(pausedRow).getByText(copy.inactive)).toBeInTheDocument();
+    expect(pausedRow).toHaveAttribute(
       'data-habit-active',
       'false',
     );
