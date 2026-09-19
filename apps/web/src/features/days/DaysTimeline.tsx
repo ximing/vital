@@ -1,13 +1,19 @@
 import type { Day } from '@vital/dto';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t } from '@/copy';
-import { shortYmd } from './headline';
 import {
   assignTimelineLanes,
   buildDaysTimeline,
+  clipVerticalLine,
   DEFAULT_TIMELINE_WIDTH_PX,
   timelineTrackMetrics,
+  timelineYmd,
 } from './timeline';
+
+/** Label text line height; leader lines start just below it. */
+const LABEL_LINE_PX = 14;
+/** Leader line stops this far above the dot center. */
+const LEADER_DOT_GAP_PX = 9;
 
 export function DaysTimeline({
   days,
@@ -44,7 +50,7 @@ export function DaysTimeline({
         model.points.map((point) => ({
           id: point.id,
           name: point.name,
-          dateText: shortYmd(point.nextYmd, todayYmd),
+          dateText: timelineYmd(point.nextYmd, todayYmd),
           leftPercent: point.leftPercent,
         })),
         { containerWidthPx: widthPx, todayLabel },
@@ -56,6 +62,48 @@ export function DaysTimeline({
     () => new Map(layout.placements.map((item) => [item.id, item])),
     [layout.placements],
   );
+
+  // Leader line segments for labels lifted above lane 0, clipped so a line
+  // never crosses another label's text on its way down to the dot.
+  const leaders = useMemo(() => {
+    const boxes = layout.placements
+      .filter((item) => item.lane !== null)
+      .map((item) => ({
+        id: item.id,
+        lane: item.lane as number,
+        leftPx: (item.labelLeftPercent / 100) * widthPx,
+        rightPx: ((item.labelLeftPercent + item.widthPercent) / 100) * widthPx,
+      }));
+    const byPoint = new Map<string, { top: number; height: number }[]>();
+    for (const point of model.points) {
+      const placed = placementById.get(point.id);
+      if (!placed || placed.lane === null || placed.lane < 1) continue;
+      const dotXPx = (point.leftPercent / 100) * widthPx;
+      const covers = boxes
+        .filter(
+          (box) =>
+            box.id !== point.id &&
+            box.lane < (placed.lane as number) &&
+            dotXPx >= box.leftPx - 2 &&
+            dotXPx <= box.rightPx + 2,
+        )
+        .map((box) => ({
+          top: track.labelTop(box.lane) - 1,
+          bottom: track.labelTop(box.lane) + LABEL_LINE_PX + 1,
+        }));
+      byPoint.set(
+        point.id,
+        clipVerticalLine(
+          track.labelTop(placed.lane) + LABEL_LINE_PX + 1,
+          track.axisTop - LEADER_DOT_GAP_PX,
+          covers,
+        ),
+      );
+    }
+    return byPoint;
+    // track is derived from layout; placementById from layout.placements.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout, model.points, widthPx]);
 
   if (model.points.length === 0) return null;
 
@@ -95,9 +143,19 @@ export function DaysTimeline({
             {t.days.monthLabel.replace('{n}', String(tick.month))}
           </span>
         ))}
+        {model.points.map((point) =>
+          (leaders.get(point.id) ?? []).map((seg, i) => (
+            <span
+              key={`${point.id}-leader-${i}`}
+              aria-hidden
+              className="pointer-events-none absolute w-px bg-border"
+              style={{ left: `${point.leftPercent}%`, top: seg.top, height: seg.height }}
+            />
+          )),
+        )}
         {model.points.map((point) => {
           const day = byId.get(point.id);
-          const md = shortYmd(point.nextYmd, todayYmd);
+          const md = timelineYmd(point.nextYmd, todayYmd);
           const placed = placementById.get(point.id);
           return (
             <span key={point.id}>
@@ -106,7 +164,7 @@ export function DaysTimeline({
                 onClick={() => day && onOpen(day)}
                 className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
                 style={{ left: `${point.leftPercent}%`, top: track.axisTop }}
-                aria-label={`${point.name} ${md}`}
+                aria-label={`${point.name} ${point.nextYmd}`}
               >
                 <span
                   className={`mx-auto block size-[11px] rounded-full shadow-[0_0_0_2.5px_var(--bg-surface),0_1px_3px_rgb(20_34_24/25%)] ${

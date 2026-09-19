@@ -12,9 +12,11 @@ import { draftCoverMeta, lunarDateLabel, pickNextUp, shortYmd } from '../../../s
 import {
   assignTimelineLanes,
   buildDaysTimeline,
+  clipVerticalLine,
   estimateTextWidthPx,
   TIMELINE_MAX_LANES,
   timelineTrackMetrics,
+  timelineYmd,
   ymdDiffDays,
   type TimelineLabelPlacement,
 } from '../../../src/features/days/timeline';
@@ -341,7 +343,7 @@ describe('buildDaysTimeline', () => {
     expect(model.months.map((m) => m.month)).toEqual([9, 10, 11, 12]);
   });
 
-  it('extends the axis to the farthest nextYmd and pins today at 0', () => {
+  it('extends the axis past the farthest nextYmd and pins today at 0', () => {
     const today = '2026-09-16';
     const model = buildDaysTimeline(
       [
@@ -350,7 +352,12 @@ describe('buildDaysTimeline', () => {
       today,
     );
     expect(model.spanMonths).toBe(5);
-    expect(model.points[0]?.leftPercent).toBe(100);
+    // Right pad keeps the farthest dot slightly inside the track edge.
+    expect(model.endYmd > '2027-02-06').toBe(true);
+    expect(model.points[0]?.leftPercent).toBeLessThan(100);
+    expect(model.points[0]?.leftPercent).toBeCloseTo(
+      (ymdDiffDays(today, '2027-02-06') / ymdDiffDays(today, model.endYmd)) * 100,
+    );
     expect(model.points[0]?.amber).toBe(true);
   });
 });
@@ -405,6 +412,34 @@ describe('pickNextUp', () => {
         }),
       ]),
     ).toBeNull();
+  });
+});
+
+describe('timelineYmd', () => {
+  it('drops the year for dates within a year of today', () => {
+    expect(timelineYmd('2026-09-25', '2026-09-16')).toBe('09-25');
+    expect(timelineYmd('2027-06-20', '2026-09-16')).toBe('06-20');
+  });
+
+  it('keeps the full date beyond a year out', () => {
+    expect(timelineYmd('2027-10-01', '2026-09-16')).toBe('2027-10-01');
+  });
+});
+
+describe('clipVerticalLine', () => {
+  it('returns one segment when nothing covers the line', () => {
+    expect(clipVerticalLine(10, 40, [])).toEqual([{ top: 10, height: 30 }]);
+  });
+
+  it('clips around a covering label box and drops slivers', () => {
+    expect(clipVerticalLine(10, 60, [{ top: 20, bottom: 36 }])).toEqual([
+      { top: 10, height: 10 },
+      { top: 36, height: 24 },
+    ]);
+  });
+
+  it('returns nothing when fully covered', () => {
+    expect(clipVerticalLine(10, 40, [{ top: 0, bottom: 50 }])).toEqual([]);
   });
 });
 

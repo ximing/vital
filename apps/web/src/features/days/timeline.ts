@@ -39,10 +39,10 @@ export type TimelineLabelLayout = {
 
 export const TIMELINE_MAX_LANES = 3;
 export const TIMELINE_LABEL_EM_PX = 11;
-export const TIMELINE_LABEL_GAP_PX = 8;
+export const TIMELINE_LABEL_GAP_PX = 12;
 export const DEFAULT_TIMELINE_WIDTH_PX = 960;
 /** Vertical pitch of one label row above the axis. */
-export const TIMELINE_LANE_STEP_PX = 16;
+export const TIMELINE_LANE_STEP_PX = 18;
 const TIMELINE_TOP_PAD_PX = 8;
 const TIMELINE_AXIS_GAP_PX = 10;
 const TIMELINE_BELOW_AXIS_PX = 28;
@@ -90,6 +90,14 @@ function nextMonthStart(ymd: string): string {
   return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
 }
 
+/**
+ * Timeline label date: MM-DD while within a year of today (the month ticks
+ * below the axis carry the calendar context); full YYYY-MM-DD beyond that.
+ */
+export function timelineYmd(ymd: string, todayYmd: string): string {
+  return ymdDiffDays(todayYmd, ymd) <= 366 ? ymd.slice(5) : ymd;
+}
+
 function spanMonthsOf(from: string, to: string): number {
   const a = ymdParts(from);
   const b = ymdParts(to);
@@ -125,7 +133,11 @@ export function buildDaysTimeline(days: readonly Day[], todayYmd: string): DaysT
     return ymd > max ? ymd : max;
   }, todayYmd);
   const minEnd = addMonthsYmd(todayYmd, MIN_SPAN_MONTHS);
-  const endYmd = farthest > minEnd ? farthest : minEnd;
+  let endYmd = farthest > minEnd ? farthest : minEnd;
+  if (endYmd === farthest && farthest > todayYmd) {
+    // Small right pad so the last dot and its label are not flush against the edge.
+    endYmd = addDaysYmd(endYmd, Math.max(2, Math.round(ymdDiffDays(todayYmd, endYmd) * 0.02)));
+  }
   const span = Math.max(ymdDiffDays(todayYmd, endYmd), 1);
   const leftPercentOf = (ymd: string) => clampPercent((ymdDiffDays(todayYmd, ymd) / span) * 100);
 
@@ -226,6 +238,30 @@ export function timelineTrackMetrics(lanesUsed: number): { height: number; axisT
     axisTop,
     labelTop: (lane: number) => axisTop - TIMELINE_AXIS_GAP_PX - (lane + 1) * TIMELINE_LANE_STEP_PX,
   };
+}
+
+/**
+ * Visible segments of the vertical leader line from a stacked label down to
+ * its dot, clipped around any lower-lane label boxes the line passes under.
+ * Segments shorter than 2px are dropped.
+ */
+export function clipVerticalLine(
+  yTop: number,
+  yBottom: number,
+  covers: readonly { top: number; bottom: number }[],
+): { top: number; height: number }[] {
+  const sorted = [...covers].sort((a, b) => a.top - b.top);
+  const segments: { top: number; height: number }[] = [];
+  let cursor = yTop;
+  for (const cover of sorted) {
+    const top = Math.max(cover.top, yTop);
+    const bottom = Math.min(cover.bottom, yBottom);
+    if (bottom <= yTop || top >= yBottom) continue;
+    if (top > cursor + 1) segments.push({ top: cursor, height: top - cursor });
+    cursor = Math.max(cursor, bottom);
+  }
+  if (yBottom > cursor + 1) segments.push({ top: cursor, height: yBottom - cursor });
+  return segments;
 }
 
 /**
