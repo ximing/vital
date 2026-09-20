@@ -1,12 +1,13 @@
 import { createTaskInputSchema } from '@vital/dto';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  apiMarkdownPath,
-  generateApiMarkdown,
+  generateApiCatalog,
   normalizeClientPath,
   parseRouteSource,
   printZodFields,
+  referencesDir,
 } from '../scripts/gen-vital-skill.js';
 
 describe('gen-vital-skill', () => {
@@ -68,32 +69,40 @@ describe('gen-vital-skill', () => {
     expect(fields).toContain('uuid');
   });
 
-  it('generated catalog includes live routes and matches the committed file', async () => {
-    const markdown = await generateApiMarkdown();
-    expect(markdown).toContain('POST /api/v1/tokens');
-    expect(markdown).toContain('POST /api/v1/tasks');
-    expect(markdown).toContain('GET /api/v1/sync/head');
-    expect(markdown).toContain('`listId`');
-    expect(markdown).toContain('TOKEN_LIMIT_REACHED');
-    expect(markdown).toContain('export interface CreatedApiToken');
-    expect(markdown).toContain('export interface Report extends ReportListItem');
-    expect(markdown).toContain('export interface AppLatestReleaseResponse');
-    expect(markdown).toContain('export type InboxPreview');
-    expect(markdown).toContain('POST /api/v1/agent/cluster');
-    expect(markdown).toContain('POST /api/v1/agent/memory/distill');
-    expect(markdown).toContain('Client: `organizeAgentTasks`');
-    expect(markdown).toContain('Client: `listOutcomes`');
-    expect(markdown).toContain('Client: `listAgentExecutions`');
+  it('generated catalog is split by module and matches committed files', async () => {
+    const catalog = await generateApiCatalog();
+    expect(catalog['index.md']).toContain('inbox.md');
+    expect(catalog['common.md']).toContain('TOKEN_LIMIT_REACHED');
+    expect(catalog['tokens.md']).toContain('POST /api/v1/tokens');
+    expect(catalog['tokens.md']).toContain('export interface CreatedApiToken');
+    expect(catalog['tasks.md']).toContain('POST /api/v1/tasks');
+    expect(catalog['tasks.md']).toContain('`listId`');
+    expect(catalog['tasks.md']).not.toContain('TOKEN_LIMIT_REACHED');
+    expect(catalog['sync.md']).toContain('GET /api/v1/sync/head');
+    expect(catalog['reports.md']).toContain('export interface Report extends ReportListItem');
+    expect(catalog['app.md']).toContain('export interface AppLatestReleaseResponse');
+    expect(catalog['inbox.md']).toContain('export type InboxPreview');
+    expect(catalog['agent.md']).toContain('POST /api/v1/agent/cluster');
+    expect(catalog['agent.md']).toContain('POST /api/v1/agent/memory/distill');
+    expect(catalog['agent.md']).toContain('Client: `organizeAgentTasks`');
+    expect(catalog['agent.md']).toContain('Client: `listAgentExecutions`');
+    expect(catalog['outcomes.md']).toContain('Client: `listOutcomes`');
     const cancel =
-      markdown.split('#### `POST /api/v1/agent/schedule/:capability/cancel`')[1]?.split('#### ')[0] ??
-      '';
+      catalog['agent.md']
+        ?.split('#### `POST /api/v1/agent/schedule/:capability/cancel`')[1]
+        ?.split('#### ')[0] ?? '';
     expect(cancel).toContain('"outcome.cluster"');
     expect(cancel).not.toContain('`capability`: uuid');
-    const tokenGet = markdown.split('#### `GET /api/v1/tokens`')[1]?.split('#### ')[0] ?? '';
+    const tokenGet = catalog['tokens.md']?.split('#### `GET /api/v1/tokens`')[1]?.split('#### ')[0] ?? '';
     expect(tokenGet).toContain('Client: `listApiTokens`');
     expect(tokenGet).not.toContain('createApiTokenInputSchema');
     expect(tokenGet).not.toContain('listApiTokenAccessQuerySchema');
-    const committed = await fs.readFile(apiMarkdownPath, 'utf8');
-    expect(committed).toBe(markdown);
+    expect(Object.keys(catalog).sort()).toEqual(
+      (await fs.readdir(referencesDir)).filter((name) => name.endsWith('.md')).sort(),
+    );
+    for (const [name, body] of Object.entries(catalog)) {
+      const committed = await fs.readFile(path.join(referencesDir, name), 'utf8');
+      expect(committed, name).toBe(body);
+    }
   });
 });

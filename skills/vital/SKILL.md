@@ -5,7 +5,20 @@ description: Operate the user's Vital personal OS (today, inbox, tasks, threads,
 
 # Vital API
 
-Read [references/api.md](references/api.md) before calling any endpoint. That file is generated from server routes and `@vital/dto` (`pnpm gen:vital-skill`). Do not invent fields or paths.
+Load **one** module from [references/](references/index.md) for the domain you are calling. Do not open every file. Catalog is generated (`pnpm gen:vital-skill`); do not invent fields or paths.
+
+| If you are… | Open |
+| --- | --- |
+| Today board | [references/today.md](references/today.md) |
+| Tasks (list / create / complete) | [references/tasks.md](references/tasks.md); also [lists.md](references/lists.md) when creating |
+| Threads | [references/outcomes.md](references/outcomes.md) |
+| Inbox capture / read body | [references/inbox.md](references/inbox.md) |
+| Habits | [references/habits.md](references/habits.md) |
+| Days / 日子 | [references/days.md](references/days.md) |
+| Search | [references/search.md](references/search.md) |
+| Daily / weekly report | [references/reports.md](references/reports.md) |
+| Unknown error `code` | [references/common.md](references/common.md) |
+| Anything else | [references/index.md](references/index.md), then that one module |
 
 ## Auth
 
@@ -23,7 +36,7 @@ Errors are `{ "error": { "code": "...", "message": "...", "details": ... } }`. `
 
 ## Workflows
 
-Resolve request/response fields from `references/api.md`. Prefer these sequences:
+Resolve request/response fields from the **one** module in the table above. Prefer these sequences:
 
 **Today.** `GET /api/v1/today` — open threads, tasks, pulse, and now-recommendations.
 

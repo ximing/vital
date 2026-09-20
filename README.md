@@ -73,7 +73,7 @@ Vital 把 Agent 当成产品的一部分，而不是外挂聊天窗。
 
 1. 在 **设置 → 令牌** 签发 `vt_` 前缀的个人访问令牌（明文只显示一次，可随时撤销）。
 2. 把 skill 装到对应 Agent，或设置 `VITAL_TOKEN` / `VITAL_API_URL`。
-3. API 目录由服务端路由自动生成（`pnpm gen:vital-skill` → [skills/vital/references/api.md](skills/vital/references/api.md)），不要靠记忆编字段。
+3. API 目录按域拆开生成（`pnpm gen:vital-skill` → [skills/vital/references/](skills/vital/references/index.md)），Agent 只加载当前域的模块，不要靠记忆编字段。
 
 ![访问令牌](docs/screenshots/settings-tokens.png)
 
@@ -283,7 +283,7 @@ pnpm lint && pnpm typecheck && pnpm test
 - **工程规范**：[docs/project-standards.md](docs/project-standards.md)（测试数据库、私有附件签名 URL、视觉实现约束等，改动相关领域前必读）。
 - **设计规范**：[docs/vital-calm-productivity-design-system.md](docs/vital-calm-productivity-design-system.md)（色彩 / 字级 / 间距 / 组件的唯一事实来源是 `packages/tokens`，token 需 `theme.ts` 与 `css/semantic.css` 双改）。
 - **数据库迁移**：schema 变更改 `apps/server/src/db/schema`，经 `pnpm --filter @vital/server migrate:generate` 生成迁移，`pnpm --filter @vital/server migrate` 应用。
-- **API 文档**：路由或 DTO 变更后执行 `pnpm gen:vital-skill` 重新生成 [skills/vital/references/api.md](skills/vital/references/api.md)。
+- **API 文档**：路由或 DTO 变更后执行 `pnpm gen:vital-skill` 重新生成 [skills/vital/references/](skills/vital/references/index.md)。
 - **截图**：`docs/screenshots/` 来自本地 dev（Emerald Garden，含浅色 / 深色与移动端）。UI 大改后请同步更新。
 
 提交信息沿用现有风格：`feat: / fix: / refactor: …`（中文描述）。

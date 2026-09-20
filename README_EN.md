@@ -73,7 +73,7 @@ The repo ships an installable skill: [skills/vital/SKILL.md](skills/vital/SKILL.
 
 1. Issue a `vt_`-prefixed personal access token in **Settings → Tokens** (plaintext shown once; revocable anytime).
 2. Install the skill, or set `VITAL_TOKEN` / `VITAL_API_URL`.
-3. The API catalog is generated from server routes (`pnpm gen:vital-skill` → [skills/vital/references/api.md](skills/vital/references/api.md)). Do not invent fields.
+3. The API catalog is generated per domain (`pnpm gen:vital-skill` → [skills/vital/references/](skills/vital/references/index.md)). Load only the module for the current task. Do not invent fields.
 
 ![Access tokens](docs/screenshots/settings-tokens.png)
 
@@ -279,7 +279,7 @@ pnpm lint && pnpm typecheck && pnpm test
 - **Engineering standards**: [docs/project-standards.md](docs/project-standards.md) (Chinese) — test databases, signed URLs for private attachments, visual implementation constraints. Read before touching these areas.
 - **Design system**: [docs/vital-calm-productivity-design-system.md](docs/vital-calm-productivity-design-system.md) (Chinese) — the single source of truth for color / type / spacing / components is `packages/tokens`; a token change must update both `theme.ts` and `css/semantic.css`.
 - **Database migrations**: edit `apps/server/src/db/schema`, generate migrations with `pnpm --filter @vital/server migrate:generate`, and apply them with `pnpm --filter @vital/server migrate`.
-- **API docs**: after changing routes or DTOs, run `pnpm gen:vital-skill` to regenerate [skills/vital/references/api.md](skills/vital/references/api.md).
+- **API docs**: after changing routes or DTOs, run `pnpm gen:vital-skill` to regenerate [skills/vital/references/](skills/vital/references/index.md).
 - **Screenshots**: images in `docs/screenshots/` come from local dev (Emerald Garden, light and dark, plus mobile). Update them after major UI changes.
 
 Commit messages follow the existing style: `feat: / fix: / refactor: …` (Chinese descriptions).
