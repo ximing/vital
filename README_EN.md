@@ -72,7 +72,7 @@ Scheduling, leases, budget, and restart guarantees: [docs/agent-scheduling.md](d
 The repo ships an installable skill: [skills/vital/SKILL.md](skills/vital/SKILL.md). Claude, Codex, Cursor, or any agent that can load skills can operate your Vital without another chat product.
 
 1. Issue a `vt_`-prefixed personal access token in **Settings → Tokens** (plaintext shown once; revocable anytime).
-2. Install the skill, or set `VITAL_TOKEN` / `VITAL_API_URL`.
+2. Install the skill for your coding tool (see [Coding Agent Skills](#coding-agent-skills)) and set `VITAL_TOKEN` / `VITAL_API_URL`.
 3. The API catalog is generated per domain (`pnpm gen:vital-skill` → [skills/vital/references/](skills/vital/references/index.md)). Load only the module for the current task. Do not invent fields.
 
 ![Access tokens](docs/screenshots/settings-tokens.png)
@@ -89,6 +89,75 @@ Workflows documented in the skill:
 - **Daily / weekly report:** `GET /api/v1/reports/current?type=daily`, then `PATCH` with the current `revision`.
 
 Internal agent and external skill share one dataset: edits in the web UI show up for Claude; tasks Claude creates appear on Today immediately.
+
+#### Coding Agent Skills
+
+Vital ships [Agent Skills](https://code.claude.com/docs/en/claude-code/skills) in [`skills/`](./skills) that teach coding agents to operate the same HTTP API as the apps. The skill is a plain `SKILL.md` (plus per-domain `references/`) with no runtime dependency, so the same files work across tools. Installation differs by tool — if you use more than one, install separately for each.
+
+After installing, give the agent a token (do not commit the secret):
+
+```bash
+export VITAL_TOKEN=vt_xxxxxxxx
+export VITAL_API_URL=https://vital.aimo.plus   # local dev: http://127.0.0.1:3010
+```
+
+##### Claude Code
+
+```bash
+/plugin marketplace add ximing/vital
+/plugin install vital@vital
+```
+
+Or manually: `cp -r skills/vital ~/.claude/skills/`
+
+##### Codex App / Codex CLI
+
+This repository doubles as a Codex plugin marketplace (see [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json)), so no official listing is needed:
+
+```bash
+codex plugin marketplace add ximing/vital
+codex plugin add vital@vital
+```
+
+##### Cursor
+
+The plugin manifest lives at [`.cursor-plugin/plugin.json`](.cursor-plugin/plugin.json). In Cursor Agent chat run `/add-plugin vital`, or search for `vital` in the plugin marketplace. Manually, copy the skill directory into `.cursor/skills/` of your project.
+
+##### Grok Build CLI
+
+Copy into Grok's user skills directory (Grok loads `SKILL.md` from there):
+
+```bash
+cp -r skills/vital ~/.grok/skills/
+```
+
+##### Kimi Code
+
+```text
+/plugins install https://github.com/ximing/vital
+```
+
+Then start a fresh session (`/new`) so the plugin loads.
+
+##### OpenCode
+
+Add the plugin to `opencode.json` (global or project-level); it registers `skills/` through OpenCode's plugin system:
+
+```json
+{
+  "plugin": ["vital@git+https://github.com/ximing/vital.git"]
+}
+```
+
+##### Pi
+
+```bash
+pi install git:github.com/ximing/vital
+```
+
+The package manifest in [`package.json`](package.json) declares the `skills/` directory for Pi's native skill discovery.
+
+> The skill only teaches the agent how to call the Vital API. Issue a token in **Settings → Tokens**. For local development point `VITAL_API_URL` at `http://127.0.0.1:3010`.
 
 ## Today · start with the one thing for right now
 

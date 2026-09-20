@@ -72,7 +72,7 @@ Vital 把 Agent 当成产品的一部分，而不是外挂聊天窗。
 仓库自带可安装的 skill：[skills/vital/SKILL.md](skills/vital/SKILL.md)。Claude、Codex、Cursor 或其他能跑 skill 的 Agent 都可以用它操作你的 Vital，而不必再开一个聊天产品。
 
 1. 在 **设置 → 令牌** 签发 `vt_` 前缀的个人访问令牌（明文只显示一次，可随时撤销）。
-2. 把 skill 装到对应 Agent，或设置 `VITAL_TOKEN` / `VITAL_API_URL`。
+2. 按下面的 [编程 Agent Skills](#编程-agent-skills) 把 skill 装到对应工具，并设置 `VITAL_TOKEN` / `VITAL_API_URL`。
 3. API 目录按域拆开生成（`pnpm gen:vital-skill` → [skills/vital/references/](skills/vital/references/index.md)），Agent 只加载当前域的模块，不要靠记忆编字段。
 
 ![访问令牌](docs/screenshots/settings-tokens.png)
@@ -89,6 +89,75 @@ Skill 里写好的典型工作流：
 - **写日报 / 周报**：`GET /api/v1/reports/current?type=daily`，带当前 `revision` 再 `PATCH`。
 
 对内 Agent 和对外 skill 操作的是同一份数据：你在网页里改的，Claude 看得到；Claude 建的任务，今天看板上立刻出现。
+
+#### 编程 Agent Skills
+
+Vital 在 [`skills/`](./skills) 下内置 [Agent Skills](https://code.claude.com/docs/en/claude-code/skills)，教编程 Agent 通过 HTTP API 操作同一份数据。技能本体是纯 `SKILL.md`（外加按域拆开的 `references/`），零运行时依赖，同一份文件适用于各编程工具。安装方式因工具而异——多个工具同时使用时，需要分别为每个工具安装。
+
+装好 skill 之后，把令牌交给 Agent（不要把完整令牌写进仓库）：
+
+```bash
+export VITAL_TOKEN=vt_xxxxxxxx
+export VITAL_API_URL=https://vital.aimo.plus   # 本机开发用 http://127.0.0.1:3010
+```
+
+##### Claude Code
+
+```bash
+/plugin marketplace add ximing/vital
+/plugin install vital@vital
+```
+
+或手动安装：`cp -r skills/vital ~/.claude/skills/`
+
+##### Codex App / Codex CLI
+
+本仓库自身就是一个 Codex 插件市场（见 [`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json)），无需官方上架：
+
+```bash
+codex plugin marketplace add ximing/vital
+codex plugin add vital@vital
+```
+
+##### Cursor
+
+插件清单在 [`.cursor-plugin/plugin.json`](.cursor-plugin/plugin.json)。在 Cursor Agent 对话框中执行 `/add-plugin vital`，或在插件市场搜索 `vital`。也可以手动把技能目录拷进项目的 `.cursor/skills/`。
+
+##### Grok Build CLI
+
+复制到 Grok 的用户技能目录（Grok 会自动加载 `SKILL.md`）：
+
+```bash
+cp -r skills/vital ~/.grok/skills/
+```
+
+##### Kimi Code
+
+```text
+/plugins install https://github.com/ximing/vital
+```
+
+安装后新开会话（`/new`）使插件生效。
+
+##### OpenCode
+
+在 `opencode.json`（全局或项目级）里加插件；它会通过 OpenCode 插件系统注册 `skills/`：
+
+```json
+{
+  "plugin": ["vital@git+https://github.com/ximing/vital.git"]
+}
+```
+
+##### Pi
+
+```bash
+pi install git:github.com/ximing/vital
+```
+
+[`package.json`](package.json) 里的包清单为 Pi 的原生技能发现声明了 `skills/` 目录。
+
+> 技能只教 Agent 怎么调 Vital API。令牌在 **设置 → 令牌** 签发；本机开发把 `VITAL_API_URL` 指到 `http://127.0.0.1:3010`。
 
 ## 今天 · 从「当下的一件事」开始
 

@@ -1,0 +1,26 @@
+{
+  "name": "vital",
+  "owner": {
+    "name": "ximing"
+  },
+  "plugins": [
+    {
+      "name": "vital",
+      "source": "./",
+      "description": "Operate the user's Vital personal OS (inbox, tasks, threads, habits, days, reports) through its HTTP API with a personal access token.",
+      "version": "0.1.0",
+      "author": {
+        "name": "ximing"
+      },
+      "homepage": "https://github.com/ximing/vital",
+      "keywords": [
+        "vital",
+        "skills",
+        "inbox",
+        "tasks",
+        "habits",
+        "reports"
+      ]
+    }
+  ]
+}

@@ -18,7 +18,9 @@ coverage/
 
 .superpowers/
 .worktrees/
-.agents/
+.agents/*
+!.agents/plugins/
+!.agents/plugins/marketplace.json
 .grok/
 
 apps/mobile/android/

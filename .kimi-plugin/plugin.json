@@ -1,0 +1,28 @@
+{
+  "name": "vital",
+  "version": "0.1.0",
+  "description": "Operate the user's Vital personal OS (inbox, tasks, threads, habits, days, reports) through its HTTP API with a personal access token.",
+  "author": {
+    "name": "ximing",
+    "homepage": "https://github.com/ximing"
+  },
+  "homepage": "https://github.com/ximing/vital",
+  "keywords": [
+    "vital",
+    "skills",
+    "inbox",
+    "tasks",
+    "habits",
+    "reports"
+  ],
+  "skills": "./skills/",
+  "skillInstructions": "Vital skill tool mapping for Kimi Code:\n\n- Call Vital HTTP APIs with Kimi Code's `Bash` tool (`curl -sS -H \"Authorization: Bearer $VITAL_TOKEN\"`). The skill and `skills/vital/references/` document exact paths and bodies.\n- Do not invent fields or paths. Load only the reference module for the current domain.\n- Never print the full token. Tokens start with `vt_`.\n- Invoke the Vital skill with Kimi Code's native `Skill` tool.",
+  "interface": {
+    "displayName": "Vital",
+    "shortDescription": "Let the agent operate your Vital personal OS",
+    "longDescription": "The Vital skill lets coding agents capture inbox items, manage tasks, threads, habits, days, and reports through the same HTTP API as the Vital apps, using a personal access token.",
+    "developerName": "ximing",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/ximing/vital"
+  }
+}
