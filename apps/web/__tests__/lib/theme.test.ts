@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { themes } from '@vital/tokens';
 import {
   THEME_STORAGE_KEY,
   applyTheme,
   getThemeChoice,
   resolveTheme,
+  setNativeWindowChromeForTest,
   setThemeChoice,
   subscribeSystemTheme,
 } from '../../src/lib/theme';
@@ -31,6 +33,7 @@ describe('theme helper', () => {
 
   afterEach(() => {
     localStorage.clear();
+    setNativeWindowChromeForTest(null);
   });
 
   it('defaults to system when storage is empty', () => {
@@ -64,6 +67,31 @@ describe('theme helper', () => {
     setThemeChoice('light');
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light');
     expect(document.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('syncs the native titlebar to the resolved scheme in Tauri', async () => {
+    const setTheme = vi.fn(async () => undefined);
+    const setBackgroundColor = vi.fn(async () => undefined);
+    setNativeWindowChromeForTest(async () => ({ setTheme, setBackgroundColor }));
+
+    setThemeChoice('light');
+    await vi.waitFor(() => {
+      expect(setTheme).toHaveBeenCalledWith('light');
+      expect(setBackgroundColor).toHaveBeenCalledWith(themes.light.bgCanvas);
+    });
+
+    setThemeChoice('dark');
+    await vi.waitFor(() => {
+      expect(setTheme).toHaveBeenCalledWith('dark');
+      expect(setBackgroundColor).toHaveBeenCalledWith(themes.dark.bgCanvas);
+    });
+
+    setTheme.mockClear();
+    mockMatchMedia(true);
+    setThemeChoice('system');
+    await vi.waitFor(() => {
+      expect(setTheme).toHaveBeenCalledWith('dark');
+    });
   });
 
   it('subscribeSystemTheme registers and unregisters the media listener', () => {

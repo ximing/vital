@@ -21,14 +21,17 @@ describe('Tauri desktop contract', () => {
     assert.equal(conf.build.frontendDist, '../../web/dist');
   });
 
-  it('uses a 1280x800 window, min 960x640, dark titlebar', () => {
+  it('uses a 1280x800 window, min 960x640, native titlebar that follows the app theme', () => {
     const win = conf.app.windows[0];
     assert.equal(win.label, 'main');
     assert.equal(win.width, 1280);
     assert.equal(win.height, 800);
     assert.equal(win.minWidth, 960);
     assert.equal(win.minHeight, 640);
-    assert.equal(win.theme, 'Dark');
+    assert.equal(win.theme, undefined);
+    assert.equal(win.backgroundColor, undefined);
+    assert.notEqual(win.decorations, false);
+    assert.ok(win.titleBarStyle === undefined || win.titleBarStyle === 'Visible');
   });
 
   it('registers plugin-http, plugin-store, window-state, and notification', () => {
@@ -92,6 +95,8 @@ describe('Tauri desktop contract', () => {
     assert.ok(caps.permissions.includes('core:webview:allow-create-webview-window'));
     assert.ok(caps.permissions.includes('core:window:allow-set-always-on-top'));
     assert.ok(caps.permissions.includes('core:window:allow-set-visible-on-all-workspaces'));
+    assert.ok(caps.permissions.includes('core:window:allow-set-theme'));
+    assert.ok(caps.permissions.includes('core:window:allow-set-background-color'));
     assert.deepEqual(caps.windows, ['main', 'notify-alert']);
     assert.ok(caps.remote.urls.includes('http://localhost:5180/*'));
   });

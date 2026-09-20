@@ -16,6 +16,16 @@ describe('web shell contract', () => {
     expect(html).toContain('rel="preload"');
   });
 
+  it('desktop titlebar stays native and follows the resolved light/dark scheme', () => {
+    const theme = read('src/lib/theme.ts');
+    expect(theme).toContain('setTheme');
+    expect(theme).toContain('setBackgroundColor');
+    expect(theme).toContain('@tauri-apps/api/window');
+    expect(theme).toContain('bgCanvas');
+    const main = read('src/main.tsx');
+    expect(main).toContain('applyTheme()');
+  });
+
   it('Vite listens on 5180 and proxies /api to 127.0.0.1:3010', () => {
     const config = read('vite.config.ts');
     expect(config).toContain('port: 5180');

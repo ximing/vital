@@ -21,6 +21,8 @@
     "core:window:allow-set-position",
     "core:window:allow-request-user-attention",
     "core:window:allow-unminimize",
+    "core:window:allow-set-theme",
+    "core:window:allow-set-background-color",
     "store:default",
     "window-state:default",
     "notification:default",

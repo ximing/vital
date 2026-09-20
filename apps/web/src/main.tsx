@@ -74,9 +74,10 @@ const Root = observer(function Root() {
   return <App />;
 });
 
+applyTheme();
+
 const rootEl = document.getElementById('root');
 if (rootEl && isNotifyAlertRuntime()) {
-  applyTheme();
   subscribeSystemTheme();
   createRoot(rootEl).render(
     <StrictMode>
