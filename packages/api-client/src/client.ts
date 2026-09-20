@@ -62,6 +62,7 @@ import type {
   ExtractInboxInput,
   InboxCollection,
   InboxItem,
+  InboxMarkdown,
   InboxPreview,
   InboxExportInwitResponse,
   InwitConfigInput,
@@ -234,6 +235,7 @@ export interface VitalClient {
     idempotencyKey?: string,
   ): Promise<{ item: InboxItem; created: boolean }>;
   getInbox(id: string): Promise<InboxItem>;
+  getInboxMarkdown(id: string): Promise<InboxMarkdown>;
   patchInbox(id: string, input: PatchInboxInput): Promise<InboxItem>;
   patchInboxAssets(id: string, input: PatchInboxAssetsInput): Promise<InboxItem>;
   deleteInbox(id: string): Promise<void>;
@@ -499,6 +501,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     createInbox: async (input, idempotencyKey) =>
       (await createInboxResult(input, idempotencyKey)).item,
     getInbox: (id) => http.request(`/api/v1/inbox/${id}`),
+    getInboxMarkdown: (id) => http.request(`/api/v1/inbox/${id}/markdown`),
     patchInbox: (id, input) =>
       http.request(`/api/v1/inbox/${id}`, { method: 'PATCH', body: input }),
     patchInboxAssets: (id, input) =>

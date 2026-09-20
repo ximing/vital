@@ -39,6 +39,23 @@ describe('createTaskInputSchema', () => {
     expect(parsed.recurrenceKind).toBe('legal_workdays');
   });
 
+  it('accepts dueYmd and rejects dueYmd with dueAt', () => {
+    const parsed = createTaskInputSchema.parse({
+      title: '明天',
+      listId: '11111111-1111-4111-8111-111111111111',
+      dueYmd: '2026-09-21',
+    });
+    expect(parsed.dueYmd).toBe('2026-09-21');
+    expect(
+      createTaskInputSchema.safeParse({
+        title: '明天',
+        listId: '11111111-1111-4111-8111-111111111111',
+        dueYmd: '2026-09-21',
+        dueAt: '2026-09-21T00:00:00.000Z',
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects an unsupported reminder offset', () => {
     expect(
       createTaskInputSchema.safeParse({

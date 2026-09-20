@@ -205,6 +205,58 @@ describe('inbox', () => {
     expect(types).toEqual(['heading', 'paragraph', 'image', 'bulletList']);
   });
 
+  it('stores markdown as a TipTap doc and serves it back as markdown', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: {
+        title: '笔记',
+        source: 'manual',
+        markdown: '## 标题\n\n正文 **粗**\n\n- 要点',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const doc = created.json().contentJson;
+    expect(doc.content.map((block: { type: string }) => block.type)).toEqual([
+      'heading',
+      'paragraph',
+      'bulletList',
+    ]);
+    expect(created.json().extractedText).toContain('标题');
+    const md = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/inbox/${created.json().id}/markdown`,
+      token: alice.token,
+    });
+    expect(md.statusCode).toBe(200);
+    expect(md.json().markdown).toContain('## 标题');
+    expect(md.json().markdown).toContain('要点');
+  });
+
+  it('patch markdown replaces the stored doc', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/inbox',
+      token: alice.token,
+      payload: { title: '草稿', markdown: '# 旧' },
+    });
+    const patched = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/inbox/${created.json().id}`,
+      token: alice.token,
+      payload: { markdown: '# 新标题\n\n新正文' },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().contentJson.content[0]).toMatchObject({
+      type: 'heading',
+      attrs: { level: 1 },
+    });
+    expect(patched.json().extractedText).toContain('新标题');
+  });
+
   it('forever canonical URL idempotency returns stored response', async () => {
     const alice = await registerUser(app);
     const url = 'https://News.Example.com/path/?utm_source=x#frag';

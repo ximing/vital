@@ -19,9 +19,10 @@ export {
 } from './refs.js';
 export { tidyArticle } from './tidy.js';
 export { htmlToArticleDoc } from './convert.js';
+export { pmJsonToArticleDoc } from './from-pm.js';
 export { rebindDocMedia } from './rebind.js';
 export { articleDocToHtml } from './serialize.js';
-export { textToArticleDoc } from './text.js';
+export { articleDocToText, textToArticleDoc } from './text.js';
 export { articleDocSchema, MAX_CONTENT_JSON_BYTES } from './schema.js';
 export {
   EMPTY_ARTICLE_DOC,

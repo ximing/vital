@@ -124,7 +124,12 @@ export const desktopAssetSchema = z.object({
   name: z.string().trim().min(1).max(200),
   sizeBytes: emptyToUndef(z.coerce.number().int().positive()),
 });
-export type DesktopAsset = z.infer<typeof desktopAssetSchema>;
+export interface DesktopAsset {
+  id: DesktopAssetId;
+  url: string;
+  name: string;
+  sizeBytes?: number | undefined;
+}
 
 export const appLatestReleaseSchema = z.object({
   versionName: z.string().trim().min(1).max(32),
@@ -134,12 +139,21 @@ export const appLatestReleaseSchema = z.object({
   android: androidReleaseSchema.nullable(),
   desktop: z.array(desktopAssetSchema).max(16),
 });
-export type AppLatestRelease = z.infer<typeof appLatestReleaseSchema>;
+export interface AppLatestRelease {
+  versionName: string;
+  tag: string;
+  htmlUrl: string | null;
+  publishedAt: string | null;
+  android: AndroidRelease | null;
+  desktop: DesktopAsset[];
+}
 
 export const appLatestReleaseResponseSchema = z.object({
   latest: appLatestReleaseSchema.nullable(),
 });
-export type AppLatestReleaseResponse = z.infer<typeof appLatestReleaseResponseSchema>;
+export interface AppLatestReleaseResponse {
+  latest: AppLatestRelease | null;
+}
 
 /** Classify a GitHub asset filename into a desktop installer id. Skip updater tarballs. */
 export function classifyDesktopAsset(name: string): DesktopAssetId | null {

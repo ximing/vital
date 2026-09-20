@@ -38,6 +38,15 @@ describe('createInboxInputSchema', () => {
   it('accepts wechat as a collector source', () => {
     expect(createInboxInputSchema.parse({ title: '收藏', source: 'wechat' }).source).toBe('wechat');
   });
+
+  it('accepts markdown and html bodies', () => {
+    expect(createInboxInputSchema.parse({ title: '笔记', markdown: '# 标题\n\n正文' }).markdown).toBe(
+      '# 标题\n\n正文',
+    );
+    expect(
+      createInboxInputSchema.parse({ title: '网页', extractedHtml: '<h2>Hi</h2>' }).extractedHtml,
+    ).toBe('<h2>Hi</h2>');
+  });
 });
 
 describe('patchInboxInputSchema', () => {

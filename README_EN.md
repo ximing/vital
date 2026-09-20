@@ -79,8 +79,12 @@ The repo ships an installable skill: [skills/vital/SKILL.md](skills/vital/SKILL.
 
 Workflows documented in the skill:
 
+- **Today:** `GET /api/v1/today` (threads, tasks, pulse, now-recommendations).
 - **Today's tasks:** `GET /api/v1/tasks?listId=smart:today`. Natural-language create: `POST /api/v1/tasks/from-text` (needs LLM settings).
-- **Capture a URL:** `POST /api/v1/inbox/extract`, then `POST /api/v1/inbox`.
+- **Threads:** `GET /api/v1/outcomes?status=open`. Detail: `GET /api/v1/outcomes/:id/detail`.
+- **Capture a document:** `POST /api/v1/inbox` with `markdown` or `extractedHtml` (stored as TipTap). URL capture: extract then create. Read body: `GET /api/v1/inbox/:id/markdown`.
+- **Habits:** `GET /api/v1/habits`, then `POST /api/v1/habits/:id/tick`.
+- **Days:** `GET /api/v1/days`.
 - **Search:** `POST /api/v1/search`, optionally scoped to task / inbox / report.
 - **Daily / weekly report:** `GET /api/v1/reports/current?type=daily`, then `PATCH` with the current `revision`.
 

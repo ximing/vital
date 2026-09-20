@@ -39,6 +39,20 @@ export const recurrenceKindSchema = z.enum([
 export type RecurrenceKind = z.infer<typeof recurrenceKindSchema>;
 
 const isoDateTimeSchema = z.string().datetime({ offset: true });
+const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+function dueYmdExclusive(
+  value: { dueYmd?: string | undefined; dueAt?: string | null | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.dueYmd !== undefined && value.dueAt !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['dueYmd'],
+      message: 'dueYmd and dueAt are mutually exclusive',
+    });
+  }
+}
 
 /** Open-task duplicate hint, attached only on create/convert responses. */
 export interface SimilarTaskHit {
@@ -124,10 +138,13 @@ export const createTaskInputSchema = z.object({
   reminderAt: isoDateTimeSchema.nullable().optional(),
   isAllDay: z.boolean().optional(),
   timezone: ianaTimezoneSchema.optional(),
+  /** YYYY-MM-DD in `timezone` (account default). All-day unless `isAllDay` is false. Mutually exclusive with `dueAt`. */
+  dueYmd: ymdSchema.optional(),
   recurrence: z.string().trim().min(1).max(500).nullable().optional(),
   recurrenceKind: recurrenceKindSchema.nullable().optional(),
   tagIds: tagIdsSchema.optional(),
 }).superRefine((value, ctx) => {
+  dueYmdExclusive(value, ctx);
   if (value.reminderMode === 'offset' && value.reminderOffsetMinutes === undefined) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['reminderOffsetMinutes'], message: 'offset required' });
   }
@@ -155,12 +172,16 @@ export const patchTaskInputSchema = z
     reminderAt: isoDateTimeSchema.nullable().optional(),
     isAllDay: z.boolean().optional(),
     timezone: ianaTimezoneSchema.optional(),
+    dueYmd: ymdSchema.optional(),
     recurrence: z.string().trim().min(1).max(500).nullable().optional(),
     recurrenceKind: recurrenceKindSchema.nullable().optional(),
     tagIds: tagIdsSchema.optional(),
   })
   .refine((value) => Object.values(value).some((item) => item !== undefined), {
     message: 'at least one field required',
+  })
+  .superRefine((value, ctx) => {
+    dueYmdExclusive(value, ctx);
   });
 export type PatchTaskInput = z.infer<typeof patchTaskInputSchema>;
 
@@ -202,8 +223,6 @@ export const reorderTasksInputSchema = z.object({
   orderedIds: z.array(uuidSchema).min(1),
 });
 export type ReorderTasksInput = z.infer<typeof reorderTasksInputSchema>;
-
-const ymdSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 /** Natural-language create: server fills title/due/priority/notes via the user's LLM. */
 export const createTaskFromTextInputSchema = z.object({

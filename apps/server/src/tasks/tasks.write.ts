@@ -83,6 +83,12 @@ function parseInstant(isoStr: string, allDay: boolean, zone: string): Date {
   return dt.toJSDate();
 }
 
+function dueAtFromYmd(ymd: string, zone: string): Date {
+  const dt = DateTime.fromISO(`${ymd}T00:00:00`, { zone });
+  if (!dt.isValid) throw AppError.of(400, 'VALIDATION_ERROR');
+  return dt.toJSDate();
+}
+
 function snapExisting(d: Date | null, allDay: boolean, zone: string): Date | null {
   if (d === null) return null;
   if (!allDay) return d;
@@ -119,11 +125,13 @@ export async function createTaskInTx(
   if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
 
   const zone = input.timezone ?? user.timezone;
-  const isAllDay = input.isAllDay ?? false;
+  const isAllDay = input.dueYmd !== undefined ? (input.isAllDay ?? true) : (input.isAllDay ?? false);
   const dueAt =
-    input.dueAt === undefined || input.dueAt === null
-      ? null
-      : parseInstant(input.dueAt, isAllDay, zone);
+    input.dueYmd !== undefined
+      ? dueAtFromYmd(input.dueYmd, zone)
+      : input.dueAt === undefined || input.dueAt === null
+        ? null
+        : parseInstant(input.dueAt, isAllDay, zone);
   const startAt =
     input.startAt === undefined || input.startAt === null
       ? null
@@ -275,14 +283,18 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   }
 
   const zone = input.timezone ?? task.timezone;
-  const isAllDay = input.isAllDay ?? task.isAllDay;
+  const isAllDay =
+    input.dueYmd !== undefined ? (input.isAllDay ?? true) : (input.isAllDay ?? task.isAllDay);
 
   let dueAt = task.dueAt;
   let startAt = task.startAt;
   let reminderMode = asReminderMode(task.reminderMode);
   let reminderOffsetMinutes = asReminderOffsetMinutes(task.reminderOffsetMinutes);
   let reminderAt = task.reminderAt;
-  if (input.dueAt !== undefined) {
+  const dueTouched = input.dueAt !== undefined || input.dueYmd !== undefined;
+  if (input.dueYmd !== undefined) {
+    dueAt = dueAtFromYmd(input.dueYmd, zone);
+  } else if (input.dueAt !== undefined) {
     dueAt = input.dueAt === null ? null : parseInstant(input.dueAt, isAllDay, zone);
   } else if (input.isAllDay !== undefined || input.timezone !== undefined) {
     dueAt = snapExisting(dueAt, isAllDay, zone);
@@ -356,7 +368,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   if (recurrenceKind !== null && dueAt === null) throw AppError.of(400, 'VALIDATION_ERROR');
 
   const oldDue = task.dueAt;
-  if (input.dueAt !== undefined && recurrence && dueAt) {
+  if (dueTouched && recurrence && dueAt) {
     const snapped = nextOccurrenceOnOrAfter(
       {
         ...toRecurrence(task),
@@ -378,7 +390,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   }
 
   const now = new Date();
-  const deferred = isDefer(oldDue, input.dueAt === undefined ? undefined : dueAt, now);
+  const deferred = isDefer(oldDue, dueTouched ? dueAt : undefined, now);
   const patch: Partial<TaskRow> = {
     updatedAt: now,
     timezone: zone,

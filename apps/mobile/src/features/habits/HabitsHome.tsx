@@ -3,7 +3,7 @@ import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Stack, router } from 'expo-router';
-import { ChevronLeft, Ellipsis, Flame, Pencil, Pause, Play, Plus, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, Ellipsis, Pencil, Pause, Play, Plus, Repeat, Trash2 } from 'lucide-react-native';
 import type { Habit } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { BottomSheet } from '../../components/BottomSheet';
@@ -122,7 +122,7 @@ const HabitsHomeContent = observer(function HabitsHomeContent() {
           <Banner action={{ label: copy.actions.retry, onPress: () => void s.load(false) }}>{s.error}</Banner>
         ) : habits.length === 0 ? (
           <EmptyState
-            icon={Flame}
+            icon={Repeat}
             title={copy.habits.empty}
             action={{
               label: copy.habits.add,

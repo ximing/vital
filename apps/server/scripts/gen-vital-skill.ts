@@ -1,4 +1,5 @@
 import {
+  AGENT_SCHEDULE_CAPABILITIES,
   API_TOKEN_ACCESS_RETENTION_DAYS,
   API_TOKEN_MAX_PER_USER,
   API_TOKEN_PREFIX,
@@ -222,11 +223,11 @@ function handlerSnippet(source: string, start: number): string {
 
 export function parseRouteSource(source: string): ParsedRoute[] {
   const routes: ParsedRoute[] = [];
-  const re = /app\.(get|post|patch|put|delete)\(\s*'([^']+)'/g;
+  const re = /app\.(get|post|patch|put|delete)\(\s*(?:'([^']+)'|`([^`]+)`)/g;
   let match = re.exec(source);
   while (match) {
     const method = (match[1] ?? 'get').toUpperCase();
-    const routePath = match[2] ?? '';
+    const routePath = normalizePath(match[2] ?? match[3] ?? '');
     const snippet = handlerSnippet(source, match.index);
     const websocket = /websocket:\s*true/.test(snippet);
     const auth =
@@ -258,6 +259,56 @@ function normalizePath(raw: string): string {
   return raw.replace(/\$\{(\w+)\}/g, ':$1');
 }
 
+function readJsStringHead(source: string, start: number): string | undefined {
+  const quote = source[start];
+  if (quote !== "'" && quote !== '"' && quote !== '`') return undefined;
+  if (quote === "'" || quote === '"') {
+    let i = start + 1;
+    let raw = '';
+    while (i < source.length) {
+      const ch = source.charAt(i);
+      if (ch === '\\') {
+        raw += source.charAt(i + 1);
+        i += 2;
+        continue;
+      }
+      if (ch === quote) return raw;
+      raw += ch;
+      i += 1;
+    }
+    return undefined;
+  }
+  let i = start + 1;
+  let raw = '';
+  while (i < source.length) {
+    const ch = source.charAt(i);
+    if (ch === '\\') {
+      raw += source.charAt(i + 1);
+      i += 2;
+      continue;
+    }
+    if (ch === '`') return raw;
+    if (ch === '$' && source.charAt(i + 1) === '{') {
+      const close = source.indexOf('}', i + 2);
+      if (close < 0) return raw;
+      const expr = source.slice(i + 2, close);
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(expr)) {
+        raw += `\${${expr}}`;
+        i = close + 1;
+        continue;
+      }
+      return raw;
+    }
+    raw += ch;
+    i += 1;
+  }
+  return raw;
+}
+
+export function normalizeClientPath(raw: string): string {
+  return normalizePath(raw.replace(/\?.*$/, ''));
+}
+
 function parseClientOps(source: string): Map<string, ClientOp> {
   const returns = new Map<string, string>();
   const iface = /export interface VitalClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? '';
@@ -273,10 +324,17 @@ function parseClientOps(source: string): Map<string, ClientOp> {
   const implStart = source.indexOf('export function createVitalClient');
   const impl = implStart >= 0 ? source.slice(implStart) : source;
   const ops = new Map<string, ClientOp>();
-  const callRe = /http\.request(?:WithStatus)?\(\s*(['"`])([^'"`]+)\1/g;
+  const callRe = /http\.request(?:WithStatus)?\(/g;
   let call = callRe.exec(impl);
   while (call) {
-    const routePath = normalizePath(call[2] ?? '');
+    const after = impl.slice(call.index + call[0].length);
+    const ws = /^\s*/.exec(after)?.[0].length ?? 0;
+    const raw = readJsStringHead(after, ws);
+    if (raw === undefined || raw === '') {
+      call = callRe.exec(impl);
+      continue;
+    }
+    const routePath = normalizeClientPath(raw);
     const fromCall = impl.slice(call.index);
     const nextCall = fromCall.slice(1).search(/http\.request(?:WithStatus)?\(/);
     const thisCall = nextCall === -1 ? fromCall.slice(0, 500) : fromCall.slice(0, nextCall + 1);
@@ -312,6 +370,9 @@ function paramFields(routePath: string, schemaName?: string): string[] {
   const names = [...routePath.matchAll(/:([A-Za-z0-9_]+)/g)].map((m) => m[1] ?? '');
   return names.map((name) => {
     if (name === 'partNumber') return `- \`${name}\`: integer > 0`;
+    if (name === 'capability') {
+      return `- \`${name}\`: ${AGENT_SCHEDULE_CAPABILITIES.map((id) => JSON.stringify(id)).join(' | ')}`;
+    }
     return `- \`${name}\`: uuid`;
   });
 }
@@ -348,17 +409,25 @@ async function collectRoutes(): Promise<ParsedRoute[]> {
   return routes.filter((route) => !route.websocket);
 }
 
+function isCatalogTypeAlias(body: string): boolean {
+  if (/\bz\.infer\b/.test(body)) return false;
+  return /\bOmit<|\bPick<|\bRecord</.test(body) || / = (?:\s*\|\s*)?[A-Z]\w+(?:\s*\|\s*[A-Z]\w+)+;/.test(body.replace(/\s+/g, ' '));
+}
+
 async function collectInterfaces(): Promise<string> {
   const entries = await fs.readdir(dtoDir);
   const blocks: string[] = [];
   for (const name of entries.sort()) {
     if (!name.endsWith('.ts') || name === 'index.ts') continue;
     const source = await fs.readFile(path.join(dtoDir, name), 'utf8');
-    const re = /export interface \w+(?:\s+extends\s+[^{]+)? \{[\s\S]*?\n\}/g;
+    const re =
+      /export (?:interface \w+(?:\s+extends\s+[^{]+)? \{[\s\S]*?\n\}|type \w+ = [\s\S]*?;)/g;
     let match = re.exec(source);
     while (match) {
       const body = match[0]?.trim();
-      if (body !== undefined) blocks.push(body);
+      if (body !== undefined && (body.startsWith('export interface') || isCatalogTypeAlias(body))) {
+        blocks.push(body);
+      }
       match = re.exec(source);
     }
   }
@@ -375,15 +444,21 @@ function groupName(routePath: string): string {
 const GROUP_ORDER = [
   'tokens',
   'auth',
+  'today',
   'lists',
   'tasks',
   'tags',
   'inbox',
+  'outcomes',
+  'habits',
+  'days',
   'reports',
   'search',
   'uploads',
   'notification-channels',
   'llm',
+  'agent',
+  'integrations',
   'sync',
   'health',
   'app',

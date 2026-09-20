@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { htmlToArticleDoc } from '../src/convert.js';
 import { articleDocToHtml } from '../src/serialize.js';
-import { textToArticleDoc } from '../src/text.js';
+import { articleDocToText, textToArticleDoc } from '../src/text.js';
 
 function roundTrip(html: string): string {
   return articleDocToHtml(htmlToArticleDoc(articleDocToHtml(htmlToArticleDoc(html))));
@@ -68,3 +68,26 @@ describe('textToArticleDoc', () => {
     expect(html).toBe('<p>甲</p><p>乙</p>');
   });
 });
+
+describe('articleDocToText', () => {
+  it('flattens headings and lists', () => {
+    expect(
+      articleDocToText({
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '标题' }] },
+          {
+            type: 'bulletList',
+            content: [
+              {
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: '甲' }] }],
+              },
+            ],
+          },
+        ],
+      }),
+    ).toBe('标题\n\n- 甲');
+  });
+});
+

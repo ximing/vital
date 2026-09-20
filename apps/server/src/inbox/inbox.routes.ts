@@ -22,6 +22,7 @@ import {
   createInbox,
   deleteInbox,
   getInbox,
+  getInboxMarkdown,
   listInbox,
   patchInbox,
   patchInboxAssets,
@@ -74,6 +75,14 @@ export function registerInboxRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = idParams.parse(req.params);
     return getInbox(user.id, id);
+  });
+
+  /** Article body as Markdown (from stored TipTap/article-doc). Empty string when there is no body. */
+  app.get('/api/v1/inbox/:id/markdown', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    return getInboxMarkdown(user.id, id);
   });
 
   app.patch(

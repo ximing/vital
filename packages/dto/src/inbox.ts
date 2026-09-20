@@ -88,8 +88,10 @@ export const createInboxInputSchema = z.object({
   originalUrl: httpUrlSchema.nullable().optional(),
   extractedText: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
   contentJson: articleDocSchema.nullable().optional(),
-  /** Legacy capture field (extension ≤0.2.0); converted to `contentJson` server-side. */
+  /** HTML body; converted to `contentJson` (article-doc / TipTap JSON) on write. */
   extractedHtml: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
+  /** Markdown body; converted to `contentJson` on write. */
+  markdown: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
   excerpt: z.string().trim().max(500).nullable().optional(),
   byline: z.string().trim().max(200).nullable().optional(),
   siteName: z.string().trim().max(200).nullable().optional(),
@@ -104,6 +106,8 @@ export const patchInboxInputSchema = z
     status: z.enum(['unread', 'later', 'archived']).optional(),
     extractedText: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
     contentJson: articleDocSchema.nullable().optional(),
+    extractedHtml: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
+    markdown: z.string().max(MAX_EXTRACT_HTML_BYTES).nullable().optional(),
     excerpt: z.string().trim().max(500).nullable().optional(),
     byline: z.string().trim().max(200).nullable().optional(),
     siteName: z.string().trim().max(200).nullable().optional(),
@@ -141,6 +145,11 @@ export interface ConvertInboxResponse {
   task: Task;
   /** Same hits as `task.similarOpenTasks` when convert created a new task. */
   similarOpenTasks?: SimilarTaskHit[];
+}
+
+/** GET /inbox/:id/markdown — article body as Markdown for agents. */
+export interface InboxMarkdown {
+  markdown: string;
 }
 
 export const listInboxQuerySchema = z.object({

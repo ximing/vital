@@ -1,6 +1,6 @@
 ---
 name: vital
-description: Operate the user's Vital personal OS (inbox, tasks, lists, tags, reports, search) through its HTTP API. Use when the user asks to add a task, capture a URL, search inbox or reports, write a daily or weekly report, or otherwise manage Vital data. Requires a personal access token from Settings → 令牌. Use when the user runs /vital.
+description: Operate the user's Vital personal OS (today, inbox, tasks, threads, habits, days, lists, tags, reports, search) through its HTTP API. Use when the user asks to add a task, capture a URL, tick a habit, manage threads or 日子, search inbox or reports, write a daily or weekly report, or otherwise manage Vital data. Requires a personal access token from Settings → 令牌. Use when the user runs /vital.
 ---
 
 # Vital API
@@ -25,13 +25,21 @@ Errors are `{ "error": { "code": "...", "message": "...", "details": ... } }`. `
 
 Resolve request/response fields from `references/api.md`. Prefer these sequences:
 
-**Today's tasks.** `GET /api/v1/tasks?listId=smart:today`. To add one, `GET /api/v1/lists`, pick the inbox or a user list UUID, then `POST /api/v1/tasks`. Natural language: `POST /api/v1/tasks/from-text` (needs LLM settings).
+**Today.** `GET /api/v1/today` — open threads, tasks, pulse, and now-recommendations.
 
-**Capture a URL.** `POST /api/v1/inbox/extract` with `{ "url" }`, then `POST /api/v1/inbox` with the preview (`title`, `originalUrl`, `extractedHtml` / `extractedText`, `excerpt`, `byline`, `siteName`, `source: "manual"`).
+**Tasks.** `GET /api/v1/tasks?listId=smart:today`. To add one, `GET /api/v1/lists`, pick the inbox or a user list UUID, then `POST /api/v1/tasks`. All-day due date: `dueYmd` as `YYYY-MM-DD` in the account timezone (do not send `dueAt` at the same time). Natural language: `POST /api/v1/tasks/from-text` (needs LLM settings). Complete with `POST /api/v1/tasks/:id/complete`.
 
-**Search.** `POST /api/v1/search` with `{ "q" }`. Optional `types`: `task`, `inbox`, `report`.
+**Threads.** `GET /api/v1/outcomes?status=open`. Create with `POST /api/v1/outcomes`. Drill-down: `GET /api/v1/outcomes/:id/detail`.
 
-**Daily / weekly report.** `GET /api/v1/reports/current?type=daily` (or `weekly`). Save with `PATCH /api/v1/reports/:id` and the current `revision`.
+**Capture a document.** `POST /api/v1/inbox` with `title` and `markdown` or `extractedHtml`. The server stores TipTap `contentJson`. Read the body as Markdown: `GET /api/v1/inbox/:id/markdown` (list/sync omit the body). URL capture: `POST /api/v1/inbox/extract` then `POST /api/v1/inbox` with the preview. Convert to a task: `POST /api/v1/inbox/:id/convert`.
+
+**Habits.** `GET /api/v1/habits`, then `POST /api/v1/habits/:id/tick`.
+
+**Days.** `GET /api/v1/days`. Create with `POST /api/v1/days`.
+
+**Search.** `POST /api/v1/search` with `{ "q" }`. Optional `types`: `task`, `inbox`, `report`. Grouped quick search: `GET /api/v1/search?q=`.
+
+**Daily / weekly report.** `GET /api/v1/reports/current?type=daily` (or `weekly`). Save with `PATCH /api/v1/reports/:id` and the current `revision`. Agent notes (daily only): `POST /api/v1/reports/:id/generate`.
 
 Do not use register/login/refresh, change-password, or LLM key endpoints unless the user explicitly asks. Do not create extra tokens unless asked.
 

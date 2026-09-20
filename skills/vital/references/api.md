@@ -264,6 +264,36 @@ export interface AppAndroidReleaseResponse {
 ```
 
 ```ts
+export interface DesktopAsset {
+  id: DesktopAssetId;
+  url: string;
+  name: string;
+  sizeBytes?: number | undefined;
+}
+```
+
+```ts
+export interface AppLatestRelease {
+  versionName: string;
+  tag: string;
+  htmlUrl: string | null;
+  publishedAt: string | null;
+  android: AndroidRelease | null;
+  desktop: DesktopAsset[];
+}
+```
+
+```ts
+export interface AppLatestReleaseResponse {
+  latest: AppLatestRelease | null;
+}
+```
+
+```ts
+export type LlmParameters = Record<string, LlmJsonValue>;
+```
+
+```ts
 export interface AuthTokens {
   accessToken: string;
   refreshToken?: string;
@@ -496,6 +526,13 @@ export interface InboxItem {
 ```
 
 ```ts
+export type InboxPreview = Omit<
+  InboxItem,
+  'id' | 'capturedAt' | 'createdAt' | 'updatedAt' | 'deletedAt'
+>;
+```
+
+```ts
 export interface InboxCollection {
   items: InboxItem[];
   nextCursor: string | null;
@@ -508,6 +545,12 @@ export interface ConvertInboxResponse {
   task: Task;
   /** Same hits as `task.similarOpenTasks` when convert created a new task. */
   similarOpenTasks?: SimilarTaskHit[];
+}
+```
+
+```ts
+export interface InboxMarkdown {
+  markdown: string;
 }
 ```
 
@@ -873,6 +916,10 @@ export interface ReportEmbedsResponse {
 ```
 
 ```ts
+export type ReportTypeCounts = Record<ReportType, number>;
+```
+
+```ts
 export interface ReportGenerateTrigger {
   status: 'queued' | 'disabled';
   jobId: string | null;
@@ -1016,6 +1063,10 @@ export interface ReportSearchHit {
   type: 'report';
   report: ReportListItem;
 }
+```
+
+```ts
+export type SearchHit = TaskSearchHit | InboxSearchHit | ReportSearchHit;
 ```
 
 ```ts
@@ -1466,6 +1517,16 @@ Request body (`registerInputSchema`):
 - `password`: string 8–128
 - `displayName`: string 1–50
 
+### today
+
+#### `GET /api/v1/today`
+
+Today's dashboard: open threads, tasks, pulse, and now-recommendations.
+
+- Auth: Bearer required
+- Client: `getToday`
+- Response: `TodayDashboard`
+
 ### lists
 
 #### `GET /api/v1/lists`
@@ -1559,7 +1620,7 @@ Query (`listTasksQuerySchema`):
 
 #### `POST /api/v1/tasks`
 
-Create a task. `listId` must be a user or inbox list UUID, not a `smart:*` id. Call GET /api/v1/lists first.
+Create a task. `listId` must be a user or inbox list UUID, not a `smart:*` id. Call GET /api/v1/lists first. All-day due: `dueYmd` as YYYY-MM-DD in the task timezone (account default). Mutually exclusive with `dueAt`.
 
 - Auth: Bearer required
 - Client: `createTask`
@@ -1584,6 +1645,7 @@ Request body (`createTaskInputSchema`):
 - `reminderAt`: string iso datetime (optional, nullable)
 - `isAllDay`: boolean (optional)
 - `timezone`: string 1–64 (optional)
+- `dueYmd`: string pattern (optional)
 - `recurrence`: string 1–500 (optional, nullable)
 - `recurrenceKind`: "daily" | "weekly" | "monthly" | "yearly" | "weekdays" | "weekends" | "holidays" | "legal_workdays" (optional, nullable)
 - `tagIds`: uuid[] (optional)
@@ -1643,6 +1705,7 @@ Request body (`patchTaskInputSchema`):
 - `reminderAt`: string iso datetime (optional, nullable)
 - `isAllDay`: boolean (optional)
 - `timezone`: string 1–64 (optional)
+- `dueYmd`: string pattern (optional)
 - `recurrence`: string 1–500 (optional, nullable)
 - `recurrenceKind`: "daily" | "weekly" | "monthly" | "yearly" | "weekdays" | "weekends" | "holidays" | "legal_workdays" (optional, nullable)
 - `tagIds`: uuid[] (optional)
@@ -1839,7 +1902,7 @@ Query (`listInboxQuerySchema`):
 
 #### `POST /api/v1/inbox`
 
-Capture an item. `source` defaults to `manual`. Optional header `Idempotency-Key` (64 hex chars); required when `source` is `extension`.
+Capture an item. `source` defaults to `manual`. Send `markdown` or `extractedHtml` (or `contentJson`); the server stores TipTap `contentJson`. Priority: contentJson > html > markdown > extractedText. Optional header `Idempotency-Key` (64 hex chars); required when `source` is `extension`.
 
 - Auth: Bearer required
 - Client: `createInboxResult`
@@ -1854,6 +1917,7 @@ Request body (`createInboxInputSchema`):
   - `type`: "doc"
   - `content`: lazy[]
 - `extractedHtml`: string 0–2097152 (optional, nullable)
+- `markdown`: string 0–2097152 (optional, nullable)
 - `excerpt`: string 0–500 (optional, nullable)
 - `byline`: string 0–200 (optional, nullable)
 - `siteName`: string 0–200 (optional, nullable)
@@ -1905,6 +1969,8 @@ Request body (`patchInboxInputSchema`):
 - `contentJson` (optional, nullable):
   - `type`: "doc"
   - `content`: lazy[]
+- `extractedHtml`: string 0–2097152 (optional, nullable)
+- `markdown`: string 0–2097152 (optional, nullable)
 - `excerpt`: string 0–500 (optional, nullable)
 - `byline`: string 0–200 (optional, nullable)
 - `siteName`: string 0–200 (optional, nullable)
@@ -1959,9 +2025,21 @@ Path params:
 
 - `id`: uuid
 
+#### `GET /api/v1/inbox/:id/markdown`
+
+Article body as Markdown from the stored TipTap doc. Empty string when there is no body. List/sync omit the body.
+
+- Auth: Bearer required
+- Client: `getInboxMarkdown`
+- Response: `InboxMarkdown`
+
+Path params:
+
+- `id`: uuid
+
 #### `POST /api/v1/inbox/extract`
 
-Fetch a URL and return a preview. Follow with POST /api/v1/inbox using the preview fields.
+Fetch a URL and return a preview (contentJson + extractedText). Follow with POST /api/v1/inbox using those fields.
 
 - Auth: Bearer required
 - Client: `extractInbox`
@@ -1970,6 +2048,309 @@ Fetch a URL and return a preview. Follow with POST /api/v1/inbox using the previ
 Request body (`extractInboxInputSchema`):
 
 - `url`: string 0–2048 url
+
+### outcomes
+
+#### `GET /api/v1/outcomes`
+
+List Outcomes
+
+- Auth: Bearer required
+- Client: `listOutcomes`
+- Response: `Outcome[]`
+
+Query (`listOutcomesQuerySchema`):
+
+- `status`: "open" | "closed" (optional)
+
+#### `POST /api/v1/outcomes`
+
+Create Outcome
+
+- Auth: Bearer required
+- Client: `createOutcome`
+- Response: `Outcome`
+
+Request body (`createOutcomeInputSchema`):
+
+- `name`: string 1–120
+
+#### `PATCH /api/v1/outcomes/:id`
+
+Patch Outcome
+
+- Auth: Bearer required
+- Client: `patchOutcome`
+- Response: `Outcome`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchOutcomeInputSchema`):
+
+- `name`: string 1–120 (optional)
+- `sortOrder`: number int (optional)
+
+#### `POST /api/v1/outcomes/:id/close`
+
+Close Outcome
+
+- Auth: Bearer required
+- Client: `closeOutcome`
+- Response: `Outcome`
+
+Path params:
+
+- `id`: uuid
+
+#### `GET /api/v1/outcomes/:id/detail`
+
+Thread drill-down: outcome + its tasks, materials and agent timeline.
+
+- Auth: Bearer required
+- Client: `getOutcomeDetail`
+- Response: `OutcomeDetail`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/outcomes/:id/refresh`
+
+Manual agent re-run: enqueue + mark pending, 202 (worker picks it up).
+
+- Auth: Bearer required
+- Client: `refreshOutcome`
+- Status: 202
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/outcomes/:id/reopen`
+
+Reopen Outcome
+
+- Auth: Bearer required
+- Client: `reopenOutcome`
+- Response: `Outcome`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/outcomes/:id/undo`
+
+Undo Outcome
+
+- Auth: Bearer required
+- Client: `undoOutcome`
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+### habits
+
+#### `GET /api/v1/habits`
+
+List Habits
+
+- Auth: Bearer required
+- Client: `listHabits`
+- Response: `Habit[]`
+
+#### `POST /api/v1/habits`
+
+Create Habit
+
+- Auth: Bearer required
+- Client: `createHabit`
+- Response: `Habit`
+
+Request body (`createHabitInputSchema`):
+
+- `name`: string 1–120
+- `kind`: "daily" | "count"
+- `targetCount`: number int min 1 max 99 (optional)
+- `windowStart`: string pattern (optional)
+- `windowEnd`: string pattern (optional)
+- `outcomeId`: uuid (optional)
+
+#### `DELETE /api/v1/habits/:id`
+
+Delete Habit
+
+- Auth: Bearer required
+- Client: `deleteHabit`
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+#### `PATCH /api/v1/habits/:id`
+
+Patch Habit
+
+- Auth: Bearer required
+- Client: `patchHabit`
+- Response: `Habit`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchHabitInputSchema`):
+
+- `name`: string 1–120 (optional)
+- `targetCount`: number int min 1 max 99 (optional, nullable)
+- `windowStart`: string pattern (optional, nullable)
+- `windowEnd`: string pattern (optional, nullable)
+- `active`: boolean (optional)
+- `sortOrder`: number int (optional)
+- `outcomeId`: uuid (optional, nullable)
+
+#### `POST /api/v1/habits/:id/tick`
+
+Tick Habit
+
+- Auth: Bearer required
+- Client: `tickHabit`
+- Response: `Habit`
+
+Path params:
+
+- `id`: uuid
+
+#### `GET /api/v1/habits/checkins`
+
+List Habit Checkins
+
+- Auth: Bearer required
+- Client: `listHabitCheckins`
+- Response: `HabitCheckinsResponse`
+
+Query (`habitCheckinsQuerySchema`):
+
+- `from`: string pattern
+- `to`: string pattern
+
+### days
+
+#### `GET /api/v1/days`
+
+List Days
+
+- Auth: Bearer required
+- Client: `listDays`
+- Response: `DayCollection`
+
+#### `POST /api/v1/days`
+
+Create Day
+
+- Auth: Bearer required
+- Client: `createDay`
+- Status: 201
+- Response: `Day`
+
+Request body (`createDayInputSchema`):
+
+- `catalogKey`: string 1–64 (optional)
+- `name`: string 1–80 (optional)
+- `note`: string 0–200 (optional)
+- `calendar`: "solar" | "lunar" (optional)
+- `anchorYmd`: string pattern (optional)
+- `lunarYear`: number int min 1900 max 2100 (optional)
+- `lunarMonth`: number int min 1 max 12 (optional)
+- `lunarDay`: number int min 1 max 30 (optional)
+- `lunarLeap`: boolean (optional)
+- `repeat`: "none" | "yearly" (optional)
+- `displayMode`: "auto" | "countdown" | "countup" (optional)
+- `timeHm`: string pattern (optional, nullable)
+- `coverPreset`: "mist" | "night" | "blossom" | "paper" | "lantern" | "silk" | "moon" | "willow" | "river" | "field" | "tea" | "snow" (optional)
+- `coverAttachmentId`: uuid (optional, nullable)
+- `reminderOffsets`: 0 | 1 | 3 | 7 | 30[] (optional)
+- `pinned`: boolean (optional)
+
+#### `DELETE /api/v1/days/:id`
+
+Delete Day
+
+- Auth: Bearer required
+- Client: `deleteDay`
+- Response: `void`
+
+Path params:
+
+- `id`: uuid
+
+#### `GET /api/v1/days/:id`
+
+Get Day
+
+- Auth: Bearer required
+- Client: `getDay`
+- Response: `Day`
+
+Path params:
+
+- `id`: uuid
+
+#### `PATCH /api/v1/days/:id`
+
+Patch Day
+
+- Auth: Bearer required
+- Client: `patchDay`
+- Response: `Day`
+
+Path params:
+
+- `id`: uuid
+
+Request body (`patchDayInputSchema`):
+
+- `name`: string 1–80 (optional)
+- `note`: string 0–200 (optional, nullable)
+- `calendar`: "solar" | "lunar" (optional)
+- `anchorYmd`: string pattern (optional)
+- `lunarYear`: number int min 1900 max 2100 (optional)
+- `lunarMonth`: number int min 1 max 12 (optional, nullable)
+- `lunarDay`: number int min 1 max 30 (optional, nullable)
+- `lunarLeap`: boolean (optional)
+- `repeat`: "none" | "yearly" (optional)
+- `displayMode`: "auto" | "countdown" | "countup" (optional)
+- `timeHm`: string pattern (optional, nullable)
+- `coverPreset`: "mist" | "night" | "blossom" | "paper" | "lantern" | "silk" | "moon" | "willow" | "river" | "field" | "tea" | "snow" (optional)
+- `coverAttachmentId`: uuid (optional, nullable)
+- `reminderOffsets`: 0 | 1 | 3 | 7 | 30[] (optional)
+- `pinned`: boolean (optional)
+- `hidden`: boolean (optional)
+
+#### `GET /api/v1/days/catalog`
+
+List Day Catalog
+
+- Auth: Bearer required
+- Client: `listDayCatalog`
+- Response: `DayCatalogResponse`
+
+#### `GET /api/v1/days/meta`
+
+Get Day Calendar Meta
+
+- Auth: Bearer required
+- Client: `getDayCalendarMeta`
+- Response: `DayCalendarMeta`
+
+Query (`dayCalendarMetaQuerySchema`):
+
+- `year`: number int min 1900 max 2100
 
 ### reports
 
@@ -2398,57 +2779,6 @@ Request body (`putLlmRoutingSchema`):
 
 - `routing`: object
 
-### sync
-
-#### `GET /api/v1/sync/changes`
-
-Sync Changes
-
-- Auth: Bearer required
-- Client: `syncChanges`
-- Response: `SyncChanges`
-
-Query (`syncChangesQuerySchema`):
-
-- `since`: string 1–2048
-- `limit`: number int min 1 max 500
-
-#### `GET /api/v1/sync/head`
-
-Sync Head
-
-- Auth: Bearer required
-- Client: `syncHead`
-- Response: `SyncHead`
-
-### health
-
-#### `GET /api/health`
-
-- Auth: none
-
-#### `GET /api/v1/health/ready`
-
-- Auth: none
-
-### app
-
-#### `GET /api/v1/app`
-
-Latest GitHub Release catalog (Android APK + desktop installers). `latest` is null when none is published.
-
-- Auth: none
-- Client: `getAppLatest`
-- Response: `AppLatestReleaseResponse`
-
-#### `GET /api/v1/app/android`
-
-Latest Android APK from GitHub Releases (`ximing/vital` by default). `android` is null when no release with an `.apk` asset is published. Public; the APK is downloaded from `apkUrl` (GitHub `browser_download_url`).
-
-- Auth: none
-- Client: `getAndroidRelease`
-- Response: `AppAndroidReleaseResponse`
-
 ### agent
 
 #### `GET /api/v1/agent/actions`
@@ -2496,9 +2826,22 @@ Path params:
 
 - `id`: uuid
 
-#### `GET /api/v1/agent/executions`
+#### `POST /api/v1/agent/cluster`
+
+Queue outcome.cluster (organize unassigned tasks into threads). 202 `{ status: queued|disabled, jobId }`.
 
 - Auth: Bearer required
+- Client: `organizeAgentTasks`
+- Status: 202
+- Response: `{ status: 'queued' | 'disabled'; jobId: string | null }`
+
+#### `GET /api/v1/agent/executions`
+
+List Agent Executions
+
+- Auth: Bearer required
+- Client: `listAgentExecutions`
+- Response: `AgentExecution[]`
 
 Query (`agentUsageQuerySchema`):
 
@@ -2558,9 +2901,22 @@ Request body (`patchAgentMemorySchema`):
 - `content`: string 1–300 (optional)
 - `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify" | "report"[] (optional)
 
-#### `GET /api/v1/agent/metrics`
+#### `POST /api/v1/agent/memory/distill`
+
+Queue memory.distill. 202 `{ status: queued|disabled, jobId }`.
 
 - Auth: Bearer required
+- Client: `distillAgentMemory`
+- Status: 202
+- Response: `{ status: 'queued' | 'disabled'; jobId: string | null }`
+
+#### `GET /api/v1/agent/metrics`
+
+Get Agent Metrics
+
+- Auth: Bearer required
+- Client: `getAgentMetrics`
+- Response: `AgentMetricsResponse`
 
 Query (`agentMetricsQuerySchema`):
 
@@ -2584,214 +2940,19 @@ Cancel Agent Schedule
 
 Path params:
 
-- `capability`: uuid
+- `capability`: "outcome.cluster" | "memory.distill"
 
 #### `GET /api/v1/agent/usage`
 
+Get Agent Usage
+
 - Auth: Bearer required
+- Client: `getAgentUsage`
+- Response: `AgentUsageSummary`
 
 Query (`agentUsageQuerySchema`):
 
 - `days`: number int min 1
-
-### days
-
-#### `GET /api/v1/days`
-
-List Days
-
-- Auth: Bearer required
-- Client: `listDays`
-- Response: `DayCollection`
-
-#### `POST /api/v1/days`
-
-Create Day
-
-- Auth: Bearer required
-- Client: `createDay`
-- Status: 201
-- Response: `Day`
-
-Request body (`createDayInputSchema`):
-
-- `catalogKey`: string 1–64 (optional)
-- `name`: string 1–80 (optional)
-- `note`: string 0–200 (optional)
-- `calendar`: "solar" | "lunar" (optional)
-- `anchorYmd`: string pattern (optional)
-- `lunarYear`: number int min 1900 max 2100 (optional)
-- `lunarMonth`: number int min 1 max 12 (optional)
-- `lunarDay`: number int min 1 max 30 (optional)
-- `lunarLeap`: boolean (optional)
-- `repeat`: "none" | "yearly" (optional)
-- `displayMode`: "auto" | "countdown" | "countup" (optional)
-- `timeHm`: string pattern (optional, nullable)
-- `coverPreset`: "mist" | "night" | "blossom" | "paper" | "lantern" | "silk" | "moon" | "willow" | "river" | "field" | "tea" | "snow" (optional)
-- `coverAttachmentId`: uuid (optional, nullable)
-- `reminderOffsets`: 0 | 1 | 3 | 7 | 30[] (optional)
-- `pinned`: boolean (optional)
-
-#### `DELETE /api/v1/days/:id`
-
-Delete Day
-
-- Auth: Bearer required
-- Client: `deleteDay`
-- Response: `void`
-
-Path params:
-
-- `id`: uuid
-
-#### `GET /api/v1/days/:id`
-
-Get Day
-
-- Auth: Bearer required
-- Client: `getDay`
-- Response: `Day`
-
-Path params:
-
-- `id`: uuid
-
-#### `PATCH /api/v1/days/:id`
-
-Patch Day
-
-- Auth: Bearer required
-- Client: `patchDay`
-- Response: `Day`
-
-Path params:
-
-- `id`: uuid
-
-Request body (`patchDayInputSchema`):
-
-- `name`: string 1–80 (optional)
-- `note`: string 0–200 (optional, nullable)
-- `calendar`: "solar" | "lunar" (optional)
-- `anchorYmd`: string pattern (optional)
-- `lunarYear`: number int min 1900 max 2100 (optional)
-- `lunarMonth`: number int min 1 max 12 (optional, nullable)
-- `lunarDay`: number int min 1 max 30 (optional, nullable)
-- `lunarLeap`: boolean (optional)
-- `repeat`: "none" | "yearly" (optional)
-- `displayMode`: "auto" | "countdown" | "countup" (optional)
-- `timeHm`: string pattern (optional, nullable)
-- `coverPreset`: "mist" | "night" | "blossom" | "paper" | "lantern" | "silk" | "moon" | "willow" | "river" | "field" | "tea" | "snow" (optional)
-- `coverAttachmentId`: uuid (optional, nullable)
-- `reminderOffsets`: 0 | 1 | 3 | 7 | 30[] (optional)
-- `pinned`: boolean (optional)
-- `hidden`: boolean (optional)
-
-#### `GET /api/v1/days/catalog`
-
-List Day Catalog
-
-- Auth: Bearer required
-- Client: `listDayCatalog`
-- Response: `DayCatalogResponse`
-
-#### `GET /api/v1/days/meta`
-
-Get Day Calendar Meta
-
-- Auth: Bearer required
-- Client: `getDayCalendarMeta`
-- Response: `DayCalendarMeta`
-
-Query (`dayCalendarMetaQuerySchema`):
-
-- `year`: number int min 1900 max 2100
-
-### habits
-
-#### `GET /api/v1/habits`
-
-List Habits
-
-- Auth: Bearer required
-- Client: `listHabits`
-- Response: `Habit[]`
-
-#### `POST /api/v1/habits`
-
-Create Habit
-
-- Auth: Bearer required
-- Client: `createHabit`
-- Response: `Habit`
-
-Request body (`createHabitInputSchema`):
-
-- `name`: string 1–120
-- `kind`: "daily" | "count"
-- `targetCount`: number int min 1 max 99 (optional)
-- `windowStart`: string pattern (optional)
-- `windowEnd`: string pattern (optional)
-- `outcomeId`: uuid (optional)
-
-#### `DELETE /api/v1/habits/:id`
-
-Delete Habit
-
-- Auth: Bearer required
-- Client: `deleteHabit`
-- Response: `void`
-
-Path params:
-
-- `id`: uuid
-
-#### `PATCH /api/v1/habits/:id`
-
-Patch Habit
-
-- Auth: Bearer required
-- Client: `patchHabit`
-- Response: `Habit`
-
-Path params:
-
-- `id`: uuid
-
-Request body (`patchHabitInputSchema`):
-
-- `name`: string 1–120 (optional)
-- `targetCount`: number int min 1 max 99 (optional, nullable)
-- `windowStart`: string pattern (optional, nullable)
-- `windowEnd`: string pattern (optional, nullable)
-- `active`: boolean (optional)
-- `sortOrder`: number int (optional)
-- `outcomeId`: uuid (optional, nullable)
-
-#### `POST /api/v1/habits/:id/tick`
-
-Tick Habit
-
-- Auth: Bearer required
-- Client: `tickHabit`
-- Response: `Habit`
-
-Path params:
-
-- `id`: uuid
-
-#### `GET /api/v1/habits/checkins`
-
-List Habit Checkins
-
-- Auth: Bearer required
-- Client: `listHabitCheckins`
-- Response: `HabitCheckinsResponse`
-
-Query (`habitCheckinsQuerySchema`):
-
-- `from`: string pattern
-- `to`: string pattern
 
 ### integrations
 
@@ -2825,112 +2986,53 @@ Test Inwit
 - Client: `testInwit`
 - Response: `InwitTestResponse`
 
-### outcomes
+### sync
 
-#### `GET /api/v1/outcomes`
+#### `GET /api/v1/sync/changes`
 
-- Auth: Bearer required
-
-Query (`listOutcomesQuerySchema`):
-
-- `status`: "open" | "closed" (optional)
-
-#### `POST /api/v1/outcomes`
-
-Create Outcome
+Sync Changes
 
 - Auth: Bearer required
-- Client: `createOutcome`
-- Response: `Outcome`
+- Client: `syncChanges`
+- Response: `SyncChanges`
 
-Request body (`createOutcomeInputSchema`):
+Query (`syncChangesQuerySchema`):
 
-- `name`: string 1–120
+- `since`: string 1–2048
+- `limit`: number int min 1 max 500
 
-#### `PATCH /api/v1/outcomes/:id`
+#### `GET /api/v1/sync/head`
 
-Patch Outcome
-
-- Auth: Bearer required
-- Client: `patchOutcome`
-- Response: `Outcome`
-
-Path params:
-
-- `id`: uuid
-
-Request body (`patchOutcomeInputSchema`):
-
-- `name`: string 1–120 (optional)
-- `sortOrder`: number int (optional)
-
-#### `POST /api/v1/outcomes/:id/close`
-
-Close Outcome
+Sync Head
 
 - Auth: Bearer required
-- Client: `closeOutcome`
-- Response: `Outcome`
+- Client: `syncHead`
+- Response: `SyncHead`
 
-Path params:
+### health
 
-- `id`: uuid
+#### `GET /api/health`
 
-#### `GET /api/v1/outcomes/:id/detail`
+- Auth: none
 
-Thread drill-down: outcome + its tasks, materials and agent timeline.
+#### `GET /api/v1/health/ready`
 
-- Auth: Bearer required
-- Client: `getOutcomeDetail`
-- Response: `OutcomeDetail`
+- Auth: none
 
-Path params:
+### app
 
-- `id`: uuid
+#### `GET /api/v1/app`
 
-#### `POST /api/v1/outcomes/:id/refresh`
+Latest GitHub Release catalog (Android APK + desktop installers). `latest` is null when none is published.
 
-Manual agent re-run: enqueue + mark pending, 202 (worker picks it up).
+- Auth: none
+- Client: `getAppLatest`
+- Response: `AppLatestReleaseResponse`
 
-- Auth: Bearer required
-- Client: `refreshOutcome`
-- Status: 202
-- Response: `void`
+#### `GET /api/v1/app/android`
 
-Path params:
+Latest Android APK from GitHub Releases (`ximing/vital` by default). `android` is null when no release with an `.apk` asset is published. Public; the APK is downloaded from `apkUrl` (GitHub `browser_download_url`).
 
-- `id`: uuid
-
-#### `POST /api/v1/outcomes/:id/reopen`
-
-Reopen Outcome
-
-- Auth: Bearer required
-- Client: `reopenOutcome`
-- Response: `Outcome`
-
-Path params:
-
-- `id`: uuid
-
-#### `POST /api/v1/outcomes/:id/undo`
-
-Undo Outcome
-
-- Auth: Bearer required
-- Client: `undoOutcome`
-- Response: `void`
-
-Path params:
-
-- `id`: uuid
-
-### today
-
-#### `GET /api/v1/today`
-
-Get Today
-
-- Auth: Bearer required
-- Client: `getToday`
-- Response: `TodayDashboard`
+- Auth: none
+- Client: `getAndroidRelease`
+- Response: `AppAndroidReleaseResponse`

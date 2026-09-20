@@ -26,13 +26,18 @@ import { dailyUsage } from './usage.service.js';
 import { limitLlm } from '../plugins/rate-limit.js';
 
 export function registerAgentRoutes(app: FastifyInstance): void {
-  for (const [path, capability] of [['cluster', 'outcome.cluster'], ['memory/distill', 'memory.distill']] as const) {
-    app.post(`/api/v1/agent/${path}`, { preHandler: [requireAuth, limitLlm] }, async (req, reply) => {
-      if (!req.user) throw AppError.of(401, 'INVALID_TOKEN');
-      const jobId = await dispatchAgentSchedule(req.user.id, capability, new Date(), true);
-      return reply.code(202).send({ status: jobId ? 'queued' : 'disabled', jobId });
-    });
-  }
+  /** Queue outcome.cluster (organize unassigned tasks into threads). */
+  app.post('/api/v1/agent/cluster', { preHandler: [requireAuth, limitLlm] }, async (req, reply) => {
+    if (!req.user) throw AppError.of(401, 'INVALID_TOKEN');
+    const jobId = await dispatchAgentSchedule(req.user.id, 'outcome.cluster', new Date(), true);
+    return reply.code(202).send({ status: jobId ? 'queued' : 'disabled', jobId });
+  });
+  /** Queue memory.distill. */
+  app.post('/api/v1/agent/memory/distill', { preHandler: [requireAuth, limitLlm] }, async (req, reply) => {
+    if (!req.user) throw AppError.of(401, 'INVALID_TOKEN');
+    const jobId = await dispatchAgentSchedule(req.user.id, 'memory.distill', new Date(), true);
+    return reply.code(202).send({ status: jobId ? 'queued' : 'disabled', jobId });
+  });
   app.get('/api/v1/agent/executions', { preHandler: [requireAuth] }, async (req) => {
     if (!req.user) throw AppError.of(401, 'INVALID_TOKEN');
     return listExecutions(req.user.id, agentUsageQuerySchema.parse(req.query).days);

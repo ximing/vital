@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ONBOARDING_CHECKLIST_KEYS } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { Activity, Brain, Flame, Heart, MessagesSquare } from 'lucide-react-native';
+import { Activity, Brain, CalendarDays, Repeat, Waypoints } from 'lucide-react-native';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
@@ -74,9 +74,9 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
   const updateNotes = update.remote?.releaseNotes;
 
   const aiItems: { icon: LucideIcon; label: string; href: string; value?: string }[] = [
-    { icon: Flame, label: copy.me.habits, href: '/habits' },
-    { icon: Heart, label: copy.me.days, href: '/days' },
-    { icon: MessagesSquare, label: copy.me.threads, href: '/threads' },
+    { icon: Repeat, label: copy.me.habits, href: '/habits' },
+    { icon: CalendarDays, label: copy.me.days, href: '/days' },
+    { icon: Waypoints, label: copy.me.threads, href: '/threads' },
     {
       icon: Activity,
       label: copy.me.agentActivity,

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { MessagesSquare } from 'lucide-react-native';
+import { Waypoints } from 'lucide-react-native';
 import type { Outcome } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Button } from '../../components/Button';
@@ -108,7 +108,7 @@ export function OutcomeBoard({
       ) : null}
       {outcomes.length === 0 ? (
         <EmptyState
-          icon={MessagesSquare}
+          icon={Waypoints}
           title={copy.today.emptyTitle}
           hint={copy.today.emptyHint}
           action={{ label: copy.today.newOutcome, onPress: () => setCreating(true) }}

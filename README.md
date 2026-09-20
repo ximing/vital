@@ -79,8 +79,12 @@ Vital 把 Agent 当成产品的一部分，而不是外挂聊天窗。
 
 Skill 里写好的典型工作流：
 
+- **今天**：`GET /api/v1/today`（线程、任务、脉冲、此刻推荐）。
 - **今天的任务**：`GET /api/v1/tasks?listId=smart:today`；自然语言建任务走 `POST /api/v1/tasks/from-text`（需要已配置模型）。
-- **抓一篇稍后读**：`POST /api/v1/inbox/extract` 再 `POST /api/v1/inbox`。
+- **线程**：`GET /api/v1/outcomes?status=open`；详情 `GET /api/v1/outcomes/:id/detail`。
+- **抓一篇稍后读**：`POST /api/v1/inbox` 可直接带 `markdown` / `extractedHtml`（服务端存 TipTap）；URL 则 `extract` 再入库。读正文用 `GET /api/v1/inbox/:id/markdown`。
+- **习惯**：`GET /api/v1/habits`，打卡 `POST /api/v1/habits/:id/tick`。
+- **日子**：`GET /api/v1/days`。
 - **搜索**：`POST /api/v1/search`，可限定任务 / 稍后读 / 报告。
 - **写日报 / 周报**：`GET /api/v1/reports/current?type=daily`，带当前 `revision` 再 `PATCH`。
 

@@ -7,10 +7,10 @@ import {
   Archive,
   ChevronLeft,
   Ellipsis,
-  MessagesSquare,
   Pencil,
   Plus,
   RotateCcw,
+  Waypoints,
 } from 'lucide-react-native';
 import type { Outcome, OutcomeSignal } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
@@ -148,7 +148,7 @@ const ThreadsHomeContent = observer(function ThreadsHomeContent() {
             <SectionHead title={copy.threads.openGroup} count={open.length} first />
             {open.length === 0 ? (
               <EmptyState
-                icon={MessagesSquare}
+                icon={Waypoints}
                 title={copy.threads.empty}
                 action={{
                   label: copy.threads.add,

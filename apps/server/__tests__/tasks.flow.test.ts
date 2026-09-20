@@ -305,6 +305,32 @@ describe('tasks', () => {
     expect(pinChild.statusCode).toBe(400);
   });
 
+  it('dueYmd is all-day in the account timezone', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '那天', listId: inbox, dueYmd: '2026-09-21' },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().isAllDay).toBe(true);
+    expect(created.json().dueAt).toBe(shanghaiDate('2026-09-21'));
+    const both = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '冲突',
+        listId: inbox,
+        dueYmd: '2026-09-21',
+        dueAt: shanghaiDate('2026-09-21'),
+      },
+    });
+    expect(both.statusCode).toBe(400);
+  });
+
   it('undated tasks land in the someday list and recurrence requires dueAt', async () => {
     const alice = await registerUser(app);
     const inbox = await inboxId(app, alice.token);

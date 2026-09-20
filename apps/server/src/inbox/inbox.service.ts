@@ -7,6 +7,7 @@ import {
   type InboxAsset,
   type InboxCollection,
   type InboxItem,
+  type InboxMarkdown,
   type InboxSource,
   type InboxStatus,
   type ListInboxQuery,
@@ -38,12 +39,15 @@ import { getStorage, type StorageMetadata } from '../storage/factory.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import { idempotencyKeyForUrl } from './canonical.js';
 import {
+  articleDocToText,
   htmlToArticleDoc,
+  pmJsonToArticleDoc,
   rebindDocMedia,
   textToArticleDoc,
   type ArticleDoc,
   type DocAssetRef,
 } from '@vital/article-doc';
+import { parseMarkdownToPmJSON, serializePmJSONToMarkdown } from '@vital/markdown';
 
 function asStatus(value: string): InboxStatus {
   if (value === 'unread' || value === 'later' || value === 'archived' || value === 'converted') {
@@ -76,25 +80,45 @@ function clip(value: string | null | undefined, max: number): string | null {
   return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
 }
 
+function nonemptyDoc(doc: ArticleDoc | null): ArticleDoc | null {
+  return doc !== null && doc.content.length > 0 ? doc : null;
+}
+
+function markdownToArticleDoc(markdown: string): ArticleDoc {
+  return pmJsonToArticleDoc(parseMarkdownToPmJSON(markdown));
+}
+
 /**
- * Body doc on write: client-supplied doc wins; legacy `extractedHtml` (pre-0.3.0
- * extension) is converted at the boundary; text-only input becomes a paragraph
- * doc. Media srcs are bound to the item's current assets.
+ * Body doc on write. Priority: contentJson > HTML > markdown > plain text.
+ * Media srcs are bound to the item's current assets.
  */
 function docOnWrite(
   contentJson: ArticleDoc | null | undefined,
   extractedText: string | null,
   assets: readonly DocAssetRef[],
   extractedHtml?: string | null,
+  markdown?: string | null,
 ): ArticleDoc | null {
   const html = clip(extractedHtml ?? null, 2 * 1024 * 1024);
   const fromHtml = html !== null ? htmlToArticleDoc(html) : null;
+  const md = clip(markdown ?? null, 2 * 1024 * 1024);
+  const fromMd = md !== null ? markdownToArticleDoc(md) : null;
   const doc =
     contentJson ??
-    (fromHtml !== null && fromHtml.content.length > 0 ? fromHtml : null) ??
+    nonemptyDoc(fromHtml) ??
+    nonemptyDoc(fromMd) ??
     (extractedText !== null && extractedText !== '' ? textToArticleDoc(extractedText) : null);
   if (doc === null) return null;
   return rebindDocMedia(doc, assets);
+}
+
+function textForBody(explicit: string | null | undefined, doc: ArticleDoc | null, fallback: string | null): string | null {
+  if (explicit !== undefined) return explicit;
+  if (doc !== null) {
+    const derived = clip(articleDocToText(doc), 2 * 1024 * 1024);
+    if (derived !== null) return derived;
+  }
+  return fallback;
 }
 
 type InboxBody = { extractedText: string | null; contentJson: ArticleDoc | null };
@@ -380,6 +404,14 @@ export async function getInbox(userId: string, id: string): Promise<InboxItem> {
   return dtoOf(await getOwnedInboxOr404(userId, id));
 }
 
+export async function getInboxMarkdown(userId: string, id: string): Promise<InboxMarkdown> {
+  const item = await dtoOf(await getOwnedInboxOr404(userId, id));
+  if (item.contentJson === null || item.contentJson.content.length === 0) {
+    return { markdown: '' };
+  }
+  return { markdown: serializePmJSONToMarkdown(item.contentJson) };
+}
+
 export async function createInbox(
   userId: string,
   input: CreateInboxInput,
@@ -405,9 +437,17 @@ export async function createInbox(
     key = headerKey;
   }
 
-  const extractedText = clip(input.extractedText ?? null, 2 * 1024 * 1024);
+  const givenText =
+    input.extractedText !== undefined ? clip(input.extractedText, 2 * 1024 * 1024) : undefined;
   // New items have no assets yet; patchInboxAssets rebinds media once uploads land.
-  const contentJson = docOnWrite(input.contentJson ?? null, extractedText, [], input.extractedHtml);
+  const contentJson = docOnWrite(
+    input.contentJson,
+    givenText ?? null,
+    [],
+    input.extractedHtml,
+    input.markdown,
+  );
+  const extractedText = textForBody(givenText, contentJson, null);
   const excerpt = clip(input.excerpt ?? extractedText, 500);
   const now = new Date();
   const id = randomUUID();
@@ -510,18 +550,18 @@ export async function patchInbox(
   }
   await getDb().transaction(async (tx) => {
     await tx.update(inboxItems).set(patch).where(eq(inboxItems.id, row.id));
-    if (input.extractedText !== undefined || input.contentJson !== undefined) {
+    if (
+      input.extractedText !== undefined ||
+      input.contentJson !== undefined ||
+      input.extractedHtml !== undefined ||
+      input.markdown !== undefined
+    ) {
       const [current] = await tx
         .select()
         .from(inboxItemBodies)
         .where(eq(inboxItemBodies.inboxItemId, row.id))
         .limit(1);
-      const extractedText =
-        input.extractedText !== undefined ? input.extractedText : (current?.extractedText ?? null);
-      const nextDoc =
-        input.contentJson !== undefined
-          ? input.contentJson
-          : (current?.contentJson ?? null);
+      const givenText = input.extractedText !== undefined ? input.extractedText : undefined;
       const assetRefs = await tx
         .select({
           attachmentId: inboxAssets.attachmentId,
@@ -529,7 +569,23 @@ export async function patchInbox(
         })
         .from(inboxAssets)
         .where(eq(inboxAssets.inboxItemId, row.id));
-      await writeInboxBody(row.id, extractedText, docOnWrite(nextDoc, extractedText, assetRefs), tx);
+      const replaceDoc =
+        input.contentJson !== undefined ||
+        input.extractedHtml !== undefined ||
+        input.markdown !== undefined;
+      const nextDoc = docOnWrite(
+        replaceDoc ? input.contentJson : (current?.contentJson ?? null),
+        givenText ?? current?.extractedText ?? null,
+        assetRefs,
+        input.extractedHtml,
+        input.markdown,
+      );
+      const extractedText = textForBody(
+        givenText,
+        replaceDoc ? nextDoc : null,
+        current?.extractedText ?? null,
+      );
+      await writeInboxBody(row.id, extractedText, nextDoc, tx);
     }
     if (input.tagIds !== undefined) await replaceInboxTags(row.id, input.tagIds, tx);
   });

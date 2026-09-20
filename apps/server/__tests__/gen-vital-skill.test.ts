@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   apiMarkdownPath,
   generateApiMarkdown,
+  normalizeClientPath,
   parseRouteSource,
   printZodFields,
 } from '../scripts/gen-vital-skill.js';
@@ -39,6 +40,27 @@ describe('gen-vital-skill', () => {
     ]);
   });
 
+  it('normalizes interpolated client paths', () => {
+    expect(normalizeClientPath('/api/v1/habits/${id}')).toBe('/api/v1/habits/:id');
+    expect(normalizeClientPath('/api/v1/agent/schedule/${capability}/cancel')).toBe(
+      '/api/v1/agent/schedule/:capability/cancel',
+    );
+    expect(normalizeClientPath('/api/v1/outcomes')).toBe('/api/v1/outcomes');
+  });
+
+  it('parses template-literal route paths', () => {
+    const routes = parseRouteSource(`
+      app.post(\`/api/v1/habits/\${id}/tick\`, { preHandler: [requireAuth] }, async (req) => {
+        return tickHabit(idParamsSchema.parse(req.params).id);
+      });
+    `);
+    expect(routes[0]).toMatchObject({
+      method: 'POST',
+      path: '/api/v1/habits/:id/tick',
+      auth: true,
+    });
+  });
+
   it('prints create-task fields from the dto schema', () => {
     const fields = printZodFields(createTaskInputSchema).join('\n');
     expect(fields).toContain('`title`');
@@ -55,6 +77,18 @@ describe('gen-vital-skill', () => {
     expect(markdown).toContain('TOKEN_LIMIT_REACHED');
     expect(markdown).toContain('export interface CreatedApiToken');
     expect(markdown).toContain('export interface Report extends ReportListItem');
+    expect(markdown).toContain('export interface AppLatestReleaseResponse');
+    expect(markdown).toContain('export type InboxPreview');
+    expect(markdown).toContain('POST /api/v1/agent/cluster');
+    expect(markdown).toContain('POST /api/v1/agent/memory/distill');
+    expect(markdown).toContain('Client: `organizeAgentTasks`');
+    expect(markdown).toContain('Client: `listOutcomes`');
+    expect(markdown).toContain('Client: `listAgentExecutions`');
+    const cancel =
+      markdown.split('#### `POST /api/v1/agent/schedule/:capability/cancel`')[1]?.split('#### ')[0] ??
+      '';
+    expect(cancel).toContain('"outcome.cluster"');
+    expect(cancel).not.toContain('`capability`: uuid');
     const tokenGet = markdown.split('#### `GET /api/v1/tokens`')[1]?.split('#### ')[0] ?? '';
     expect(tokenGet).toContain('Client: `listApiTokens`');
     expect(tokenGet).not.toContain('createApiTokenInputSchema');
