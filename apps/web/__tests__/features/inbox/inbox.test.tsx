@@ -43,6 +43,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       createInbox: vi.fn(),
       patchInbox: vi.fn(),
       convertInbox: vi.fn(),
+      exportInboxToInwit: vi.fn(),
       deleteInbox: vi.fn(),
       completeTask: vi.fn(),
       uncompleteTask: vi.fn(),
@@ -581,6 +582,59 @@ describe('inbox reader', () => {
 
     await user.click(screen.getByRole('button', { name: t.inbox.addToReport }));
     expect(screen.getByText(t.inbox.addToReportStub)).toBeInTheDocument();
+  });
+
+  it('shows loading feedback while exporting to inwit', async () => {
+    const item = makeItem({ id: 'i1', title: '一篇' });
+    vi.mocked(client.getInbox).mockResolvedValue(item);
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [item], nextCursor: null });
+    let finish: (value: { inbox: typeof item; inwitDocumentId: string }) => void = () => undefined;
+    vi.mocked(client.exportInboxToInwit).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    renderAt('/inbox/i1');
+    expect(await screen.findByRole('heading', { name: '一篇' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: t.inbox.exportInwit }));
+    const pending = await screen.findByRole('button', { name: t.inbox.exportingInwit });
+    expect(pending).toHaveAttribute('aria-busy', 'true');
+    expect(pending).toBeDisabled();
+    expect(screen.getAllByText(t.inbox.exportingInwit).length).toBeGreaterThan(0);
+
+    finish({
+      inbox: {
+        ...item,
+        inwitDocumentId: 'doc-1',
+        inwitExportedAt: '2026-09-21T00:00:00.000Z',
+      },
+      inwitDocumentId: 'doc-1',
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText(t.inbox.exportInwitNote).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole('button', { name: t.inbox.exportingInwit })).not.toBeInTheDocument();
+    expect(client.exportInboxToInwit).toHaveBeenCalledWith('i1');
+  });
+
+  it('clears the exporting note and shows the error when inwit export fails', async () => {
+    const item = makeItem({ id: 'i1', title: '一篇' });
+    vi.mocked(client.getInbox).mockResolvedValue(item);
+    vi.mocked(client.exportInboxToInwit).mockRejectedValue(
+      new ApiError(409, 'INWIT_NOT_CONFIGURED', '还没有配置 inwit accessKey'),
+    );
+    const user = userEvent.setup();
+    renderAt('/inbox/i1');
+    expect(await screen.findByRole('heading', { name: '一篇' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: t.inbox.exportInwit }));
+    expect((await screen.findAllByText('还没有配置 inwit accessKey')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: t.inbox.exportInwit })).toBeEnabled();
+    expect(screen.queryByText(t.inbox.exportingInwit)).not.toBeInTheDocument();
   });
 
   it('shows reader empty copy when the item is missing', async () => {

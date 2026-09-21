@@ -344,7 +344,9 @@ const InboxListContent = observer(function InboxListContent() {
               <Text style={styles.optionLabel}>
                 {s.menuItem.inwitDocumentId !== null
                   ? copy.inbox.exportedInwit
-                  : copy.inbox.exportInwit}
+                  : s.exportingId === s.menuItem.id
+                    ? copy.inbox.exportingInwit
+                    : copy.inbox.exportInwit}
               </Text>
             </Pressable>
             {s.menuItem.originalUrl ? (

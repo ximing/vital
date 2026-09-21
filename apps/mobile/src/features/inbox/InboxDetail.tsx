@@ -210,13 +210,18 @@ const InboxDetailContent = observer(function InboxDetailContent({ inboxId }: { i
             {copy.inbox.markRead}
           </Button>
         ) : null}
-        <Button loading={s.busy} disabled={converted} onPress={() => void s.convert(openTask)}>
+        <Button
+          loading={s.busy}
+          disabled={converted || s.exporting}
+          onPress={() => void s.convert(openTask)}
+        >
           {converted ? copy.inbox.convertedChip : copy.actions.convert}
         </Button>
         <Button
           variant="quiet"
-          loading={s.busy}
-          disabled={item.inwitDocumentId !== null}
+          loading={s.exporting}
+          loadingText={copy.inbox.exportingInwit}
+          disabled={item.inwitDocumentId !== null || s.busy}
           onPress={() => void s.exportToInwit()}
         >
           {item.inwitDocumentId !== null ? copy.inbox.exportedInwit : copy.inbox.exportInwit}

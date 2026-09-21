@@ -30,6 +30,7 @@ export class InboxService extends Service {
   menuItem: InboxItem | null = null;
   compose = false;
   primed = false;
+  exportingId: string | null = null;
 
   private unsubSync: (() => void) | null = null;
 
@@ -156,12 +157,17 @@ export class InboxService extends Service {
       toast(copy.inbox.exportedInwit);
       return;
     }
+    if (this.exportingId !== null) return;
+    this.exportingId = item.id;
+    toast(copy.inbox.exportingInwit);
     try {
       const res = await client.exportInboxToInwit(item.id);
       this.mergeItem(res.inbox);
       toast(copy.toast.exportedInwit);
     } catch (err) {
       toast(humanError(err));
+    } finally {
+      this.exportingId = null;
     }
   }
 
@@ -182,6 +188,7 @@ export class InboxDetailService extends Service {
   outcomes: Outcome[] = [];
   error: string | null = null;
   busy = false;
+  exporting = false;
   fontSize: ReaderFontSize = 'md';
   more = false;
   outcomePicker = false;
@@ -265,7 +272,9 @@ export class InboxDetailService extends Service {
   }
 
   async convert(openTask: (id: string) => void): Promise<void> {
-    if (this.item === null || this.item.status === 'converted') return;
+    if (this.item === null || this.item.status === 'converted' || this.busy || this.exporting) {
+      return;
+    }
     this.busy = true;
     try {
       const inboxList = this.lists.find((row) => row.kind === 'inbox');
@@ -295,8 +304,8 @@ export class InboxDetailService extends Service {
 
   async exportToInwit(): Promise<void> {
     const item = this.item;
-    if (item === null || item.inwitDocumentId !== null) return;
-    this.busy = true;
+    if (item === null || item.inwitDocumentId !== null || this.busy || this.exporting) return;
+    this.exporting = true;
     try {
       const res = await client.exportInboxToInwit(item.id);
       this.item = res.inbox;
@@ -304,7 +313,7 @@ export class InboxDetailService extends Service {
     } catch (err) {
       toast(humanError(err));
     } finally {
-      this.busy = false;
+      this.exporting = false;
     }
   }
 }
