@@ -248,6 +248,7 @@ export const copy = {
     copyLink: '复制链接',
     convertedChip: '已转任务',
     exportInwit: '转存到 inwit',
+    exportingInwit: '正在转存…',
     exportedInwit: '已转存',
     favorite: '收藏',
     unfavorite: '取消收藏',

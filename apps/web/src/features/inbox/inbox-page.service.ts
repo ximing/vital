@@ -14,6 +14,7 @@ export class InboxPageService extends Service {
   itemMenu: InboxItemMenu | null = null;
   actionError: string | null = null;
   statusNote: string | null = null;
+  exportingId: string | null = null;
 
   get auth(): AuthService {
     return this.resolve(AuthService);
@@ -61,10 +62,21 @@ export class InboxPageService extends Service {
   }
 
   async exportToInwit(id: string): Promise<void> {
+    if (this.exportingId !== null) return;
     this.actionError = null;
-    await client.exportInboxToInwit(id);
-    this.setStatusNote(t.inbox.exportInwitNote);
-    await this.refresh();
+    this.exportingId = id;
+    this.setStatusNote(t.inbox.exportingInwit);
+    try {
+      const res = await client.exportInboxToInwit(id);
+      this.query.setQueryData(inboxKeys.item(id), res.inbox);
+      this.setStatusNote(t.inbox.exportInwitNote);
+      await this.refresh();
+    } catch (err) {
+      if (this.statusNote === t.inbox.exportingInwit) this.setStatusNote(null);
+      throw err;
+    } finally {
+      this.exportingId = null;
+    }
   }
 
   openConvertedTask(taskId: string): void {

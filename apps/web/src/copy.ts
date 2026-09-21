@@ -597,6 +597,7 @@ export const t = {
     convert: '转为任务',
     converted: '已转为任务',
     exportInwit: '转存到 inwit',
+    exportingInwit: '正在转存到 inwit…',
     exportedInwit: '已转存到 inwit',
     exportInwitNote: '已转存到 inwit，可在 inwit 中查看。',
     attachOutcome: '挂到线程',

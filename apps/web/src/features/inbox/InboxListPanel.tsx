@@ -1,6 +1,6 @@
 import type { InboxItem } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
-import { Plus } from 'lucide-react';
+import { LoaderCircle, Plus } from 'lucide-react';
 import {
   useEffect,
   useMemo,
@@ -295,7 +295,20 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
       ) : null}
 
       {statusNote ? (
-        <p role="status" className="mt-3 px-3 text-[length:var(--text-meta)] text-muted">
+        <p
+          role="status"
+          aria-live="polite"
+          className={`mt-3 flex items-center gap-2 px-3 text-[length:var(--text-meta)] ${
+            page.exportingId !== null ? 'text-accent' : 'text-muted'
+          }`}
+        >
+          {page.exportingId !== null ? (
+            <Icon
+              icon={LoaderCircle}
+              size={14}
+              className="shrink-0 animate-spin motion-reduce:animate-none"
+            />
+          ) : null}
           {statusNote}
         </p>
       ) : null}

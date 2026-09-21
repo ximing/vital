@@ -8,6 +8,7 @@ import {
   Copy,
   FilePlus2,
   ListTodo,
+  LoaderCircle,
   Star,
 } from 'lucide-react';
 import { observer, useService } from '@rabjs/react';
@@ -48,6 +49,7 @@ function ActionButton({
   activeClass = '',
   filled = false,
   disabled = false,
+  loading = false,
   onClick,
 }: {
   label: string;
@@ -56,6 +58,7 @@ function ActionButton({
   activeClass?: string;
   filled?: boolean;
   disabled?: boolean;
+  loading?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -64,13 +67,23 @@ function ActionButton({
       aria-label={label}
       title={label}
       aria-pressed={active || undefined}
-      disabled={disabled}
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
       onClick={onClick}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] disabled:cursor-not-allowed disabled:opacity-40 ${
-        active ? activeClass : 'text-muted hover:bg-surface-muted hover:text-fg'
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] disabled:cursor-not-allowed ${
+        loading
+          ? 'text-accent'
+          : active
+            ? activeClass
+            : 'text-muted hover:bg-surface-muted hover:text-fg disabled:opacity-40'
       }`}
     >
-      <Icon icon={icon} size={15} fill={filled ? 'currentColor' : 'none'} />
+      <Icon
+        icon={loading ? LoaderCircle : icon}
+        size={15}
+        fill={filled && !loading ? 'currentColor' : 'none'}
+        className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+      />
     </button>
   );
 }
@@ -109,6 +122,9 @@ function InboxReaderContent() {
   const patchable = item ? canPatchStatus(item) : false;
   const converted = item?.status === 'converted';
   const exportedInwit = item?.inwitDocumentId != null;
+  const exporting = item != null && page.exportingId === item.id;
+  const exportPending = page.exportingId !== null;
+  const statusNote = page.statusNote;
   const [readProgress, setReadProgress] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -167,7 +183,7 @@ function InboxReaderContent() {
   }
 
   async function onExportInwit() {
-    if (!item || exportedInwit) return;
+    if (!item || exportedInwit || page.exportingId !== null) return;
     try {
       await page.exportToInwit(item.id);
       setConvertNote(null);
@@ -244,10 +260,17 @@ function InboxReaderContent() {
               onClick={() => void onConvert()}
             />
             <ActionButton
-              label={exportedInwit ? t.inbox.exportedInwit : t.inbox.exportInwit}
+              label={
+                exportedInwit
+                  ? t.inbox.exportedInwit
+                  : exporting
+                    ? t.inbox.exportingInwit
+                    : t.inbox.exportInwit
+              }
               icon={BookMarked}
               active={exportedInwit}
               activeClass="bg-done/12 text-done"
+              loading={exporting}
               disabled={!online || exportedInwit || !item}
               onClick={() => void onExportInwit()}
             />
@@ -321,6 +344,25 @@ function InboxReaderContent() {
           >
             {t.inbox.openTask}
           </Link>
+        </p>
+      ) : null}
+
+      {statusNote ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className={`${CONTENT_WIDTH} flex items-center gap-2 pt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] ${
+            exportPending ? 'text-accent' : 'text-muted'
+          }`}
+        >
+          {exportPending ? (
+            <Icon
+              icon={LoaderCircle}
+              size={14}
+              className="shrink-0 animate-spin motion-reduce:animate-none"
+            />
+          ) : null}
+          {statusNote}
         </p>
       ) : null}
 
