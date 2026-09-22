@@ -5,8 +5,8 @@ export const STICKY_ALERT_EVENT = 'vital://sticky-alert';
 export const OPEN_NOTIFY_EVENT = 'vital://open-notify';
 export const STICKY_ALERT_HASH_PREFIX = '#vital-alert=';
 export const STICKY_ALERT_PREF_KEY = 'vital:sticky-alert';
-export const STICKY_ALERT_WIDTH = 400;
-export const STICKY_ALERT_HEIGHT = 196;
+export const STICKY_ALERT_WIDTH = 420;
+export const STICKY_ALERT_HEIGHT = 212;
 const MARGIN = 16;
 
 export type StickyAlertPayload = {
@@ -221,6 +221,7 @@ async function showStickyAlertNow(payload: StickyAlertPayload): Promise<void> {
     minimizable: false,
     closable: true,
     decorations: false,
+    transparent: true,
     alwaysOnTop: true,
     visibleOnAllWorkspaces: true,
     skipTaskbar: true,

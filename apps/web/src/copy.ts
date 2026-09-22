@@ -1106,6 +1106,8 @@ export const t = {
       desktopUnsupported: '客户端通知不可用。',
       sticky: '置顶强提醒',
       stickyHint: '额外弹出必须手动关掉的窗口。只保存在这台电脑，默认关闭。',
+      kind: '提醒',
+      close: '关闭',
       later: '稍后',
       open: '打开',
       remaining: '还有 {n} 条',

@@ -131,6 +131,22 @@ body {
   animation: pulse-breath 4.8s ease-in-out infinite;
 }
 
+/* Sticky alert window entrance — slide up + fade per design/notify-alert.html. */
+@keyframes notify-alert-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.notify-alert-enter {
+  animation: notify-alert-in var(--ease-out);
+}
+
 @keyframes skeleton-pulse {
   0%,
   100% {

@@ -1,0 +1,259 @@
+<!-- 设计稿 · 桌面置顶提醒弹窗 notify-alert · 四块画板：浅色单条 / 浅色队列 / 深色单条 / 深色逾期 + 规格标注 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital · 置顶提醒弹窗 · 设计稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* ===== 两套主题 token —— 与 packages/tokens/src/theme.ts 对齐 ===== */
+  .t-light{
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-hover:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --secondary:#555E56; --tertiary:#98A098; --on-accent:#FFFFFF;
+    --line:#E2E6E0; --danger:#CE4A45; --danger-subtle:#F6E4E2;
+    --shadow:0 1px 2px rgb(20 34 24/6%),0 12px 36px rgb(20 34 24/12%),0 2px 8px rgb(20 34 24/8%);
+    --ring:rgb(28 122 79/16%);
+    --stage:#E2E7E1;
+  }
+  .t-dark{
+    --canvas:#0F1210; --surface:#161A17; --elevated:#232925; --muted:#1D221E;
+    --accent:#5FD3A1; --accent-hover:#82E0B6; --accent-subtle:#1B2E24;
+    --ink:#ECEFEB; --secondary:#A4ACA1; --tertiary:#798174; --on-accent:#0B1611;
+    --line:rgba(255,255,255,.08); --danger:#E8756C; --danger-subtle:#33201D;
+    --shadow:0 1px 2px rgb(0 0 0/32%),0 16px 44px rgb(0 0 0/48%),0 2px 8px rgb(0 0 0/32%);
+    --ring:rgb(95 211 161/22%);
+    --stage:#0B0E0C;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+    background:#D9DFDA;-webkit-font-smoothing:antialiased;font-size:14px;line-height:21px;
+    display:flex;flex-direction:column;align-items:center;gap:64px;padding:56px 0 120px}
+  .num{font-variant-numeric:tabular-nums}
+  .fd{font-family:Sora,Inter,"PingFang SC",sans-serif;letter-spacing:-0.02em}
+  .art-label{font-size:12px;color:#555E56;letter-spacing:.08em;margin-bottom:-44px}
+  .art-label b{color:#1B211D}
+
+  /* 画板 = 一块桌面角落，弹窗浮在右下 */
+  .stage{width:1180px;height:520px;border-radius:16px;position:relative;overflow:hidden;
+    box-shadow:0 24px 64px rgb(20 34 24/14%);
+    background:var(--stage)}
+  .stage .wallpaper{position:absolute;inset:0;
+    background:
+      radial-gradient(50% 70% at 88% 112%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 62%),
+      radial-gradient(38% 50% at 6% -8%,color-mix(in srgb,var(--accent) 5%,transparent),transparent 60%)}
+
+  /* ===== 弹窗本体 420×212 ===== */
+  .alert{position:absolute;right:32px;bottom:32px;width:420px;border-radius:14px;
+    background:var(--elevated);color:var(--ink);box-shadow:var(--shadow);
+    overflow:hidden;padding:18px 20px 16px;
+    display:flex;flex-direction:column;gap:0}
+  /* 顶部发丝渐变条（呼应 report-paper 的 3px 渐变） */
+  .alert::before{content:"";position:absolute;inset:0 0 auto;height:3px;
+    background:linear-gradient(90deg,var(--accent),transparent 72%);opacity:.9}
+  .alert.danger::before{background:linear-gradient(90deg,var(--danger),transparent 72%)}
+
+  /* 头部：品牌圆点 + 种类 eyebrow + 时间 + 关闭 */
+  .alert-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .alert-mark{width:20px;height:20px;border-radius:6px;flex:none;display:grid;place-items:center;
+    background:var(--accent-subtle);color:var(--accent-hover)}
+  .alert.danger .alert-mark{background:var(--danger-subtle);color:var(--danger)}
+  .alert-kind{font-size:11px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--accent-hover)}
+  .alert.danger .alert-kind{color:var(--danger)}
+  .alert-time{margin-left:auto;font-size:12px;line-height:16px;color:var(--tertiary)}
+  .alert-close{width:24px;height:24px;border:none;border-radius:6px;background:transparent;
+    color:var(--tertiary);cursor:pointer;display:grid;place-items:center;margin-left:2px;
+    transition:background .15s ease,color .15s ease}
+  .alert-close:hover{background:var(--muted);color:var(--ink)}
+
+  /* 标题 + 正文 */
+  .alert-title{font-family:Sora,Inter,"PingFang SC",sans-serif;letter-spacing:-0.02em;
+    font-size:16px;line-height:24px;font-weight:600;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical}
+  .alert-body{margin-top:4px;font-size:13px;line-height:18px;color:var(--secondary);
+    overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .alert-body .hot{color:var(--danger);font-weight:600}
+
+  /* 底部：队列指示 + 操作 */
+  .alert-foot{margin-top:14px;display:flex;align-items:center;gap:12px}
+  .queue{display:flex;align-items:center;gap:8px;font-size:12px;line-height:16px;color:var(--tertiary)}
+  .queue .dots{display:flex;gap:4px}
+  .queue .dot{width:6px;height:6px;border-radius:999px;background:var(--muted)}
+  .queue .dot.on{background:var(--accent)}
+  .alert.danger .queue .dot.on{background:var(--danger)}
+  .alert-acts{margin-left:auto;display:flex;gap:8px}
+  .btn{height:32px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:500;
+    display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;cursor:pointer;
+    transition:background .15s ease,border-color .15s ease}
+  .btn-quiet{background:transparent;color:var(--secondary)}
+  .btn-quiet:hover{background:var(--muted);color:var(--ink)}
+  .btn-primary{background:var(--accent);color:var(--on-accent);font-weight:600}
+  .btn-primary:hover{background:var(--accent-hover)}
+  .t-dark .btn-primary:hover{background:var(--accent-hover)}
+  .btn-primary:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring)}
+
+  /* ===== 规格标注板 ===== */
+  .spec{width:1180px;border-radius:16px;background:#FAFBF9;box-shadow:0 24px 64px rgb(20 34 24/10%);
+    padding:36px 44px;color:#1B211D}
+  .spec h2{font-family:Sora,Inter,sans-serif;font-size:18px;font-weight:700;letter-spacing:-0.02em}
+  .spec .cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:36px;margin-top:20px}
+  .spec h3{font-size:11px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;color:#98A098;
+    padding-bottom:8px;border-bottom:1px solid #E2E6E0;margin-bottom:10px}
+  .spec li{list-style:none;font-size:13px;line-height:20px;color:#555E56;padding:3px 0;display:flex;gap:8px}
+  .spec li::before{content:"·";color:#1C7A4F;font-weight:700}
+  .spec code{font-family:ui-monospace,monospace;font-size:12px;background:#EBEEE9;border-radius:4px;padding:0 4px;color:#155E3D}
+</style>
+</head>
+<body>
+
+<!-- ============ 画板 1 · 浅色 · 单条提醒 ============ -->
+<div class="art-label"><b>01</b> · 浅色 · 单条任务提醒</div>
+<section class="stage t-light">
+  <div class="wallpaper"></div>
+  <div class="alert">
+    <div class="alert-head">
+      <span class="alert-mark">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      </span>
+      <span class="alert-kind">Vital · 提醒</span>
+      <span class="alert-time num">14:30</span>
+      <button class="alert-close" aria-label="关闭">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <h1 class="alert-title">给设计组发周报初稿</h1>
+    <p class="alert-body">截止今天 17:00 · 关联任务「Q3 设计系统复盘」，记得附上组件库的最新截图。</p>
+    <div class="alert-foot">
+      <div class="alert-acts" style="margin-left:auto">
+        <button class="btn btn-quiet">稍后</button>
+        <button class="btn btn-primary">打开</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 画板 2 · 浅色 · 队列 ============ -->
+<div class="art-label"><b>02</b> · 浅色 · 多条排队（第 1 / 3 条）</div>
+<section class="stage t-light">
+  <div class="wallpaper"></div>
+  <div class="alert">
+    <div class="alert-head">
+      <span class="alert-mark">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      </span>
+      <span class="alert-kind">Vital · 提醒</span>
+      <span class="alert-time num">09:00</span>
+      <button class="alert-close" aria-label="关闭">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <h1 class="alert-title">站会前过一遍阻塞项</h1>
+    <p class="alert-body">昨天标记的 3 个阻塞还没有更新状态，打开 Today 快速处理。</p>
+    <div class="alert-foot">
+      <span class="queue">
+        <span class="dots"><i class="dot on"></i><i class="dot"></i><i class="dot"></i></span>
+        还有 2 条
+      </span>
+      <div class="alert-acts">
+        <button class="btn btn-quiet">稍后</button>
+        <button class="btn btn-primary">打开</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 画板 3 · 深色 · 单条 ============ -->
+<div class="art-label"><b>03</b> · 深色 · 单条提醒（长标题截断）</div>
+<section class="stage t-dark">
+  <div class="wallpaper"></div>
+  <div class="alert">
+    <div class="alert-head">
+      <span class="alert-mark">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+      </span>
+      <span class="alert-kind">Vital · 提醒</span>
+      <span class="alert-time num">21:15</span>
+      <button class="alert-close" aria-label="关闭">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <h1 class="alert-title">复盘：为什么这周的专注时长比上周少了整整四个小时</h1>
+    <p class="alert-body">Agent 已生成今日小结，含 2 条改进建议 · 来自每日 21:00 例行。</p>
+    <div class="alert-foot">
+      <div class="alert-acts" style="margin-left:auto">
+        <button class="btn btn-quiet">稍后</button>
+        <button class="btn btn-primary">打开</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 画板 4 · 深色 · 逾期变体 ============ -->
+<div class="art-label"><b>04</b> · 深色 · 逾期任务（危险色变体）</div>
+<section class="stage t-dark">
+  <div class="wallpaper"></div>
+  <div class="alert danger">
+    <div class="alert-head">
+      <span class="alert-mark">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      </span>
+      <span class="alert-kind">Vital · 已逾期</span>
+      <span class="alert-time num">17:00</span>
+      <button class="alert-close" aria-label="关闭">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <h1 class="alert-title">提交季度报税材料</h1>
+    <p class="alert-body"><span class="hot">已逾期 2 小时</span> · 原定今天 15:00 截止，打开后可一键改期或标记完成。</p>
+    <div class="alert-foot">
+      <div class="alert-acts" style="margin-left:auto">
+        <button class="btn btn-quiet">稍后</button>
+        <button class="btn btn-primary">打开</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 规格标注 ============ -->
+<section class="spec t-light">
+  <h2 class="fd">实现规格</h2>
+  <div class="cols">
+    <div>
+      <h3>结构 / 尺寸</h3>
+      <ul>
+        <li>窗口 <code>420×212</code>（现为 400×196，随实现调整常量）</li>
+        <li>圆角 <code>14px</code>，padding <code>18/20/16</code></li>
+        <li>顶部 3px 渐变发丝条，呼应 <code>report-paper</code></li>
+        <li>头部 = 20px 图标块 + eyebrow 种类 + 时间 + 关闭 ×</li>
+        <li>标题单行截断；正文最多两行（<code>line-clamp:2</code>）</li>
+      </ul>
+    </div>
+    <div>
+      <h3>主题 / 状态</h3>
+      <ul>
+        <li>全部色值取自 <code>packages/tokens</code>，亮暗各一套</li>
+        <li>默认绿：<code>accentPrimary</code>；逾期变体：<code>danger</code></li>
+        <li>图标块：<code>accent-subtle</code> 底 + <code>accent-deep</code> 图标</li>
+        <li>队列态：左侧 3 点进度 + 「还有 N 条」，无队列时隐藏</li>
+        <li>主按钮 focus 环 <code>--focus-ring</code></li>
+      </ul>
+    </div>
+    <div>
+      <h3>行为（保持现有逻辑）</h3>
+      <ul>
+        <li>「稍后」= 出队下一条；队列空则关窗（现 <code>later()</code>）</li>
+        <li>「打开」= 唤起主窗并跳转 url（现 <code>open()</code>）</li>
+        <li>× 关闭 = 稍后（不出声地跳过当前条）</li>
+        <li>入场：自下而上 12px + 淡入 180ms（<code>motion.outMs</code>）</li>
+        <li>窗口标题 = 当前条标题（现 <code>document.title</code>）</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
