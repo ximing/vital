@@ -84,6 +84,21 @@ export function useTaskQuery(id: string | null) {
   });
 }
 
+/** Parent row for the detail back link. List caches count so the title can show before getTask returns. */
+export function useParentTask(parentId: string | null): Task | undefined {
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: todoKeys.item(parentId ?? ''),
+    queryFn: () => {
+      if (parentId === null || parentId === '') throw new Error('parent id required');
+      return client.getTask(parentId);
+    },
+    enabled: parentId !== null && parentId !== '',
+    placeholderData: () => (parentId ? findTaskInCache(qc, parentId) : undefined),
+  });
+  return parentId ? query.data : undefined;
+}
+
 /**
  * Task shown in the detail pane. Subtasks often live on the parent list but
  * not on the current smart list (e.g. today), so the pane must not depend on
@@ -91,17 +106,11 @@ export function useTaskQuery(id: string | null) {
  */
 export function useDetailTask(selectedId: string | null, localTasks: Task[]): Task | undefined {
   const qc = useQueryClient();
-  const fromLocal = selectedId
-    ? localTasks.find((task) => task.id === selectedId)
-    : undefined;
+  const fromLocal = selectedId ? localTasks.find((task) => task.id === selectedId) : undefined;
   const fromCache =
-    selectedId !== null && fromLocal === undefined
-      ? findTaskInCache(qc, selectedId)
-      : undefined;
+    selectedId !== null && fromLocal === undefined ? findTaskInCache(qc, selectedId) : undefined;
   const fetchId =
-    selectedId !== null && fromLocal === undefined && fromCache === undefined
-      ? selectedId
-      : null;
+    selectedId !== null && fromLocal === undefined && fromCache === undefined ? selectedId : null;
   const fetched = useTaskQuery(fetchId);
   return fromLocal ?? fromCache ?? fetched.data;
 }
@@ -129,7 +138,9 @@ export function useTodoActions() {
       todos.noteSimilarOpen(task.similarOpenTasks);
       await invalidate();
       await markOnboarding({ createdTask: true });
-      todos.setSelected(task.id);
+      // Detail follows selectedId. A subtask is created from its parent pane;
+      // selecting the child would replace that pane.
+      if (task.parentId === null) todos.setSelected(task.id);
     },
   });
 

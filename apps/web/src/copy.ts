@@ -515,6 +515,7 @@ export const t = {
     estimateClear: '清除',
     subtasks: '子任务',
     addSubtask: '添加子任务',
+    backToParent: '返回父任务',
     delegable: '可交给 Agent',
     delegableHint: '打开后，可以让 Agent 为这个任务起草执行方案。',
     draftTrigger: '让 Agent 起草方案',
@@ -1090,7 +1091,8 @@ export const t = {
     weekSun: '周日',
     weekMon: '周一',
     dailyModelCallLimit: '每日后台处理额度',
-    dailyModelCallLimitHint: '默认 {n} 次。用完之后，后台任务会安排到明天继续。手动发起的操作不占这个额度。',
+    dailyModelCallLimitHint:
+      '默认 {n} 次。用完之后，后台任务会安排到明天继续。手动发起的操作不占这个额度。',
     dailyModelCallLimitInvalid: '请填写 {min} 到 {max} 之间的整数',
     notify: {
       title: '通知',

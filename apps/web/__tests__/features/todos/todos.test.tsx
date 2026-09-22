@@ -614,6 +614,71 @@ describe('todos workspace', () => {
     expect(await screen.findByRole('complementary', { name: child.title })).toBeInTheDocument();
     expect(screen.getByLabelText(t.todos.title)).toHaveValue(child.title);
     expect(screen.getByLabelText(t.todos.closeDetail)).toBeInTheDocument();
+    await user.click(
+      await screen.findByRole('button', { name: `${t.todos.backToParent} ${parent.title}` }),
+    );
+    expect(await screen.findByRole('complementary', { name: parent.title })).toBeInTheDocument();
+    expect(screen.getByLabelText(t.todos.title)).toHaveValue(parent.title);
+    expect(screen.getByLabelText(t.todos.addSubtask)).toBeInTheDocument();
+  });
+
+  it('keeps the parent detail open when a subtask is added with Enter', async () => {
+    const parent = makeTask({
+      id: 'parent-1',
+      title: '写季度总结',
+      listId: inbox.id,
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+    });
+    const child = makeTask({
+      id: 'child-1',
+      title: '列大纲',
+      listId: inbox.id,
+      parentId: parent.id,
+      dueAt: null,
+    });
+    let created = false;
+    vi.mocked(client.listTasks).mockImplementation(async ({ listId }) => ({
+      items:
+        listId === 'smart:today'
+          ? [parent]
+          : listId === inbox.id
+            ? created
+              ? [parent, child]
+              : [parent]
+            : [],
+      nextCursor: null,
+    }));
+    vi.mocked(client.createTask).mockImplementation(async () => {
+      created = true;
+      return child;
+    });
+    vi.mocked(client.getTask).mockImplementation(async (id) => {
+      if (id === child.id) return child;
+      if (id === parent.id) return parent;
+      throw new Error(`unknown task ${id}`);
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/todos/lists/smart:today');
+    const row = await screen.findByRole('option', { name: parent.title });
+    await user.click(within(row).getByRole('button', { name: t.todos.openDetail }));
+    expect(await screen.findByRole('complementary', { name: parent.title })).toBeInTheDocument();
+    const add = screen.getByLabelText(t.todos.addSubtask);
+    await user.type(add, '列大纲');
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(client.createTask).toHaveBeenCalledWith({
+        title: '列大纲',
+        listId: inbox.id,
+        parentId: parent.id,
+      }),
+    );
+    expect(await screen.findByRole('button', { name: child.title })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: parent.title })).toBeInTheDocument();
+    expect(screen.getByLabelText(t.todos.title)).toHaveValue(parent.title);
+    expect(screen.getByLabelText(t.todos.addSubtask)).toHaveValue('');
+    expect(
+      screen.queryByRole('button', { name: `${t.todos.backToParent} ${parent.title}` }),
+    ).not.toBeInTheDocument();
   });
 
   it('does not show open/done tabs on smart lists', async () => {
