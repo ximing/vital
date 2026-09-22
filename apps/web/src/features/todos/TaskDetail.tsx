@@ -1,6 +1,6 @@
 import type { AgentAction, List, Outcome, PatchTaskInput, Tag, Task } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
-import { Ellipsis, Folder, Pin, Plus, Timer, X } from 'lucide-react';
+import { ChevronLeft, Ellipsis, Folder, Pin, Plus, Timer, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { AuthService } from '@/services/auth.service';
@@ -13,6 +13,7 @@ import { DraftSection } from './DraftSection';
 import { NotesEditor } from './NotesEditor';
 import { addDaysYmd, inboxList, listPickerRows, todayYmd } from './model';
 import { PriorityMenu } from './priority';
+import { useParentTask } from './queries';
 import { draftFromTask, draftToPatch, scheduleDayPatch } from './schedule-draft';
 import { SchedulePopover } from './SchedulePopover';
 import { TaskCheckbox } from './TaskRow';
@@ -71,6 +72,7 @@ export const TaskDetail: FC<{
 }) {
   const todos = useService(TodosUiService);
   const auth = useService(AuthService);
+  const parentTask = useParentTask(task.parentId);
   const weekStartsOn = auth.user?.weekStartsOn === 0 ? 0 : 1;
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
@@ -305,6 +307,24 @@ export const TaskDetail: FC<{
         </div>
       </div>
 
+      {task.parentId !== null ? (
+        <div className="border-b border-border px-4 py-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              if (task.parentId) todos.openDetail(task.parentId);
+            }}
+            aria-label={
+              parentTask ? `${t.todos.backToParent} ${parentTask.title}` : t.todos.backToParent
+            }
+            className="inline-flex max-w-full min-w-0 items-center gap-0.5 rounded-md px-1 py-0.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg"
+          >
+            <Icon icon={ChevronLeft} size={13} className="shrink-0" />
+            <span className="min-w-0 truncate">{parentTask?.title ?? t.todos.backToParent}</span>
+          </button>
+        </div>
+      ) : null}
+
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-4">
         <textarea
           value={title}
@@ -371,9 +391,7 @@ export const TaskDetail: FC<{
         />
 
         <div className="mt-7">
-          <p className="eyebrow eyebrow-rule mb-2.5">
-            {t.todos.notes}
-          </p>
+          <p className="eyebrow eyebrow-rule mb-2.5">{t.todos.notes}</p>
           <NotesEditor value={notes} onChange={queueNotes} />
         </div>
 
@@ -431,7 +449,6 @@ export const TaskDetail: FC<{
             </div>
           </div>
         ) : null}
-
       </div>
     </aside>
   );
@@ -474,10 +491,12 @@ function EstimateField({
           popover.open ? FIELD_CONTROL_OPEN_CLASS : ''
         }`}
       >
-        <Icon icon={Timer} size={13} className={`shrink-0 ${value !== null ? 'text-accent' : ''}`} />
-        <span className="truncate">
-          {value !== null ? estimateLabel(value) : t.todos.estimate}
-        </span>
+        <Icon
+          icon={Timer}
+          size={13}
+          className={`shrink-0 ${value !== null ? 'text-accent' : ''}`}
+        />
+        <span className="truncate">{value !== null ? estimateLabel(value) : t.todos.estimate}</span>
       </button>
       {popover.open ? (
         <div
