@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
+import { config } from '../src/config.js';
 import { REFRESH_COOKIE_NAME } from '../src/auth/cookies.js';
 import { resetDb } from './helpers/db.js';
 import {
@@ -327,6 +328,36 @@ describe('auth flow', () => {
 
     const me = await injectJson(app, { method: 'GET', url: '/api/v1/auth/me' });
     expect(me.statusCode).toBe(401);
+  });
+
+  it('PATCH /auth/me stores the daily background model-call limit', async () => {
+    const reg = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: alice,
+    });
+    const token = reg.json().tokens.accessToken;
+    expect(reg.json().user.dailyModelCallLimit).toBe(config.AGENT_DAILY_MODEL_CALL_LIMIT);
+
+    const invalid = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token,
+      payload: { dailyModelCallLimit: 0 },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const updated = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token,
+      payload: { dailyModelCallLimit: 250 },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().dailyModelCallLimit).toBe(250);
+
+    const me = await injectJson(app, { method: 'GET', url: '/api/v1/auth/me', token });
+    expect(me.json().dailyModelCallLimit).toBe(250);
   });
 
   it('PATCH /auth/onboarding merges flags and leaves omitted keys unchanged', async () => {

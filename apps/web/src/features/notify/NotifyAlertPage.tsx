@@ -101,7 +101,7 @@ export function NotifyAlertPage({
 
   return (
     <div
-      className="notify-alert-enter relative flex h-screen flex-col overflow-hidden rounded-[14px] bg-elevated px-5 pb-4 pt-[18px] text-fg"
+      className="notify-alert-enter relative flex h-screen flex-col overflow-hidden rounded-[14px] bg-elevated px-4 pb-3 pt-[14px] text-fg"
       data-region="notify-alert"
       role="alertdialog"
       aria-modal="true"
@@ -112,7 +112,7 @@ export function NotifyAlertPage({
         aria-hidden
         className="absolute inset-x-0 top-0 h-[3px] opacity-90 [background:linear-gradient(90deg,var(--accent-primary),transparent_72%)]"
       />
-      <div className="mb-2.5 flex items-center gap-2">
+      <div className="mb-2 flex shrink-0 items-center gap-2">
         <span className="grid size-5 shrink-0 place-items-center rounded-md bg-accent-subtle text-accent-deep">
           <Icon icon={Bell} size={12} strokeWidth={2.2} />
         </span>
@@ -133,17 +133,17 @@ export function NotifyAlertPage({
       </div>
       <h1
         id="notify-alert-title"
-        className="truncate font-display text-[length:var(--text-section)] leading-[var(--text-section-lh)] font-semibold"
+        className="shrink-0 truncate font-display text-[length:var(--text-section)] leading-[var(--text-section-lh)] font-semibold"
       >
         {current.title}
       </h1>
       <p
         id="notify-alert-body"
-        className="mt-1 line-clamp-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-secondary"
+        className="mt-1 line-clamp-2 min-h-0 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-secondary"
       >
         {current.body}
       </p>
-      <div className="mt-auto flex items-center gap-3 pt-3.5">
+      <div className="mt-auto flex shrink-0 items-center gap-3 pt-2.5">
         {remaining > 0 ? (
           <span className="flex items-center gap-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
             <QueueDots total={queue.length} />
@@ -151,10 +151,10 @@ export function NotifyAlertPage({
           </span>
         ) : null}
         <div className="ml-auto flex gap-2">
-          <Button variant="quiet" className="h-8 min-h-8 px-3.5" onClick={later}>
+          <Button variant="quiet" size="sm" onClick={later}>
             {copy.later}
           </Button>
-          <Button className="h-8 min-h-8 px-3.5 font-semibold" onClick={open}>
+          <Button size="sm" className="font-semibold" onClick={open}>
             {copy.open}
           </Button>
         </div>

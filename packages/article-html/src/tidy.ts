@@ -110,13 +110,19 @@ function durationCaption(text: string): string | null {
   return match?.[1] !== undefined ? `视频 · ${match[1]}` : null;
 }
 
+function withoutChromeGlue(value: string): string {
+  return value.replace(/[,，、.|:：%\-_/]/g, '');
+}
+
 function isChromeOnlyText(text: string): boolean {
   let s = text.replace(/\s+/g, '');
   if (s === '') return false;
+  // `<code>cwd</code>、<code>settingsManager</code>` and `src`/`tidy.ts` put the separator in its own text node.
+  if (withoutChromeGlue(s) === '') return false;
   s = s.replace(/百分之\d+/g, '');
   s = s.replace(/时长\d{1,2}:\d{2}(?::\d{2})?/g, '');
   s = s.replace(/\d{1,2}:\d{2}(?:\/\d{1,2}:\d{2})?/g, '');
-  s = s.replace(/[,，、.|:：%\-_/]/g, '');
+  s = withoutChromeGlue(s);
   let prev = '';
   while (s !== prev) {
     prev = s;

@@ -11,6 +11,7 @@ const user: UserProfile = {
   locale: 'zh-CN',
   themePreference: 'system',
   weekStartsOn: 1,
+  dailyModelCallLimit: 100,
   convertArchiveOnComplete: true,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},

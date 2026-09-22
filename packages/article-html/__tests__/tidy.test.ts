@@ -42,6 +42,30 @@ describe('tidyArticleHtml', () => {
     expect(tidyArticleHtml('<p>hello<br>world</p>')).toBe('<p>hello<br>world</p>');
   });
 
+  it('keeps separator punctuation between inline code', () => {
+    const html =
+      '<p>同时维护 Session 运行所依赖的 <code>cwd</code>、<code>settingsManager</code>、<code>modelRuntime</code>、<code>resourceLoader</code> 等 Services。</p>';
+    expect(tidyArticleHtml(html)).toBe(html);
+  });
+
+  it('keeps other glue punctuation that is its own text or inline node', () => {
+    const html = [
+      '<p><code>src</code>/<code>tidy.ts</code>，<code>a</code>, <code>b</code>',
+      '：<code>k</code>:<code>v</code> <code>50</code>%',
+      '<code>pre</code>-<code>commit</code> <code>foo</code>_<code>bar</code>',
+      '<code>a</code>|<code>b</code> <code>v1</code>.<code>2</code> ...</p>',
+      '<p><code>cwd</code><em>、</em><b>，</b><strong>/</strong><i>-</i><code>x</code></p>',
+      '<p>甲、乙、丙</p>',
+    ].join('');
+    expect(tidyArticleHtml(html)).toBe(html);
+  });
+
+  it('still drops player chrome that is only tokens glued by the same punctuation', () => {
+    const out = tidyArticleHtml('<p>关注、分享、赞</p><p>高清/流畅</p><p>播放，倍速</p><p>正文保留。</p>');
+    expect(out).not.toMatch(/关注|分享|赞|高清|流畅|播放|倍速/);
+    expect(out).toContain('正文保留。');
+  });
+
   it('sanitizers still drop data-* and keep the real image on the dirty fixture', () => {
     const sanitizeOut = runSanitizeHtml(WECHAT_HTML);
     const purifyOut = runDomPurify(WECHAT_HTML);

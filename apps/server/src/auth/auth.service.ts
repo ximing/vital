@@ -78,6 +78,7 @@ export async function toProfile(user: User): Promise<UserProfile> {
     locale: user.locale,
     themePreference: themeOf(user.themePreference),
     weekStartsOn: weekStartsOnOf(user.weekStartsOn),
+    dailyModelCallLimit: user.dailyModelCallLimit,
     convertArchiveOnComplete: user.convertArchiveOnComplete,
     notifications: notificationsOf(user),
     onboarding: onboardingOf(user.onboarding),
@@ -156,6 +157,7 @@ export async function registerUser(
     locale: 'zh-CN',
     themePreference: 'system',
     weekStartsOn: 1,
+    dailyModelCallLimit: config.AGENT_DAILY_MODEL_CALL_LIMIT,
     convertArchiveOnComplete: false,
     notifyTaskRemind: true,
     notifyTaskDue: true,
@@ -223,6 +225,8 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
   if (input.locale !== undefined) patch.locale = input.locale;
   if (input.themePreference !== undefined) patch.themePreference = input.themePreference;
   if (input.weekStartsOn !== undefined) patch.weekStartsOn = input.weekStartsOn;
+  if (input.dailyModelCallLimit !== undefined)
+    patch.dailyModelCallLimit = input.dailyModelCallLimit;
   if (input.convertArchiveOnComplete !== undefined) {
     patch.convertArchiveOnComplete = input.convertArchiveOnComplete;
   }
@@ -245,8 +249,10 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
     if (input.notifications.taskDue !== undefined) {
       patch.notifyTaskDue = input.notifications.taskDue;
     }
-    if (input.notifications.agentInsights !== undefined) patch.notifyAgentInsights = input.notifications.agentInsights;
-    if (input.notifications.dayRemind !== undefined) patch.notifyDayRemind = input.notifications.dayRemind;
+    if (input.notifications.agentInsights !== undefined)
+      patch.notifyAgentInsights = input.notifications.agentInsights;
+    if (input.notifications.dayRemind !== undefined)
+      patch.notifyDayRemind = input.notifications.dayRemind;
     if (input.notifications.quietHoursStart !== undefined) patch.quietHoursStart = nextStart;
     if (input.notifications.quietHoursEnd !== undefined) patch.quietHoursEnd = nextEnd;
     if (input.notifications.allDayNotifyTime !== undefined) {

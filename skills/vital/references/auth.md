@@ -31,6 +31,8 @@ export interface UserProfile {
   locale: string;
   themePreference: ThemePreference;
   weekStartsOn: WeekStartsOn;
+  /** Background model calls allowed per local day. Manual actions do not count. */
+  dailyModelCallLimit: number;
   convertArchiveOnComplete: boolean;
   notifications: NotificationPrefs;
   onboarding: OnboardingState;
@@ -118,6 +120,7 @@ Request body (`updateMeInputSchema`):
 - `locale`: string 2–16 (optional)
 - `themePreference`: "light" | "dark" | "system" (optional)
 - `weekStartsOn`: 0 | 1 (optional)
+- `dailyModelCallLimit`: number int min 1 max 10000 (optional)
 - `convertArchiveOnComplete`: boolean (optional)
 - `notifications` (optional):
   - `taskRemind`: boolean (optional)

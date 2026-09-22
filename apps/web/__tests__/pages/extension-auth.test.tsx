@@ -26,6 +26,7 @@ const mockUser: UserProfile = {
   locale: 'zh-CN',
   themePreference: 'system',
   weekStartsOn: 1,
+  dailyModelCallLimit: 100,
   convertArchiveOnComplete: false,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},

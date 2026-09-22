@@ -45,6 +45,7 @@ const mockUser: UserProfile = {
   locale: 'zh-CN',
   themePreference: 'system',
   weekStartsOn: 1,
+  dailyModelCallLimit: 100,
   convertArchiveOnComplete: false,
   notifications: DEFAULT_NOTIFICATION_PREFS,
   onboarding: {},
@@ -207,6 +208,7 @@ describe('NotificationsSection', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: t.settings.timezone })).toBeInTheDocument();
     });
+    expect(screen.getByLabelText(t.settings.dailyModelCallLimit)).toHaveValue(100);
     await user.click(screen.getByRole('tab', { name: t.settings.tabs.llm }));
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: t.settings.llm.providers })).toBeInTheDocument();
@@ -216,6 +218,36 @@ describe('NotificationsSection', () => {
       expect(screen.getByLabelText(t.settings.tokens.name)).toBeInTheDocument();
     });
     expect(screen.getByText(t.settings.version.replace('{v}', APP_VERSION))).toBeInTheDocument();
+  });
+
+  it('saves a daily background processing limit from preferences', async () => {
+    vi.mocked(client.updateMe).mockClear();
+    vi.mocked(client.updateMe).mockImplementation(async (input) => ({
+      ...mockUser,
+      dailyModelCallLimit: input.dailyModelCallLimit ?? mockUser.dailyModelCallLimit,
+    }));
+    render(
+      <RabRoot>
+        <MemoryRouter initialEntries={['/settings?tab=prefs']}>
+          <Routes>
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </MemoryRouter>
+      </RabRoot>,
+    );
+    const field = await screen.findByLabelText(t.settings.dailyModelCallLimit);
+    expect(field).toHaveValue(100);
+    fireEvent.change(field, { target: { value: '0' } });
+    fireEvent.blur(field);
+    expect(client.updateMe).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        t.settings.dailyModelCallLimitInvalid.replace('{min}', '1').replace('{max}', '10000'),
+      ),
+    ).toBeInTheDocument();
+    fireEvent.change(field, { target: { value: '250' } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(client.updateMe).toHaveBeenCalledWith({ dailyModelCallLimit: 250 }));
   });
 
   it('adds a custom OpenAI-compatible provider', async () => {

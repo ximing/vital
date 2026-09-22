@@ -209,6 +209,48 @@ describe('htmlToArticleDoc — robustness', () => {
     expect(doc).toEqual([{ type: 'paragraph', content: [{ type: 'text', text: '鱼&羊 <鲜>' }] }]);
   });
 
+  it('keeps separator punctuation between inline code', () => {
+    const doc = blocks(
+      '<p>同时维护 Session 运行所依赖的 <code>cwd</code>、<code>settingsManager</code>、<code>modelRuntime</code>、<code>resourceLoader</code> 等 Services。</p>',
+    );
+    expect(inline(doc[0])).toEqual([
+      { type: 'text', text: '同时维护 Session 运行所依赖的 ' },
+      { type: 'text', text: 'cwd', marks: [{ type: 'code' }] },
+      { type: 'text', text: '、' },
+      { type: 'text', text: 'settingsManager', marks: [{ type: 'code' }] },
+      { type: 'text', text: '、' },
+      { type: 'text', text: 'modelRuntime', marks: [{ type: 'code' }] },
+      { type: 'text', text: '、' },
+      { type: 'text', text: 'resourceLoader', marks: [{ type: 'code' }] },
+      { type: 'text', text: ' 等 Services。' },
+    ]);
+  });
+
+  it('keeps other glue punctuation, including marks, and still drops glued player chrome', () => {
+    const kept = blocks(
+      '<p><code>src</code>/<code>tidy.ts</code>，<code>a</code>, <code>b</code>：<code>k</code>:<code>v</code> <code>50</code>% <code>pre</code>-<code>commit</code> <code>foo</code>_<code>bar</code> <code>a</code>|<code>b</code> <code>v1</code>.<code>2</code> ...</p>' +
+        '<p><code>cwd</code><em>、</em><b>，</b><strong>/</strong><i>-</i></p>' +
+        '<p>甲、乙、丙</p>',
+    );
+    expect(inline(kept[0]).map((node) => (node.type === 'text' ? node.text : '')).join('')).toBe(
+      'src/tidy.ts，a, b：k:v 50% pre-commit foo_bar a|b v1.2 ...',
+    );
+    expect(inline(kept[1])).toEqual([
+      { type: 'text', text: 'cwd', marks: [{ type: 'code' }] },
+      { type: 'text', text: '、', marks: [{ type: 'italic' }] },
+      { type: 'text', text: '，/', marks: [{ type: 'bold' }] },
+      { type: 'text', text: '-', marks: [{ type: 'italic' }] },
+    ]);
+    expect(inline(kept[2])).toEqual([{ type: 'text', text: '甲、乙、丙' }]);
+
+    const dropped = blocks('<p>关注、分享、赞</p><p>高清/流畅</p><p>播放，倍速</p><p>正文保留。</p>');
+    const texts = dropped.map((block) =>
+      'content' in block && Array.isArray(block.content) ? JSON.stringify(block.content) : '',
+    );
+    expect(texts.join('')).not.toMatch(/关注|分享|赞|高清|流畅|播放|倍速/);
+    expect(texts.some((text) => text.includes('正文保留。'))).toBe(true);
+  });
+
   it('scrubs WeChat player chrome but keeps duration captions', () => {
     const doc = blocks(
       '<p>分享视频，时长03:25</p><p>退出全屏 切换到竖屏全屏 播放 倍速 全屏</p><p>正文保留</p>',

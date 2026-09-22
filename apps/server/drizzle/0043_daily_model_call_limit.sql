@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "daily_model_call_limit" integer DEFAULT 100 NOT NULL;--> statement-breakpoint
+ALTER TABLE "users" ADD CONSTRAINT "users_daily_model_call_limit_check" CHECK ("users"."daily_model_call_limit" BETWEEN 1 AND 10000);

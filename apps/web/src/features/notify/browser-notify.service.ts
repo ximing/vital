@@ -173,13 +173,9 @@ export class BrowserNotifyService extends Service {
       const plan = planDueNow(task, prefs, zone, now);
       if (!plan) continue;
       const key = notifyKey(plan.eventType, task.id, plan.occurrenceAt);
-      const title =
-        plan.eventType === 'task.remind'
-          ? t.settings.notify.remindTitle
-          : t.settings.notify.dueTitle;
-      const template =
+      const body =
         plan.eventType === 'task.remind' ? t.settings.notify.remindBody : t.settings.notify.dueBody;
-      this.display(key, title, template.replace('{title}', task.title), taskUrl(task));
+      this.display(key, task.title, body, taskUrl(task));
     }
   }
 

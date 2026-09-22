@@ -5,8 +5,8 @@ export const STICKY_ALERT_EVENT = 'vital://sticky-alert';
 export const OPEN_NOTIFY_EVENT = 'vital://open-notify';
 export const STICKY_ALERT_HASH_PREFIX = '#vital-alert=';
 export const STICKY_ALERT_PREF_KEY = 'vital:sticky-alert';
-export const STICKY_ALERT_WIDTH = 420;
-export const STICKY_ALERT_HEIGHT = 212;
+export const STICKY_ALERT_WIDTH = 360;
+export const STICKY_ALERT_HEIGHT = 162;
 const MARGIN = 16;
 
 export type StickyAlertPayload = {

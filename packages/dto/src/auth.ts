@@ -28,6 +28,16 @@ export type ThemePreference = z.infer<typeof themePreferenceSchema>;
 export const weekStartsOnSchema = z.union([z.literal(0), z.literal(1)]);
 export type WeekStartsOn = z.infer<typeof weekStartsOnSchema>;
 
+/** Inclusive bounds for the per-user daily background model-call budget. */
+export const MIN_DAILY_MODEL_CALL_LIMIT = 1;
+export const MAX_DAILY_MODEL_CALL_LIMIT = 10_000;
+export const DEFAULT_DAILY_MODEL_CALL_LIMIT = 100;
+export const dailyModelCallLimitSchema = z
+  .number()
+  .int()
+  .min(MIN_DAILY_MODEL_CALL_LIMIT)
+  .max(MAX_DAILY_MODEL_CALL_LIMIT);
+
 export const authModeSchema = z.enum(['cookie', 'bearer']);
 export type AuthMode = z.infer<typeof authModeSchema>;
 
@@ -174,6 +184,7 @@ export const updateMeInputSchema = z
     locale: z.string().min(2).max(16).optional(),
     themePreference: themePreferenceSchema.optional(),
     weekStartsOn: weekStartsOnSchema.optional(),
+    dailyModelCallLimit: dailyModelCallLimitSchema.optional(),
     convertArchiveOnComplete: z.boolean().optional(),
     notifications: patchNotificationPrefsSchema.optional(),
   })
@@ -205,6 +216,8 @@ export interface UserProfile {
   locale: string;
   themePreference: ThemePreference;
   weekStartsOn: WeekStartsOn;
+  /** Background model calls allowed per local day. Manual actions do not count. */
+  dailyModelCallLimit: number;
   convertArchiveOnComplete: boolean;
   notifications: NotificationPrefs;
   onboarding: OnboardingState;

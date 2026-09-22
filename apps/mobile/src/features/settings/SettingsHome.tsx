@@ -1,9 +1,14 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ONBOARDING_CHECKLIST_KEYS } from '@vital/dto';
+import {
+  DEFAULT_DAILY_MODEL_CALL_LIMIT,
+  MAX_DAILY_MODEL_CALL_LIMIT,
+  MIN_DAILY_MODEL_CALL_LIMIT,
+  ONBOARDING_CHECKLIST_KEYS,
+} from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Activity, Brain, CalendarDays, Repeat, Waypoints } from 'lucide-react-native';
 import { Banner } from '../../components/Banner';
@@ -59,6 +64,33 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
     s.displayName.trim() !== '' && s.displayName.trim() !== (user?.displayName ?? '');
   const weekStartsOn = user?.weekStartsOn ?? 1;
   const timezone = user?.timezone ?? 'UTC';
+  const savedLimit = user?.dailyModelCallLimit ?? DEFAULT_DAILY_MODEL_CALL_LIMIT;
+  const [limitDraft, setLimitDraft] = useState(String(savedLimit));
+  const [limitError, setLimitError] = useState('');
+  const [syncedLimit, setSyncedLimit] = useState(savedLimit);
+  if (savedLimit !== syncedLimit) {
+    setSyncedLimit(savedLimit);
+    setLimitDraft(String(savedLimit));
+    setLimitError('');
+  }
+  function commitLimit(raw: string) {
+    const next = Number(raw.trim());
+    if (
+      !Number.isInteger(next) ||
+      next < MIN_DAILY_MODEL_CALL_LIMIT ||
+      next > MAX_DAILY_MODEL_CALL_LIMIT
+    ) {
+      setLimitError(
+        copy.settings.dailyModelCallLimitInvalid
+          .replace('{min}', String(MIN_DAILY_MODEL_CALL_LIMIT))
+          .replace('{max}', String(MAX_DAILY_MODEL_CALL_LIMIT)),
+      );
+      return;
+    }
+    setLimitError('');
+    setLimitDraft(String(next));
+    if (next !== savedLimit) void s.patchPrefs({ dailyModelCallLimit: next });
+  }
   const displayName = s.displayName;
   const nickname = s.nickname;
   const enabled = s.enabled;
@@ -82,9 +114,7 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
       label: copy.me.agentActivity,
       href: '/activity',
       value:
-        todayExecs === null
-          ? undefined
-          : copy.me.activityToday.replace('{n}', String(todayExecs)),
+        todayExecs === null ? undefined : copy.me.activityToday.replace('{n}', String(todayExecs)),
     },
     { icon: Brain, label: copy.me.memory, href: '/memory' },
   ];
@@ -252,7 +282,9 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
                 value={prefs.taskDue}
                 trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
                 ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) => void s.patchPrefs({ notifications: { ...prefs, taskDue: v } })}
+                onValueChange={(v) =>
+                  void s.patchPrefs({ notifications: { ...prefs, taskDue: v } })
+                }
               />
             </View>
           </View>
@@ -338,6 +370,28 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
             divider
             onPress={() => s.openPrefPicker('week')}
           />
+          <View style={styles.hairline} />
+          <View style={styles.limitPad}>
+            <Field
+              label={copy.settings.dailyModelCallLimit}
+              value={limitDraft}
+              keyboardType="number-pad"
+              inputMode="numeric"
+              isInvalid={limitError !== ''}
+              onChangeText={(value) => {
+                setLimitDraft(value);
+                if (limitError) setLimitError('');
+              }}
+              onBlur={() => commitLimit(limitDraft)}
+            />
+            {limitError ? <Text style={styles.limitError}>{limitError}</Text> : null}
+            <Text style={styles.hint}>
+              {copy.settings.dailyModelCallLimitHint.replace(
+                '{n}',
+                String(DEFAULT_DAILY_MODEL_CALL_LIMIT),
+              )}
+            </Text>
+          </View>
         </View>
 
         <SectionHead title={copy.settings.tabs.llm} />
@@ -358,7 +412,10 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
           <View style={styles.progressBlock}>
             <View style={styles.track}>
               <View
-                style={[styles.fill, { width: `${Math.round(progressRatio(updateBytes, updateTotal) * 100)}%` }]}
+                style={[
+                  styles.fill,
+                  { width: `${Math.round(progressRatio(updateBytes, updateTotal) * 100)}%` },
+                ]}
               />
             </View>
             <Text style={styles.hint}>
@@ -379,7 +436,9 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
             </Banner>
           </View>
         ) : null}
-        {updateNotes && updatePhase !== 'idle' ? <Text style={styles.hint}>{updateNotes}</Text> : null}
+        {updateNotes && updatePhase !== 'idle' ? (
+          <Text style={styles.hint}>{updateNotes}</Text>
+        ) : null}
       </ScrollView>
 
       <PickerSheet
@@ -433,7 +492,9 @@ function versionValue(update: {
 }): string {
   if (update.phase === 'checking') return copy.settings.update.checking;
   if (update.phase === 'downloading') {
-    return formatProgress(update.bytesDownloaded, update.totalBytes) || copy.settings.update.downloading;
+    return (
+      formatProgress(update.bytesDownloaded, update.totalBytes) || copy.settings.update.downloading
+    );
   }
   if (update.phase === 'ready') return copy.settings.update.readyShort;
   if (update.phase === 'installing') return copy.settings.update.installing;
@@ -488,6 +549,13 @@ const createStyles = (t: Theme) =>
     pressedSoft: { opacity: 0.7 },
     rowEnd: { flexDirection: 'row', justifyContent: 'flex-end' },
     hint: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
+    limitPad: {
+      gap: t.space[2],
+      paddingHorizontal: t.space[4],
+      paddingTop: t.space[3],
+      paddingBottom: t.space[4],
+    },
+    limitError: { fontSize: t.type.meta.fontSize, color: t.danger },
     subHead: {
       fontSize: t.type.meta.fontSize,
       fontWeight: '600',

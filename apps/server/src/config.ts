@@ -1,3 +1,8 @@
+import {
+  DEFAULT_DAILY_MODEL_CALL_LIMIT,
+  MAX_DAILY_MODEL_CALL_LIMIT,
+  MIN_DAILY_MODEL_CALL_LIMIT,
+} from '@vital/dto';
 import { config as loadEnv } from 'dotenv';
 import { z } from 'zod';
 
@@ -70,7 +75,13 @@ export const envSchema = z.object({
   AGENT_ENABLED: boolEnum.default('true'),
   AGENT_LEASE_MS: z.coerce.number().int().min(1000).default(300_000),
   AGENT_HEARTBEAT_MS: z.coerce.number().int().min(100).default(30_000),
-  AGENT_DAILY_MODEL_CALL_LIMIT: z.coerce.number().int().min(1).default(100),
+  // Seeded onto new accounts. Each user can change it in Settings → 偏好.
+  AGENT_DAILY_MODEL_CALL_LIMIT: z.coerce
+    .number()
+    .int()
+    .min(MIN_DAILY_MODEL_CALL_LIMIT)
+    .max(MAX_DAILY_MODEL_CALL_LIMIT)
+    .default(DEFAULT_DAILY_MODEL_CALL_LIMIT),
   AGENT_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(4),
   AGENT_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(8),
   AGENT_RETRY_MAX_AGE_MS: z.coerce.number().int().min(1000).default(172_800_000),

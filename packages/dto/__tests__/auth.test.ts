@@ -129,13 +129,18 @@ describe('updateMeInputSchema', () => {
       timezone: 'Asia/Shanghai',
       themePreference: 'dark',
       weekStartsOn: 0,
+      dailyModelCallLimit: 100,
       convertArchiveOnComplete: true,
       notifications: { taskRemind: false },
     });
     expect(ok.notifications?.taskRemind).toBe(false);
     expect(ok.displayName).toBe('Ada');
     expect(ok.weekStartsOn).toBe(0);
+    expect(ok.dailyModelCallLimit).toBe(100);
     expect(() => updateMeInputSchema.parse({ timezone: 'Not/AZone' })).toThrow();
+    expect(() => updateMeInputSchema.parse({ dailyModelCallLimit: 0 })).toThrow();
+    expect(() => updateMeInputSchema.parse({ dailyModelCallLimit: 1.5 })).toThrow();
+    expect(() => updateMeInputSchema.parse({ dailyModelCallLimit: 10_001 })).toThrow();
   });
 });
 

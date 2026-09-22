@@ -440,6 +440,9 @@ export const copy = {
     weekStartsOn: '一周从哪天开始',
     weekSun: '周日',
     weekMon: '周一',
+    dailyModelCallLimit: '每日后台处理额度',
+    dailyModelCallLimitHint: '默认 {n} 次。用完之后，后台任务会安排到明天继续。手动发起的操作不占这个额度。',
+    dailyModelCallLimitInvalid: '请填写 {min} 到 {max} 之间的整数',
     notify: {
       title: '通知',
       hint: '到点通过你配置的渠道推送。先接通 MeoW。',

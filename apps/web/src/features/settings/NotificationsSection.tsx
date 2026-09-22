@@ -83,7 +83,7 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
                   browser.showPush({
                     type: 'notify',
                     id: `preview:${Date.now()}`,
-                    title: copy.remindTitle,
+                    title: copy.previewTitle,
                     body: copy.previewBody,
                     url: '/today',
                   })

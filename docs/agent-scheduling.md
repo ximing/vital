@@ -27,7 +27,7 @@
 
 ## 成本与记录
 
-每用户每日默认允许 100 次后台模型请求，按用户时区计日。请求记账与预算预占原子提交；超额任务推迟到次日且不消耗失败重试次数。手动操作不占后台预算，使用接口请求频率限制。通知先预占唯一通知记录，再改写文本；重复扫描不会重复改写，准备过程中重启可恢复持久化的规则文案。
+每用户可在设置的「偏好」里调整每日后台模型请求额度，默认 100 次，按用户时区计日。新账户的初始值来自 `AGENT_DAILY_MODEL_CALL_LIMIT`。请求记账与预算预占原子提交；超额任务推迟到次日且不消耗失败重试次数。手动操作不占后台预算，使用接口请求频率限制。通知先预占唯一通知记录，再改写文本；重复扫描不会重复改写，准备过程中重启可恢复持久化的规则文案。
 
 模型超时、临时不可用、限流及已知数据库瞬时错误可重试。无效模型认证/配置及程序错误不盲目重试。后台默认最多尝试 8 次，并限制失败重试总时间为 48 小时；自然语言创建任务仍保留最多 3 次重试的独立交互策略。
 
@@ -35,7 +35,7 @@
 
 ## 配置与发布
 
-配置示例见根目录 `.env.production.example` 与 `apps/server/.env.example`。主要配置为 `AGENT_SCHEDULER_INTERVAL_MS`、`AGENT_CONCURRENCY`、`AGENT_LEASE_MS`、`AGENT_HEARTBEAT_MS`、`AGENT_MAX_ATTEMPTS`、`AGENT_RETRY_MAX_AGE_MS`、`AGENT_DAILY_MODEL_CALL_LIMIT`。
+配置示例见根目录 `.env.production.example` 与 `apps/server/.env.example`。主要配置为 `AGENT_SCHEDULER_INTERVAL_MS`、`AGENT_CONCURRENCY`、`AGENT_LEASE_MS`、`AGENT_HEARTBEAT_MS`、`AGENT_MAX_ATTEMPTS`、`AGENT_RETRY_MAX_AGE_MS`。`AGENT_DAILY_MODEL_CALL_LIMIT` 只作为新账户的默认额度；已注册用户以设置里的值为准。
 
 发布前必须执行 `0026_chilly_korg.sql` 迁移。现有 Compose 的 server/worker 依赖迁移任务成功后启动；不要先启动新代码再迁移。该迁移新增状态和历史字段，不删除排队任务。
 

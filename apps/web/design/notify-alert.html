@@ -46,10 +46,10 @@
       radial-gradient(50% 70% at 88% 112%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 62%),
       radial-gradient(38% 50% at 6% -8%,color-mix(in srgb,var(--accent) 5%,transparent),transparent 60%)}
 
-  /* ===== 弹窗本体 420×212 ===== */
-  .alert{position:absolute;right:32px;bottom:32px;width:420px;border-radius:14px;
+  /* ===== 弹窗本体 360×162 ===== */
+  .alert{position:absolute;right:32px;bottom:32px;width:360px;border-radius:14px;
     background:var(--elevated);color:var(--ink);box-shadow:var(--shadow);
-    overflow:hidden;padding:18px 20px 16px;
+    overflow:hidden;padding:14px 16px 12px;
     display:flex;flex-direction:column;gap:0}
   /* 顶部发丝渐变条（呼应 report-paper 的 3px 渐变） */
   .alert::before{content:"";position:absolute;inset:0 0 auto;height:3px;
@@ -57,7 +57,7 @@
   .alert.danger::before{background:linear-gradient(90deg,var(--danger),transparent 72%)}
 
   /* 头部：品牌圆点 + 种类 eyebrow + 时间 + 关闭 */
-  .alert-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .alert-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .alert-mark{width:20px;height:20px;border-radius:6px;flex:none;display:grid;place-items:center;
     background:var(--accent-subtle);color:var(--accent-hover)}
   .alert.danger .alert-mark{background:var(--danger-subtle);color:var(--danger)}
@@ -79,14 +79,14 @@
   .alert-body .hot{color:var(--danger);font-weight:600}
 
   /* 底部：队列指示 + 操作 */
-  .alert-foot{margin-top:14px;display:flex;align-items:center;gap:12px}
+  .alert-foot{margin-top:10px;display:flex;align-items:center;gap:12px}
   .queue{display:flex;align-items:center;gap:8px;font-size:12px;line-height:16px;color:var(--tertiary)}
   .queue .dots{display:flex;gap:4px}
   .queue .dot{width:6px;height:6px;border-radius:999px;background:var(--muted)}
   .queue .dot.on{background:var(--accent)}
   .alert.danger .queue .dot.on{background:var(--danger)}
   .alert-acts{margin-left:auto;display:flex;gap:8px}
-  .btn{height:32px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:500;
+  .btn{height:28px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:500;
     display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;cursor:pointer;
     transition:background .15s ease,border-color .15s ease}
   .btn-quiet{background:transparent;color:var(--secondary)}
@@ -225,8 +225,8 @@
     <div>
       <h3>结构 / 尺寸</h3>
       <ul>
-        <li>窗口 <code>420×212</code>（现为 400×196，随实现调整常量）</li>
-        <li>圆角 <code>14px</code>，padding <code>18/20/16</code></li>
+        <li>窗口 <code>360×162</code>（曾为 420×212，随实现调整常量）</li>
+        <li>圆角 <code>14px</code>，padding <code>14/16/12</code></li>
         <li>顶部 3px 渐变发丝条，呼应 <code>report-paper</code></li>
         <li>头部 = 20px 图标块 + eyebrow 种类 + 时间 + 关闭 ×</li>
         <li>标题单行截断；正文最多两行（<code>line-clamp:2</code>）</li>

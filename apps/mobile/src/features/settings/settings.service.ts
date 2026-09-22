@@ -108,6 +108,7 @@ export class SettingsService extends Service {
   async patchPrefs(input: {
     timezone?: string;
     weekStartsOn?: 0 | 1;
+    dailyModelCallLimit?: number;
     notifications?: NotificationPrefs;
     avatarAttachmentId?: string;
   }): Promise<void> {

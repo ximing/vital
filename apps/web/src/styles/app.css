@@ -147,6 +147,13 @@ body {
   animation: notify-alert-in var(--ease-out);
 }
 
+/* The sticky alert window is transparent so the rounded card corners show the
+   desktop through; strip the canvas background without waiting on React. */
+html:has([data-region='notify-alert']),
+html:has([data-region='notify-alert']) body {
+  background: transparent;
+}
+
 @keyframes skeleton-pulse {
   0%,
   100% {

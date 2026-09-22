@@ -302,6 +302,13 @@
       "when": 1789661825211,
       "tag": "0042_steady_blonde_phantom",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790076355481,
+      "tag": "0043_daily_model_call_limit",
+      "breakpoints": true
     }
   ]
 }

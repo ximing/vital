@@ -109,6 +109,7 @@ describe('Tauri runtime client', () => {
               locale: 'zh-CN',
               themePreference: 'system',
               weekStartsOn: 1,
+              dailyModelCallLimit: 100,
               convertArchiveOnComplete: true,
               notifications: {
                 taskRemind: true,
