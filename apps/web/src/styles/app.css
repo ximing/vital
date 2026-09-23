@@ -75,7 +75,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-:focus-visible {
+/* 硬轮廓只给非文本输入的交互元素（按钮、链接、复选框等）。
+   文本输入的聚焦反馈交给容器 :focus-within 或自身的 focus: 边框/光晕，
+   避免裸 input 上贴一圈刺眼的矩形框。 */
+:focus-visible:not(:where(input, textarea, select, [contenteditable='true'])) {
   outline: var(--focus-ring-w) solid var(--border-focus);
   outline-offset: var(--focus-ring-offset);
 }
@@ -286,8 +289,16 @@ html:has([data-region='notify-alert']) body {
   }
 }
 
-.field-focus:focus-visible {
-  box-shadow: 0 0 0 3px var(--focus-ring);
+.field-shell {
+  transition:
+    border-color var(--ease-out),
+    box-shadow var(--ease-out);
+}
+.field-shell:focus-within {
+  border-color: var(--border-focus);
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 3px var(--focus-ring);
 }
 
 .reader-article {

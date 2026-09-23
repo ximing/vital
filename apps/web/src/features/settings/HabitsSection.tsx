@@ -598,7 +598,7 @@ function TargetStepper({
     'inline-flex h-9 w-8 items-center justify-center text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg';
   return (
     <span className="flex items-center">
-      <span className="inline-flex h-9 items-center overflow-hidden rounded-[10px] border border-border bg-surface">
+      <span className="field-shell inline-flex h-9 items-center overflow-hidden rounded-[10px] border border-border bg-surface">
         <button type="button" aria-label="−" className={STEP_BTN} onClick={() => setValue(value - 1)}>
           <Icon icon={Minus} size={13} />
         </button>

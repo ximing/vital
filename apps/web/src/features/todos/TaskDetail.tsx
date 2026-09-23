@@ -405,7 +405,7 @@ export const TaskDetail: FC<{
                 </span>
               ) : null}
             </p>
-            <div className="rounded-[14px] border border-border bg-canvas px-3 py-1.5">
+            <div className="field-shell rounded-[14px] border border-border bg-canvas px-3 py-1.5">
               <ul className="flex flex-col">
                 {subtasks.map((child) => (
                   <li

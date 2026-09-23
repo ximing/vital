@@ -178,7 +178,7 @@ export const QuickAdd: FC<{
   if (card) {
     return (
       <form onSubmit={(event) => void handle(event)} className="pb-2">
-        <div className="rounded-xl bg-elevated px-3 py-2 shadow-[0_0_0_1px_var(--border-subtle)]">
+        <div className="rounded-xl bg-elevated px-3 py-2 shadow-[0_0_0_1px_var(--border-subtle)] transition-shadow duration-[var(--ease-out)] focus-within:shadow-[0_0_0_1px_var(--border-focus),0_0_0_4px_var(--focus-ring)]">
           <input
             id={captureId ? QUICK_ADD_ID : undefined}
             ref={inputRef}
@@ -190,7 +190,7 @@ export const QuickAdd: FC<{
             aria-label={t.todos.quickAddPlaceholder}
             aria-busy={busy || undefined}
             aria-describedby={busy ? statusId : undefined}
-            className="field-focus h-8 w-full border-0 bg-transparent px-0 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
+            className="h-8 w-full border-0 bg-transparent px-0 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
           />
           <div className="mt-1 flex items-center gap-0.5">
             <fieldset
@@ -224,7 +224,7 @@ export const QuickAdd: FC<{
       onSubmit={(event) => void handle(event)}
       className="w-full min-w-0 self-stretch pb-4 pt-1"
     >
-      <div className="flex h-[46px] w-full min-w-0 items-center gap-2 rounded-[14px] border border-border bg-surface px-4 shadow-[var(--shadow-xs)]">
+      <div className="field-shell flex h-[46px] w-full min-w-0 items-center gap-2 rounded-[14px] border border-border bg-surface px-4 shadow-[var(--shadow-xs)]">
         <span aria-hidden className="shrink-0 text-[17px] font-medium leading-none text-accent">
           {busy ? (
             <Icon
@@ -247,7 +247,7 @@ export const QuickAdd: FC<{
           aria-label={t.todos.quickAddPlaceholder}
           aria-busy={busy || undefined}
           aria-describedby={busy ? statusId : undefined}
-          className="field-focus h-8 min-w-0 flex-1 border-0 bg-transparent px-0.5 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
+          className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0.5 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
         />
         <fieldset
           disabled={blocked}
