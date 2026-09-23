@@ -38,11 +38,18 @@ function asNotify(task: TaskNotifyInput) {
     status: task.status ?? 'todo',
     dueAt: task.dueAt ?? null,
     reminderMode:
-      task.reminderMode === 'none' || task.reminderMode === 'due' || task.reminderMode === 'offset' || task.reminderMode === 'custom'
+      task.reminderMode === 'none' ||
+      task.reminderMode === 'due' ||
+      task.reminderMode === 'offset' ||
+      task.reminderMode === 'custom'
         ? task.reminderMode
         : null,
     reminderOffsetMinutes:
-      task.reminderOffsetMinutes === 5 || task.reminderOffsetMinutes === 15 || task.reminderOffsetMinutes === 30 || task.reminderOffsetMinutes === 60 || task.reminderOffsetMinutes === 1440
+      task.reminderOffsetMinutes === 5 ||
+      task.reminderOffsetMinutes === 15 ||
+      task.reminderOffsetMinutes === 30 ||
+      task.reminderOffsetMinutes === 60 ||
+      task.reminderOffsetMinutes === 1440
         ? task.reminderOffsetMinutes
         : null,
     reminderAt: task.reminderAt ?? null,
@@ -68,7 +75,11 @@ export function prefsFromUser(user: User): NotificationPrefs {
 }
 
 async function listNameOf(db: NotificationDb, listId: string): Promise<string> {
-  const [row] = await db.select({ name: lists.name }).from(lists).where(eq(lists.id, listId)).limit(1);
+  const [row] = await db
+    .select({ name: lists.name })
+    .from(lists)
+    .where(eq(lists.id, listId))
+    .limit(1);
   return row?.name ?? '';
 }
 
@@ -110,10 +121,7 @@ async function cancelLive(
         eq(notificationOutbox.entityId, taskId),
         inArray(notificationOutbox.status, [...LIVE]),
       );
-  await db
-    .update(notificationOutbox)
-    .set({ status: 'cancelled', updatedAt: now })
-    .where(cond);
+  await db.update(notificationOutbox).set({ status: 'cancelled', updatedAt: now }).where(cond);
 }
 
 export async function syncTaskNotifications(
@@ -164,6 +172,14 @@ export async function syncTaskNotifications(
         status: sql`CASE WHEN ${notificationOutbox.status} = 'sent' THEN 'sent' ELSE 'pending' END`,
         attemptCount: sql`CASE WHEN ${notificationOutbox.status} = 'sent' THEN ${notificationOutbox.attemptCount} ELSE 0 END`,
       },
+      // A heal tick can still hold the pre-delete row. Do not revive a
+      // cancelled outbox entry after the task is gone or no longer open.
+      setWhere: sql`EXISTS (
+        SELECT 1 FROM ${tasks}
+        WHERE ${tasks.id} = ${notificationOutbox.entityId}
+          AND ${tasks.deletedAt} IS NULL
+          AND ${tasks.status} IN ('todo', 'doing')
+      )`,
     });
 }
 

@@ -22,6 +22,11 @@ import { insightStillEligible } from './insights.js';
 
 const BACKOFF_MS = [30_000, 120_000, 300_000, 900_000, 3_600_000, 14_400_000, 43_200_000];
 const MAX_ATTEMPTS = 8;
+
+/** Claim sets `sending`. A delete that lands mid-dispatch cancels that row; later writes must not reopen it. */
+function stillClaimed(id: string) {
+  return and(eq(notificationOutbox.id, id), eq(notificationOutbox.status, 'sending'));
+}
 const STUCK_MS = 5 * 60_000;
 
 function iconUrl(): string {
@@ -32,13 +37,19 @@ function taskUrl(listId: string, taskId: string): string {
   return `${config.WEB_ORIGIN.replace(/\/$/, '')}/todos/lists/${listId}?task=${taskId}`;
 }
 
-function todayUrl(): string { return `${config.WEB_ORIGIN.replace(/\/$/, '')}/today`; }
+function todayUrl(): string {
+  return `${config.WEB_ORIGIN.replace(/\/$/, '')}/today`;
+}
 
 function dayUrl(dayId: string): string {
   return `${config.WEB_ORIGIN.replace(/\/$/, '')}/days?id=${dayId}`;
 }
 
-function notifyUrl(job: { eventType: string; entityId: string; payload: NotificationOutboxPayload }): string {
+function notifyUrl(job: {
+  eventType: string;
+  entityId: string;
+  payload: NotificationOutboxPayload;
+}): string {
   if (job.eventType === 'agent.insight') return todayUrl();
   if (job.eventType === 'day.remind') return dayUrl(job.entityId);
   return taskUrl(job.payload.listId, job.entityId);
@@ -53,8 +64,12 @@ function formatWhen(payload: NotificationOutboxPayload): string {
   return dt.toFormat('yyyy-LL-dd HH:mm');
 }
 
-export function renderMeowMessage(payload: NotificationOutboxPayload): { title: string; msg: string } {
-  if (payload.eventType === 'agent.insight') return { title: '系统主动提醒', msg: payload.message ?? payload.title };
+export function renderMeowMessage(payload: NotificationOutboxPayload): {
+  title: string;
+  msg: string;
+} {
+  if (payload.eventType === 'agent.insight')
+    return { title: '系统主动提醒', msg: payload.message ?? payload.title };
   if (payload.eventType === 'day.remind') {
     return { title: '日子提醒', msg: payload.message ?? `「${payload.title}」` };
   }
@@ -76,7 +91,12 @@ export async function recoverStuckSending(now = new Date()): Promise<number> {
   const rows = await getDb()
     .update(notificationOutbox)
     .set({ status: 'pending', updatedAt: now })
-    .where(and(inArray(notificationOutbox.status, ['sending', 'preparing']), lt(notificationOutbox.updatedAt, cutoff)))
+    .where(
+      and(
+        inArray(notificationOutbox.status, ['sending', 'preparing']),
+        lt(notificationOutbox.updatedAt, cutoff),
+      ),
+    )
     .returning({ id: notificationOutbox.id });
   return rows.length;
 }
@@ -152,19 +172,22 @@ async function recordDelivery(
     });
 }
 
-async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void> {
+export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void> {
   const [user] = await getDb().select().from(users).where(eq(users.id, job.userId)).limit(1);
   if (!user) {
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'cancelled', updatedAt: now, lastError: 'user gone' })
-      .where(eq(notificationOutbox.id, job.id));
+      .where(stillClaimed(job.id));
     return;
   }
   if (job.eventType === 'agent.insight') {
     const kind = job.payload.insightKind;
     if (!kind || !(await insightStillEligible(user, job.entityId, kind, now))) {
-      await getDb().update(notificationOutbox).set({ status: 'cancelled', updatedAt: now, lastError: 'insight expired or disabled' }).where(eq(notificationOutbox.id, job.id));
+      await getDb()
+        .update(notificationOutbox)
+        .set({ status: 'cancelled', updatedAt: now, lastError: 'insight expired or disabled' })
+        .where(stillClaimed(job.id));
       return;
     }
   }
@@ -173,7 +196,7 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'pending', scheduledAt: delayed, updatedAt: now })
-      .where(eq(notificationOutbox.id, job.id));
+      .where(stillClaimed(job.id));
     return;
   }
 
@@ -189,12 +212,14 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
   const channels = await getDb()
     .select()
     .from(notificationChannels)
-    .where(and(eq(notificationChannels.userId, job.userId), eq(notificationChannels.enabled, true)));
+    .where(
+      and(eq(notificationChannels.userId, job.userId), eq(notificationChannels.enabled, true)),
+    );
   if (channels.length === 0) {
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'pending', updatedAt: now, nextAttemptAt: new Date(now.getTime() + 60_000) })
-      .where(eq(notificationOutbox.id, job.id));
+      .where(stillClaimed(job.id));
     return;
   }
 
@@ -244,14 +269,14 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'sent', sentAt: now, lastError: null, updatedAt: now })
-      .where(eq(notificationOutbox.id, job.id));
+      .where(stillClaimed(job.id));
     return;
   }
   if (allDone && !anyRetryable) {
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'failed', lastError: lastError ?? '渠道永久失败', updatedAt: now })
-      .where(eq(notificationOutbox.id, job.id));
+      .where(stillClaimed(job.id));
     return;
   }
 
@@ -265,7 +290,7 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
         lastError: lastError ?? '重试次数用尽',
         updatedAt: now,
       })
-      .where(eq(notificationOutbox.id, job.id));
+      .where(stillClaimed(job.id));
     return;
   }
   const wait = BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)] ?? 30_000;
@@ -278,7 +303,7 @@ async function dispatchOne(job: NotificationOutboxRow, now: Date): Promise<void>
       lastError,
       updatedAt: now,
     })
-    .where(eq(notificationOutbox.id, job.id));
+    .where(stillClaimed(job.id));
 }
 
 export async function processDueNotifications(now = new Date()): Promise<number> {
@@ -298,7 +323,7 @@ export async function processDueNotifications(now = new Date()): Promise<number>
           lastError: 'dispatch crash',
           updatedAt: now,
         })
-        .where(eq(notificationOutbox.id, job.id));
+        .where(stillClaimed(job.id));
     }
   }
   return claimed.length;
@@ -326,7 +351,10 @@ export function resetHealTaskNotificationsCursor(): void {
   healCursor = undefined;
 }
 
-export async function healTaskNotifications(now = new Date(), pageSize = HEAL_PAGE_SIZE): Promise<number> {
+export async function healTaskNotifications(
+  now = new Date(),
+  pageSize = HEAL_PAGE_SIZE,
+): Promise<number> {
   const db = getDb();
   const page = Math.max(1, pageSize);
 

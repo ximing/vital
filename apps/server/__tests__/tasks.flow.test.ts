@@ -6,8 +6,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { processDueAgentJobs } from '../src/agent/jobs.js';
 import { buildFastify } from '../src/app.js';
 import { getDb } from '../src/db/index.js';
-import { agentJobs, notificationOutbox } from '../src/db/schema.js';
-import { healTaskNotifications, processDueNotifications } from '../src/notifications/dispatch.js';
+import { agentJobs, notificationOutbox, tasks, users } from '../src/db/schema.js';
+import {
+  dispatchOne,
+  healTaskNotifications,
+  processDueNotifications,
+} from '../src/notifications/dispatch.js';
+import { syncTaskNotifications } from '../src/notifications/outbox.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -346,9 +351,7 @@ describe('tasks', () => {
       url: '/api/v1/tasks?listId=smart:someday',
       token: alice.token,
     });
-    expect(listed.json().items.map((task: { id: string }) => task.id)).toContain(
-      created.json().id,
-    );
+    expect(listed.json().items.map((task: { id: string }) => task.id)).toContain(created.json().id);
     const noDue = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/tasks',
@@ -500,7 +503,9 @@ describe('tasks', () => {
       url: `/api/v1/tasks?listId=${child.json().id}`,
       token: alice.token,
     });
-    expect((childOnly.json().items as { title: string }[]).map((item) => item.title)).toEqual(['子任务']);
+    expect((childOnly.json().items as { title: string }[]).map((item) => item.title)).toEqual([
+      '子任务',
+    ]);
   });
 });
 
@@ -646,6 +651,48 @@ describe('tasks agent triggers', () => {
       .select()
       .from(notificationOutbox)
       .where(eq(notificationOutbox.entityId, id));
+    for (const row of rows) {
+      expect(['cancelled', 'sent', 'failed']).toContain(row.status);
+    }
+  });
+
+  it('does not revive a notification cancelled while a worker still holds the task', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const dueAt = new Date(Date.now() - 60_000).toISOString();
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: 'due now', listId: inbox, dueAt },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+    const [task] = await getDb().select().from(tasks).where(eq(tasks.id, id));
+    const [user] = await getDb().select().from(users).where(eq(users.id, alice.id));
+    const [job] = await getDb()
+      .select()
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.entityId, id));
+    expect(task).toBeDefined();
+    expect(user).toBeDefined();
+    expect(job?.status).toBe('pending');
+
+    const del = await injectJson(app, {
+      method: 'DELETE',
+      url: `/api/v1/tasks/${id}`,
+      token: alice.token,
+    });
+    expect(del.statusCode).toBe(204);
+
+    await syncTaskNotifications(task!, user!, new Date());
+    await dispatchOne({ ...job!, status: 'sending' }, new Date());
+
+    const rows = await getDb()
+      .select()
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.entityId, id));
+    expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(['cancelled', 'sent', 'failed']).toContain(row.status);
     }
