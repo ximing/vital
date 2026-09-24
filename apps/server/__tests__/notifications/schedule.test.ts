@@ -118,6 +118,42 @@ describe('planTaskNotification', () => {
     expect(planTaskNotification(task({ dueAt: oldDue }), prefs, now)).toBeNull();
   });
 
+  it('does not turn a count-habit custom reminder into an immediate all-day due', () => {
+    const dueAt = DateTime.fromISO('2026-09-06', { zone: TZ }).startOf('day').toJSDate();
+    const afternoon = DateTime.fromISO('2026-09-06T08:00:00.000Z').toJSDate();
+    expect(
+      planTaskNotification(
+        task({ dueAt, isAllDay: true, habitId: 'habit-1', reminderMode: 'custom', reminderAt: null }),
+        prefs,
+        afternoon,
+      ),
+    ).toBeNull();
+
+    const slot = at('2026-09-06T09:45:00.000Z');
+    const paced = planTaskNotification(
+      task({
+        dueAt,
+        isAllDay: true,
+        habitId: 'habit-1',
+        reminderMode: 'custom',
+        reminderAt: slot,
+      }),
+      prefs,
+      afternoon,
+    );
+    expect(paced?.eventType).toBe('task.remind');
+    expect(paced?.scheduledAt.toISOString()).toBe(slot.toISOString());
+    expect(paced?.occurrenceAt.toISOString()).toBe(slot.toISOString());
+
+    const daily = planTaskNotification(
+      task({ dueAt, isAllDay: true, habitId: 'habit-1' }),
+      prefs,
+      afternoon,
+    );
+    expect(daily?.eventType).toBe('task.due');
+    expect(daily?.scheduledAt.toISOString()).toBe(afternoon.toISOString());
+  });
+
   it('respects event toggles and terminal status', () => {
     const dueAt = at('2026-09-06T14:00:00.000Z');
     expect(

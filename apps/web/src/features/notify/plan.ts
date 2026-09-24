@@ -82,6 +82,15 @@ export function planTaskBrowserNotify(
   if (task.deletedAt !== null) return null;
   if (!isOpen(task)) return null;
 
+  // Count habits store the paced ring as a custom reminder. Empty custom means
+  // stay quiet, and the ring id is the remind time so the next slot can still alert.
+  if (task.habitId && task.reminderMode === 'custom') {
+    if (!prefs.taskRemind || !task.reminderAt) return null;
+    const at = new Date(task.reminderAt);
+    if (at.getTime() < now.getTime() - MISSED_GRACE_MS) return null;
+    return { eventType: 'task.remind', scheduledAt: at, occurrenceAt: at };
+  }
+
   const remindAt = semanticReminderAt(task, prefs.allDayNotifyTime);
   if (remindAt && prefs.taskRemind) {
     if (remindAt.getTime() < now.getTime() - MISSED_GRACE_MS) return null;

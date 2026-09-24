@@ -332,26 +332,34 @@ async function spawnInstance(
   day: string,
   seq: number,
   timezone: string,
+  now = new Date(),
 ): Promise<void> {
   const inbox = await getInboxList(userId);
-  await getDb()
-    .insert(tasks)
-    .values({
-      id: randomUUID(),
-      userId,
-      listId: inbox.id,
-      habitId: habit.id,
-      habitSeq: seq,
-      habitKey: `${habit.id}:${day}:${String(seq)}`,
-      title: habit.name,
-      status: 'todo',
-      priority: 3,
-      dueAt: allDayLocalMidnight(day, timezone),
-      isAllDay: true,
-      timezone,
-      sortOrder: await nextTaskSortOrder(inbox.id),
-    })
-    .onConflictDoNothing();
+  const sortOrder = await nextTaskSortOrder(inbox.id);
+  const user = await getUserEntity(userId);
+  await getDb().transaction(async (tx) => {
+    const [row] = await tx
+      .insert(tasks)
+      .values({
+        id: randomUUID(),
+        userId,
+        listId: inbox.id,
+        habitId: habit.id,
+        habitSeq: seq,
+        habitKey: `${habit.id}:${day}:${String(seq)}`,
+        title: habit.name,
+        status: 'todo',
+        priority: 3,
+        dueAt: allDayLocalMidnight(day, timezone),
+        isAllDay: true,
+        timezone,
+        sortOrder,
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (!row) return;
+    await syncTaskNotifications(row, user, now, tx);
+  });
 }
 
 /**
@@ -384,7 +392,7 @@ export async function ensureOpenTodayInstance(
   const [open] = await getDb().select({ id: tasks.id }).from(tasks).where(openWhere).limit(1);
   if (open) return open.id;
 
-  await spawnInstance(userId, habit, day, progress.total + 1, timezone);
+  await spawnInstance(userId, habit, day, progress.total + 1, timezone, now);
   const [spawned] = await getDb().select({ id: tasks.id }).from(tasks).where(openWhere).limit(1);
   return spawned?.id ?? null;
 }
@@ -410,15 +418,16 @@ export async function spawnDailyHabits(userId: string, timezone: string, now = n
     if (!withinWindow(habit, now, timezone)) continue;
     const progress = progressByHabit.get(habit.id) ?? { done: 0, total: 0 };
     if (progress.total > 0) continue;
-    await spawnInstance(userId, habit, day, 1, timezone);
+    await spawnInstance(userId, habit, day, 1, timezone, now);
     spawned += 1;
   }
   return spawned;
 }
 
 /**
- * Relay: completing one instance of a count habit spawns the next one,
- * unless the daily target is reached or the window has passed.
+ * Relay: completing one count-habit instance spawns exactly one next instance.
+ * Later counts stay unspawned until that one is completed. Skipped once the
+ * daily target is reached, the window has passed, or an open instance already exists.
  */
 export async function spawnNextOnComplete(userId: string, task: Task, now = new Date()): Promise<void> {
   if (!task.habitId || !task.habitSeq) return;
@@ -434,5 +443,19 @@ export async function spawnNextOnComplete(userId: string, task: Task, now = new 
   if (!withinWindow(habit, now, timezone)) return;
   const progress = await todayProgress(userId, habit.id, day);
   if (progress.done >= habit.targetCount) return;
-  await spawnInstance(userId, habit, day, task.habitSeq + 1, timezone);
+  const [open] = await getDb()
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        eq(tasks.habitId, habit.id),
+        like(tasks.habitKey, `${habit.id}:${day}:%`),
+        inArray(tasks.status, ['todo', 'doing']),
+        isNull(tasks.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (open) return;
+  await spawnInstance(userId, habit, day, task.habitSeq + 1, timezone, now);
 }

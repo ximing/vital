@@ -1,12 +1,21 @@
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import type { Task } from '@vital/dto';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { DateTime } from 'luxon';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { getUserEntity } from '../src/auth/auth.service.js';
 import { buildFastify } from '../src/app.js';
 import { getDb } from '../src/db/index.js';
-import { lists, tasks } from '../src/db/schema.js';
-import { expireStaleHabitInstances, listHabits, spawnDailyHabits } from '../src/habits/habits.service.js';
+import { lists, notificationOutbox, tasks } from '../src/db/schema.js';
+import {
+  expireStaleHabitInstances,
+  listHabits,
+  spawnDailyHabits,
+  spawnNextOnComplete,
+} from '../src/habits/habits.service.js';
+import { nextCountHabitReminder } from '../src/notifications/habit-remind.js';
+import { syncTaskNotifications } from '../src/notifications/outbox.js';
 import { allDayLocalMidnight } from '../src/tasks/recurrence.js';
 import { loadHabitHeadlineFacts } from '../src/habits/progress.js';
 import { resetDb } from './helpers/db.js';
@@ -528,5 +537,134 @@ describe('habits', () => {
     expect(items.find((row) => row.habitId === stretchId)?.days).toEqual([
       { date: '2026-09-16', done: 1 },
     ]);
+  });
+
+  it('schedules the next count on the single open instance', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '喝水', kind: 'count', targetCount: 8, windowStart: '08:00', windowEnd: '22:00' },
+    });
+    const habitId = created.json().id as string;
+    const now = DateTime.fromISO('2026-09-16T08:30:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    expect(await spawnDailyHabits(alice.id, 'Asia/Shanghai', now)).toBe(1);
+
+    const [first] = await getDb().select().from(tasks).where(eq(tasks.habitId, habitId));
+    if (!first) throw new Error('missing first instance');
+    expect(first.habitSeq).toBe(1);
+    const firstRing = nextCountHabitReminder({
+      targetCount: 8,
+      seq: 1,
+      windowStart: '08:00',
+      windowEnd: '22:00',
+      timezone: 'Asia/Shanghai',
+      allDayNotifyTime: '09:00',
+      lastCompletedAt: null,
+      remindedToday: false,
+      existingReminderAt: null,
+      quietHoursStart: null,
+      quietHoursEnd: null,
+      now,
+    });
+    expect(first.reminderMode).toBe('custom');
+    expect(first.reminderAt?.toISOString()).toBe(firstRing?.scheduledAt.toISOString());
+    const [pending] = await getDb()
+      .select()
+      .from(notificationOutbox)
+      .where(and(eq(notificationOutbox.entityId, first.id), eq(notificationOutbox.status, 'pending')));
+    expect(pending?.payload.message).toBe('今天 0/8');
+    expect(pending?.scheduledAt.toISOString()).not.toBe(now.toISOString());
+
+    await getDb()
+      .update(tasks)
+      .set({ status: 'done', completedAt: now, updatedAt: now })
+      .where(eq(tasks.id, first.id));
+    const user = await getUserEntity(alice.id);
+    const [doneRow] = await getDb().select().from(tasks).where(eq(tasks.id, first.id));
+    if (!doneRow) throw new Error('missing completed instance');
+    await syncTaskNotifications(doneRow, user, now);
+    await spawnNextOnComplete(
+      alice.id,
+      { habitId, habitSeq: 1, timezone: 'Asia/Shanghai' } as Task,
+      now,
+    );
+
+    const rows = await getDb().select().from(tasks).where(eq(tasks.habitId, habitId));
+    expect(rows).toHaveLength(2);
+    const open = rows.find((row) => row.status === 'todo');
+    if (!open) throw new Error('missing open instance');
+    expect(open.habitSeq).toBe(2);
+    const secondRing = nextCountHabitReminder({
+      targetCount: 8,
+      seq: 2,
+      windowStart: '08:00',
+      windowEnd: '22:00',
+      timezone: 'Asia/Shanghai',
+      allDayNotifyTime: '09:00',
+      lastCompletedAt: now,
+      remindedToday: false,
+      existingReminderAt: null,
+      quietHoursStart: null,
+      quietHoursEnd: null,
+      now,
+    });
+    expect(open.reminderAt?.toISOString()).toBe(secondRing?.scheduledAt.toISOString());
+    if (!open.reminderAt) throw new Error('missing second reminder');
+    expect(open.reminderAt.getTime() - now.getTime()).toBeGreaterThan(20 * 60 * 1000);
+
+    const later = DateTime.fromISO('2026-09-16T10:01:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    const [fresh] = await getDb().select().from(tasks).where(eq(tasks.id, open.id));
+    if (!fresh) throw new Error('missing fresh instance');
+    await syncTaskNotifications(fresh, user, later);
+    const [advanced] = await getDb().select().from(tasks).where(eq(tasks.id, open.id));
+    if (!advanced?.reminderAt) throw new Error('missing advanced reminder');
+    expect(DateTime.fromJSDate(advanced.reminderAt, { zone: 'Asia/Shanghai' }).toFormat('HH:mm')).toBe(
+      '11:30',
+    );
+    const live = await getDb()
+      .select()
+      .from(notificationOutbox)
+      .where(and(eq(notificationOutbox.entityId, open.id), eq(notificationOutbox.status, 'pending')));
+    expect(live).toHaveLength(1);
+    expect(live[0]?.payload.message).toBe('今天 1/8');
+  });
+
+  it('does not remind the next count of a windowless habit after the daily ping time', async () => {
+    const alice = await registerUser(app);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/habits',
+      token: alice.token,
+      payload: { name: '喝水', kind: 'count', targetCount: 8 },
+    });
+    const habitId = created.json().id as string;
+    const now = DateTime.fromISO('2026-09-16T16:00:00', { zone: 'Asia/Shanghai' }).toJSDate();
+    expect(await spawnDailyHabits(alice.id, 'Asia/Shanghai', now)).toBe(1);
+    const [first] = await getDb().select().from(tasks).where(eq(tasks.habitId, habitId));
+    if (!first) throw new Error('missing first instance');
+    expect(first.reminderAt?.toISOString()).toBe(now.toISOString());
+
+    await getDb()
+      .update(tasks)
+      .set({ status: 'done', completedAt: now, updatedAt: now })
+      .where(eq(tasks.id, first.id));
+    await spawnNextOnComplete(
+      alice.id,
+      { habitId, habitSeq: 1, timezone: 'Asia/Shanghai' } as Task,
+      now,
+    );
+    const rows = await getDb().select().from(tasks).where(eq(tasks.habitId, habitId));
+    expect(rows).toHaveLength(2);
+    const open = rows.find((row) => row.habitSeq === 2);
+    if (!open) throw new Error('missing second instance');
+    expect(open.reminderMode).toBe('custom');
+    expect(open.reminderAt).toBeNull();
+    const pending = await getDb()
+      .select()
+      .from(notificationOutbox)
+      .where(and(eq(notificationOutbox.entityId, open.id), eq(notificationOutbox.status, 'pending')));
+    expect(pending).toHaveLength(0);
   });
 });

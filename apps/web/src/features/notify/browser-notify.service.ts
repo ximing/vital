@@ -1,8 +1,9 @@
 import { resolve, Service } from '@rabjs/react';
-import type { NotificationPrefs, Task } from '@vital/dto';
+import type { Habit, NotificationPrefs, Task } from '@vital/dto';
 import { DEFAULT_NOTIFICATION_PREFS } from '@vital/dto';
 import { isTauriRuntime } from '@/api/client';
 import { t } from '@/copy';
+import { todayKeys } from '@/features/today/query-keys';
 import { todoKeys } from '@/features/todos/query-keys';
 import { AuthService } from '@/services/auth.service';
 import { appQueryClient } from '@/services/query.service';
@@ -39,6 +40,19 @@ function notificationCtor(): typeof Notification | null {
 function mapPermission(value: string): Exclude<BrowserNotifyPermission, 'unsupported'> {
   if (value === 'granted' || value === 'denied') return value;
   return 'default';
+}
+
+function notifyBody(task: Task, eventType: 'task.remind' | 'task.due'): string {
+  if (task.habitId && eventType === 'task.remind') {
+    const habits = appQueryClient.getQueryData<Habit[]>(todayKeys.habits);
+    const habit = habits?.find((row) => row.id === task.habitId);
+    if (habit && habit.kind === 'count' && habit.targetCount !== null && habit.targetCount >= 2) {
+      return t.settings.notify.habitCountBody
+        .replace('{done}', String(habit.todayDone))
+        .replace('{total}', String(habit.targetCount));
+    }
+  }
+  return eventType === 'task.remind' ? t.settings.notify.remindBody : t.settings.notify.dueBody;
 }
 
 function openNotifyUrl(url: string): void {
@@ -173,9 +187,7 @@ export class BrowserNotifyService extends Service {
       const plan = planDueNow(task, prefs, zone, now);
       if (!plan) continue;
       const key = notifyKey(plan.eventType, task.id, plan.occurrenceAt);
-      const body =
-        plan.eventType === 'task.remind' ? t.settings.notify.remindBody : t.settings.notify.dueBody;
-      this.display(key, task.title, body, taskUrl(task));
+      this.display(key, task.title, notifyBody(task, plan.eventType), taskUrl(task));
     }
   }
 
