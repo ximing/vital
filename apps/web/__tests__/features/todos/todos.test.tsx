@@ -215,7 +215,8 @@ describe('todos workspace', () => {
     expect(main.className).not.toMatch(/mx-auto/);
     expect(document.querySelector('[data-region="detail-slot"]')).not.toBeNull();
     expect(screen.queryByLabelText(t.todos.pickTask)).not.toBeInTheDocument();
-    expect(screen.getByLabelText(t.todos.quickAddPlaceholder)).toHaveClass('field-focus');
+    const quickAdd = screen.getByLabelText(t.todos.quickAddPlaceholder);
+    expect(quickAdd.closest('.field-shell')).not.toBeNull();
   });
 
   it('shows spec empty copy on today', async () => {
