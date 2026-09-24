@@ -11,6 +11,8 @@ export type TaskScheduleInput = {
   reminderAt?: Date | null;
   isAllDay: boolean;
   timezone: string;
+  /** Set on habit instances so a count-habit custom/empty remind cannot fall through to all-day due. */
+  habitId?: string | null;
 };
 
 export type SchedulePlan = {
@@ -19,7 +21,7 @@ export type SchedulePlan = {
   occurrenceAt: Date;
 };
 
-const MISSED_GRACE_MS = 15 * 60 * 1000;
+export const MISSED_GRACE_MS = 15 * 60 * 1000;
 
 /** Timed dueAt, or the all-day notify clock on that local date. */
 function dueAnchor(
@@ -64,6 +66,18 @@ export function planTaskNotification(
 ): SchedulePlan | null {
   if (task.deletedAt !== null) return null;
   if (task.status !== 'todo' && task.status !== 'doing') return null;
+
+  // Count-habit instances store the paced ring as a custom reminder. An empty
+  // custom reminder means "stay quiet" — do not fall through to all-day due.
+  if (task.habitId && task.reminderMode === 'custom') {
+    if (!task.reminderAt || !prefs.taskRemind) return null;
+    if (task.reminderAt.getTime() < now.getTime() - MISSED_GRACE_MS) return null;
+    return {
+      eventType: 'task.remind',
+      scheduledAt: task.reminderAt,
+      occurrenceAt: task.reminderAt,
+    };
+  }
 
   const remindAt = semanticReminderAt(task, prefs.allDayNotifyTime);
   if (remindAt && prefs.taskRemind) {

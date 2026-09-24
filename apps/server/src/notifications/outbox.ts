@@ -10,6 +10,8 @@ import {
   type NotificationOutboxPayload,
   type User,
 } from '../db/schema.js';
+import { countHabitRemindMessage } from './habit-remind.js';
+import { resolveCountHabitRemind } from './habit-remind-db.js';
 import { idempotencyKey, planWithQuietHours } from './schedule.js';
 
 export type NotificationDb = Pick<Database, 'insert' | 'update' | 'delete' | 'select'>;
@@ -27,6 +29,9 @@ export type TaskNotifyInput = {
   isAllDay?: boolean | undefined;
   timezone: string;
   deletedAt?: Date | null | undefined;
+  habitId?: string | null | undefined;
+  habitSeq?: number | null | undefined;
+  habitKey?: string | null | undefined;
 };
 
 function asNotify(task: TaskNotifyInput) {
@@ -56,6 +61,9 @@ function asNotify(task: TaskNotifyInput) {
     isAllDay: task.isAllDay ?? false,
     timezone: task.timezone,
     deletedAt: task.deletedAt ?? null,
+    habitId: task.habitId ?? null,
+    habitSeq: task.habitSeq ?? null,
+    habitKey: task.habitKey ?? null,
   };
 }
 
@@ -88,6 +96,7 @@ function payloadOf(
   listName: string,
   eventType: 'task.remind' | 'task.due',
   scheduledAt: Date,
+  message?: string,
 ): NotificationOutboxPayload {
   return {
     title: task.title,
@@ -98,6 +107,7 @@ function payloadOf(
     isAllDay: task.isAllDay,
     timezone: task.timezone,
     eventType,
+    ...(message ? { message } : {}),
   };
 }
 
@@ -124,23 +134,23 @@ async function cancelLive(
   await db.update(notificationOutbox).set({ status: 'cancelled', updatedAt: now }).where(cond);
 }
 
-export async function syncTaskNotifications(
-  raw: TaskNotifyInput,
-  user: User,
-  now = new Date(),
-  db: NotificationDb = getDb(),
+function sameInstant(a: Date | null | undefined, b: Date | null): boolean {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return a.getTime() === b.getTime();
+}
+
+async function writeTaskOutbox(
+  db: NotificationDb,
+  task: ReturnType<typeof asNotify>,
+  plan: { eventType: 'task.remind' | 'task.due'; scheduledAt: Date; occurrenceAt: Date },
+  now: Date,
+  message?: string,
 ): Promise<void> {
-  const task = asNotify(raw);
-  const prefs = prefsFromUser(user);
-  const plan = planWithQuietHours(task, prefs, user.timezone, now);
-  if (!plan || !OPEN.includes(task.status as (typeof OPEN)[number])) {
-    await cancelLive(db, task.id, now);
-    return;
-  }
   const key = idempotencyKey(plan.eventType, task.id, plan.occurrenceAt);
   await cancelLive(db, task.id, now, key);
   const listName = await listNameOf(db, task.listId);
-  const payload = payloadOf(task, listName, plan.eventType, plan.scheduledAt);
+  const payload = payloadOf(task, listName, plan.eventType, plan.scheduledAt, message);
   await db
     .insert(notificationOutbox)
     .values({
@@ -181,6 +191,70 @@ export async function syncTaskNotifications(
           AND ${tasks.status} IN ('todo', 'doing')
       )`,
     });
+}
+
+async function syncCountHabitReminder(
+  db: NotificationDb,
+  task: ReturnType<typeof asNotify>,
+  ring: { occurrenceAt: Date; scheduledAt: Date; done: number; total: number } | null,
+  taskRemind: boolean,
+  now: Date,
+): Promise<void> {
+  const reminderAt = ring && taskRemind ? ring.scheduledAt : null;
+  const run = async (tx: NotificationDb) => {
+    if (task.reminderMode !== 'custom' || !sameInstant(task.reminderAt, reminderAt)) {
+      await tx
+        .update(tasks)
+        .set({
+          reminderMode: 'custom',
+          reminderAt,
+          reminderOffsetMinutes: null,
+          updatedAt: now,
+        })
+        .where(and(eq(tasks.id, task.id), eq(tasks.userId, task.userId)));
+    }
+    if (!ring || !taskRemind) {
+      await cancelLive(tx, task.id, now);
+      return;
+    }
+    await writeTaskOutbox(
+      tx,
+      task,
+      { eventType: 'task.remind', scheduledAt: ring.scheduledAt, occurrenceAt: ring.occurrenceAt },
+      now,
+      countHabitRemindMessage(ring.done, ring.total),
+    );
+  };
+  if (db === getDb()) {
+    await getDb().transaction(run);
+    return;
+  }
+  await run(db);
+}
+
+export async function syncTaskNotifications(
+  raw: TaskNotifyInput,
+  user: User,
+  now = new Date(),
+  db: NotificationDb = getDb(),
+): Promise<void> {
+  const task = asNotify(raw);
+  const prefs = prefsFromUser(user);
+  if (task.deletedAt !== null || !OPEN.includes(task.status as (typeof OPEN)[number])) {
+    await cancelLive(db, task.id, now);
+    return;
+  }
+  const habit = await resolveCountHabitRemind(db, task, prefs, now);
+  if (habit.kind === 'habit') {
+    await syncCountHabitReminder(db, task, habit.ring, prefs.taskRemind, now);
+    return;
+  }
+  const plan = planWithQuietHours(task, prefs, user.timezone, now);
+  if (!plan) {
+    await cancelLive(db, task.id, now);
+    return;
+  }
+  await writeTaskOutbox(db, task, plan, now);
 }
 
 export async function syncTaskNotificationsById(

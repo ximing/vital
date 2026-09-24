@@ -47,6 +47,51 @@ describe('planTaskBrowserNotify', () => {
     expect(plan?.scheduledAt.toISOString()).toBe(due.toISOString());
   });
 
+  it('keeps a paced count-habit reminder off the immediate all-day due path', () => {
+    const dueAt = '2026-09-06T00:00:00.000Z';
+    const now = new Date('2026-09-06T00:30:00.000Z');
+    const slot = '2026-09-06T01:45:00.000Z';
+    const paced = planTaskBrowserNotify(
+      task({
+        id: 'habit-task',
+        habitId: 'habit-1',
+        habitSeq: 2,
+        isAllDay: true,
+        dueAt,
+        reminderMode: 'custom',
+        reminderAt: slot,
+      }),
+      DEFAULT_NOTIFICATION_PREFS,
+      now,
+    );
+    expect(paced?.eventType).toBe('task.remind');
+    expect(paced?.scheduledAt.toISOString()).toBe(slot);
+    expect(paced?.occurrenceAt.toISOString()).toBe(slot);
+
+    expect(
+      planTaskBrowserNotify(
+        task({
+          id: 'quiet',
+          habitId: 'habit-1',
+          isAllDay: true,
+          dueAt,
+          reminderMode: 'custom',
+          reminderAt: null,
+        }),
+        DEFAULT_NOTIFICATION_PREFS,
+        now,
+      ),
+    ).toBeNull();
+
+    const daily = planTaskBrowserNotify(
+      task({ id: 'daily', habitId: 'habit-1', isAllDay: true, dueAt, reminderMode: null }),
+      DEFAULT_NOTIFICATION_PREFS,
+      new Date('2026-09-06T08:00:00.000Z'),
+    );
+    expect(daily?.eventType).toBe('task.due');
+    expect(daily?.scheduledAt.toISOString()).toBe('2026-09-06T08:00:00.000Z');
+  });
+
   it('does not plan completed tasks', () => {
     expect(
       planTaskBrowserNotify(

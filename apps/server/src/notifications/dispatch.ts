@@ -74,6 +74,9 @@ export function renderMeowMessage(payload: NotificationOutboxPayload): {
     return { title: '日子提醒', msg: payload.message ?? `「${payload.title}」` };
   }
   const when = formatWhen(payload);
+  if (payload.eventType === 'task.remind' && payload.message) {
+    return { title: payload.title, msg: payload.message };
+  }
   if (payload.eventType === 'task.remind') {
     return {
       title: '任务提醒',

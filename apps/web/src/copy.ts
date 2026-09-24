@@ -1121,6 +1121,7 @@ export const t = {
       previewBody: '这是一条需要手动关闭的桌面提醒。',
       remindBody: '提醒时间到了',
       dueBody: '已经到期',
+      habitCountBody: '今天 {done}/{total}',
       taskRemind: '有提醒时间时推送',
       taskDue: '没有提醒时按到期推送',
       agentInsights: '系统主动提醒',
