@@ -32,6 +32,7 @@ export type TaskNotifyInput = {
   habitId?: string | null | undefined;
   habitSeq?: number | null | undefined;
   habitKey?: string | null | undefined;
+  createdAt?: Date | null | undefined;
 };
 
 function asNotify(task: TaskNotifyInput) {
@@ -64,6 +65,7 @@ function asNotify(task: TaskNotifyInput) {
     habitId: task.habitId ?? null,
     habitSeq: task.habitSeq ?? null,
     habitKey: task.habitKey ?? null,
+    createdAt: task.createdAt ?? null,
   };
 }
 

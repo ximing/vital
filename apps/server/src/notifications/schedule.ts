@@ -13,6 +13,8 @@ export type TaskScheduleInput = {
   timezone: string;
   /** Set on habit instances so a count-habit custom/empty remind cannot fall through to all-day due. */
   habitId?: string | null;
+  /** When the task was created. Absent means "already existed" for catch-up. */
+  createdAt?: Date | null;
 };
 
 export type SchedulePlan = {
@@ -97,11 +99,21 @@ export function planTaskNotification(
     const today = DateTime.fromJSDate(now, { zone }).startOf('day');
     if (dueLocal < today) return null;
     const { hour, minute } = parseHHmm(prefs.allDayNotifyTime);
-    let fire = dueLocal.set({ hour, minute, second: 0, millisecond: 0 });
-    if (fire.toJSDate().getTime() < now.getTime()) fire = DateTime.fromJSDate(now);
+    const fire = dueLocal.set({ hour, minute, second: 0, millisecond: 0 }).toJSDate();
+    // Created after today's morning slot: stay quiet. The 21:00 digest covers it.
+    if (task.createdAt && task.createdAt.getTime() > fire.getTime() && fire.getTime() <= now.getTime()) {
+      return null;
+    }
+    if (fire.getTime() < now.getTime() - MISSED_GRACE_MS) {
+      return {
+        eventType: 'task.due',
+        scheduledAt: now,
+        occurrenceAt: task.dueAt,
+      };
+    }
     return {
       eventType: 'task.due',
-      scheduledAt: fire.toJSDate(),
+      scheduledAt: fire,
       occurrenceAt: task.dueAt,
     };
   }

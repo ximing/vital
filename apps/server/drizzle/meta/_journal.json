@@ -309,6 +309,13 @@
       "when": 1790076355481,
       "tag": "0043_daily_model_call_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790225462817,
+      "tag": "0044_task_evening_digest",
+      "breakpoints": true
     }
   ]
 }

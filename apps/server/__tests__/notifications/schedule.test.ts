@@ -93,7 +93,7 @@ describe('planTaskNotification', () => {
     expect(dayBefore?.scheduledAt.toISOString()).toBe('2026-09-07T01:00:00.000Z');
   });
 
-  it('all-day due today fires at allDayNotifyTime, or now if that already passed', () => {
+  it('all-day due today fires at allDayNotifyTime; later creates wait for the evening digest', () => {
     const dueAt = DateTime.fromISO('2026-09-06', { zone: TZ }).startOf('day').toJSDate();
     const morning = DateTime.fromISO('2026-09-06T01:00:00.000Z').toJSDate(); // 09:00 CST
     const plan = planTaskNotification(task({ dueAt, isAllDay: true }), prefs, morning);
@@ -105,8 +105,19 @@ describe('planTaskNotification', () => {
     expect(fire.minute).toBe(0);
 
     const afternoon = DateTime.fromISO('2026-09-06T08:00:00.000Z').toJSDate(); // 16:00 CST
-    const late = planTaskNotification(task({ dueAt, isAllDay: true }), prefs, afternoon);
-    expect(late?.scheduledAt.getTime()).toBe(afternoon.getTime());
+    const existed = planTaskNotification(
+      task({ dueAt, isAllDay: true, createdAt: DateTime.fromISO('2026-09-06T00:00:00.000Z').toJSDate() }),
+      prefs,
+      afternoon,
+    );
+    expect(existed?.scheduledAt.getTime()).toBe(afternoon.getTime());
+
+    const createdLate = planTaskNotification(
+      task({ dueAt, isAllDay: true, createdAt: DateTime.fromISO('2026-09-06T02:00:00.000Z').toJSDate() }),
+      prefs,
+      afternoon,
+    );
+    expect(createdLate).toBeNull();
   });
 
   it('does not enqueue past calendar all-day or missed timed due', () => {

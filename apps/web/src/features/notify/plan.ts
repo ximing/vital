@@ -109,8 +109,14 @@ export function planTaskBrowserNotify(
     const today = formatYmd(now, task.timezone);
     if (dueDay < today) return null;
     const clock = prefs.allDayNotifyTime.length === 5 ? `${prefs.allDayNotifyTime}:00` : prefs.allDayNotifyTime;
-    let fire = new Date(zonedWallTimeIso(dueDay, clock, task.timezone));
-    if (fire.getTime() < now.getTime()) fire = now;
+    const fire = new Date(zonedWallTimeIso(dueDay, clock, task.timezone));
+    // Created after today's morning slot: stay quiet. The 21:00 digest covers it.
+    if (new Date(task.createdAt).getTime() > fire.getTime() && fire.getTime() <= now.getTime()) {
+      return null;
+    }
+    if (fire.getTime() < now.getTime() - MISSED_GRACE_MS) {
+      return { eventType: 'task.due', scheduledAt: now, occurrenceAt: dueAt };
+    }
     return { eventType: 'task.due', scheduledAt: fire, occurrenceAt: dueAt };
   }
 

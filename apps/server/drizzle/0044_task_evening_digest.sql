@@ -1,0 +1,4 @@
+ALTER TABLE "notification_outbox" DROP CONSTRAINT "notification_outbox_event_type_check";--> statement-breakpoint
+ALTER TABLE "notification_outbox" DROP CONSTRAINT "notification_outbox_entity_type_check";--> statement-breakpoint
+ALTER TABLE "notification_outbox" ADD CONSTRAINT "notification_outbox_event_type_check" CHECK ("notification_outbox"."event_type" IN ('task.remind', 'task.due', 'agent.insight', 'day.remind', 'task.digest'));--> statement-breakpoint
+ALTER TABLE "notification_outbox" ADD CONSTRAINT "notification_outbox_entity_type_check" CHECK ("notification_outbox"."entity_type" IN ('task', 'outcome', 'habit', 'day', 'user'));

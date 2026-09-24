@@ -18,6 +18,7 @@ import { publishNotification } from '../sync/sync.hub.js';
 import { sendMeow } from './meow.js';
 import { syncTaskNotifications } from './outbox.js';
 import { applyQuietHours } from './quiet-hours.js';
+import { countEveningDigestTasks, eveningDigestMessage } from './evening-digest.js';
 import { insightStillEligible } from './insights.js';
 
 const BACKOFF_MS = [30_000, 120_000, 300_000, 900_000, 3_600_000, 14_400_000, 43_200_000];
@@ -50,7 +51,7 @@ function notifyUrl(job: {
   entityId: string;
   payload: NotificationOutboxPayload;
 }): string {
-  if (job.eventType === 'agent.insight') return todayUrl();
+  if (job.eventType === 'agent.insight' || job.eventType === 'task.digest') return todayUrl();
   if (job.eventType === 'day.remind') return dayUrl(job.entityId);
   return taskUrl(job.payload.listId, job.entityId);
 }
@@ -70,6 +71,9 @@ export function renderMeowMessage(payload: NotificationOutboxPayload): {
 } {
   if (payload.eventType === 'agent.insight')
     return { title: '系统主动提醒', msg: payload.message ?? payload.title };
+  if (payload.eventType === 'task.digest') {
+    return { title: payload.title || '晚间提醒', msg: payload.message ?? '' };
+  }
   if (payload.eventType === 'day.remind') {
     return { title: '日子提醒', msg: payload.message ?? `「${payload.title}」` };
   }
@@ -193,6 +197,52 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
         .where(stillClaimed(job.id));
       return;
     }
+  }
+  if (job.eventType === 'task.digest') {
+    const zone = user.timezone || 'Asia/Shanghai';
+    if (!user.notifyTaskDue) {
+      await getDb()
+        .update(notificationOutbox)
+        .set({ status: 'cancelled', updatedAt: now, lastError: 'task due notifications off' })
+        .where(stillClaimed(job.id));
+      return;
+    }
+    const quietUntil = applyQuietHours(now, user.quietHoursStart, user.quietHoursEnd, zone);
+    if (quietUntil.getTime() > now.getTime() + 1_000) {
+      const sameDay =
+        DateTime.fromJSDate(quietUntil, { zone }).toISODate() ===
+        DateTime.fromJSDate(now, { zone }).toISODate();
+      if (!sameDay) {
+        await getDb()
+          .update(notificationOutbox)
+          .set({ status: 'cancelled', updatedAt: now, lastError: 'quiet hours crossed midnight' })
+          .where(stillClaimed(job.id));
+        return;
+      }
+      await getDb()
+        .update(notificationOutbox)
+        .set({ status: 'pending', scheduledAt: quietUntil, updatedAt: now })
+        .where(stillClaimed(job.id));
+      return;
+    }
+    const count = await countEveningDigestTasks(user.id, zone, now);
+    if (count === 0) {
+      await getDb()
+        .update(notificationOutbox)
+        .set({ status: 'cancelled', updatedAt: now, lastError: 'nothing open' })
+        .where(stillClaimed(job.id));
+      return;
+    }
+    job.payload = {
+      ...job.payload,
+      eventType: 'task.digest',
+      title: '晚间提醒',
+      message: eveningDigestMessage(count),
+    };
+    await getDb()
+      .update(notificationOutbox)
+      .set({ payload: job.payload, updatedAt: now })
+      .where(stillClaimed(job.id));
   }
   const delayed = applyQuietHours(now, user.quietHoursStart, user.quietHoursEnd, user.timezone);
   if (delayed.getTime() > now.getTime() + 1_000) {

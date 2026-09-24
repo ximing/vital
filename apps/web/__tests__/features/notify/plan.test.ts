@@ -92,6 +92,24 @@ describe('planTaskBrowserNotify', () => {
     expect(daily?.scheduledAt.toISOString()).toBe('2026-09-06T08:00:00.000Z');
   });
 
+  it('stays quiet when an all-day task is created after the morning slot', () => {
+    const dueAt = '2026-09-05T16:00:00.000Z';
+    const afternoon = new Date('2026-09-06T08:00:00.000Z');
+    expect(
+      planTaskBrowserNotify(
+        task({
+          id: 'late',
+          isAllDay: true,
+          dueAt,
+          reminderMode: null,
+          createdAt: '2026-09-06T02:00:00.000Z',
+        }),
+        DEFAULT_NOTIFICATION_PREFS,
+        afternoon,
+      ),
+    ).toBeNull();
+  });
+
   it('does not plan completed tasks', () => {
     expect(
       planTaskBrowserNotify(
