@@ -18,10 +18,10 @@ describe('web shell contract', () => {
 
   it('desktop titlebar stays native and follows the resolved light/dark scheme', () => {
     const theme = read('src/lib/theme.ts');
-    expect(theme).toContain('setTheme');
-    expect(theme).toContain('setBackgroundColor');
-    expect(theme).toContain('@tauri-apps/api/window');
+    expect(theme).toContain('applyChrome');
     expect(theme).toContain('bgCanvas');
+    expect(theme).not.toContain('@tauri-apps');
+    expect(theme).not.toContain('__TAURI_INTERNALS__');
     const main = read('src/main.tsx');
     expect(main).toContain('applyTheme()');
   });
@@ -77,7 +77,7 @@ describe('web shell contract', () => {
 
   it('browser / is the marketing page; desktop / goes to login or today', () => {
     const app = read('src/App.tsx');
-    expect(app).toContain('isTauriRuntime()');
+    expect(app).toContain('isDesktopHost()');
     expect(app).toContain('RootEntry');
     expect(app).toContain('LandingPage');
     expect(app).toMatch(/path="\/"/);
@@ -167,15 +167,30 @@ describe('web shell contract', () => {
     expect(copy).toContain('输入关键词搜任务、稍后读和报告。');
   });
 
-  it('Tauri runtime uses bearer plugin-http + plugin-store and an absolute baseUrl', () => {
+  it('web client is cookie-only and does not branch on the desktop shell', () => {
     const client = read('src/api/client.ts');
-    expect(client).toContain('__TAURI_INTERNALS__');
-    expect(client).toContain("authMode: 'bearer'");
-    expect(client).toContain('@tauri-apps/plugin-http');
-    expect(client).toContain('@tauri-apps/plugin-store');
-    expect(client).toContain('http://127.0.0.1:3010');
-    expect(client).toContain('VITE_TAURI_API_URL');
-    expect(client).toContain('tauriFetch');
+    expect(client).toContain("baseUrl: ''");
+    expect(client).toContain("authMode: 'cookie'");
+    expect(client).not.toContain("authMode: 'bearer'");
+    expect(client).not.toContain('@tauri-apps');
+    expect(client).not.toContain('__TAURI_INTERNALS__');
+    expect(client).not.toContain('VITE_TAURI_API_URL');
+    const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
+    expect(pkg.dependencies['@tauri-apps/api']).toBeUndefined();
+    expect(pkg.dependencies['@tauri-apps/plugin-http']).toBeUndefined();
+    expect(pkg.dependencies['@tauri-apps/plugin-store']).toBeUndefined();
+    const host = read('src/host.ts');
+    expect(host).toContain("kind !== 'desktop'");
+    expect(host).toContain('__VITAL_HOST__');
+    const srcRoot = path.resolve(webRoot, 'src');
+    const files = readdirSync(srcRoot, { recursive: true, encoding: 'utf8' }).filter(
+      (file) => file.endsWith('.ts') || file.endsWith('.tsx'),
+    );
+    const hits = files.filter((file) => {
+      const text = readFileSync(path.join(srcRoot, file), 'utf8');
+      return text.includes('@tauri-apps') || text.includes('__TAURI_INTERNALS__');
+    });
+    expect(hits).toEqual([]);
   });
 
   it('local notify uses window.Notification so the Tauri plugin can patch it', () => {
@@ -189,8 +204,11 @@ describe('web shell contract', () => {
     const sticky = read('src/features/notify/sticky-alert.ts');
     expect(sticky).toContain('STICKY_ALERT_PREF_KEY');
     expect(sticky).toContain('vital:sticky-alert');
+    expect(sticky).not.toContain('@tauri-apps');
+    expect(sticky).toContain('closeStickyAlert');
+    expect(sticky).toContain('openInMain');
     const section = read('src/features/settings/NotificationsSection.tsx');
-    expect(section).toContain('isTauriRuntime');
+    expect(section).toContain('isDesktopHost');
     expect(section).toContain('copy.desktop');
     expect(section).toContain('copy.sticky');
     expect(section).toContain('copy.preview');

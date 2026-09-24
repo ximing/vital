@@ -245,7 +245,7 @@ Chrome 扩展（MV3 / WXT）可以把当前页、选区或图片存进稍后读�
 | 端 | 技术 | 鉴权 |
 | --- | --- | --- |
 | **Web** | Vite / React，`localhost:5180` | Cookie（刷新令牌 httpOnly） |
-| **桌面** | Tauri 2，内嵌同一套 Web UI | Bearer，存在本地 store |
+| **桌面** | Tauri 2，打开线上同一套 Web | 与浏览器相同的 cookie |
 | **移动** | Expo / React Native（Android） | Bearer；启动时可检查 GitHub Release 自更新 APK |
 | **扩展** | Chrome MV3 / WXT | Bearer，用于一键收集 |
 
@@ -276,7 +276,7 @@ pnpm workspace + Turbo，Node ≥ 22，包名 `@vital/*`。
 
 ```
 apps/web          Vite / React（cookie auth）
-apps/desktop      Tauri 2（bearer；内嵌 web UI）
+apps/desktop      Tauri 2（打开线上 Web，登录与浏览器相同）
 apps/mobile       Expo（bearer）
 apps/extension    Chrome MV3 / WXT（bearer）
 apps/server       Fastify 5 + Drizzle + PostgreSQL

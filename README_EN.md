@@ -241,7 +241,7 @@ Three clients, one sync protocol, one backend. Desktop wraps the web UI; mobile 
 | Client | Stack | Auth |
 | --- | --- | --- |
 | **Web** | Vite / React at `:5180` | Cookie (httpOnly refresh) |
-| **Desktop** | Tauri 2 embedding the same web UI | Bearer in a local store |
+| **Desktop** | Tauri 2 opening the hosted web app | Same cookie as the browser |
 | **Mobile** | Expo / React Native (Android) | Bearer; can self-update the APK from GitHub Releases |
 | **Extension** | Chrome MV3 / WXT | Bearer, for one-click capture |
 
@@ -272,7 +272,7 @@ pnpm workspace + Turbo. Node ≥ 22. Packages are named `@vital/*`.
 
 ```
 apps/web          Vite / React (cookie auth)
-apps/desktop      Tauri 2 (bearer; wraps the web UI)
+apps/desktop      Tauri 2 (opens the hosted web app; same login as the browser)
 apps/mobile       Expo (bearer)
 apps/extension    Chrome MV3 / WXT (bearer)
 apps/server       Fastify 5 + Drizzle + PostgreSQL

@@ -1,7 +1,7 @@
 import { resolve, Service } from '@rabjs/react';
 import type { Habit, NotificationPrefs, Task } from '@vital/dto';
 import { DEFAULT_NOTIFICATION_PREFS } from '@vital/dto';
-import { isTauriRuntime } from '@/api/client';
+import { isDesktopHost } from '@/host';
 import { t } from '@/copy';
 import { todayKeys } from '@/features/today/query-keys';
 import { todoKeys } from '@/features/todos/query-keys';
@@ -13,8 +13,6 @@ import {
   readStickyAlertPref,
   resetStickyAlertForTest,
   showStickyAlert,
-  startStickyAlertBridge,
-  stopStickyAlertBridge,
   writeStickyAlertPref,
 } from './sticky-alert';
 
@@ -99,18 +97,13 @@ export class BrowserNotifyService extends Service {
   private started = false;
 
   private stickyActive(): boolean {
-    return isTauriRuntime() && this.stickyEnabled;
+    return isDesktopHost() && this.stickyEnabled;
   }
 
   setStickyEnabled(value: boolean): void {
     this.stickyEnabled = value;
     writeStickyAlertPref(value);
-    if (this.stickyActive()) {
-      void startStickyAlertBridge((url) => openNotifyUrl(url));
-      if (this.started) this.scan();
-      return;
-    }
-    stopStickyAlertBridge();
+    if (this.stickyActive() && this.started) this.scan();
   }
 
   get auth(): AuthService {
@@ -141,9 +134,6 @@ export class BrowserNotifyService extends Service {
     if (this.started) return;
     this.started = true;
     this.refreshPermission();
-    if (this.stickyActive()) {
-      void startStickyAlertBridge((url) => openNotifyUrl(url));
-    }
     this.scan();
     this.timer = setInterval(() => this.scan(), SCAN_MS);
     // Tauri's plugin probes OS permission asynchronously after patching Notification.
@@ -161,7 +151,6 @@ export class BrowserNotifyService extends Service {
     this.timer = null;
     if (this.probe) clearTimeout(this.probe);
     this.probe = null;
-    stopStickyAlertBridge();
   }
 
   showPush(raw: unknown): void {

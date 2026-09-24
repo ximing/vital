@@ -1,39 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main and sticky-alert windows: plugin-http (API + S3), plugin-store, window-state, notification",
+  "description": "Desktop shell commands for chrome and sticky alerts, plus system notifications.",
   "windows": ["main", "notify-alert"],
   "local": true,
-  "remote": {
-    "urls": ["http://localhost:5180/*", "http://127.0.0.1:5180/*"]
-  },
   "permissions": [
-    "core:default",
-    "core:webview:allow-create-webview-window",
-    "core:window:allow-create",
-    "core:window:allow-show",
-    "core:window:allow-close",
-    "core:window:allow-destroy",
-    "core:window:allow-set-focus",
-    "core:window:allow-set-always-on-top",
-    "core:window:allow-set-skip-taskbar",
-    "core:window:allow-set-visible-on-all-workspaces",
-    "core:window:allow-set-position",
-    "core:window:allow-request-user-attention",
-    "core:window:allow-unminimize",
-    "core:window:allow-set-theme",
-    "core:window:allow-set-background-color",
-    "store:default",
-    "window-state:default",
-    "notification:default",
-    {
-      "identifier": "http:default",
-      "allow": [
-        { "url": "http://127.0.0.1:3010/*" },
-        { "url": "http://localhost:3010/*" },
-        { "url": "https://*/*" },
-        { "url": "https://*:*/*" }
-      ]
-    }
+    "allow-apply-chrome",
+    "allow-show-sticky-alert",
+    "allow-close-sticky-alert",
+    "allow-open-in-main",
+    "notification:default"
   ]
 }

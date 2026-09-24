@@ -3,8 +3,8 @@
 #   Actions → Build Desktop → Run workflow
 #   GitHub Release published → attach installers to that release
 #
-# Production API origin is baked into the web bundle as VITE_TAURI_API_URL.
-# Override with repository secret or variable VITE_TAURI_API_URL; otherwise
+# The shell loads this site as frontendDist. It is not written into Vite.
+# Override with repository secret or variable VITAL_WEB_URL; otherwise
 # https://vital.aimo.plus. The origin is not confidential — a variable is enough.
 name: Build Desktop
 
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  VITE_TAURI_API_URL: ${{ secrets.VITE_TAURI_API_URL || vars.VITE_TAURI_API_URL || 'https://vital.aimo.plus' }}
+  VITAL_WEB_URL: ${{ secrets.VITAL_WEB_URL || vars.VITAL_WEB_URL || 'https://vital.aimo.plus' }}
 
 jobs:
   build-desktop:
@@ -78,11 +78,15 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if command -v python3 >/dev/null; then PY=python3; else PY=python; fi
           "$PY" - "$version" <<'PY'
-          import json, pathlib, re, sys
+          import json, os, pathlib, re, sys
           version = sys.argv[1]
+          web = os.environ.get("VITAL_WEB_URL", "https://vital.aimo.plus").strip().rstrip("/")
+          if not web.startswith(("https://", "http://")):
+              raise SystemExit("VITAL_WEB_URL must be an http(s) origin")
           conf = pathlib.Path("apps/desktop/src-tauri/tauri.conf.json")
           data = json.loads(conf.read_text())
           data["version"] = version
+          data["build"]["frontendDist"] = web
           conf.write_text(json.dumps(data, indent=2) + "\n")
           cargo = pathlib.Path("apps/desktop/src-tauri/Cargo.toml")
           text, n = re.subn(
@@ -120,7 +124,6 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VITE_TAURI_API_URL: ${{ env.VITE_TAURI_API_URL }}
           # Ad-hoc sign so Apple Silicon DMGs are "unidentified developer", not "damaged".
           APPLE_SIGNING_IDENTITY: '-'
         with:

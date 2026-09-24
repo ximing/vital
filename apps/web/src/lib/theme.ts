@@ -1,4 +1,5 @@
 import { themes } from '@vital/tokens';
+import { getVitalHost } from '@/host';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 
@@ -19,43 +20,13 @@ export function resolveTheme(choice: ThemeChoice): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-type NativeWindowChrome = {
-  setTheme: (theme: 'light' | 'dark') => Promise<void>;
-  setBackgroundColor: (color: string) => Promise<void>;
-};
-
-async function loadNativeWindowChrome(): Promise<NativeWindowChrome | null> {
-  if (typeof window === 'undefined' || window.__TAURI_INTERNALS__ === undefined) return null;
-  try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window');
-    return getCurrentWindow();
-  } catch {
-    return null;
-  }
-}
-
-let nativeWindowChrome: () => Promise<NativeWindowChrome | null> = loadNativeWindowChrome;
-let chromeSync = 0;
-
-export function setNativeWindowChromeForTest(
-  loader: (() => Promise<NativeWindowChrome | null>) | null,
-): void {
-  nativeWindowChrome = loader ?? loadNativeWindowChrome;
-  chromeSync = 0;
-}
-
 function syncNativeWindowChrome(scheme: 'light' | 'dark'): void {
-  const generation = ++chromeSync;
-  const backgroundColor = themes[scheme].bgCanvas;
-  void nativeWindowChrome()
-    .then((chrome) => {
-      if (!chrome || generation !== chromeSync) return;
-      return Promise.all([chrome.setTheme(scheme), chrome.setBackgroundColor(backgroundColor)]);
-    })
-    .catch(() => undefined);
+  const host = getVitalHost();
+  if (!host) return;
+  host.applyChrome({ scheme, background: themes[scheme].bgCanvas });
 }
 
-/** Runtime twin of the index.html FOUC snippet. Also syncs the native titlebar in Tauri. */
+/** Runtime twin of the index.html FOUC snippet. Also syncs the native titlebar in the desktop shell. */
 export function applyTheme(): void {
   const scheme = resolveTheme(getThemeChoice());
   document.documentElement.dataset.theme = scheme;

@@ -6,8 +6,7 @@
   "build": {
     "beforeDevCommand": "node scripts/before-dev.mjs",
     "devUrl": "http://localhost:5180",
-    "beforeBuildCommand": "pnpm --dir ../.. --filter @vital/web... build",
-    "frontendDist": "../../web/dist"
+    "frontendDist": "https://vital.aimo.plus"
   },
   "app": {
     "withGlobalTauri": false,

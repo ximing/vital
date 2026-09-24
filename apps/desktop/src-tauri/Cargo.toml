@@ -15,15 +15,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
-# cookies off: bearer only. unsafe-headers: Authorization is a forbidden fetch header.
-tauri-plugin-http = { version = "2", default-features = false, features = [
-  "rustls-tls",
-  "http2",
-  "charset",
-  "system-proxy",
-  "unsafe-headers",
-] }
-tauri-plugin-store = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }

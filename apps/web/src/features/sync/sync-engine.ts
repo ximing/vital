@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { nextSyncSince, syncEventsUrl, syncHeadMoved } from '@vital/api-client';
 import type { SyncChanges, SyncHead } from '@vital/dto';
-import { client, isTauriRuntime, tauriBaseUrl, tokenStore } from '@/api/client';
+import { client, tokenStore } from '@/api/client';
 import { browserNotify } from '@/features/notify/browser-notify.service';
 import { applySyncChanges } from './apply-changes';
 
@@ -19,7 +19,6 @@ let inFlight: Promise<void> | null = null;
 let backoff = 1_000;
 
 function eventsUrl(): string {
-  if (isTauriRuntime()) return syncEventsUrl(tauriBaseUrl());
   return syncEventsUrl('');
 }
 

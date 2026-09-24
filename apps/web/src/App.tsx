@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { TODOS_HOME_PATH } from '@/routes';
-import { isTauriRuntime } from '@/api/client';
+import { isDesktopHost } from '@/host';
 import { GuestOnly, RequireAuth, RootEntry } from '@/shell/require-auth';
 import { RouteFallback } from '@/shell/route-fallback';
 
@@ -59,7 +59,7 @@ export function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
       <Routes>
-        <Route path="/" element={isTauriRuntime() ? <RootEntry /> : <LandingPage />} />
+        <Route path="/" element={isDesktopHost() ? <RootEntry /> : <LandingPage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route
           path="/login"

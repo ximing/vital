@@ -2,11 +2,10 @@
 
 interface ImportMetaEnv {
   readonly VITE_APP_VERSION: string;
-  readonly VITE_TAURI_API_URL?: string;
 }
 
 interface Window {
-  __TAURI_INTERNALS__?: unknown;
+  __VITAL_HOST__?: import('./host').VitalHost;
 }
 
 declare module '*.svg?react' {

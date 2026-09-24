@@ -1,6 +1,6 @@
 import { bindServices, useService } from '@rabjs/react';
 import { useEffect, type FC } from 'react';
-import { isTauriRuntime } from '@/api/client';
+import { isDesktopHost } from '@/host';
 import { t } from '@/copy';
 import { BrowserNotifyService } from '@/features/notify/browser-notify.service';
 import { Banner } from '@/ui/banner';
@@ -13,7 +13,7 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
   const page = useService(NotificationsSectionService);
   const browser = useService(BrowserNotifyService);
   const copy = t.settings.notify;
-  const desktop = isTauriRuntime();
+  const desktop = isDesktopHost();
   const localTitle = desktop ? copy.desktop : copy.browser;
   const localHint = desktop ? copy.desktopHint : copy.browserHint;
   const localAsk = desktop ? copy.desktopAsk : copy.browserAsk;

@@ -3,7 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { client, isTauriRuntime } from '@/api/client';
+import { client } from '@/api/client';
+import type { VitalHost } from '@/host';
 import { t } from '@/copy';
 import { APP_VERSION } from '@/lib/app-version';
 import { NotificationsSection } from '../../../src/features/settings/NotificationsSection';
@@ -16,7 +17,6 @@ vi.mock('@/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/client')>();
   return {
     ...actual,
-    isTauriRuntime: vi.fn(() => false),
     client: {
       listNotificationChannels: vi.fn(),
       createNotificationChannel: vi.fn(),
@@ -54,10 +54,22 @@ const mockUser: UserProfile = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+function installDesktopHost(): void {
+  const host: VitalHost = {
+    kind: 'desktop',
+    applyChrome() {},
+    showStickyAlert() {},
+    listenStickyAlerts: async () => () => undefined,
+    closeStickyAlert() {},
+    openInMain() {},
+  };
+  Object.defineProperty(window, '__VITAL_HOST__', { configurable: true, value: host });
+}
+
 describe('NotificationsSection', () => {
   beforeEach(() => {
     setAuthForTest(mockUser);
-    vi.mocked(isTauriRuntime).mockReturnValue(false);
+    Reflect.deleteProperty(window, '__VITAL_HOST__');
     resetBrowserNotify();
     vi.mocked(client.listNotificationChannels).mockResolvedValue({ items: [] });
     vi.mocked(client.listApiTokens).mockResolvedValue({ items: [] });
@@ -100,7 +112,7 @@ describe('NotificationsSection', () => {
   });
 
   it('labels the local channel as system notifications in Tauri', async () => {
-    vi.mocked(isTauriRuntime).mockReturnValue(true);
+    installDesktopHost();
     const Ctor = function FakeNotification() {} as unknown as typeof Notification;
     Object.defineProperty(Ctor, 'permission', { configurable: true, value: 'default' });
     Ctor.requestPermission = vi.fn(async () => 'default' as NotificationPermission);
@@ -119,13 +131,12 @@ describe('NotificationsSection', () => {
       screen.queryByRole('button', { name: t.settings.notify.preview }),
     ).not.toBeInTheDocument();
     await waitFor(() => expect(client.listNotificationChannels).toHaveBeenCalled());
-    vi.mocked(isTauriRuntime).mockReturnValue(false);
     vi.unstubAllGlobals();
   });
 
   it('persists the desktop sticky overlay flag locally and reveals preview when on', async () => {
     const user = userEvent.setup();
-    vi.mocked(isTauriRuntime).mockReturnValue(true);
+    installDesktopHost();
     const Ctor = function FakeNotification() {} as unknown as typeof Notification;
     Object.defineProperty(Ctor, 'permission', { configurable: true, value: 'granted' });
     Ctor.requestPermission = vi.fn(async () => 'granted' as NotificationPermission);
@@ -141,7 +152,6 @@ describe('NotificationsSection', () => {
     expect(toggle).toBeChecked();
     expect(window.localStorage.getItem('vital:sticky-alert')).toBe('1');
     expect(screen.getByRole('button', { name: t.settings.notify.preview })).toBeInTheDocument();
-    vi.mocked(isTauriRuntime).mockReturnValue(false);
     vi.unstubAllGlobals();
   });
 

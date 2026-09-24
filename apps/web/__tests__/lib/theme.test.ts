@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { themes } from '@vital/tokens';
+import type { VitalHost } from '../../src/host';
 import {
   THEME_STORAGE_KEY,
   applyTheme,
   getThemeChoice,
   resolveTheme,
-  setNativeWindowChromeForTest,
   setThemeChoice,
   subscribeSystemTheme,
 } from '../../src/lib/theme';
@@ -33,7 +33,7 @@ describe('theme helper', () => {
 
   afterEach(() => {
     localStorage.clear();
-    setNativeWindowChromeForTest(null);
+    Reflect.deleteProperty(window, '__VITAL_HOST__');
   });
 
   it('defaults to system when storage is empty', () => {
@@ -69,29 +69,42 @@ describe('theme helper', () => {
     expect(document.documentElement.dataset.theme).toBe('light');
   });
 
-  it('syncs the native titlebar to the resolved scheme in Tauri', async () => {
-    const setTheme = vi.fn(async () => undefined);
-    const setBackgroundColor = vi.fn(async () => undefined);
-    setNativeWindowChromeForTest(async () => ({ setTheme, setBackgroundColor }));
+  it('syncs the native titlebar through the desktop host', () => {
+    const applyChrome = vi.fn();
+    const host: VitalHost = {
+      kind: 'desktop',
+      applyChrome,
+      showStickyAlert() {},
+      listenStickyAlerts: async () => () => undefined,
+      closeStickyAlert() {},
+      openInMain() {},
+    };
+    Object.defineProperty(window, '__VITAL_HOST__', { configurable: true, value: host });
 
     setThemeChoice('light');
-    await vi.waitFor(() => {
-      expect(setTheme).toHaveBeenCalledWith('light');
-      expect(setBackgroundColor).toHaveBeenCalledWith(themes.light.bgCanvas);
+    expect(applyChrome).toHaveBeenCalledWith({
+      scheme: 'light',
+      background: themes.light.bgCanvas,
     });
 
     setThemeChoice('dark');
-    await vi.waitFor(() => {
-      expect(setTheme).toHaveBeenCalledWith('dark');
-      expect(setBackgroundColor).toHaveBeenCalledWith(themes.dark.bgCanvas);
+    expect(applyChrome).toHaveBeenCalledWith({
+      scheme: 'dark',
+      background: themes.dark.bgCanvas,
     });
 
-    setTheme.mockClear();
+    applyChrome.mockClear();
     mockMatchMedia(true);
     setThemeChoice('system');
-    await vi.waitFor(() => {
-      expect(setTheme).toHaveBeenCalledWith('dark');
+    expect(applyChrome).toHaveBeenCalledWith({
+      scheme: 'dark',
+      background: themes.dark.bgCanvas,
     });
+  });
+
+  it('does not ask for chrome when there is no desktop host', () => {
+    expect(() => setThemeChoice('light')).not.toThrow();
+    expect(document.documentElement.dataset.theme).toBe('light');
   });
 
   it('subscribeSystemTheme registers and unregisters the media listener', () => {

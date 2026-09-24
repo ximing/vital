@@ -1,14 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { VitalHost } from '../../../src/host';
 import { appPathFromNotifyUrl } from '../../../src/features/notify/app-path';
 import {
   browserNotify,
   resetBrowserNotify,
 } from '../../../src/features/notify/browser-notify.service';
-import {
-  resetStickyAlertForTest,
-  setStickyAlertTauriForTest,
-  STICKY_ALERT_LABEL,
-} from '../../../src/features/notify/sticky-alert';
+import { resetStickyAlertForTest } from '../../../src/features/notify/sticky-alert';
+
+function installDesktopHost(overrides: Partial<VitalHost> = {}): VitalHost {
+  const host: VitalHost = {
+    kind: 'desktop',
+    applyChrome() {},
+    showStickyAlert() {},
+    listenStickyAlerts: async () => () => undefined,
+    closeStickyAlert() {},
+    openInMain() {},
+    ...overrides,
+  };
+  Object.defineProperty(window, '__VITAL_HOST__', { configurable: true, value: host });
+  return host;
+}
 
 const originalNotification = globalThis.Notification;
 
@@ -59,7 +70,7 @@ function installTauriPatchedNotification() {
 afterEach(() => {
   resetBrowserNotify();
   resetStickyAlertForTest();
-  Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
+  Reflect.deleteProperty(window, '__VITAL_HOST__');
   vi.unstubAllGlobals();
   if (originalNotification) {
     vi.stubGlobal('Notification', originalNotification);
@@ -117,36 +128,10 @@ describe('BrowserNotifyService', () => {
     expect(permission).toBe('default');
   });
 
-  it('does not open the sticky overlay on Tauri unless the local flag is on', async () => {
-    Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} });
+  it('does not open the sticky overlay on the desktop unless the local flag is on', () => {
+    const showStickyAlert = vi.fn();
+    installDesktopHost({ showStickyAlert });
     const { calls } = installTauriPatchedNotification();
-    const created: unknown[] = [];
-    setStickyAlertTauriForTest(
-      async () =>
-        ({
-          WebviewWindow: Object.assign(
-            class {
-              constructor() {
-                created.push('created');
-              }
-              once() {
-                return undefined;
-              }
-              show = async () => undefined;
-              unminimize = async () => undefined;
-              setFocus = async () => undefined;
-              setAlwaysOnTop = async () => undefined;
-              requestUserAttention = async () => undefined;
-              close = async () => undefined;
-            },
-            { getByLabel: async () => null, getCurrent: () => null },
-          ),
-          currentMonitor: async () => null,
-          UserAttentionType: { Critical: 1 },
-          emitTo: async () => undefined,
-          listen: async () => () => undefined,
-        }) as never,
-    );
     browserNotify().showPush({
       type: 'notify',
       id: 'n3',
@@ -154,47 +139,14 @@ describe('BrowserNotifyService', () => {
       body: '「交报告」提醒到了',
       url: '/today',
     });
-    await Promise.resolve();
-    expect(created).toHaveLength(0);
+    expect(showStickyAlert).not.toHaveBeenCalled();
     expect(calls).toHaveLength(1);
   });
 
-  it('opens a sticky overlay on Tauri when the local flag is on, even without OS permission', async () => {
-    Object.defineProperty(window, '__TAURI_INTERNALS__', { configurable: true, value: {} });
+  it('asks the shell for a sticky overlay when the local flag is on, even without OS permission', () => {
     installBrowserNotification('default');
-    const created: Array<{ label: string; options: Record<string, unknown> }> = [];
-    const emitTo = vi.fn(async () => undefined);
-    setStickyAlertTauriForTest(
-      async () =>
-        ({
-          WebviewWindow: Object.assign(
-            class {
-              constructor(label: string, options: Record<string, unknown>) {
-                created.push({ label, options });
-              }
-              once(event: string, handler: () => void) {
-                if (event === 'tauri://created') handler();
-              }
-              show = async () => undefined;
-              unminimize = async () => undefined;
-              setFocus = async () => undefined;
-              setAlwaysOnTop = async () => undefined;
-              requestUserAttention = async () => undefined;
-              close = async () => undefined;
-            },
-            {
-              getByLabel: async () => null,
-              getCurrent: () => {
-                throw new Error('unused');
-              },
-            },
-          ),
-          currentMonitor: async () => null,
-          UserAttentionType: { Critical: 1 },
-          emitTo,
-          listen: async () => () => undefined,
-        }) as never,
-    );
+    const showStickyAlert = vi.fn();
+    installDesktopHost({ showStickyAlert });
     const notify = browserNotify();
     notify.setStickyEnabled(true);
     notify.showPush({
@@ -204,11 +156,11 @@ describe('BrowserNotifyService', () => {
       body: '「交报告」提醒到了',
       url: '/today',
     });
-    await vi.waitFor(() => expect(created).toHaveLength(1));
-    expect(created[0]?.label).toBe(STICKY_ALERT_LABEL);
-    expect(String(created[0]?.options.url)).toContain('vital-alert=');
-    expect(created[0]?.options.alwaysOnTop).toBe(true);
-    expect(created[0]?.options.visibleOnAllWorkspaces).toBe(true);
-    expect(created[0]?.options.decorations).toBe(false);
+    expect(showStickyAlert).toHaveBeenCalledWith({
+      id: 'n4',
+      title: '任务提醒',
+      body: '「交报告」提醒到了',
+      url: '/today',
+    });
   });
 });
