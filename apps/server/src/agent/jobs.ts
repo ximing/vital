@@ -314,9 +314,18 @@ async function processOne(job: AgentJobRow, now: Date): Promise<void> {
         firstAttemptAt: terminal || superseded ? null : job.firstAttemptAt,
         leaseToken: null, leaseExpiresAt: null, lastError: message, updatedAt: now,
       }).where(eq(agentJobs.id, job.id));
-      if (terminal && !newer && job.jobType === 'outcome.refresh' && 'outcomeId' in job.payload) {
-        await tx.update(outcomes).set({ agentState: 'failed' })
-          .where(and(eq(outcomes.id, job.payload.outcomeId), eq(outcomes.userId, job.userId)));
+      if (job.jobType === 'outcome.refresh' && 'outcomeId' in job.payload) {
+        // A budget defer waits until the next local day. Clear the pending pulse
+        // so the last headline stays on the card; the job itself remains queued.
+        const nextState = terminal && !newer ? 'failed' : deferred && !superseded ? 'idle' : null;
+        if (nextState !== null) {
+          await tx.update(outcomes).set({ agentState: nextState })
+            .where(and(
+              eq(outcomes.id, job.payload.outcomeId),
+              eq(outcomes.userId, job.userId),
+              ...(nextState === 'idle' ? [eq(outcomes.agentState, 'pending')] : []),
+            ));
+        }
       }
     });
   } finally { clearInterval(heartbeat); }

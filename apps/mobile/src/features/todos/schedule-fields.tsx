@@ -1,10 +1,13 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import type { PatchTaskInput, RecurrenceKind, ReminderOffsetMinutes, Task } from '@vital/dto';
+import type { Theme } from '@vital/tokens';
 import { DateField } from '../../components/DateField';
 import { PickerOption, PickerSheet } from '../../components/PickerSheet';
 import { SelectField, type SelectOption } from '../../components/SelectField';
 import { copy } from '../../lib/copy';
 import { fromDatetimeLocal, toDatetimeLocal } from '../../lib/format';
+import { useTheme } from '../../theme/use-theme';
 import {
   offsetLabel,
   recurrenceSelectValue,
@@ -14,6 +17,18 @@ import {
 } from '../../lib/schedule';
 
 const OFFSETS: ReminderOffsetMinutes[] = [5, 15, 30, 60, 1440];
+
+const createRowStyles = (t: Theme) =>
+  StyleSheet.create({
+    row: {
+      minHeight: 48,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space[3],
+    },
+    label: { width: 64, fontSize: 13, color: t.textTertiary },
+    value: { flex: 1, textAlign: 'right', fontSize: 14, color: t.fgPrimary },
+  });
 
 function reminderOptions(hasDue: boolean): SelectOption<ReminderValue>[] {
   return [
@@ -60,6 +75,9 @@ export function RecurrenceField({
   task: Task;
   onPatch: (input: PatchTaskInput) => void;
 }) {
+  const t = useTheme();
+  const styles = useMemo(() => createRowStyles(t), [t]);
+  const [open, setOpen] = useState(false);
   const value = recurrenceSelectValue(task);
   const options: SelectOption<RecurrenceValue>[] = [
     { value: 'none', label: copy.todos.recurrenceNone },
@@ -75,18 +93,39 @@ export function RecurrenceField({
   if (value === 'custom') {
     options.push({ value: 'custom', label: task.recurrence ?? copy.todos.recurrence, disabled: true });
   }
+  const selected = options.find((option) => option.value === value);
+
+  function choose(next: RecurrenceValue): void {
+    if (next === 'custom') return;
+    if (next === 'none') onPatch({ recurrence: null, recurrenceKind: null });
+    else onPatch({ recurrence: null, recurrenceKind: next as RecurrenceKind });
+    setOpen(false);
+  }
 
   return (
-    <SelectField
-      label={copy.todos.recurrence}
-      value={value}
-      options={options}
-      onChange={(next) => {
-        if (next === 'custom') return;
-        if (next === 'none') onPatch({ recurrence: null, recurrenceKind: null });
-        else onPatch({ recurrence: null, recurrenceKind: next as RecurrenceKind });
-      }}
-    />
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={copy.todos.recurrence}
+        onPress={() => setOpen(true)}
+        style={styles.row}
+      >
+        <Text style={styles.label}>{copy.todos.recurrence}</Text>
+        <Text style={styles.value} numberOfLines={1}>
+          {selected?.label ?? copy.todos.recurrenceNone}
+        </Text>
+      </Pressable>
+      <PickerSheet visible={open} title={copy.todos.recurrence} onClose={() => setOpen(false)}>
+        {options.map((option) => (
+          <PickerOption
+            key={option.value}
+            label={option.label}
+            selected={option.value === value}
+            onPress={() => choose(option.value)}
+          />
+        ))}
+      </PickerSheet>
+    </>
   );
 }
 

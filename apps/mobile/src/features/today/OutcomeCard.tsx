@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Outcome, OutcomeSignal } from '@vital/dto';
+import { router } from 'expo-router';
 import type { Theme } from '@vital/tokens';
 import { PickerSheet } from '../../components/PickerSheet';
 import { copy } from '../../lib/copy';
@@ -50,7 +51,10 @@ export function OutcomeCard({
       <Pressable
         testID="outcome-card"
         accessibilityRole="button"
-        onPress={() => setMenu(true)}
+        accessibilityLabel={outcome.name}
+        onPress={() => router.push(`/threads/${outcome.id}`)}
+        onLongPress={() => setMenu(true)}
+        delayLongPress={320}
         style={({ pressed }) => [styles.card, rnShadow(t), pressed && styles.pressed]}
       >
         <View style={styles.head}>
@@ -67,15 +71,12 @@ export function OutcomeCard({
         </View>
 
         <View style={styles.headline}>
-          {view.pending ? (
-            <>
-              <View style={styles.skel} />
-              <View style={[styles.skel, styles.skelShort]} />
-            </>
-          ) : view.headline ? (
+          {view.headline ? (
             <Text style={styles.headlineText} numberOfLines={2}>
               {view.headline}
             </Text>
+          ) : view.pending ? (
+            <Text style={styles.headlineText}>{copy.today.updating}</Text>
           ) : null}
         </View>
 
@@ -99,6 +100,7 @@ export function OutcomeCard({
               {copy.today.materials.replace('{n}', String(outcome.materialCount))}
             </Text>
           ) : null}
+          {view.pending ? <Text style={styles.stat}>{copy.today.updating}</Text> : null}
           {view.failed ? (
             <Pressable
               accessibilityRole="button"
@@ -162,13 +164,6 @@ const createStyles = (t: Theme) =>
     badgeText: { fontSize: t.type.caption.fontSize, fontWeight: '500' },
     headline: { minHeight: 20, gap: 6 },
     headlineText: { fontSize: t.type.meta.fontSize, lineHeight: 20, color: t.fgMuted },
-    skel: {
-      height: 13,
-      width: '92%',
-      borderRadius: 2,
-      backgroundColor: t.bgSurfaceMuted,
-    },
-    skelShort: { width: '64%' },
     next: { marginTop: 'auto', paddingTop: t.space[3], gap: 2 },
     nextSpacer: { marginTop: 'auto' },
     nextLabel: {

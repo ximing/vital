@@ -419,6 +419,24 @@ describe('thread workspace', () => {
     });
   });
 
+  it('keeps the last headline visible while a refresh is pending', async () => {
+    vi.mocked(client.getOutcomeDetail).mockResolvedValue(
+      makeDetail({
+        outcome: makeOutcome({
+          id: OUTCOME_ID,
+          name: '身体健康',
+          agentState: 'pending',
+          agentHeadline: '喝水近 7 天全勤',
+        }),
+      }),
+    );
+    renderThread();
+
+    expect(await screen.findByText('喝水近 7 天全勤')).toBeInTheDocument();
+    expect(screen.getByText(t.today.updating)).toBeInTheDocument();
+    expect(screen.queryByLabelText(t.today.updating)).not.toBeInTheDocument();
+  });
+
   it('shows the not-found state for a missing thread', async () => {
     vi.mocked(client.getOutcomeDetail).mockRejectedValue(
       new ApiError(404, 'NOT_FOUND', 'not found'),

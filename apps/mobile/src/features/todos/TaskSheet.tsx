@@ -15,10 +15,10 @@ import {
 } from 'lucide-react-native';
 import type { TaskPriority } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { useSheetExpand } from '../../components/BottomSheet';
+import { useSheetExpand, useSheetScroll } from '../../components/BottomSheet';
 import { DateField } from '../../components/DateField';
 import { Loading } from '../../components/Loading';
-import { PickerOption, PickerSheet } from '../../components/PickerSheet';
+import { PickerDivider, PickerOption, PickerSheet } from '../../components/PickerSheet';
 import { SectionHead } from '../../components/SectionHead';
 import { TaskCheckbox } from '../../components/TaskRow';
 import { useFocusReload } from '../../hooks/use-focus-reload';
@@ -106,6 +106,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
   registerFlush: (flush: (() => Promise<void>) | null) => void;
 }) {
   const expand = useSheetExpand();
+  const sheetScroll = useSheetScroll(full);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const s = useService(TaskSheetService);
@@ -250,6 +251,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
       ) : null}
 
       <ScrollView
+        {...sheetScroll}
         style={styles.main}
         scrollEnabled={full}
         nestedScrollEnabled={false}
@@ -429,6 +431,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
             onPress={() => void s.togglePin()}
           />
         ) : null}
+        {movable ? <PickerDivider /> : null}
         {task.status !== 'canceled' ? (
           <PickerOption
             label={copy.todos.abandon}

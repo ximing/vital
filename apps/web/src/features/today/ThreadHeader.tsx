@@ -155,14 +155,17 @@ export function ThreadHeader({
         </div>
       ) : null}
 
-      {outcome.agentState === 'pending' ? (
-        <div aria-label={t.today.updating} className="mt-3">
-          <div className="skeleton-pulse h-[13px] w-[55%] rounded-sm" />
-        </div>
-      ) : headline !== null ? (
+      {headline !== null ? (
         <p className="mt-3 max-w-[68ch] text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">
           {headline}
         </p>
+      ) : outcome.agentState === 'pending' ? (
+        <div aria-label={t.today.updating} className="mt-3">
+          <div className="skeleton-pulse h-[13px] w-[55%] rounded-sm" />
+        </div>
+      ) : null}
+      {outcome.agentState === 'pending' && headline !== null ? (
+        <p className="mt-1.5 text-[length:var(--text-caption)] text-tertiary">{t.today.updating}</p>
       ) : null}
 
       {outcome.agentState === 'failed' ? (

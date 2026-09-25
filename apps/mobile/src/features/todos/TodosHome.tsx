@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { Task } from '@vital/dto';
 import {
@@ -13,13 +13,12 @@ import {
   List as ListIcon,
   Menu,
   Pin,
-  Plus,
 } from 'lucide-react-native';
 import type { Theme } from '@vital/tokens';
 import { Banner } from '../../components/Banner';
 import { IconButton } from '../../components/IconButton';
 import { PageHeader } from '../../components/PageHeader';
-import { PickerOption, PickerSheet } from '../../components/PickerSheet';
+import { PickerOption, PickerSection, PickerSheet } from '../../components/PickerSheet';
 import { SearchIconButton } from '../../components/SearchIconButton';
 import { useOpenTask } from '../../components/TaskSheetHost';
 import { copy } from '../../lib/copy';
@@ -31,10 +30,7 @@ import {
 } from '../../lib/format';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
-import { Icon } from '../../ui/icon';
-import { rnShadow } from '../../ui/card';
 import { ListDrawer } from './ListDrawer';
-import { NewTaskBar } from './NewTaskBar';
 import { TaskList } from './TaskList';
 import { emptyCopy, isSmartList, listLabel, titleCopy, type TaskListView } from './list-meta';
 import { TaskListService } from './task-list.service';
@@ -58,7 +54,6 @@ function sortHint(sort: TaskSort, key: TaskSortKey): string {
 const TodosHomeContent = observer(function TodosHomeContent() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
-  const insets = useSafeAreaInsets();
   const s = useService(TodosService);
   const list = useService(TaskListService);
   const openTask = useOpenTask();
@@ -69,7 +64,6 @@ const TodosHomeContent = observer(function TodosHomeContent() {
   useFocusReload(useCallback(() => s.load(), [s]));
   const tz = s.tz;
   const headerTitle = s.current ? listLabel(s.current) : titleCopy(s.listId);
-  const createId = isSmartList(s.listId) ? s.inboxId : s.listId;
 
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
@@ -102,7 +96,6 @@ const TodosHomeContent = observer(function TodosHomeContent() {
             : undefined
         }
         showViews={false}
-        hideComposer
         grouped
         view={s.view}
         onViewChange={(view: TaskListView) => s.setView(view)}
@@ -110,36 +103,9 @@ const TodosHomeContent = observer(function TodosHomeContent() {
         onPostponeOverdue={() => void s.postponeOverdue()}
         onOverdueCount={(count: number) => s.setOverdueCount(count)}
       />
-      {s.compose && createId ? (
-        <NewTaskBar
-          listId={createId}
-          extra={
-            s.listId === 'smart:today'
-              ? { dueAt: startOfLocalDayIso(tz), isAllDay: true, timezone: tz }
-              : undefined
-          }
-          onCreated={() => {
-            s.closeCompose();
-            s.bumpList();
-            void s.load();
-          }}
-        />
-      ) : (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={copy.actions.add}
-          onPress={() => s.openCompose()}
-          style={({ pressed }) => [
-            styles.fab,
-            { bottom: Math.max(insets.bottom, t.space[5]) + t.space[12] + t.space[5] },
-            pressed && styles.fabPressed,
-          ]}
-        >
-          <Icon icon={Plus} size={26} color={t.fgOnAccent} />
-        </Pressable>
-      )}
       <ListDrawer />
       <PickerSheet visible={s.more} title={copy.todos.more} onClose={() => s.closeMore()}>
+        <PickerSection first label={copy.todos.viewMenu} />
         <PickerOption
           icon={ListIcon}
           label={copy.todos.views.list}
@@ -163,6 +129,7 @@ const TodosHomeContent = observer(function TodosHomeContent() {
           label={copy.todos.showDone}
           onPress={() => s.selectList('smart:done')}
         />
+        <PickerSection label={copy.todos.sort} />
         {TASK_SORT_KEYS.map((key) => {
           const active = list.taskSort.key === key;
           const hint = sortHint(list.taskSort, key);
@@ -176,6 +143,7 @@ const TodosHomeContent = observer(function TodosHomeContent() {
             />
           );
         })}
+        <PickerSection label={copy.todos.listMenu} />
         {s.current?.kind === 'user' ? (
           <PickerOption
             icon={Pin}
@@ -215,17 +183,4 @@ export const TodosHome = bindServices(TodosHomeContent, [TodosService]);
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bgCanvas },
-    fab: {
-      position: 'absolute',
-      right: t.space[5],
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: t.accentPrimary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      ...rnShadow(t),
-      shadowRadius: 12,
-    },
-    fabPressed: { backgroundColor: t.accentPrimaryHover },
   });

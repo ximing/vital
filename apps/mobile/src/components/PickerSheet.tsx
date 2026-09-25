@@ -4,6 +4,7 @@ import { Check } from 'lucide-react-native';
 import type { Theme } from '@vital/tokens';
 import { copy } from '../lib/copy';
 import { useTheme } from '../theme/use-theme';
+import { sheetShadow } from '../ui/card';
 import { Icon, type LucideIcon } from '../ui/icon';
 
 export function PickerSheet({
@@ -23,7 +24,8 @@ export function PickerSheet({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel={copy.actions.cancel} />
-        <View style={styles.sheet} accessibilityViewIsModal>
+        <View style={[styles.sheet, sheetShadow(t)]} accessibilityViewIsModal>
+          <View style={styles.handle} />
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button">
@@ -72,6 +74,20 @@ export function PickerOption({
   );
 }
 
+/** Hairline between picker groups that are different actions. */
+export function PickerDivider() {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
+  return <View style={styles.divider} />;
+}
+
+/** Caption that splits a picker into separate functions instead of one continuous list. */
+export function PickerSection({ label, first = false }: { label: string; first?: boolean }) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
+  return <Text style={[styles.section, first && styles.sectionFirst]}>{label}</Text>;
+}
+
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     overlay: {
@@ -84,9 +100,19 @@ const createStyles = (t: Theme) =>
       backgroundColor: t.bgElevated,
       borderTopLeftRadius: t.radius.xl,
       borderTopRightRadius: t.radius.xl,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.borderSubtle,
       paddingHorizontal: t.space[4],
-      paddingTop: t.space[4],
+      paddingTop: t.space[2],
       paddingBottom: t.space[8],
+    },
+    handle: {
+      alignSelf: 'center',
+      width: 40,
+      height: 5,
+      marginBottom: t.space[3],
+      borderRadius: t.radius.pill,
+      backgroundColor: t.textTertiary,
     },
     header: {
       flexDirection: 'row',
@@ -113,4 +139,22 @@ const createStyles = (t: Theme) =>
       color: t.fgPrimary,
     },
     optionDestructive: { color: t.danger },
+    section: {
+      marginTop: t.space[3],
+      marginBottom: t.space[1],
+      paddingTop: t.space[3],
+      paddingHorizontal: t.space[3],
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.borderSubtle,
+      fontSize: 12,
+      fontWeight: '600',
+      color: t.textTertiary,
+    },
+    sectionFirst: { marginTop: 0, paddingTop: 0, borderTopWidth: 0 },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      marginVertical: t.space[2],
+      marginHorizontal: t.space[3],
+      backgroundColor: t.borderSubtle,
+    },
   });

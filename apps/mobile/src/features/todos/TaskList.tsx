@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -258,7 +260,10 @@ function TaskListContent({
   const movableLists = lists.filter((row) => row.kind !== 'smart' && !row.isArchived);
 
   return (
-    <View style={styles.flex}>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       {offline ? <Banner tone="info">{copy.offline}</Banner> : null}
       {error ? (
         <Banner
@@ -638,7 +643,7 @@ function TaskListContent({
             ))
           : null}
       </PickerSheet>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

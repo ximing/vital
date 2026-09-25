@@ -320,6 +320,22 @@ describe('today workspace', () => {
     });
   });
 
+  it('keeps an existing headline visible while the agent refresh is pending', async () => {
+    const pending = makeOutcome({
+      id: 'o-known',
+      name: '身体健康',
+      agentState: 'pending',
+      agentHeadline: '喝水近 7 天全勤',
+    });
+    vi.mocked(client.getToday).mockResolvedValue(makeDashboard({ outcomes: [pending] }));
+
+    renderToday();
+
+    expect(await screen.findByText('喝水近 7 天全勤')).toBeInTheDocument();
+    expect(screen.getByText(t.today.updating)).toBeInTheDocument();
+    expect(screen.queryByLabelText(t.today.updating)).not.toBeInTheDocument();
+  });
+
   it('guides thread creation when the board is empty', async () => {
     vi.mocked(client.createOutcome).mockImplementation(async (input) =>
       makeOutcome({ id: 'o-new', name: input.name }),

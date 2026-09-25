@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { llmReady } from '@vital/dto';
@@ -81,6 +81,10 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
 
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scroll}
@@ -143,19 +147,20 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
               lists={s.lists}
               onComplete={(task) => void s.completeTask(task)}
             />
-            {inboxId ? (
-              <NewTaskBar
-                listId={inboxId}
-                extra={{ dueAt: startOfLocalDayIso(tz), isAllDay: true, timezone: tz }}
-                onCreated={(task) => {
-                  s.applyTask(task);
-                  void s.refresh();
-                }}
-              />
-            ) : null}
           </View>
         </View>
       </ScrollView>
+      {inboxId ? (
+        <NewTaskBar
+          listId={inboxId}
+          extra={{ dueAt: startOfLocalDayIso(tz), isAllDay: true, timezone: tz }}
+          onCreated={(task) => {
+            s.applyTask(task);
+            void s.refresh();
+          }}
+        />
+      ) : null}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 });

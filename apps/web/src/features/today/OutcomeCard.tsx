@@ -69,13 +69,13 @@ export function OutcomeCard({
       </div>
 
       <div className="mt-2.5 min-h-5 text-[length:var(--text-meta)] leading-5 text-muted">
-        {view.pending ? (
+        {view.headline ? (
+          <p className="line-clamp-2">{view.headline}</p>
+        ) : view.pending ? (
           <div aria-label={t.today.updating}>
             <div className="skeleton-pulse h-[13px] w-[92%] rounded-sm" />
             <div className="skeleton-pulse mt-1.5 h-[13px] w-[64%] rounded-sm" />
           </div>
-        ) : view.headline ? (
-          <p className="line-clamp-2">{view.headline}</p>
         ) : null}
       </div>
 

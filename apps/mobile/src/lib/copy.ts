@@ -492,6 +492,8 @@ export const copy = {
   },
   todos: {
     views: { list: '列表', board: '看板', week: '日历' },
+    viewMenu: '视图',
+    listMenu: '清单',
     priority: '优先级',
     notes: '备注',
     notesPlaceholder: '写下备注',
@@ -571,6 +573,7 @@ export const copy = {
     markDone: '完成',
     markUndone: '标为未完成',
     addTaskPlaceholder: '添加任务',
+    composerDate: '日期',
     describe: '描述',
     pin: '置顶',
     unpin: '取消置顶',

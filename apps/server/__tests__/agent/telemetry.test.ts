@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { buildFastify } from '../../src/app.js';
 import { getUserEntity } from '../../src/auth/auth.service.js';
 import { getDb } from '../../src/db/index.js';
-import { agentExecutions, agentJobs, agentModelBudgets, agentUsage } from '../../src/db/schema.js';
+import { agentExecutions, agentJobs, agentModelBudgets, agentUsage, outcomes } from '../../src/db/schema.js';
 import { enqueueOutcomeRefresh, processDueAgentJobs } from '../../src/agent/jobs.js';
 import { config } from '../../src/config.js';
 import { completeText, setPiResolveOverride } from '../../src/llm/pi.js';
@@ -71,6 +71,8 @@ describe('automatic model and execution telemetry', () => {
     const [deferred] = await getDb().select().from(agentJobs).where(eq(agentJobs.userId, alice.id));
     expect(deferred).toMatchObject({ status: 'pending', lastError: 'DAILY_MODEL_BUDGET', attemptCount: 0 });
     expect(deferred?.nextAttemptAt?.getTime()).toBeGreaterThan(Date.now());
+    const [deferredOutcome] = await getDb().select().from(outcomes).where(eq(outcomes.id, outcomeId));
+    expect(deferredOutcome?.agentState).toBe('idle');
     const executions = await getDb().select().from(agentExecutions).where(eq(agentExecutions.userId, alice.id));
     expect(executions.every(e => e.status === 'skipped' && e.reason === 'DAILY_MODEL_BUDGET')).toBe(true);
     expect(await getDb().select().from(agentUsage)).toHaveLength(0);
