@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
 
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react-native';
 import type { TaskPriority } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { useSheetExpand } from '../../components/BottomSheet';
 import { DateField } from '../../components/DateField';
 import { Loading } from '../../components/Loading';
 import { PickerOption, PickerSheet } from '../../components/PickerSheet';
@@ -29,7 +30,6 @@ import {
   isOverdue,
   localDateStamp,
   toDatetimeLocal,
-  zonedLocalMidnightIso,
 } from '../../lib/format';
 import { useTheme } from '../../theme/use-theme';
 import { Icon } from '../../ui/icon';
@@ -37,6 +37,8 @@ import { rnShadow } from '../../ui/card';
 import { priorityColor } from './priority';
 import { ReminderPicker } from './schedule-fields';
 import { AddSubtaskRow, SubtaskRow } from './subtasks';
+import { NotesField } from './NotesField';
+import { QuickSchedule, TagCreateRow, TaskSheetExtras } from './TaskSheetFields';
 import { TaskSheetService } from './task-sheet.service';
 
 const PRIORITIES: TaskPriority[] = [0, 1, 2, 3];
@@ -94,11 +96,16 @@ const TaskSheetContent = observer(function TaskSheetContent({
   taskId,
   full,
   onClose,
+  onOpenTask,
+  registerFlush,
 }: {
   taskId: string;
   full: boolean;
   onClose: () => void;
+  onOpenTask: (id: string) => void;
+  registerFlush: (flush: (() => Promise<void>) | null) => void;
 }) {
+  const expand = useSheetExpand();
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const s = useService(TaskSheetService);
@@ -108,6 +115,13 @@ const TaskSheetContent = observer(function TaskSheetContent({
       await s.load();
     }, [s, taskId]),
   );
+  useEffect(() => {
+    registerFlush(() => s.flushText());
+    return () => {
+      registerFlush(null);
+      void s.flushText();
+    };
+  }, [registerFlush, s]);
 
   const task = s.task;
   if (task === null) return <Loading />;
@@ -143,16 +157,12 @@ const TaskSheetContent = observer(function TaskSheetContent({
         ? localDateStamp(zone, new Date(task.dueAt))
         : toDatetimeLocal(task.dueAt, zone);
 
-  function setDue(value: string): void {
-    if (value === '') {
-      void s.patch({ dueAt: null });
-      return;
-    }
-    const iso = allDay ? zonedLocalMidnightIso(zone, value) : fromDatetimeLocal(value, zone);
-    void s.patch({ dueAt: iso, isAllDay: allDay });
-  }
-
   const doneSubtasks = s.doneSubtasks;
+  const movable = task.parentId === null;
+
+  function openOther(id: string): void {
+    void s.flushText().then(() => onOpenTask(id));
+  }
 
   return (
     <View style={styles.wrap}>
@@ -172,6 +182,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={copy.todos.list}
+          disabled={!movable}
           onPress={() => s.openList()}
           style={styles.listChip}
         >
@@ -209,12 +220,41 @@ const TaskSheetContent = observer(function TaskSheetContent({
           </Pressable>
         </View>
       </View>
+      {s.saveLabel !== null ? (
+        <Pressable
+          accessibilityRole={s.saveState === 'error' ? 'button' : 'text'}
+          disabled={s.saveState !== 'error'}
+          onPress={() => s.retrySave()}
+          style={styles.saveRow}
+        >
+          <Text style={[styles.saveLabel, s.saveState === 'error' && styles.saveError]}>{s.saveLabel}</Text>
+        </Pressable>
+      ) : null}
+      {task.parentId !== null ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            s.parent ? `${copy.todos.backToParent} ${s.parent.title}` : copy.todos.backToParent
+          }
+          onPress={() => {
+            const parentId = task.parentId;
+            if (parentId) openOther(parentId);
+          }}
+          style={styles.parentLink}
+        >
+          <Icon icon={ChevronLeft} size={14} color={t.fgMuted} />
+          <Text style={styles.parentTitle} numberOfLines={1}>
+            {s.parent?.title ?? copy.todos.backToParent}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <ScrollView
         style={styles.main}
         scrollEnabled={full}
         nestedScrollEnabled={false}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.mainContent}
       >
         {/* 日期行：checkbox + 语义色日期文本 */}
@@ -226,7 +266,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
             kind={allDay ? 'date' : 'datetime-local'}
             zone={zone}
             weekStartsOn={weekStartsOn}
-            onChange={setDue}
+            onChange={(value) => s.setDue(value)}
             trigger={
               <Text style={[styles.due, { color: dueColor }]} numberOfLines={1}>
                 {dueText}
@@ -234,34 +274,43 @@ const TaskSheetContent = observer(function TaskSheetContent({
             }
           />
         </View>
+        <QuickSchedule />
 
         <TextInput
           value={s.title}
           onChangeText={(title) => s.setTitle(title)}
-          onEndEditing={() => void s.saveTitle()}
+          onEndEditing={(event) => {
+            s.setTitle(event.nativeEvent.text);
+            void s.flushText();
+          }}
           multiline
           scrollEnabled={full}
           style={[styles.title, done && styles.titleDone]}
           placeholder={copy.fields.title}
           placeholderTextColor={t.textTertiary}
         />
-        <TextInput
+        <NotesField
           value={s.notes}
-          onChangeText={(notes) => s.setNotes(notes)}
-          onEndEditing={() => void s.saveNotes()}
-          multiline
-          scrollEnabled={full}
-          style={[styles.notes, full ? styles.notesFull : styles.notesHalf]}
-          placeholder={copy.todos.addNotes}
-          placeholderTextColor={t.textTertiary}
+          full={full}
+          onChange={(notes) => s.setNotes(notes)}
+          onCommit={() => void s.flushText()}
+          onEditStart={() => {
+            if (!full) expand();
+          }}
         />
 
         {/* 标签 chips + 虚线「+ 标签」 */}
         <View style={styles.tags}>
           {namedTags.map((tag) => (
-            <View key={tag.id} style={styles.tagChip}>
+            <Pressable
+              key={tag.id}
+              accessibilityRole="button"
+              accessibilityLabel={tag.name}
+              onPress={() => void s.toggleTag(tag.id)}
+              style={styles.tagChip}
+            >
               <Text style={styles.tagLabel}>{tag.name}</Text>
-            </View>
+            </Pressable>
           ))}
           <Pressable
             accessibilityRole="button"
@@ -286,13 +335,37 @@ const TaskSheetContent = observer(function TaskSheetContent({
               }
             />
             {s.subtasks.map((row) => (
-              <SubtaskRow key={row.id} row={row} onToggle={(item) => void s.toggleSubtask(item)} />
+              <SubtaskRow
+                key={row.id}
+                row={row}
+                onToggle={(item) => void s.toggleSubtask(item)}
+                onOpen={(item) => openOther(item.id)}
+              />
             ))}
             <AddSubtaskRow onAdd={(title) => s.addSubtask(title)} openToken={s.subAddToken} />
           </View>
         ) : null}
+        <TaskSheetExtras full={full} />
       </ScrollView>
 
+      {task.reminderMode === 'custom' ? (
+        <View style={styles.customRemind}>
+          <DateField
+            label={copy.todos.reminderCustom}
+            value={task.reminderAt ? toDatetimeLocal(task.reminderAt, zone) : ''}
+            kind="datetime-local"
+            zone={zone}
+            weekStartsOn={weekStartsOn}
+            onChange={(next) => {
+              void s.patch(
+                next === ''
+                  ? { reminderMode: 'none', reminderOffsetMinutes: null, reminderAt: null }
+                  : { reminderMode: 'custom', reminderAt: fromDatetimeLocal(next, zone) },
+              );
+            }}
+          />
+        </View>
+      ) : null}
       {/* 底部工具条：标签 / 子任务 / 提醒 / 排期 */}
       <View style={styles.toolbar}>
         <ToolButton icon={TagIcon} label={copy.todos.tags} onPress={() => s.openTags()} />
@@ -318,7 +391,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
           kind={allDay ? 'date' : 'datetime-local'}
           zone={zone}
           weekStartsOn={weekStartsOn}
-          onChange={setDue}
+          onChange={(value) => s.setDue(value)}
           trigger={<ToolFace icon={CalendarClock} label={copy.todos.schedule} />}
         />
       </View>
@@ -335,6 +408,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
       </PickerSheet>
 
       <PickerSheet visible={s.tagOpen} title={copy.todos.tags} onClose={() => s.closeTags()}>
+        <TagCreateRow onCreate={(name) => s.createTag(name)} />
         {tags.map((tag) => {
           const on = task.tagIds.includes(tag.id);
           return (
@@ -349,10 +423,12 @@ const TaskSheetContent = observer(function TaskSheetContent({
       </PickerSheet>
 
       <PickerSheet visible={s.moreOpen} title={copy.todos.more} onClose={() => s.closeMore()}>
-        <PickerOption
-          label={task.pinned ? copy.todos.unpin : copy.todos.pin}
-          onPress={() => void s.togglePin()}
-        />
+        {movable ? (
+          <PickerOption
+            label={task.pinned ? copy.todos.unpin : copy.todos.pin}
+            onPress={() => void s.togglePin()}
+          />
+        ) : null}
         {task.status !== 'canceled' ? (
           <PickerOption
             label={copy.todos.abandon}
@@ -398,6 +474,18 @@ const createStyles = (t: Theme) =>
       justifyContent: 'center',
     },
     pressed: { opacity: 0.5 },
+    saveRow: { paddingHorizontal: 20, paddingBottom: 2 },
+    saveLabel: { fontSize: 12, lineHeight: 16, color: t.textTertiary, fontVariant: ['tabular-nums'] },
+    saveError: { color: t.danger },
+    parentLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      marginHorizontal: t.space[3],
+      marginBottom: 2,
+    },
+    parentTitle: { flex: 1, fontSize: 13, color: t.fgMuted },
+    customRemind: { paddingHorizontal: 20, paddingTop: t.space[2], gap: t.space[2] },
     listChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -439,14 +527,6 @@ const createStyles = (t: Theme) =>
       padding: 0,
     },
     titleDone: { color: t.fgMuted, textDecorationLine: 'line-through' },
-    notes: {
-      fontSize: 14,
-      lineHeight: 21,
-      color: t.fgMuted,
-      padding: 0,
-    },
-    notesHalf: { maxHeight: 63 },
-    notesFull: { minHeight: 120 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2], marginTop: 14 },
     tagChip: {
       height: 28,

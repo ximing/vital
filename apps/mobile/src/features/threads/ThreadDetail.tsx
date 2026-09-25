@@ -18,7 +18,9 @@ import { SectionHead } from '../../components/SectionHead';
 import { TaskRow } from '../../components/TaskRow';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { copy } from '../../lib/copy';
+import { formatDay, formatHm } from '../../lib/format';
 import { useOpenTask } from '../../components/TaskSheetHost';
+import { useAuth } from '../../services/auth.service';
 import { relativeTime } from '../inbox/model';
 import { useTheme } from '../../theme/use-theme';
 import { withAlpha } from '../../ui/color';
@@ -34,6 +36,7 @@ const ThreadDetailContent = observer(function ThreadDetailContent({ outcomeId }:
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const openTask = useOpenTask();
+  const zone = useAuth().user?.timezone ?? 'UTC';
   const s = useService(ThreadDetailService);
   useEffect(() => {
     s.configure(outcomeId);
@@ -49,6 +52,7 @@ const ThreadDetailContent = observer(function ThreadDetailContent({ outcomeId }:
   const detail = s.detail;
   const outcome = detail?.outcome ?? null;
   const openTasks = s.openTasks;
+  const nextTask = openTasks[0];
   const doneTasks = s.doneTasks;
   const attachCandidates = s.attachCandidates;
   const menuMaterial = s.menuMaterial;
@@ -123,6 +127,28 @@ const ThreadDetailContent = observer(function ThreadDetailContent({ outcomeId }:
         </View>
         {headline !== null ? <Text style={styles.headline}>{headline}</Text> : null}
         {closed ? <Text style={styles.closedNotice}>{copy.threads.closedNotice}</Text> : null}
+        <View style={styles.nextCard}>
+          <Text style={styles.nextLabel}>
+            {closed ? copy.threads.recentNextStep : copy.threads.nextStep}
+          </Text>
+          {nextTask !== undefined ? (
+            <Pressable accessibilityRole="button" onPress={() => openTask(nextTask.id)}>
+              <Text style={styles.nextTitle}>{nextTask.title}</Text>
+            </Pressable>
+          ) : (outcome.ruleNextStep ?? outcome.agentSuggestion) !== null ? (
+            <Text style={styles.nextTitle}>{outcome.ruleNextStep ?? outcome.agentSuggestion}</Text>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                if (!s.creatingTask) s.toggleCreatingTask();
+              }}
+            >
+              <Text style={styles.nextTitle}>{copy.threads.addFirst}</Text>
+              <Text style={styles.suggestion}>{copy.threads.addFirstHint}</Text>
+            </Pressable>
+          )}
+        </View>
 
         <SectionHead title={copy.threads.habitsSection} count={detail.habits.length} first />
         {detail.habits.length === 0 ? (
@@ -237,6 +263,29 @@ const ThreadDetailContent = observer(function ThreadDetailContent({ outcomeId }:
               </View>
             </Pressable>
           ))
+        )}
+
+        <SectionHead title={copy.threads.agentLog} count={detail.agentActions.length} />
+        {detail.agentActions.length === 0 ? (
+          <Text style={styles.emptyLine}>{copy.threads.emptyLog}</Text>
+        ) : (
+          detail.agentActions.map((action) => {
+            const labels: Record<string, string> = copy.activity.actions;
+            const summary =
+              action.payloadSummary !== ''
+                ? action.payloadSummary
+                : (labels[action.actionType] ?? action.actionType);
+            return (
+              <View key={action.id} style={styles.logRow}>
+                <Text style={styles.logMeta}>
+                  {formatDay(action.createdAt, zone)} {formatHm(action.createdAt, zone)}
+                  {' · '}
+                  {copy.threads.feedback[action.feedback]}
+                </Text>
+                <Text style={styles.logTitle}>{summary}</Text>
+              </View>
+            );
+          })
         )}
       </ScrollView>
 
@@ -371,6 +420,24 @@ const createStyles = (t: Theme) =>
       lineHeight: t.type.body.lineHeight,
       color: t.fgMuted,
     },
+    nextCard: {
+      marginTop: t.space[4],
+      borderRadius: t.radius.lg,
+      backgroundColor: t.bgAccentSubtle,
+      padding: t.space[4],
+      gap: t.space[2],
+    },
+    nextLabel: { fontSize: 12, fontWeight: '600', color: t.textTertiary },
+    nextTitle: { fontSize: 16, fontWeight: '600', color: t.fgPrimary },
+    suggestion: { fontSize: 14, lineHeight: 21, color: t.fgMuted },
+    logRow: {
+      paddingVertical: t.space[3],
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.borderSubtle,
+      gap: 2,
+    },
+    logMeta: { fontSize: 12, color: t.textTertiary, fontVariant: ['tabular-nums'] },
+    logTitle: { fontSize: 15, lineHeight: 22, color: t.fgPrimary },
     closedNotice: {
       marginTop: t.space[2],
       fontSize: t.type.meta.fontSize,

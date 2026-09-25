@@ -8,6 +8,7 @@ import {
   recurrenceSelectValue,
   reminderMeta,
   reminderSelectValue,
+  scheduleDayPatch,
 } from '../../src/lib/schedule';
 
 const TZ = 'Asia/Shanghai';
@@ -76,6 +77,24 @@ describe('schedule semantic fields', () => {
         now,
       ),
     ).toContain('逾期');
+  });
+});
+
+describe('scheduleDayPatch', () => {
+  it('keeps the clock time when moving a timed task to another day', () => {
+    const patch = scheduleDayPatch(sample(), '2026-09-10', TZ);
+    expect(patch).toEqual({
+      startAt: null,
+      dueAt: '2026-09-10T01:00:00.000Z',
+      isAllDay: false,
+    });
+  });
+
+  it('stays all-day when the task has no time', () => {
+    const patch = scheduleDayPatch(sample({ isAllDay: true, dueAt: null }), '2026-09-10', TZ);
+    expect(patch.isAllDay).toBe(true);
+    expect(patch.startAt).toBeNull();
+    expect(patch.dueAt).toBe(fromDatetimeLocal('2026-09-10T00:00', TZ));
   });
 });
 

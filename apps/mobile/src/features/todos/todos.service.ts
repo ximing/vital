@@ -10,7 +10,9 @@ import { AuthService } from '../../services/auth.service';
 import { postponeDueAt } from '../today/model';
 import { type TaskListView } from './list-meta';
 
-export type ListDraft = { mode: 'create' } | { mode: 'rename'; list: List };
+export type ListDraft =
+  | { mode: 'create'; parentId: string | null }
+  | { mode: 'rename'; list: List };
 
 const DEFAULT_LIST: ListId = 'smart:today';
 
@@ -24,6 +26,7 @@ export class TodosService extends Service {
   more = false;
   compose = false;
   manageTarget: List | null = null;
+  iconTarget: List | null = null;
   listDraft: ListDraft | null = null;
   listDraftName = '';
   listDraftBusy = false;
@@ -125,9 +128,47 @@ export class TodosService extends Service {
     this.manageTarget = null;
   }
 
-  openListCreate(): void {
-    this.listDraft = { mode: 'create' };
+  openListCreate(parentId: string | null = null): void {
+    this.manageTarget = null;
+    this.listDraft = { mode: 'create', parentId };
     this.listDraftName = '';
+  }
+
+  openIcon(list: List): void {
+    this.manageTarget = null;
+    this.iconTarget = list;
+  }
+
+  closeIcon(): void {
+    this.iconTarget = null;
+  }
+
+  async setListIcon(icon: string | null): Promise<void> {
+    const list = this.iconTarget;
+    if (list === null) return;
+    try {
+      await client.patchList(list.id, { icon, iconAttachmentId: null });
+      this.iconTarget = null;
+      await this.load();
+    } catch (err) {
+      toast(humanError(err));
+    }
+  }
+
+  async pickListIcon(): Promise<void> {
+    const list = this.iconTarget;
+    if (list === null) return;
+    this.iconTarget = null;
+    try {
+      const { pickAndUploadImage } = await import('../../lib/pick-image');
+      const picked = await pickAndUploadImage();
+      if (picked === null) return;
+      await client.bindUpload(picked.id, { ownerType: 'list', ownerId: list.id });
+      await client.patchList(list.id, { iconAttachmentId: picked.id, icon: null });
+      await this.load();
+    } catch (err) {
+      toast(humanError(err));
+    }
   }
 
   openListRename(list: List): void {
@@ -151,7 +192,10 @@ export class TodosService extends Service {
     this.listDraftBusy = true;
     try {
       if (this.listDraft.mode === 'create') {
-        const created = await client.createList({ name: trimmed });
+        const created = await client.createList({
+          name: trimmed,
+          ...(this.listDraft.parentId ? { parentId: this.listDraft.parentId } : {}),
+        });
         this.listDraft = null;
         await this.load();
         this.selectList(created.id);

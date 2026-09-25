@@ -1,6 +1,6 @@
 import { Service } from '@rabjs/react';
 import { mergeInboxItems } from '@vital/api-client';
-import type { InboxItem, InboxPreview, List, Outcome } from '@vital/dto';
+import type { InboxItem, InboxPreview, List, Outcome, SimilarTaskHit, Tag } from '@vital/dto';
 import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
@@ -31,6 +31,7 @@ export class InboxService extends Service {
   compose = false;
   primed = false;
   exportingId: string | null = null;
+  similarOpen: SimilarTaskHit[] = [];
 
   private unsubSync: (() => void) | null = null;
 
@@ -143,6 +144,7 @@ export class InboxService extends Service {
     try {
       const res = await client.convertInbox(item.id, {});
       this.mergeItem(res.inbox);
+      this.similarOpen = res.similarOpenTasks ?? res.task.similarOpenTasks ?? [];
       toast({
         message: copy.toast.converted,
         action: { label: copy.inbox.viewTask, onPress: () => openTask(res.task.id) },
@@ -171,6 +173,10 @@ export class InboxService extends Service {
     }
   }
 
+  dismissSimilar(): void {
+    this.similarOpen = [];
+  }
+
   async remove(item: InboxItem): Promise<void> {
     try {
       await client.deleteInbox(item.id);
@@ -192,6 +198,9 @@ export class InboxDetailService extends Service {
   fontSize: ReaderFontSize = 'md';
   more = false;
   outcomePicker = false;
+  tagOpen = false;
+  tags: Tag[] = [];
+  similarOpen: SimilarTaskHit[] = [];
 
   private markedRead: string | null = null;
   private fontLoaded = false;
@@ -213,14 +222,16 @@ export class InboxDetailService extends Service {
 
   async load(): Promise<void> {
     try {
-      const [next, listRes, outcomeRes] = await Promise.all([
+      const [next, listRes, outcomeRes, tagRes] = await Promise.all([
         client.getInbox(this.inboxId),
         client.listLists(),
         client.listOutcomes('open'),
+        client.listTags(),
       ]);
       this.item = next;
       this.lists = listRes.items;
       this.outcomes = outcomeRes;
+      this.tags = tagRes.items;
       this.error = null;
       this.markReadIfNeeded();
     } catch (err) {
@@ -254,6 +265,46 @@ export class InboxDetailService extends Service {
     this.more = false;
   }
 
+  openTags(): void {
+    this.tagOpen = true;
+  }
+
+  closeTags(): void {
+    this.tagOpen = false;
+  }
+
+  dismissSimilar(): void {
+    this.similarOpen = [];
+  }
+
+  async toggleTag(tagId: string): Promise<void> {
+    const item = this.item;
+    if (item === null) return;
+    const on = item.tagIds.includes(tagId);
+    const tagIds = on ? item.tagIds.filter((id) => id !== tagId) : [...item.tagIds, tagId];
+    await this.patch({ tagIds });
+  }
+
+  async createTag(name: string): Promise<void> {
+    const trimmed = name.trim();
+    const item = this.item;
+    if (trimmed === '' || item === null) return;
+    const existing = this.tags.find((tag) => tag.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      if (!item.tagIds.includes(existing.id)) await this.toggleTag(existing.id);
+      return;
+    }
+    try {
+      const created = await client.createTag({ name: trimmed });
+      this.tags = [...this.tags, created];
+      const current = this.item;
+      if (current === null || current.tagIds.includes(created.id)) return;
+      await this.patch({ tagIds: [...current.tagIds, created.id] });
+    } catch (err) {
+      toast(humanError(err));
+    }
+  }
+
   openOutcomePicker(): void {
     this.outcomePicker = true;
   }
@@ -280,6 +331,7 @@ export class InboxDetailService extends Service {
       const inboxList = this.lists.find((row) => row.kind === 'inbox');
       const res = await client.convertInbox(this.item.id, inboxList ? { listId: inboxList.id } : {});
       this.item = res.inbox;
+      this.similarOpen = res.similarOpenTasks ?? res.task.similarOpenTasks ?? [];
       toast({
         message: copy.toast.converted,
         action: { label: copy.inbox.viewTask, onPress: () => openTask(res.task.id) },

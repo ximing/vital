@@ -26,16 +26,31 @@ export function SubtaskCheckbox({ row, onToggle }: { row: Task; onToggle: (row: 
 }
 
 /** spec §c 子任务行：checkbox 20 + 标题 14/500；完成态 fgMuted 删除线。 */
-export function SubtaskRow({ row, onToggle }: { row: Task; onToggle: (row: Task) => void }) {
+export function SubtaskRow({
+  row,
+  onToggle,
+  onOpen,
+}: {
+  row: Task;
+  onToggle: (row: Task) => void;
+  onOpen?: (row: Task) => void;
+}) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const done = row.status === 'done';
   return (
     <View style={styles.row}>
       <SubtaskCheckbox row={row} onToggle={onToggle} />
-      <Text style={[styles.title, done && styles.titleDone]} numberOfLines={2}>
-        {row.title}
-      </Text>
+      <Pressable
+        accessibilityRole="button"
+        disabled={onOpen === undefined}
+        onPress={() => onOpen?.(row)}
+        style={styles.titlePress}
+      >
+        <Text style={[styles.title, done && styles.titleDone]} numberOfLines={2}>
+          {row.title}
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -121,7 +136,8 @@ const createStyles = (t: Theme) =>
     },
     checkDone: { backgroundColor: t.statusDone, borderColor: t.statusDone },
     checkMark: { color: t.fgOnAccent, fontSize: 11, fontWeight: '700' },
-    title: { flex: 1, minWidth: 0, fontSize: 14, lineHeight: 20, fontWeight: '500', color: t.fgPrimary },
+    titlePress: { flex: 1, minWidth: 0 },
+    title: { fontSize: 14, lineHeight: 20, fontWeight: '500', color: t.fgPrimary },
     titleDone: { color: t.fgMuted, textDecorationLine: 'line-through' },
     addRow: {
       flexDirection: 'row',

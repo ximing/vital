@@ -1,6 +1,13 @@
-import type { RecurrenceKind, ReminderOffsetMinutes, Task } from '@vital/dto';
+import type { PatchTaskInput, RecurrenceKind, ReminderOffsetMinutes, Task } from '@vital/dto';
 import { copy } from './copy';
-import { formatHm, formatHumanDay, isOverdue, localDateStamp } from './format';
+import {
+  formatHm,
+  formatHumanDay,
+  fromDatetimeLocal,
+  isOverdue,
+  localDateStamp,
+  zonedLocalMidnightIso,
+} from './format';
 
 export type ReminderValue = 'none' | 'due' | 'custom' | '5' | '15' | '30' | '60' | '1440';
 export type RecurrenceValue = RecurrenceKind | 'none' | 'custom';
@@ -28,6 +35,18 @@ export function reminderSelectValue(task: Task): ReminderValue {
 export function recurrenceSelectValue(task: Task): RecurrenceValue {
   if (task.recurrenceKind) return task.recurrenceKind;
   return recurrenceKind(task.recurrence);
+}
+
+/** Point-date patch for one day, keeping the task's time-of-day when it has one. */
+export function scheduleDayPatch(task: Task, ymd: string, zone: string): PatchTaskInput {
+  if (task.isAllDay || task.dueAt === null) {
+    return { startAt: null, dueAt: zonedLocalMidnightIso(zone, ymd), isAllDay: true };
+  }
+  return {
+    startAt: null,
+    dueAt: fromDatetimeLocal(`${ymd}T${formatHm(task.dueAt, zone)}`, zone),
+    isAllDay: false,
+  };
 }
 
 export function offsetLabel(minutes: ReminderOffsetMinutes): string {

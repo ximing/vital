@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Modal,
@@ -14,16 +14,26 @@ import { useTheme } from '../theme/use-theme';
 
 export type BottomSheetRender = (opts: { full: boolean; onClose: () => void }) => ReactNode;
 
+const SheetExpandContext = createContext<() => void>(() => undefined);
+
+/** Expand the surrounding sheet to the top. No-op outside a BottomSheet. */
+export function useSheetExpand(): () => void {
+  return useContext(SheetExpandContext);
+}
+
 const SPRING = { tension: 90, friction: 12, overshootClamping: true, useNativeDriver: true } as const;
 
 export function BottomSheet({
   visible,
   onClose,
   children,
+  openFull = false,
 }: {
   visible: boolean;
   onClose: () => void;
   children: ReactNode | BottomSheetRender;
+  /** Open at the top of the screen. Forms that need the keyboard use this. */
+  openFull?: boolean;
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
@@ -46,6 +56,7 @@ export function BottomSheet({
   const geomRef = useRef({ fullH, midH, midY, hiddenY, translateY });
   const [full, setFull] = useState(false);
   if (!visible && full) setFull(false);
+  if (visible && openFull && !full) setFull(true);
   const alreadyBelowStatus = hostY === null || hostY >= 8;
   const topPad = full && !alreadyBelowStatus ? insets.top : t.space[2];
 
@@ -74,10 +85,12 @@ export function BottomSheet({
       yRef.current = hiddenY;
       return;
     }
+    const dest = openFull ? 0 : midY;
     translateY.setValue(hiddenY);
     yRef.current = hiddenY;
-    Animated.spring(translateY, { toValue: midY, ...SPRING }).start();
-  }, [visible, translateY, hiddenY, midY]);
+    if (openFull) fullRef.current = true;
+    Animated.spring(translateY, { toValue: dest, ...SPRING }).start();
+  }, [visible, translateY, hiddenY, midY, openFull]);
 
   function snapToY(toY: number, after?: () => void): void {
     const nextFull = toY <= 8;
@@ -91,6 +104,10 @@ export function BottomSheet({
   useEffect(() => {
     snapRef.current = snapToY;
   });
+
+  const expand = useCallback(() => {
+    snapRef.current(0);
+  }, []);
 
   /* eslint-disable react-hooks/refs -- PanResponder is created once; refs are read in gesture callbacks */
   const [panResponder] = useState(() =>
@@ -202,7 +219,9 @@ export function BottomSheet({
             <View style={styles.handle} />
           </View>
           <View style={styles.body}>
-            {typeof children === 'function' ? children({ full, onClose }) : children}
+            <SheetExpandContext.Provider value={expand}>
+              {typeof children === 'function' ? children({ full, onClose }) : children}
+            </SheetExpandContext.Provider>
           </View>
         </Animated.View>
       </View>

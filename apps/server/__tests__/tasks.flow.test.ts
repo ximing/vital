@@ -336,6 +336,52 @@ describe('tasks', () => {
     expect(both.statusCode).toBe(400);
   });
 
+  it('a title patch does not roll back a due date written at the same time', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '重叠',
+        listId: inbox,
+        dueAt: shanghaiDate('2026-09-20'),
+        isAllDay: true,
+        notes: '原备注',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const id = created.json().id as string;
+    const later = shanghaiDate('2026-09-28');
+    const [titleRes, dueRes] = await Promise.all([
+      injectJson(app, {
+        method: 'PATCH',
+        url: `/api/v1/tasks/${id}`,
+        token: alice.token,
+        payload: { title: '改标题', notes: '新备注' },
+      }),
+      injectJson(app, {
+        method: 'PATCH',
+        url: `/api/v1/tasks/${id}`,
+        token: alice.token,
+        payload: { dueAt: later, isAllDay: true },
+      }),
+    ]);
+    expect(titleRes.statusCode).toBe(200);
+    expect(dueRes.statusCode).toBe(200);
+    const got = await injectJson(app, {
+      method: 'GET',
+      url: `/api/v1/tasks/${id}`,
+      token: alice.token,
+    });
+    expect(got.statusCode).toBe(200);
+    expect(got.json().title).toBe('改标题');
+    expect(got.json().notes).toBe('新备注');
+    expect(got.json().dueAt).toBe(later);
+    expect(got.json().isAllDay).toBe(true);
+  });
+
   it('undated tasks land in the someday list and recurrence requires dueAt', async () => {
     const alice = await registerUser(app);
     const inbox = await inboxId(app, alice.token);

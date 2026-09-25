@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   Animated,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -21,8 +22,10 @@ import { BottomSheet } from '../../components/BottomSheet';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
 import { PickerOption, PickerSheet } from '../../components/PickerSheet';
-import { SMART_ORDER, listLabel } from './list-meta';
+import { SMART_ORDER, listLabel, visibleUserLists } from './list-meta';
 import { TodosService } from './todos.service';
+
+const LIST_EMOJIS = ['📌', '📚', '🏃', '💡', '🏠', '💼', '🎯', '🌿', '✨', '📝', '🧪', '🧳'];
 
 const ICONS: Record<string, LucideIcon> = {
   'smart:today': Sun,
@@ -47,14 +50,7 @@ export const ListDrawer = observer(function ListDrawer() {
   const smartRows = SMART_ORDER.map((id) => lists.find((row) => row.id === id)).filter(
     (row): row is List => row !== undefined,
   );
-  const userLists = lists
-    .filter((row) => row.kind === 'user' && !row.isArchived)
-    .sort(
-      (a, b) =>
-        Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) ||
-        a.sortOrder - b.sortOrder ||
-        a.id.localeCompare(b.id),
-    );
+  const userLists = visibleUserLists(lists);
 
   useEffect(() => {
     if (!s.drawer) return;
@@ -69,7 +65,7 @@ export const ListDrawer = observer(function ListDrawer() {
     return () => cancelAnimationFrame(id);
   }, [s.drawer, drawerW, translateX]);
 
-  function row(list: List): ReactElement {
+  function row(list: List, depth = 0): ReactElement {
     const active = list.id === listId;
     const Glyph = ICONS[list.id];
     const n = counts[list.id] ?? 0;
@@ -83,11 +79,16 @@ export const ListDrawer = observer(function ListDrawer() {
         delayLongPress={320}
         style={({ pressed }) => [
           styles.row,
+          depth > 0 && { paddingLeft: t.space[3] + depth * 18 },
           active && styles.rowActive,
           pressed && styles.rowPressed,
         ]}
       >
-        {Glyph ? (
+        {list.icon ? (
+          <Text style={styles.emoji}>{list.icon}</Text>
+        ) : list.iconUrl ? (
+          <Image source={{ uri: list.iconUrl }} style={styles.iconImg} />
+        ) : Glyph ? (
           <Icon icon={Glyph} size={20} color={active ? t.accentPrimary : t.fgMuted} />
         ) : (
           <View style={styles.dot} />
@@ -113,12 +114,12 @@ export const ListDrawer = observer(function ListDrawer() {
           <SafeAreaView style={styles.drawerInner} edges={['top', 'left']}>
             <Text style={styles.kicker}>{copy.todos.smartLists}</Text>
             <ScrollView keyboardShouldPersistTaps="handled">
-              {smartRows.map(row)}
+              {smartRows.map((list) => row(list))}
               <Text style={styles.kicker}>{copy.todos.userLists}</Text>
               {userLists.length === 0 ? (
                 <Text style={styles.empty}>{copy.empty.userList}</Text>
               ) : (
-                userLists.map(row)
+                userLists.map(({ list, depth }) => row(list, depth))
               )}
               <Pressable
                 accessibilityRole="button"
@@ -150,6 +151,16 @@ export const ListDrawer = observer(function ListDrawer() {
               }}
             />
             <PickerOption
+              label={copy.todos.setListIcon}
+              onPress={() => s.openIcon(manageTarget)}
+            />
+            {manageTarget.parentId === null ? (
+              <PickerOption
+                label={copy.todos.newChildList}
+                onPress={() => s.openListCreate(manageTarget.id)}
+              />
+            ) : null}
+            <PickerOption
               label={copy.todos.renameList}
               onPress={() => s.openListRename(manageTarget)}
             />
@@ -173,10 +184,35 @@ export const ListDrawer = observer(function ListDrawer() {
           </View>
         ) : null}
       </PickerSheet>
+      <PickerSheet
+        visible={s.iconTarget !== null}
+        title={copy.todos.setListIcon}
+        onClose={() => s.closeIcon()}
+      >
+        <View style={styles.emojiGrid}>
+          {LIST_EMOJIS.map((emoji) => (
+            <Pressable
+              key={emoji}
+              accessibilityRole="button"
+              accessibilityLabel={emoji}
+              onPress={() => void s.setListIcon(emoji)}
+              style={styles.emojiBtn}
+            >
+              <Text style={styles.emoji}>{emoji}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <PickerOption label={copy.todos.listIconUpload} onPress={() => void s.pickListIcon()} />
+        <PickerOption label={copy.todos.listIconClear} onPress={() => void s.setListIcon(null)} />
+      </PickerSheet>
       <BottomSheet visible={listDraft !== null} onClose={() => s.closeListDraft()}>
         <View style={styles.compose}>
           <Text style={styles.composeTitle}>
-            {listDraft?.mode === 'rename' ? copy.todos.renameList : copy.todos.newList}
+            {listDraft?.mode === 'rename'
+              ? copy.todos.renameList
+              : listDraft?.mode === 'create' && listDraft.parentId
+                ? copy.todos.newChildList
+                : copy.todos.newList}
           </Text>
           <Field
             placeholder={copy.todos.listNamePlaceholder}
@@ -243,6 +279,23 @@ const createStyles = (t: Theme) =>
       color: t.textTertiary,
       fontVariant: ['tabular-nums'],
     },
+    emoji: { fontSize: 18, width: 22, textAlign: 'center' },
+    emojiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: t.space[2],
+      paddingHorizontal: t.space[4],
+      paddingBottom: t.space[3],
+    },
+    emojiBtn: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: t.radius.md,
+      backgroundColor: t.bgSurfaceMuted,
+    },
+    iconImg: { width: 22, height: 22, borderRadius: t.radius.sm },
     dot: {
       width: 10,
       height: 10,

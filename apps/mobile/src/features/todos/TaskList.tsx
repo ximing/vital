@@ -26,10 +26,10 @@ import {
   isOverdue,
   localDateStamp,
   nestTasks,
-  startOfLocalDayIso,
   zonedLocalMidnightIso,
 } from '../../lib/format';
 import { addDaysYmd, weekDays, weekdayOfYmd } from '../../lib/calendar-grid';
+import { scheduleDayPatch } from '../../lib/schedule';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
 import { Banner } from '../../components/Banner';
@@ -550,24 +550,22 @@ function TaskListContent({
                 }}
               />
             )}
-            <PickerOption
-              label={contextTask.pinned ? copy.todos.unpin : copy.todos.pin}
-              onPress={() => {
-                const task = contextTask;
-                s.closeContext();
-                void s.patchContext(task, { pinned: !task.pinned });
-              }}
-            />
+            {contextTask.parentId === null ? (
+              <PickerOption
+                label={contextTask.pinned ? copy.todos.unpin : copy.todos.pin}
+                onPress={() => {
+                  const task = contextTask;
+                  s.closeContext();
+                  void s.patchContext(task, { pinned: !task.pinned });
+                }}
+              />
+            ) : null}
             <PickerOption
               label={copy.todos.setToday}
               onPress={() => {
                 const task = contextTask;
                 s.closeContext();
-                void s.patchContext(task, {
-                  dueAt: startOfLocalDayIso(tz),
-                  isAllDay: true,
-                  timezone: tz,
-                });
+                void s.patchContext(task, scheduleDayPatch(task, localDateStamp(tz), tz));
               }}
             />
             <PickerOption
@@ -575,11 +573,7 @@ function TaskListContent({
               onPress={() => {
                 const task = contextTask;
                 s.closeContext();
-                void s.patchContext(task, {
-                  dueAt: zonedLocalMidnightIso(tz, addDaysYmd(localDateStamp(tz), 1)),
-                  isAllDay: true,
-                  timezone: tz,
-                });
+                void s.patchContext(task, scheduleDayPatch(task, addDaysYmd(localDateStamp(tz), 1), tz));
               }}
             />
             {contextTask.dueAt !== null || contextTask.startAt !== null ? (
@@ -588,7 +582,7 @@ function TaskListContent({
                 onPress={() => {
                   const task = contextTask;
                   s.closeContext();
-                  void s.patchContext(task, { dueAt: null, startAt: null });
+                  void s.patchContext(task, { dueAt: null, startAt: null, isAllDay: true });
                 }}
               />
             ) : null}
@@ -604,12 +598,14 @@ function TaskListContent({
                 }}
               />
             ))}
-            <PickerOption
-              label={copy.todos.moveToList}
-              onPress={() => {
-                if (contextTask) s.openMove(contextTask);
-              }}
-            />
+            {contextTask.parentId === null ? (
+              <PickerOption
+                label={copy.todos.moveToList}
+                onPress={() => {
+                  if (contextTask) s.openMove(contextTask);
+                }}
+              />
+            ) : null}
             <PickerOption
               label={copy.todos.deleteTask}
               destructive

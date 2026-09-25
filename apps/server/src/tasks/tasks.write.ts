@@ -391,20 +391,32 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
 
   const now = new Date();
   const deferred = isDefer(oldDue, dueTouched ? dueAt : undefined, now);
-  const patch: Partial<TaskRow> = {
-    updatedAt: now,
-    timezone: zone,
-    isAllDay,
-    dueAt,
-    startAt,
-    reminderMode,
-    reminderOffsetMinutes,
-    reminderAt,
-    recurrenceRrule: recurrence,
-    recurrenceKind,
-    recurrenceDtstart,
-    ...(deferred ? { deferCount: task.deferCount + 1 } : {}),
-  };
+  // Only columns this request decided. A title/notes/priority patch must not
+  // write the schedule snapshot it read, or an overlapping due-date patch loses.
+  const scheduleTouched =
+    dueTouched ||
+    input.startAt !== undefined ||
+    input.isAllDay !== undefined ||
+    input.timezone !== undefined ||
+    input.reminderMode !== undefined ||
+    input.reminderOffsetMinutes !== undefined ||
+    input.reminderAt !== undefined ||
+    input.recurrence !== undefined ||
+    input.recurrenceKind !== undefined;
+  const patch: Partial<TaskRow> = { updatedAt: now };
+  if (scheduleTouched) {
+    patch.timezone = zone;
+    patch.isAllDay = isAllDay;
+    patch.dueAt = dueAt;
+    patch.startAt = startAt;
+    patch.reminderMode = reminderMode;
+    patch.reminderOffsetMinutes = reminderOffsetMinutes;
+    patch.reminderAt = reminderAt;
+    patch.recurrenceRrule = recurrence;
+    patch.recurrenceKind = recurrenceKind;
+    patch.recurrenceDtstart = recurrenceDtstart;
+    if (deferred) patch.deferCount = task.deferCount + 1;
+  }
   if (input.title !== undefined) patch.title = input.title;
   if (input.notes !== undefined) patch.notesMd = input.notes ?? '';
   if (input.status !== undefined) patch.status = input.status;
@@ -449,20 +461,22 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
         .where(and(eq(tasks.parentId, task.id), eq(tasks.userId, userId)));
     }
     if (input.tagIds !== undefined) await replaceTags(task.id, input.tagIds, tx);
+    const [fresh] = await tx.select().from(tasks).where(eq(tasks.id, task.id)).limit(1);
+    const current = fresh ?? task;
     await syncTaskNotifications(
       {
-        id: task.id,
-        userId: task.userId,
-        listId: patch.listId ?? task.listId,
-        title: patch.title ?? task.title,
-        status: patch.status ?? task.status,
-        dueAt: patch.dueAt !== undefined ? patch.dueAt : task.dueAt,
-        reminderMode: patch.reminderMode ?? task.reminderMode,
-        reminderOffsetMinutes: patch.reminderOffsetMinutes ?? task.reminderOffsetMinutes,
-        reminderAt: patch.reminderAt !== undefined ? patch.reminderAt : task.reminderAt,
-        isAllDay: patch.isAllDay ?? task.isAllDay,
-        timezone: patch.timezone ?? task.timezone,
-        deletedAt: task.deletedAt,
+        id: current.id,
+        userId: current.userId,
+        listId: current.listId,
+        title: current.title,
+        status: current.status,
+        dueAt: current.dueAt,
+        reminderMode: current.reminderMode,
+        reminderOffsetMinutes: current.reminderOffsetMinutes,
+        reminderAt: current.reminderAt,
+        isAllDay: current.isAllDay,
+        timezone: current.timezone,
+        deletedAt: current.deletedAt,
       },
       user,
       now,

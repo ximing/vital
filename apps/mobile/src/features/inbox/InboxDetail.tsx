@@ -11,6 +11,7 @@ import {
   Ellipsis,
   Link2,
   Star,
+  Tag as TagIcon,
   Target,
 } from 'lucide-react-native';
 import type { Theme } from '@vital/tokens';
@@ -22,7 +23,9 @@ import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { InboxReader } from '../../components/InboxReader';
 import { Loading } from '../../components/Loading';
-import { PickerSheet } from '../../components/PickerSheet';
+import { PickerOption, PickerSheet } from '../../components/PickerSheet';
+import { TagCreateRow } from '../todos/TaskSheetFields';
+import { SimilarOpenSheet } from '../todos/SimilarOpenSheet';
 import { useOpenTask } from '../../components/TaskSheetHost';
 import { ActionBar } from '../../components/ActionBar';
 import { InboxDetailService } from './inbox.service';
@@ -187,6 +190,29 @@ const InboxDetailContent = observer(function InboxDetailContent({ inboxId }: { i
             </Pressable>
           </View>
         ) : null}
+        <View style={styles.tags}>
+          {s.tags
+            .filter((tag) => item.tagIds.includes(tag.id))
+            .map((tag) => (
+              <Pressable
+                key={tag.id}
+                accessibilityRole="button"
+                onPress={() => void s.toggleTag(tag.id)}
+                style={styles.tagChip}
+              >
+                <Text style={styles.tagLabel}>#{tag.name}</Text>
+              </Pressable>
+            ))}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copy.todos.addTag}
+            onPress={() => s.openTags()}
+            style={styles.tagAdd}
+          >
+            <Icon icon={TagIcon} size={12} color={t.textTertiary} />
+            <Text style={styles.tagAddLabel}>{copy.todos.tags}</Text>
+          </Pressable>
+        </View>
         <Pressable
           accessibilityRole="button"
           style={({ pressed }) => [styles.outcomeRow, pressed && styles.pressed]}
@@ -263,6 +289,22 @@ const InboxDetailContent = observer(function InboxDetailContent({ inboxId }: { i
           <Text style={[styles.optionLabel, styles.optionDanger]}>{copy.inbox.delete}</Text>
         </Pressable>
       </PickerSheet>
+      <PickerSheet visible={s.tagOpen} title={copy.todos.tags} onClose={() => s.closeTags()}>
+        <TagCreateRow onCreate={(name) => s.createTag(name)} />
+        {s.tags.map((tag) => (
+          <PickerOption
+            key={tag.id}
+            label={`#${tag.name}`}
+            selected={item.tagIds.includes(tag.id)}
+            onPress={() => void s.toggleTag(tag.id)}
+          />
+        ))}
+      </PickerSheet>
+      <SimilarOpenSheet
+        hits={s.similarOpen}
+        onClose={() => s.dismissSimilar()}
+        onOpen={openTask}
+      />
       <PickerSheet
         visible={s.outcomePicker}
         title={copy.inbox.attachOutcome}
@@ -362,6 +404,27 @@ const createStyles = (t: Theme) =>
       marginTop: t.space[2],
     },
     link: { flex: 1, minWidth: 0, fontSize: t.type.meta.fontSize, color: t.accentPrimary },
+    tags: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2], marginTop: t.space[3] },
+    tagChip: {
+      height: 28,
+      borderRadius: t.radius.pill,
+      backgroundColor: t.bgAccentSubtle,
+      paddingHorizontal: 12,
+      justifyContent: 'center',
+    },
+    tagLabel: { fontSize: 12, fontWeight: '600', color: t.accentPrimary },
+    tagAdd: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      height: 28,
+      borderRadius: t.radius.pill,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: t.textTertiary,
+      paddingHorizontal: 12,
+    },
+    tagAddLabel: { fontSize: 12, color: t.textTertiary },
     outcomeRow: {
       flexDirection: 'row',
       alignItems: 'center',

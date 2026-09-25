@@ -30,6 +30,7 @@ import { PickerSheet } from '../../components/PickerSheet';
 import { SearchIconButton } from '../../components/SearchIconButton';
 import { SectionHead } from '../../components/SectionHead';
 import { useOpenTask } from '../../components/TaskSheetHost';
+import { SimilarOpenSheet } from '../todos/SimilarOpenSheet';
 import { InboxCompose } from './InboxCompose';
 import { InboxService } from './inbox.service';
 import {
@@ -378,6 +379,7 @@ const InboxListContent = observer(function InboxListContent() {
           </View>
         ) : null}
       </PickerSheet>
+      <SimilarOpenSheet hits={s.similarOpen} onClose={() => s.dismissSimilar()} onOpen={openTask} />
     </SafeAreaView>
   );
 });

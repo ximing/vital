@@ -137,7 +137,7 @@ export function ReminderField({
 
 /**
  * 提醒 PickerSheet（TaskSheet 工具条用）：render-prop 触发器 + 选项弹层，
- * 逻辑与 ReminderField 一致；自定义时间的二次编辑在详情页进行。
+ * 逻辑与 ReminderField 一致。选了自定义时间后，详情里的 ReminderField 改具体时刻。
  */
 export function ReminderPicker({
   task,

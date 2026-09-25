@@ -13,9 +13,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Stack, useRouter } from 'expo-router';
 import type { Theme } from '@vital/tokens';
-import { Check, ChevronRight, Plus } from 'lucide-react-native';
+import { Check, ChevronRight, Image as ImageIcon, Plus } from 'lucide-react-native';
+import { MarkdownFormatBar } from '../../components/MarkdownFormatBar';
 import { useOpenTask } from '../../components/TaskSheetHost';
+import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
+import { humanError } from '../../lib/errors';
+import { useFormatSession } from '../../lib/format-session';
+import { applyMarkdownFormat } from '../../lib/markdown-format';
+import { pickAndUploadImage } from '../../lib/pick-image';
+import { toast } from '../../components/toast';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { useTheme } from '../../theme/use-theme';
 import { Banner } from '../../components/Banner';
@@ -59,6 +66,7 @@ const ReportEditorContent = observer(function ReportEditorContent({
   const review = s.review;
   const embeds = s.embeds;
   const collapsed = s.collapsed;
+  const session = useFormatSession();
 
   if (report === null && error === null) return <Loading />;
   if (report === null) {
@@ -71,6 +79,44 @@ const ReportEditorContent = observer(function ReportEditorContent({
   }
 
   const notes = s.notes;
+
+  function applyFormat(action: Parameters<typeof applyMarkdownFormat>[2], href?: string): void {
+    session.cancelLeave();
+    const next = applyMarkdownFormat(s.notes, session.getSelection(), action, href);
+    s.writeNotes(next.value);
+    session.setSelection(next.selection);
+    session.setForced(next.selection);
+  }
+
+  function leaveBody(): void {
+    s.setEditingBody(false);
+    void s.save();
+  }
+
+  async function addImage(): Promise<void> {
+    if (s.report === null) return;
+    session.setPinned(true);
+    session.cancelLeave();
+    try {
+      const picked = await pickAndUploadImage();
+      if (picked === null) return;
+      await client.bindUpload(picked.id, { ownerType: 'report', ownerId: s.report.id });
+      const alt = picked.name.replaceAll('[', '').replaceAll(']', '').trim() || 'image';
+      const live = s.notes;
+      const at = s.editingBody ? session.getSelection() : { start: live.length, end: live.length };
+      const lead = at.start > 0 && live[at.start - 1] !== '\n' ? '\n' : '';
+      const snippet = `${lead}![${alt}](/api/v1/uploads/${picked.id})\n`;
+      s.writeNotes(`${live.slice(0, at.start)}${snippet}${live.slice(at.end)}`);
+      const cursor = at.start + snippet.length;
+      session.setSelection({ start: cursor, end: cursor });
+      s.setEditingBody(true);
+    } catch (err) {
+      toast(humanError(err) || copy.format.uploadFailed);
+    } finally {
+      session.setPinned(false);
+      session.cancelLeave();
+    }
+  }
 
   const body = (
     <>
@@ -92,22 +138,37 @@ const ReportEditorContent = observer(function ReportEditorContent({
           multiline
         />
         {s.editingBody ? (
-          <TextInput
-            value={notes}
-            onChangeText={(next) => s.writeNotes(next)}
-            onBlur={() => {
-              s.setEditingBody(false);
-              void s.save();
-            }}
-            style={styles.paperBodyInput}
-            placeholder={copy.empty.reportBody}
-            placeholderTextColor={t.textTertiary}
-            multiline
-            autoFocus
-            autoCapitalize="sentences"
-            autoCorrect
-            textAlignVertical="top"
-          />
+          <View>
+            <MarkdownFormatBar
+              onTouchFormat={session.beginHold}
+              onComposerChange={session.setPinned}
+              onApply={applyFormat}
+              onDismiss={(reason) => {
+                if (reason === 'blur') session.scheduleLeave(leaveBody);
+                else session.cancelLeave();
+              }}
+            />
+            <TextInput
+              value={notes}
+              selection={session.forced ?? undefined}
+              onSelectionChange={(event) => {
+                if (session.holding()) return;
+                session.setSelection(event.nativeEvent.selection);
+                if (session.forced) session.setForced(null);
+              }}
+              onChangeText={(next) => s.writeNotes(next)}
+              onFocus={session.cancelLeave}
+              onBlur={() => session.scheduleLeave(leaveBody)}
+              style={styles.paperBodyInput}
+              placeholder={copy.empty.reportBody}
+              placeholderTextColor={t.textTertiary}
+              multiline
+              autoFocus
+              autoCapitalize="sentences"
+              autoCorrect
+              textAlignVertical="top"
+            />
+          </View>
         ) : (
           <Pressable onPress={() => s.setEditingBody(true)} style={styles.paperBodyView}>
             {notes.trim() === '' || embeds === null ? (
@@ -140,6 +201,17 @@ const ReportEditorContent = observer(function ReportEditorContent({
           >
             <Icon icon={Plus} size={15} color={t.accentPrimary} />
             <Text style={styles.insertLabel}>{copy.actions.insertInbox}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={copy.format.image}
+            hitSlop={8}
+            onPressIn={session.beginHold}
+            onPress={() => void addImage()}
+            style={({ pressed }) => [styles.insertBtn, pressed && styles.pressed]}
+          >
+            <Icon icon={ImageIcon} size={15} color={t.accentPrimary} />
+            <Text style={styles.insertLabel}>{copy.format.image}</Text>
           </Pressable>
         </View>
       </View>

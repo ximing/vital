@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { Plus } from 'lucide-react-native';
-import { llmReady, type CreateTaskInput, type Task } from '@vital/dto';
+import { llmReady, type CreateTaskInput, type SimilarTaskHit, type Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { useAuth } from '../../services/auth.service';
 import { client } from '../../lib/api';
@@ -11,7 +11,9 @@ import { markOnboarding } from '../../lib/onboarding';
 import { useTheme } from '../../theme/use-theme';
 import { Icon } from '../../ui/icon';
 import { rnShadow } from '../../ui/card';
+import { useOpenTask } from '../../components/TaskSheetHost';
 import { toast } from '../../components/toast';
+import { SimilarOpenSheet } from './SimilarOpenSheet';
 
 /**
  * spec §2a 新建输入条：h48 白底 pill + 1px borderSubtle + rnShadow，左侧 plus 图标，
@@ -29,8 +31,11 @@ export function NewTaskBar({
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const auth = useAuth();
+  const openTask = useOpenTask();
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [similar, setSimilar] = useState<SimilarTaskHit[]>([]);
+  const pendingCreated = useRef<Task | null>(null);
 
   async function submit(): Promise<void> {
     const trimmed = title.trim();
@@ -49,13 +54,27 @@ export function NewTaskBar({
           })
         : await client.createTask({ title: trimmed, listId, ...extra });
       setTitle('');
-      onCreated(task);
       await markOnboarding(auth.user, auth.refreshUser, { createdTask: true });
+      const hits = task.similarOpenTasks ?? [];
+      // Keep this bar mounted until the sheet closes. Todos hides the bar inside onCreated.
+      if (hits.length > 0) {
+        pendingCreated.current = task;
+        setSimilar(hits);
+      } else {
+        onCreated(task);
+      }
     } catch (err) {
       toast(humanError(err));
     } finally {
       setBusy(false);
     }
+  }
+
+  function finishSimilar(): void {
+    setSimilar([]);
+    const created = pendingCreated.current;
+    pendingCreated.current = null;
+    if (created) onCreated(created);
   }
 
   return (
@@ -74,6 +93,7 @@ export function NewTaskBar({
           autoCapitalize="none"
         />
       </View>
+      <SimilarOpenSheet hits={similar} onClose={finishSimilar} onOpen={openTask} />
     </View>
   );
 }
