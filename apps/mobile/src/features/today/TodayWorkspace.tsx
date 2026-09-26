@@ -87,6 +87,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
       >
       <ScrollView
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         contentContainerStyle={styles.scroll}
         refreshControl={
           <RefreshControl
@@ -171,7 +172,7 @@ const createStyles = (t: Theme) =>
   StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bgCanvas },
     // spec §f.8：无 FAB，底部 24。水平留白由各区块自理——chips/习惯车道需要全宽横滚。
-    scroll: { paddingBottom: t.space[6] },
+    scroll: { paddingBottom: t.space[12] + 56 },
     block: { paddingHorizontal: t.space[4] },
     bannerBlock: {
       paddingHorizontal: t.space[4],

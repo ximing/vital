@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowUp, Calendar, Flag, Tag as TagIcon } from 'lucide-react-native';
+import { ArrowUp, Calendar, Flag, Plus, Tag as TagIcon } from 'lucide-react-native';
 import {
   llmReady,
   type CreateTaskInput,
@@ -26,6 +26,7 @@ import {
 import { markOnboarding } from '../../lib/onboarding';
 import { useAuth } from '../../services/auth.service';
 import { useTheme } from '../../theme/use-theme';
+import { rnShadow } from '../../ui/card';
 import { Icon } from '../../ui/icon';
 import { TagCreateRow } from './TaskSheetFields';
 import { SimilarOpenSheet } from './SimilarOpenSheet';
@@ -40,8 +41,9 @@ type DuePick =
   | { source: 'day'; ymd: string; allDay: boolean; hm: string | null };
 
 /**
- * One composer for Today and Todos. The field stays put; date, priority, and
- * tags are chips underneath, the way a quick-add bar works.
+ * Today and Todos share this. A corner button opens the bar and the keyboard.
+ * With a title or a chosen date, priority, or tag, tapping outside only dismisses
+ * the keyboard. An empty bar closes and the button comes back.
  */
 export function NewTaskBar({
   listId,
@@ -57,6 +59,8 @@ export function NewTaskBar({
   const auth = useAuth();
   const openTask = useOpenTask();
   const tz = auth.user?.timezone ?? 'UTC';
+  const inputRef = useRef<TextInput>(null);
+  const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [due, setDue] = useState<DuePick>({ source: 'preset' });
@@ -68,6 +72,14 @@ export function NewTaskBar({
   const [tagOpen, setTagOpen] = useState(false);
   const [similar, setSimilar] = useState<SimilarTaskHit[]>([]);
   const pendingCreated = useRef<Task | null>(null);
+  const kept =
+    title.trim() !== '' || due.source !== 'preset' || priority !== null || tagIds.length > 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   const today = localDateStamp(tz);
   const tomorrow = addDaysYmdStamp(today, 1);
@@ -104,6 +116,15 @@ export function NewTaskBar({
     setDue({ source: 'preset' });
     setPriority(null);
     setTagIds([]);
+    setOpen(false);
+  }
+
+  function dismiss(): void {
+    if (kept) {
+      inputRef.current?.blur();
+      return;
+    }
+    setOpen(false);
   }
 
   async function openTags(): Promise<void> {
@@ -183,9 +204,14 @@ export function NewTaskBar({
   }
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.overlay} pointerEvents="box-none">
+      {open ? (
+        <>
+          {kept ? null : <Pressable style={styles.backdrop} onPress={dismiss} />}
+          <View style={styles.wrap}>
       <View style={styles.field}>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           placeholder={copy.todos.addTaskPlaceholder}
           placeholderTextColor={t.textTertiary}
@@ -311,6 +337,18 @@ export function NewTaskBar({
         ))}
       </PickerSheet>
 
+          </View>
+        </>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={copy.actions.add}
+          onPress={() => setOpen(true)}
+          style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+        >
+          <Icon icon={Plus} size={26} color={t.fgOnAccent} />
+        </Pressable>
+      )}
       <SimilarOpenSheet hits={similar} onClose={finishSimilar} onOpen={openTask} />
     </View>
   );
@@ -333,6 +371,28 @@ function SheetChip({ label, on, onPress }: { label: string; on: boolean; onPress
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
+    overlay: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      justifyContent: 'flex-end',
+    },
+    backdrop: { ...StyleSheet.absoluteFillObject },
+    fab: {
+      position: 'absolute',
+      right: t.space[5],
+      bottom: t.space[5],
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: t.accentPrimary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...rnShadow(t),
+    },
+    fabPressed: { backgroundColor: t.accentPrimaryHover },
     wrap: {
       paddingHorizontal: t.space[4],
       paddingTop: t.space[3],

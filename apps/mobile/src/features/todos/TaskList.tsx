@@ -391,6 +391,8 @@ function TaskListContent({
             data={dayTasks}
             keyExtractor={(row) => row.id}
             renderItem={({ item }) => renderRow(item)}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
             ListEmptyComponent={<EmptyState title={empty} icon={CheckCircle2} />}
           />
         </View>
@@ -398,6 +400,8 @@ function TaskListContent({
         <FlatList
           data={useCategories ? [] : restNested}
           keyExtractor={(row) => row.task.id}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={{ paddingBottom: 48 + Math.max(insets.bottom, 20) + 56 + 24 }}
           refreshControl={
             <RefreshControl
