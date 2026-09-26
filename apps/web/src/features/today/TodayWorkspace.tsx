@@ -219,19 +219,17 @@ function TodayWorkspaceContent() {
                     onPostpone={(overdue) => page.postponeOverdue(overdue)}
                   />
 
-                  <div className="mt-1 px-1 pb-1">
-                    <QuickAdd
-                      variant="bar"
-                      onSubmit={(name, draft, extras) => page.create(name, draft, extras, inboxId)}
-                      disabled={!inboxId}
-                      listName={t.lists.today}
-                      lists={lists}
-                      defaultListId={inboxId}
-                      zone={timeZone}
-                      weekStartsOn={weekStartsOn}
-                      intent={intent}
-                    />
-                  </div>
+                  <QuickAdd
+                    variant="row"
+                    onSubmit={(name, draft, extras) => page.create(name, draft, extras, inboxId)}
+                    disabled={!inboxId}
+                    listName={t.lists.today}
+                    lists={lists}
+                    defaultListId={inboxId}
+                    zone={timeZone}
+                    weekStartsOn={weekStartsOn}
+                    intent={intent}
+                  />
                 </div>
               </section>
 

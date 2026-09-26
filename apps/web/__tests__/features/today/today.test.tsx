@@ -258,6 +258,12 @@ describe('today workspace', () => {
     expect(screen.getByText(t.today.pulseReportTodo)).toBeInTheDocument();
     // Task list
     expect(screen.getByText('完成项目整理')).toBeInTheDocument();
+    const compose = screen.getByLabelText(t.todos.quickAddPlaceholder);
+    expect(compose.closest('[data-region="today-compose"]')).not.toBeNull();
+    expect(compose).toHaveAttribute('placeholder', t.todos.quickAddPlaceholder);
+    const shell = compose.closest('.field-shell');
+    expect(shell).not.toBeNull();
+    expect(shell?.className).not.toMatch(/border-border|shadow-/);
   });
 
   it('marks fresh agent-created outcomes and undoes them', async () => {

@@ -1,6 +1,6 @@
 import type { List, TaskPriority } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
-import { CircleArrowUp, Folder, LoaderCircle } from 'lucide-react';
+import { CircleArrowUp, Folder, LoaderCircle, Plus } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
@@ -29,7 +29,7 @@ export const QuickAdd: FC<{
   defaultListId: string;
   zone: string;
   weekStartsOn: 0 | 1;
-  variant?: 'bar' | 'card';
+  variant?: 'bar' | 'card' | 'row';
   captureId?: boolean;
   lockedPriority?: TaskPriority;
   lockedStatus?: 'todo' | 'doing';
@@ -57,7 +57,7 @@ export const QuickAdd: FC<{
   defaultListId: string;
   zone: string;
   weekStartsOn: 0 | 1;
-  variant?: 'bar' | 'card';
+  variant?: 'bar' | 'card' | 'row';
   captureId?: boolean;
   lockedPriority?: TaskPriority;
   lockedStatus?: 'todo' | 'doing';
@@ -74,6 +74,7 @@ export const QuickAdd: FC<{
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasText, setHasText] = useState(false);
 
   // Follow defaultListId changes by adjusting state during render.
   if (defaultListId !== prevDefaultListId) {
@@ -109,6 +110,7 @@ export const QuickAdd: FC<{
         status: lockedStatus,
       });
       el.value = '';
+      setHasText(false);
       setDraft(emptyScheduleDraft());
       setPriority(lockedPriority ?? 3);
       setListId(defaultListId);
@@ -121,13 +123,16 @@ export const QuickAdd: FC<{
   }
 
   const card = variant === 'card';
+  const row = variant === 'row';
   const placeholder =
     hint ??
     (intent
       ? t.todos.composeIntent
-      : card
-        ? t.todos.composeWhat
-        : `${t.todos.composeTo} “${listName}”`);
+      : row
+        ? t.todos.quickAddPlaceholder
+        : card
+          ? t.todos.composeWhat
+          : `${t.todos.composeTo} “${listName}”`);
   const tools = (
     <>
       {intent ? null : (
@@ -138,14 +143,25 @@ export const QuickAdd: FC<{
           onChange={setDraft}
           compact
           align="end"
+          placement={row ? 'top' : 'bottom'}
           triggerClassName="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
           ariaLabel={t.todos.addDate}
         />
       )}
       {intent || lockedPriority !== undefined ? null : (
-        <PriorityMenu value={priority} onChange={setPriority} align="end" />
+        <PriorityMenu
+          value={priority}
+          onChange={setPriority}
+          align="end"
+          placement={row ? 'top' : 'bottom'}
+        />
       )}
-      <ListMenu lists={lists} value={listId} onChange={setListId} />
+      <ListMenu
+        lists={lists}
+        value={listId}
+        onChange={setListId}
+        placement={row ? 'top' : 'bottom'}
+      />
     </>
   );
 
@@ -219,6 +235,73 @@ export const QuickAdd: FC<{
     );
   }
 
+  // Today keeps the composer as the next list line: same inset as a task
+  // row, checkbox-sized mark, and no second bordered field inside the card.
+  if (row) {
+    return (
+      <form
+        onSubmit={(event) => void handle(event)}
+        data-region="today-compose"
+        className="group/compose mt-1 border-t border-border pb-1"
+      >
+        <div className="field-shell flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2">
+          <span
+            aria-hidden
+            className="flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-tertiary text-accent"
+          >
+            {busy ? (
+              <Icon
+                icon={LoaderCircle}
+                size={11}
+                className="animate-spin motion-reduce:animate-none"
+              />
+            ) : (
+              <Icon icon={Plus} size={11} strokeWidth={2.5} />
+            )}
+          </span>
+          <input
+            id={captureId ? QUICK_ADD_ID : undefined}
+            ref={inputRef}
+            type="text"
+            name="title"
+            maxLength={intent ? 2000 : 500}
+            disabled={blocked}
+            placeholder={placeholder}
+            aria-label={t.todos.quickAddPlaceholder}
+            aria-busy={busy || undefined}
+            aria-describedby={busy ? statusId : undefined}
+            onChange={(event) => setHasText(event.target.value.trim() !== '')}
+            className="h-8 min-w-0 flex-1 border-0 bg-transparent p-0 text-[length:var(--text-body)] text-fg shadow-none placeholder:text-muted outline-none"
+          />
+          <fieldset
+            disabled={blocked}
+            className="ml-auto flex min-w-0 shrink-0 items-center gap-0.5 border-0 p-0 text-muted disabled:opacity-50"
+          >
+            {tools}
+          </fieldset>
+          <button
+            type="submit"
+            disabled={blocked}
+            aria-label={t.todos.add}
+            className={
+              hasText || busy
+                ? 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent hover:bg-accent-hover disabled:opacity-40'
+                : 'sr-only'
+            }
+          >
+            <Icon
+              icon={busy ? LoaderCircle : CircleArrowUp}
+              size={15}
+              className={busy ? 'animate-spin motion-reduce:animate-none' : ''}
+            />
+          </button>
+        </div>
+        {progressNode}
+        {errorNode}
+      </form>
+    );
+  }
+
   return (
     <form
       onSubmit={(event) => void handle(event)}
@@ -269,10 +352,12 @@ function ListMenu({
   lists,
   value,
   onChange,
+  placement = 'bottom',
 }: {
   lists: List[];
   value: string;
   onChange: (id: string) => void;
+  placement?: 'top' | 'bottom';
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const popover = usePopover(popoverRef);
@@ -295,7 +380,9 @@ function ListMenu({
       {popover.open ? (
         <div
           role="menu"
-          className={`absolute right-0 z-[var(--z-dropdown)] mt-1 max-h-56 w-44 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
+          className={`absolute right-0 z-[var(--z-dropdown)] max-h-56 w-44 overflow-y-auto ${
+            placement === 'top' ? 'bottom-full mb-1' : 'mt-1'
+          } ${FIELD_POPOVER_CLASS} p-1`}
         >
           {options.map((item) => (
             <button

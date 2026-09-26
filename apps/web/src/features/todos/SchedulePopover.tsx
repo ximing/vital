@@ -70,6 +70,7 @@ export function SchedulePopover({
   triggerClassName,
   compact,
   align = 'start',
+  placement = 'bottom',
   onChange,
 }: {
   draft: ScheduleDraft;
@@ -79,6 +80,8 @@ export function SchedulePopover({
   triggerClassName?: string;
   compact?: boolean;
   align?: 'start' | 'end';
+  /** Opens upward when the trigger sits at the bottom of a scrolling pane. */
+  placement?: 'top' | 'bottom';
   onChange: (next: ScheduleDraft) => void;
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -247,9 +250,9 @@ export function SchedulePopover({
           ref={dialogRef}
           role="dialog"
           aria-label={t.todos.schedule}
-          className={`absolute z-[var(--z-dropdown)] mt-1 w-[20.5rem] ${
-            align === 'end' ? 'right-0' : 'left-0'
-          } ${FIELD_POPOVER_CLASS} p-2`}
+          className={`absolute z-[var(--z-dropdown)] w-[20.5rem] ${
+            placement === 'top' ? 'bottom-full mb-1' : 'mt-1'
+          } ${align === 'end' ? 'right-0' : 'left-0'} ${FIELD_POPOVER_CLASS} p-2`}
         >
           <div className="mb-2 grid grid-cols-2 rounded-md bg-surface-muted p-0.5">
             {(

@@ -56,10 +56,12 @@ export function PriorityMenu({
   value,
   onChange,
   align = 'start',
+  placement = 'bottom',
 }: {
   value: TaskPriority;
   onChange: (p: TaskPriority) => void;
   align?: 'start' | 'end';
+  placement?: 'top' | 'bottom';
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const popover = usePopover(popoverRef);
@@ -79,7 +81,9 @@ export function PriorityMenu({
       {popover.open ? (
         <div
           role="menu"
-          className={`absolute ${align === 'end' ? 'right-0' : 'left-0'} z-[var(--z-dropdown)] mt-1 w-36 ${FIELD_POPOVER_CLASS} p-1`}
+          className={`absolute ${align === 'end' ? 'right-0' : 'left-0'} z-[var(--z-dropdown)] w-36 ${
+            placement === 'top' ? 'bottom-full mb-1' : 'mt-1'
+          } ${FIELD_POPOVER_CLASS} p-1`}
         >
           {([0, 1, 2, 3] as TaskPriority[]).map((p) => (
             <button
