@@ -21,6 +21,7 @@
     "@vital/markdown": "workspace:*",
     "@vital/tokens": "workspace:*",
     "apk-updater": "file:./modules/apk-updater",
+    "huawei-push": "file:./modules/huawei-push",
     "babel-preset-expo": "~54.0.12",
     "expo": "~54.0.0",
     "expo-constants": "~18.0.5",

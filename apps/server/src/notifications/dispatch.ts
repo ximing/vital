@@ -16,6 +16,7 @@ import {
 import { logger } from '../utils/logger.js';
 import { publishNotification } from '../sync/sync.hub.js';
 import { sendMeow } from './meow.js';
+import { deliverHuaweiForJob } from './push-devices.service.js';
 import { syncTaskNotifications } from './outbox.js';
 import { applyQuietHours } from './quiet-hours.js';
 import { countEveningDigestTasks, eveningDigestMessage } from './evening-digest.js';
@@ -268,7 +269,8 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
     .where(
       and(eq(notificationChannels.userId, job.userId), eq(notificationChannels.enabled, true)),
     );
-  if (channels.length === 0) {
+  const huawei = await deliverHuaweiForJob(job, now, copy);
+  if (channels.length === 0 && huawei.skipped) {
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'pending', updatedAt: now, nextAttemptAt: new Date(now.getTime() + 60_000) })
@@ -312,20 +314,26 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
     .from(notificationDeliveries)
     .where(eq(notificationDeliveries.outboxId, job.id));
   const byChannel = new Map(after.map((d) => [d.channelId, d]));
-  const allDone = channels.every((ch) => {
-    const d = byChannel.get(ch.id);
-    return d?.status === 'sent' || (d?.status === 'failed' && d.permanent);
-  });
-  const allSent = channels.every((ch) => byChannel.get(ch.id)?.status === 'sent');
+  const channelsDone =
+    channels.length === 0 ||
+    channels.every((ch) => {
+      const d = byChannel.get(ch.id);
+      return d?.status === 'sent' || (d?.status === 'failed' && d.permanent);
+    });
+  const channelsSent =
+    channels.length === 0 || channels.every((ch) => byChannel.get(ch.id)?.status === 'sent');
+  if (huawei.retryable) anyRetryable = true;
+  if (huawei.lastError) lastError = huawei.lastError;
+  if (!huawei.skipped && !huawei.allSent) pendingWork = true;
 
-  if (allSent) {
+  if (channelsSent && huawei.allSent) {
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'sent', sentAt: now, lastError: null, updatedAt: now })
       .where(stillClaimed(job.id));
     return;
   }
-  if (allDone && !anyRetryable) {
+  if (channelsDone && huawei.allDone && !anyRetryable) {
     await getDb()
       .update(notificationOutbox)
       .set({ status: 'failed', lastError: lastError ?? '渠道永久失败', updatedAt: now })

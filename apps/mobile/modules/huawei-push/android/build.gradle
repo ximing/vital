@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'plus.aimo.vital'
+version = '0.0.0'
+
+android {
+  namespace "expo.modules.huaweipush"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.0"
+    consumerProguardFiles "consumer-rules.pro"
+  }
+}
+
+dependencies {
+  implementation "com.huawei.hms:push:6.13.0.301"
+  implementation "com.huawei.agconnect:agconnect-core:1.9.6.300"
+}

@@ -1,5 +1,13 @@
 import type { ExpoConfig } from 'expo/config';
-import { type ConfigPlugin, withAppBuildGradle } from '@expo/config-plugins';
+import {
+  type ConfigPlugin,
+  withAppBuildGradle,
+  withDangerousMod,
+  withProjectBuildGradle,
+} from '@expo/config-plugins';
+import fs from 'node:fs';
+import path from 'node:path';
+import { addAgcpClasspath, addHuaweiMaven, applyAgcpPlugin } from './huawei-gradle.cjs';
 
 const version = process.env.APP_VERSION_NAME ?? '0.0.0';
 const versionCode = Number(process.env.APP_VERSION_CODE ?? 1);
@@ -24,6 +32,30 @@ android {
     }
 }
 // --- end vital env signing ---`;
+
+const withHuaweiPush: ConfigPlugin = (config) => {
+  config = withProjectBuildGradle(config, (mod) => {
+    if (mod.modResults.language !== 'groovy') return mod;
+    mod.modResults.contents = addAgcpClasspath(addHuaweiMaven(mod.modResults.contents));
+    return mod;
+  });
+  config = withAppBuildGradle(config, (mod) => {
+    if (mod.modResults.language !== 'groovy') return mod;
+    const json = path.join(mod.modRequest.projectRoot, 'agconnect-services.json');
+    if (!fs.existsSync(json)) return mod;
+    mod.modResults.contents = applyAgcpPlugin(mod.modResults.contents);
+    return mod;
+  });
+  return withDangerousMod(config, [
+    'android',
+    (cfg) => {
+      const src = path.join(cfg.modRequest.projectRoot, 'agconnect-services.json');
+      const dest = path.join(cfg.modRequest.platformProjectRoot, 'app', 'agconnect-services.json');
+      if (fs.existsSync(src)) fs.copyFileSync(src, dest);
+      return cfg;
+    },
+  ]);
+};
 
 const withEnvReleaseSigning: ConfigPlugin = (config) => {
   return withAppBuildGradle(config, (mod) => {
@@ -69,6 +101,7 @@ const config: ExpoConfig = {
       },
     ],
     withEnvReleaseSigning as unknown as string,
+    withHuaweiPush as unknown as string,
   ],
   experiments: { typedRoutes: false },
   extra: { apiUrl },

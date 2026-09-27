@@ -105,3 +105,17 @@ export const patchNotificationChannelInputSchema = z
 export type PatchNotificationChannelInput = z.infer<typeof patchNotificationChannelInputSchema>;
 
 export const notificationChannelIdParamsSchema = z.object({ id: uuidSchema });
+
+export const pushProviderSchema = z.enum(['huawei']);
+export type PushProvider = z.infer<typeof pushProviderSchema>;
+
+export const registerPushDeviceInputSchema = z.object({
+  provider: pushProviderSchema,
+  token: z.string().trim().min(1).max(512),
+});
+export type RegisterPushDeviceInput = z.infer<typeof registerPushDeviceInputSchema>;
+
+export interface PushDevice {
+  id: string;
+  provider: PushProvider;
+}

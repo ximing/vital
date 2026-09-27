@@ -29,6 +29,8 @@ import {
   notificationChannels,
   notificationDeliveries,
   notificationOutbox,
+  pushDeliveries,
+  pushDevices,
   outcomes,
   reports,
   refreshTokens,
@@ -69,6 +71,8 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 
 export async function resetDb(): Promise<void> {
   await withRetry(async () => {
+    await db.delete(pushDeliveries);
+    await db.delete(pushDevices);
     await db.delete(notificationDeliveries);
     await db.delete(notificationOutbox);
     await db.delete(notificationChannels);

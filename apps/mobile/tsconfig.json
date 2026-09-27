@@ -10,6 +10,7 @@
   },
   "include": [
     "app.config.ts",
+    "huawei-gradle.d.cts",
     "vitest.config.ts",
     "app/**/*.ts",
     "app/**/*.tsx",

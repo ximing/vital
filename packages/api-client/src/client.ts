@@ -54,6 +54,8 @@ import type {
   ReportReview,
   CreateListInput,
   NotificationChannel,
+  PushDevice,
+  RegisterPushDeviceInput,
   NotificationChannelCollection,
   PatchNotificationChannelInput,
   CreateTagInput,
@@ -142,6 +144,7 @@ export interface VitalClient {
   ): Promise<NotificationChannel>;
   deleteNotificationChannel(id: string): Promise<void>;
   testNotificationChannel(id: string): Promise<void>;
+  registerPushDevice(input: RegisterPushDeviceInput): Promise<PushDevice>;
   updateOnboarding(input: UpdateOnboardingInput): Promise<UserProfile>;
   changePassword(input: ChangePasswordInput): Promise<void>;
   abortUpload(id: string): Promise<void>;
@@ -358,6 +361,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       http.request(`/api/v1/notification-channels/${id}`, { method: 'DELETE' }),
     testNotificationChannel: (id) =>
       http.request(`/api/v1/notification-channels/${id}/test`, { method: 'POST' }),
+    registerPushDevice: (input) => http.request('/api/v1/push-devices', { method: 'POST', body: input }),
     updateOnboarding: (input) =>
       http.request('/api/v1/auth/onboarding', { method: 'PATCH', body: input }),
     changePassword: async (input) => {

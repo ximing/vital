@@ -33,6 +33,7 @@ import { registerTokenRoutes } from './tokens/tokens.routes.js';
 import { recordApiTokenAccess } from './tokens/tokens.service.js';
 import './types.js';
 import { registerNotificationRoutes } from './notifications/notifications.routes.js';
+import { registerPushRoutes } from './notifications/push.routes.js';
 import { registerUploadRoutes } from './uploads/uploads.routes.js';
 import { logger } from './utils/logger.js';
 
@@ -118,6 +119,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   registerTokenRoutes(app);
   registerUploadRoutes(app);
   registerNotificationRoutes(app);
+  registerPushRoutes(app);
   registerListRoutes(app);
   registerLlmRoutes(app);
   registerInwitRoutes(app);

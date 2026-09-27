@@ -82,13 +82,19 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          AGCONNECT_SERVICES_JSON: ${{ secrets.AGCONNECT_SERVICES_JSON }}
         run: |
           if [[ -z "$ANDROID_KEYSTORE" ]]; then
             echo "::error::ANDROID_KEYSTORE secret is missing"
             exit 1
           fi
+          if [[ -z "$AGCONNECT_SERVICES_JSON" ]]; then
+            echo "::error::AGCONNECT_SERVICES_JSON secret is missing"
+            exit 1
+          fi
           keystore="$RUNNER_TEMP/release.keystore"
           printf '%s' "$ANDROID_KEYSTORE" | base64 -d > "$keystore"
+          printf '%s' "$AGCONNECT_SERVICES_JSON" | base64 -d > apps/mobile/agconnect-services.json
           {
             echo "RELEASE_STORE_FILE=$keystore"
             echo "RELEASE_STORE_STORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD"

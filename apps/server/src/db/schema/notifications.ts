@@ -113,3 +113,43 @@ export type NewNotificationChannel = typeof notificationChannels.$inferInsert;
 export type NotificationOutboxRow = typeof notificationOutbox.$inferSelect;
 export type NewNotificationOutbox = typeof notificationOutbox.$inferInsert;
 export type NotificationDeliveryRow = typeof notificationDeliveries.$inferSelect;
+
+export const pushDevices = pgTable(
+  'push_devices',
+  {
+    id: char('id', { length: 36 }).primaryKey(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    provider: varchar('provider', { length: 16 }).notNull(),
+    token: varchar('token', { length: 512 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('push_devices_provider_token_uidx').on(t.provider, t.token),
+    index('idx_push_devices_user').on(t.userId),
+    check('push_devices_provider_check', sql`${t.provider} IN ('huawei')`),
+  ],
+);
+
+export const pushDeliveries = pgTable(
+  'push_deliveries',
+  {
+    id: char('id', { length: 36 }).primaryKey(),
+    outboxId: char('outbox_id', { length: 36 }).notNull(),
+    deviceId: char('device_id', { length: 36 }).notNull(),
+    status: varchar('status', { length: 16 }).notNull(),
+    permanent: boolean('permanent').notNull().default(false),
+    lastError: varchar('last_error', { length: 500 }),
+    sentAt: timestamp('sent_at', { withTimezone: true, mode: 'date' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('push_deliveries_outbox_device_uidx').on(t.outboxId, t.deviceId),
+    index('idx_push_deliveries_outbox').on(t.outboxId),
+    check('push_deliveries_status_check', sql`${t.status} IN ('sent', 'failed')`),
+  ],
+);
+
+export type PushDeviceRow = typeof pushDevices.$inferSelect;
+export type PushDeliveryRow = typeof pushDeliveries.$inferSelect;

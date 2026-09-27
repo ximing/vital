@@ -1,12 +1,38 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Keyboard } from 'react-native';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Keyboard, Linking } from 'react-native';
+import { useRouter } from 'expo-router';
 import { BottomSheet } from './BottomSheet';
+import { parseVitalPushUrl } from '../lib/push-link';
 import { TaskSheet } from '../features/todos/TaskSheet';
 
 const OpenTaskContext = createContext<(id: string) => void>(() => undefined);
 
 export function useOpenTask(): (id: string) => void {
   return useContext(OpenTaskContext);
+}
+
+function PushOpenListener() {
+  const openTask = useOpenTask();
+  const router = useRouter();
+  useEffect(() => {
+    function open(raw: string | null) {
+      const target = parseVitalPushUrl(raw);
+      if (target === null) return;
+      if (target.kind === 'task') {
+        openTask(target.id);
+        return;
+      }
+      if (target.kind === 'day') {
+        router.push(`/days?id=${target.id}`);
+        return;
+      }
+      router.push('/');
+    }
+    void Linking.getInitialURL().then(open);
+    const sub = Linking.addEventListener('url', (event) => open(event.url));
+    return () => sub.remove();
+  }, [openTask, router]);
+  return null;
 }
 
 export function TaskSheetHost({ children }: { children: ReactNode }) {
@@ -36,6 +62,7 @@ export function TaskSheetHost({ children }: { children: ReactNode }) {
 
   return (
     <OpenTaskContext.Provider value={value}>
+      <PushOpenListener />
       {children}
       <BottomSheet visible={openTaskId !== null} onClose={closeSheet}>
         {({ full, onClose }) =>

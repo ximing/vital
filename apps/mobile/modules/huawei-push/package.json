@@ -1,0 +1,7 @@
+{
+  "name": "huawei-push",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Huawei Push Kit token for Vital",
+  "main": "src/index.ts"
+}

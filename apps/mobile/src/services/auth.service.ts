@@ -1,7 +1,9 @@
+import { AppState } from 'react-native';
 import { resolve, Service, useObserverService } from '@rabjs/react';
 import type { LoginInput, RegisterInput, UserProfile } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
 import { client } from '../lib/api';
+import { syncHuaweiPush } from '../lib/huawei-push';
 import { startMobileSync, stopMobileSync } from '../lib/sync';
 import { loadUser, onAuthCleared, saveUser, secureTokenStore } from '../lib/token-store';
 
@@ -17,6 +19,9 @@ export class AuthService extends Service {
       stopMobileSync();
       this.user = null;
       this.ready = true;
+    });
+    AppState.addEventListener('change', (state) => {
+      if (state === 'active' && this.user) void syncHuaweiPush();
     });
     void this.boot();
   }
@@ -35,8 +40,10 @@ export class AuthService extends Service {
       if (err instanceof ApiError && err.status === 401) {
         stopMobileSync();
         await secureTokenStore.clear();
+        this.user = null;
       }
     }
+    if (this.user) void syncHuaweiPush();
   }
 
   async login(input: LoginInput): Promise<UserProfile> {
@@ -44,6 +51,7 @@ export class AuthService extends Service {
     await saveUser(res.user);
     this.user = res.user;
     startMobileSync();
+    void syncHuaweiPush();
     return res.user;
   }
 
@@ -52,6 +60,7 @@ export class AuthService extends Service {
     await saveUser(res.user);
     this.user = res.user;
     startMobileSync();
+    void syncHuaweiPush();
     return res.user;
   }
 
