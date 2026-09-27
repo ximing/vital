@@ -22,3 +22,17 @@ export function parseVitalPushUrl(raw: string | null): VitalPushTarget | null {
   if (host === 'today' || path === 'today') return { kind: 'today' };
   return null;
 }
+
+/** Screen to show for a notification tap. Task taps stay on home and open the sheet. */
+export function routeForVitalPushUrl(raw: string): string | null {
+  const target = parseVitalPushUrl(raw) ?? parseVitalPushUrl(asVitalUrl(raw));
+  if (target === null) return null;
+  if (target.kind === 'day') return `/days?id=${target.id}`;
+  return '/';
+}
+
+function asVitalUrl(raw: string): string {
+  const path = raw.replace(/^\//, '');
+  if (path === 'today' || path.startsWith('task/') || path.startsWith('day/')) return `vital://${path}`;
+  return raw;
+}

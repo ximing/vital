@@ -19,6 +19,7 @@ function PushOpenListener() {
       const target = parseVitalPushUrl(raw);
       if (target === null) return;
       if (target.kind === 'task') {
+        router.replace('/');
         openTask(target.id);
         return;
       }
