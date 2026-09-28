@@ -14,7 +14,9 @@ import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
 import { humanError, isNetworkError } from '../../lib/errors';
 import { isOverdue } from '../../lib/format';
+import { createCoalescedRunner } from '../../lib/coalesce';
 import { pullSync, subscribeSnapshot, subscribeSync } from '../../lib/sync';
+import { subscribeTaskMutations } from '../../lib/task-mutations';
 import { AuthService } from '../../services/auth.service';
 import { toggleComplete } from '../todos/complete';
 import { habitProgress, habitTodayTask, postponeDueAt } from './model';
@@ -36,9 +38,10 @@ export class TodayService extends Service {
   offline = false;
   clock = new Date();
 
-  private inFlight: Promise<void> | null = null;
   private hasData = false;
+  private readonly runLoad = createCoalescedRunner();
   private unsubSync: (() => void) | null = null;
+  private unsubTasks: (() => void) | null = null;
   private unsubSnapshot: (() => void) | null = null;
   private syncTimer: ReturnType<typeof setTimeout> | null = null;
   private execTimer: ReturnType<typeof setInterval> | null = null;
@@ -81,6 +84,11 @@ export class TodayService extends Service {
         void this.load(false);
       });
     }
+    if (!this.unsubTasks) {
+      this.unsubTasks = subscribeTaskMutations(() => {
+        void this.load(false);
+      });
+    }
   }
 
   stop(): void {
@@ -88,6 +96,8 @@ export class TodayService extends Service {
     this.unsubSync = null;
     this.unsubSnapshot?.();
     this.unsubSnapshot = null;
+    this.unsubTasks?.();
+    this.unsubTasks = null;
     if (this.syncTimer) {
       clearTimeout(this.syncTimer);
       this.syncTimer = null;
@@ -129,12 +139,9 @@ export class TodayService extends Service {
   }
 
   async load(isRefresh = false): Promise<void> {
-    if (this.inFlight) {
-      await this.inFlight;
-      return;
-    }
-    const run = (async () => {
-      if (isRefresh) this.refreshing = true;
+    const refresh = isRefresh;
+    await this.runLoad(async () => {
+      if (refresh) this.refreshing = true;
       else if (!this.hasData) this.loading = true;
       try {
         const [nextDashboard, nextHabits, listRes, tagRes, actions] = await Promise.all([
@@ -160,13 +167,7 @@ export class TodayService extends Service {
         this.loading = false;
         this.refreshing = false;
       }
-    })();
-    this.inFlight = run;
-    try {
-      await run;
-    } finally {
-      if (this.inFlight === run) this.inFlight = null;
-    }
+    });
   }
 
   async refresh(): Promise<void> {
@@ -199,7 +200,9 @@ export class TodayService extends Service {
     if (habitProgress(habit).complete) return;
     const open = habitTodayTask(this.dashboard?.tasks ?? [], habit.id);
     if (open !== null) {
-      await this.completeTask(open);
+      this.noteHabitTick(habit.id);
+      const ok = await this.completeTask(open);
+      if (!ok) this.noteHabitTick(habit.id, -1);
       return;
     }
     try {
@@ -211,7 +214,7 @@ export class TodayService extends Service {
     }
   }
 
-  async completeTask(task: Task): Promise<void> {
+  async completeTask(task: Task): Promise<boolean> {
     let ok = false;
     await toggleComplete(
       task,
@@ -222,6 +225,14 @@ export class TodayService extends Service {
       { user: this.auth.user, refreshUser: (next) => this.auth.refreshUser(next) },
     );
     if (ok) await this.refresh();
+    return ok;
+  }
+
+  /** Move the lane immediately. A later reload replaces this with the server count. */
+  private noteHabitTick(id: string, delta = 1): void {
+    this.habits = this.habits.map((row) =>
+      row.id === id ? { ...row, todayDone: Math.max(0, row.todayDone + delta) } : row,
+    );
   }
 
   async postponeOverdue(): Promise<void> {
