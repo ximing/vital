@@ -323,6 +323,8 @@ After editing `apps/server/src/db/schema/**`, **restart the worker** as well (`p
 
 ## Deployment
 
+What to prepare, and how to configure the server, Huawei push, and Android signing, is in [docs/deploy.md](docs/deploy.md) (Chinese).
+
 Production uses GHCR images + Docker Compose, in two topologies:
 
 **Bundled Postgres (single host)** — [docker-compose.prod.yml](docker-compose.prod.yml): `migrate → server → worker → web`. The web service exposes an HTTP port; put any reverse proxy in front for HTTPS.

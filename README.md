@@ -327,6 +327,8 @@ pnpm test          # 服务端测试需要 compose 里的 vital_test 库（:5433
 
 ## 部署
 
+要准备的主机、环境变量、华为推送和 Android 签名见 [docs/deploy.md](docs/deploy.md)。
+
 生产环境使用 GHCR 镜像 + Docker Compose，提供两种拓扑：
 
 **自带 Postgres（单机）** —— [docker-compose.prod.yml](docker-compose.prod.yml)：`migrate → server → worker → web`，web 暴露 HTTP 端口，前置任意反向代理即可上 HTTPS。
