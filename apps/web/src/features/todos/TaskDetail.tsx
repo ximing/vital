@@ -206,6 +206,8 @@ export const TaskDetail: FC<{
           zone={zone}
           weekStartsOn={weekStartsOn}
           align="end"
+          listenNonce={todos.scheduleNonce}
+          onShortcutOpen={() => todos.takeScheduleOpen()}
           onChange={(next) => runPatch(draftToPatch(next, zone))}
         />
         <div className="ml-auto flex items-center gap-1">

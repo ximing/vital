@@ -1,7 +1,7 @@
 import type { Day, DayCatalogKind } from '@vital/dto';
 import { useService } from '@rabjs/react';
 import { Bell } from 'lucide-react';
-import { useMemo, useState, type FC } from 'react';
+import { useEffect, useMemo, useState, type FC } from 'react';
 import { useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -22,6 +22,7 @@ import {
   type DayDraft,
 } from './DayEditor';
 import { DaysTimeline } from './DaysTimeline';
+import { useDaysKeyboard } from './keyboard';
 import {
   holidayChipText,
   matchesFilter,
@@ -32,7 +33,7 @@ import {
   type DayFilter,
 } from './headline';
 import { useDayCatalogQuery, useDayMutations, useDaysQuery } from './queries';
-import { buildHeroTrack } from './timeline';
+import { buildDaysTimeline, buildHeroTrack } from './timeline';
 
 const FILTERS: { id: DayFilter; label: string }[] = [
   { id: 'all', label: t.days.filterAll },
@@ -149,7 +150,7 @@ function NextUpHero({
   );
 }
 
-function TodayBand({ day, onOpen }: { day: Day; onOpen: () => void }) {
+function TodayBand({ day, selected, onOpen }: { day: Day; selected: boolean; onOpen: () => void }) {
   const years = yearsText(day);
   const yearly =
     day.repeat === 'yearly'
@@ -159,7 +160,9 @@ function TodayBand({ day, onOpen }: { day: Day; onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="mt-[18px] flex w-full items-center gap-4 rounded-[16px] bg-gradient-to-r from-accent-subtle to-accent-subtle/40 py-3.5 pr-5 pl-4 text-left"
+      className={`mt-[18px] flex w-full items-center gap-4 rounded-[16px] bg-gradient-to-r from-accent-subtle to-accent-subtle/40 py-3.5 pr-5 pl-4 text-left ${
+        selected ? 'ring-2 ring-accent' : ''
+      }`}
     >
       <CoverImage
         src={day.coverUrl}
@@ -187,10 +190,12 @@ function TodayBand({ day, onOpen }: { day: Day; onOpen: () => void }) {
 function CountdownCard({
   day,
   todayYmd,
+  selected,
   onOpen,
 }: {
   day: Day;
   todayYmd: string;
+  selected: boolean;
   onOpen: () => void;
 }) {
   const focus = day.nextYmd ?? day.prevYmd;
@@ -201,7 +206,9 @@ function CountdownCard({
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-4 rounded-lg bg-elevated py-4 pr-5 pl-4 text-left shadow-[var(--shadow-xs)] transition-[box-shadow,transform] duration-[var(--ease-out)] hover:-translate-y-px hover:shadow-[var(--shadow)]"
+      className={`flex w-full items-center gap-4 rounded-lg bg-elevated py-4 pr-5 pl-4 text-left shadow-[var(--shadow-xs)] transition-[box-shadow,transform] duration-[var(--ease-out)] hover:-translate-y-px hover:shadow-[var(--shadow)] ${
+        selected ? 'ring-2 ring-accent' : ''
+      }`}
     >
       <CoverImage
         src={day.coverUrl}
@@ -235,13 +242,24 @@ function CountdownCard({
   );
 }
 
-function CountupRow({ day, onOpen }: { day: Day; onOpen: () => void }) {
+function CountupRow({
+  day,
+  selected,
+  onOpen,
+}: {
+  day: Day;
+  selected: boolean;
+  onOpen: () => void;
+}) {
   const years = yearsText(day);
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3.5 py-[13px] pr-5 pl-4 text-left hover:bg-surface-muted"
+      id={`day-shortcut-${day.id}`}
+      className={`flex w-full items-center gap-3.5 py-[13px] pr-5 pl-4 text-left hover:bg-surface-muted ${
+        selected ? 'bg-accent-subtle' : ''
+      }`}
     >
       <CoverImage
         src={day.coverUrl}
@@ -422,6 +440,28 @@ function DaysWorkspaceContent() {
     if (search.get('id')) setSearch({}, { replace: true });
   }
 
+  const dayIds = useMemo(() => {
+    const timelineIds = buildDaysTimeline(allDays, today).points.map((point) => point.id);
+    const rest = allDays
+      .filter((day) => day.headline.kind === 'countup' && !timelineIds.includes(day.id))
+      .map((day) => day.id);
+    return [...timelineIds, ...rest];
+  }, [allDays, today]);
+  const selectedDayId = useDaysKeyboard({
+    ids: dayIds,
+    editing: editing !== null,
+    onOpen: (id) => {
+      const day = allDays.find((item) => item.id === id);
+      if (day) openDay(day);
+    },
+    onCreate: openNew,
+    onClose: closeEditor,
+  });
+  useEffect(() => {
+    if (!selectedDayId) return;
+    document.getElementById(`day-shortcut-${selectedDayId}`)?.scrollIntoView({ block: 'nearest' });
+  }, [selectedDayId]);
+
   async function save() {
     if (draft === null || editing === null) return;
     setSaving(true);
@@ -494,7 +534,12 @@ function DaysWorkspaceContent() {
               <NextUpHero day={nextUp} todayYmd={today} onOpen={() => openDay(nextUp)} />
             ) : null}
 
-            <DaysTimeline days={allDays} todayYmd={today} onOpen={openDay} />
+            <DaysTimeline
+              days={allDays}
+              todayYmd={today}
+              selectedId={selectedDayId}
+              onOpen={openDay}
+            />
 
             <div className="mt-[26px] flex flex-wrap items-center gap-1.5">
               {FILTERS.map((item) => (
@@ -517,7 +562,12 @@ function DaysWorkspaceContent() {
             </div>
 
             {todayDays.map((day) => (
-              <TodayBand key={day.id} day={day} onOpen={() => openDay(day)} />
+              <TodayBand
+                key={day.id}
+                day={day}
+                selected={selectedDayId === day.id}
+                onOpen={() => openDay(day)}
+              />
             ))}
 
             {countdownDays.length > 0 ? (
@@ -529,6 +579,7 @@ function DaysWorkspaceContent() {
                       key={day.id}
                       day={day}
                       todayYmd={today}
+                      selected={selectedDayId === day.id}
                       onOpen={() => openDay(day)}
                     />
                   ))}
@@ -541,7 +592,12 @@ function DaysWorkspaceContent() {
                 <SectionRule label={t.days.filterCountup} count={countupDays.length} />
                 <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
                   {countupDays.map((day) => (
-                    <CountupRow key={day.id} day={day} onOpen={() => openDay(day)} />
+                    <CountupRow
+                      key={day.id}
+                      day={day}
+                      selected={selectedDayId === day.id}
+                      onOpen={() => openDay(day)}
+                    />
                   ))}
                 </div>
               </>

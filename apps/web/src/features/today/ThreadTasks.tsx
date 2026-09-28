@@ -1,5 +1,5 @@
 import type { OutcomeDetail, Task } from '@vital/dto';
-import { useService } from '@rabjs/react';
+import { observer, useService } from '@rabjs/react';
 import { useState, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { inboxList, TodosUiService, useListsQuery, useTodoActions } from '@/features/todos';
@@ -63,7 +63,7 @@ function NewTaskForm({
   );
 }
 
-function ThreadTaskRow({
+const ThreadTaskRow = observer(function ThreadTaskRow({
   task,
   timeZone,
   done,
@@ -90,9 +90,9 @@ function ThreadTaskRow({
       <button
         type="button"
         onClick={() => todos.openDetail(task.id)}
-        className={`min-w-0 flex-1 truncate text-left text-[length:var(--text-body)] ${
-          done ? 'text-muted line-through' : 'text-fg'
-        }`}
+        className={`min-w-0 flex-1 truncate rounded-md px-1 text-left text-[length:var(--text-body)] ${
+          todos.selectedId === task.id ? 'bg-surface-muted' : ''
+        } ${done ? 'text-muted line-through' : 'text-fg'}`}
       >
         {task.title}
       </button>
@@ -103,7 +103,7 @@ function ThreadTaskRow({
       </span>
     </div>
   );
-}
+});
 
 export function ThreadTasks({
   detail,

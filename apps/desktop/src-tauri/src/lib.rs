@@ -80,6 +80,11 @@ try {
             var label = windowLabel();
             if (label && label !== "notify-alert") return;
             invoke("open_in_main", { url: url });
+          },
+          hideMain: function () {
+            var label = windowLabel();
+            if (label && label !== "main") return;
+            invoke("hide_main");
           }
         };
       })()
@@ -131,12 +136,18 @@ pub fn run() {
             show_sticky_alert,
             close_sticky_alert,
             open_in_main,
+            hide_main,
         ])
         .menu(build_menu)
-        .on_menu_event(|app, event| {
-            if event.id().as_ref() == "reload" {
-                reload_main(app);
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "reload" => reload_main(app),
+            "undo" => eval_main(app, MENU_UNDO_SCRIPT),
+            "close-window" => eval_main(app, MENU_CLOSE_SCRIPT),
+            "new-task" | "new-inbox" | "palette" | "find" | "shortcuts" | "settings" | "go-today"
+            | "go-todos" | "go-inbox" | "go-habits" | "go-reports" | "go-days" => {
+                emit_menu(app, event.id().as_ref());
             }
+            _ => {}
         })
         .setup(|app| {
             app.manage(AlertHub::default());
@@ -191,10 +202,26 @@ fn show_main(app: &tauri::AppHandle) {
     }
 }
 
+const MENU_UNDO_SCRIPT: &str = r#"(()=>{var fn=window.__VITAL_UNDO_COMPLETE__;if(typeof fn==='function'&&fn())return;document.execCommand('undo');})()"#;
+const MENU_CLOSE_SCRIPT: &str = r#"(()=>{var fn=window.__VITAL_CLOSE_LAYER__;if(typeof fn==='function'&&fn())return;var host=window.__VITAL_HOST__;if(host&&typeof host.hideMain==='function')host.hideMain();})()"#;
+
 fn reload_main(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_LABEL) {
         let _ = window.reload();
     }
+}
+
+fn eval_main(app: &tauri::AppHandle, script: &str) {
+    if let Some(window) = app.get_webview_window(MAIN_LABEL) {
+        let _ = window.eval(script);
+    }
+}
+
+fn emit_menu(app: &tauri::AppHandle, action: &str) {
+    let script = format!(
+        "window.dispatchEvent(new CustomEvent('vital:menu',{{detail:'{action}'}}))"
+    );
+    eval_main(app, &script);
 }
 
 fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R>> {
@@ -213,13 +240,28 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
         false,
         None::<&str>,
     )?;
+    let settings = MenuItem::with_id(app, "settings", "设置", true, Some("CmdOrCtrl+,"))?;
+    let new_task = MenuItem::with_id(app, "new-task", "新建任务", true, Some("CmdOrCtrl+N"))?;
+    let new_inbox =
+        MenuItem::with_id(app, "new-inbox", "新建收集", true, Some("CmdOrCtrl+Shift+N"))?;
+    let undo = MenuItem::with_id(app, "undo", "撤销", true, Some("CmdOrCtrl+Z"))?;
     let reload = MenuItem::with_id(app, "reload", "重新加载", true, Some("CmdOrCtrl+R"))?;
+    let palette = MenuItem::with_id(app, "palette", "命令面板", true, Some("CmdOrCtrl+K"))?;
+    let find = MenuItem::with_id(app, "find", "搜索", true, Some("CmdOrCtrl+F"))?;
+    let go_today = MenuItem::with_id(app, "go-today", "今天", true, Some("CmdOrCtrl+1"))?;
+    let go_todos = MenuItem::with_id(app, "go-todos", "待办", true, Some("CmdOrCtrl+2"))?;
+    let go_inbox = MenuItem::with_id(app, "go-inbox", "收集", true, Some("CmdOrCtrl+3"))?;
+    let go_habits = MenuItem::with_id(app, "go-habits", "习惯", true, Some("CmdOrCtrl+4"))?;
+    let go_reports = MenuItem::with_id(app, "go-reports", "回顾", true, Some("CmdOrCtrl+5"))?;
+    let go_days = MenuItem::with_id(app, "go-days", "日子", true, Some("CmdOrCtrl+6"))?;
+    let close = MenuItem::with_id(app, "close-window", "关闭", true, Some("CmdOrCtrl+W"))?;
+    let shortcuts = MenuItem::with_id(app, "shortcuts", "键盘快捷键", true, Some("CmdOrCtrl+/"))?;
     let edit = Submenu::with_items(
         app,
         "编辑",
         true,
         &[
-            &PredefinedMenuItem::undo(app, Some("撤销"))?,
+            &undo,
             &PredefinedMenuItem::redo(app, Some("重做"))?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::cut(app, Some("剪切"))?,
@@ -233,6 +275,16 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
         "显示",
         true,
         &[
+            &palette,
+            &find,
+            &PredefinedMenuItem::separator(app)?,
+            &go_today,
+            &go_todos,
+            &go_inbox,
+            &go_habits,
+            &go_reports,
+            &go_days,
+            &PredefinedMenuItem::separator(app)?,
             &reload,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::fullscreen(app, Some("全屏"))?,
@@ -247,7 +299,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
             &PredefinedMenuItem::maximize(app, Some("缩放"))?,
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::close_window(app, Some("关闭窗口"))?,
+            &close,
         ],
     )?;
 
@@ -261,6 +313,8 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
                 &PredefinedMenuItem::about(app, Some("关于 Vital"), Some(about))?,
                 &version_item,
                 &PredefinedMenuItem::separator(app)?,
+                &settings,
+                &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::services(app, Some("服务"))?,
                 &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::hide(app, Some("隐藏 Vital"))?,
@@ -270,7 +324,9 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
                 &PredefinedMenuItem::quit(app, Some("退出 Vital"))?,
             ],
         )?;
-        return Menu::with_items(app, &[&app_menu, &edit, &view, &window]);
+        let file = Submenu::with_items(app, "文件", true, &[&new_task, &new_inbox])?;
+        let help = Submenu::with_items(app, "帮助", true, &[&shortcuts])?;
+        return Menu::with_items(app, &[&app_menu, &file, &edit, &view, &window, &help]);
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -280,7 +336,9 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
             "文件",
             true,
             &[
-                &PredefinedMenuItem::close_window(app, Some("关闭窗口"))?,
+                &new_task,
+                &new_inbox,
+                &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::quit(app, Some("退出"))?,
             ],
         )?;
@@ -289,6 +347,9 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
             "帮助",
             true,
             &[
+                &shortcuts,
+                &settings,
+                &PredefinedMenuItem::separator(app)?,
                 &PredefinedMenuItem::about(app, Some("关于 Vital"), Some(about))?,
                 &version_item,
             ],
@@ -331,6 +392,14 @@ fn install_tray(app: &tauri::App) -> tauri::Result<()> {
         .build(app)?;
     app.manage(tray);
     Ok(())
+}
+
+#[tauri::command]
+fn hide_main(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != MAIN_LABEL {
+        return Err("hide_main is main-only".into());
+    }
+    window.hide().map_err(|err| err.to_string())
 }
 
 #[tauri::command]

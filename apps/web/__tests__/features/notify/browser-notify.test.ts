@@ -15,6 +15,7 @@ function installDesktopHost(overrides: Partial<VitalHost> = {}): VitalHost {
     listenStickyAlerts: async () => () => undefined,
     closeStickyAlert() {},
     openInMain() {},
+    hideMain() {},
     ...overrides,
   };
   Object.defineProperty(window, '__VITAL_HOST__', { configurable: true, value: host });

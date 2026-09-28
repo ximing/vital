@@ -62,6 +62,7 @@ function installDesktopHost(): void {
     listenStickyAlerts: async () => () => undefined,
     closeStickyAlert() {},
     openInMain() {},
+    hideMain() {},
   };
   Object.defineProperty(window, '__VITAL_HOST__', { configurable: true, value: host });
 }

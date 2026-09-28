@@ -12,6 +12,7 @@ import {
   useListsQuery,
   useTagsQuery,
   useTodoActions,
+  useTodosKeyboard,
 } from '@/features/todos';
 import { HOME_PATH } from '@/routes';
 import { AuthService } from '@/services/auth.service';
@@ -59,6 +60,35 @@ function ThreadWorkspaceContent() {
 
   const detail = detailQuery.data ?? null;
   const tasks = detail?.tasks ?? [];
+  const openTasks = tasks.filter((task) => task.status === 'todo' || task.status === 'doing');
+  const doneTasks = tasks
+    .filter((task) => task.status === 'done')
+    .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  const selected = tasks.find((task) => task.id === selectedId);
+
+  function refresh(): void {
+    void page.refresh();
+  }
+
+  useTodosKeyboard({
+    visibleIds: [...openTasks, ...doneTasks].map((task) => task.id),
+    selected,
+    onComplete: (task) => {
+      void todoActions.complete(task).finally(refresh);
+    },
+    onUndo: () => {
+      void todoActions.undoComplete().finally(refresh);
+    },
+    onPriority: (task, priority) => {
+      void todoActions.setPriority(task, priority).finally(refresh);
+    },
+    onPin: (task) => {
+      void todoActions.patch
+        .mutateAsync({ id: task.id, input: { pinned: !task.pinned } })
+        .finally(refresh);
+    },
+  });
+
   const detailTask = detailOpen ? tasks.find((task) => task.id === selectedId) : undefined;
   const decomposeQuery = usePendingDecomposeQuery(
     detailOpen && detailTask && detailTask.parentId === null ? detailTask.id : null,
@@ -67,10 +97,6 @@ function ThreadWorkspaceContent() {
     (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.decompose') ?? null;
   const draftAction =
     (decomposeQuery.data ?? []).find((action) => action.actionType === 'task.draft') ?? null;
-
-  function refresh(): void {
-    void page.refresh();
-  }
 
   const backLink = (
     <Link to={HOME_PATH} className={BACK_LINK_CLASS}>

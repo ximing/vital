@@ -62,7 +62,13 @@ describe('Tauri desktop contract', () => {
     assert.match(lib, /window\.reload\(\)/);
     assert.match(lib, /PredefinedMenuItem::copy/);
     assert.match(lib, /PredefinedMenuItem::paste/);
-    assert.match(lib, /PredefinedMenuItem::undo/);
+    assert.match(lib, /CmdOrCtrl\+Z/);
+    assert.match(lib, /__VITAL_UNDO_COMPLETE__/);
+    assert.match(lib, /CmdOrCtrl\+F/);
+    assert.match(lib, /CmdOrCtrl\+N/);
+    assert.match(lib, /CmdOrCtrl\+1/);
+    assert.match(lib, /CmdOrCtrl\+W/);
+    assert.match(lib, /__VITAL_CLOSE_LAYER__/);
     assert.match(lib, /PredefinedMenuItem::select_all/);
     assert.match(lib, /PredefinedMenuItem::quit/);
   });
@@ -103,6 +109,7 @@ describe('Tauri desktop contract', () => {
       'show_sticky_alert',
       'close_sticky_alert',
       'open_in_main',
+      'hide_main',
     ]) {
       assert.match(build, new RegExp(command));
       assert.match(lib, new RegExp(`fn ${command}`));
@@ -117,6 +124,7 @@ describe('Tauri desktop contract', () => {
       [
         'allow-apply-chrome',
         'allow-close-sticky-alert',
+        'allow-hide-main',
         'allow-open-in-main',
         'allow-show-sticky-alert',
         'notification:default',

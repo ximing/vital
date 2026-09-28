@@ -28,6 +28,11 @@ export class TodosUiService extends Service {
   listFilter = '';
   filterFocusNonce = 0;
   quickAddNonce = 0;
+  /** Bumps when `s` should open the detail schedule popover. */
+  scheduleNonce = 0;
+  scheduleHandled = 0;
+  moveTaskId: string | null = null;
+  pendingDeleteId: string | null = null;
   hideCompleted = true;
   boardMode: BoardMode = 'status';
   taskSort: TaskSort = DEFAULT_TASK_SORT;
@@ -65,6 +70,33 @@ export class TodosUiService extends Service {
 
   requestQuickAdd(): void {
     this.quickAddNonce += 1;
+  }
+
+  requestSchedule(): void {
+    this.scheduleNonce += 1;
+  }
+
+  /** True once per requestSchedule, including a detail pane that mounts afterwards. */
+  takeScheduleOpen(): boolean {
+    if (this.scheduleNonce === this.scheduleHandled) return false;
+    this.scheduleHandled = this.scheduleNonce;
+    return true;
+  }
+
+  openMove(id: string): void {
+    this.moveTaskId = id;
+  }
+
+  closeMove(): void {
+    this.moveTaskId = null;
+  }
+
+  requestDelete(id: string): void {
+    this.pendingDeleteId = id;
+  }
+
+  clearDelete(): void {
+    this.pendingDeleteId = null;
   }
 
   setHideCompleted(hide: boolean): void {
@@ -174,6 +206,10 @@ export class TodosUiService extends Service {
     this.listFilter = '';
     this.filterFocusNonce = 0;
     this.quickAddNonce = 0;
+    this.scheduleNonce = 0;
+    this.scheduleHandled = 0;
+    this.moveTaskId = null;
+    this.pendingDeleteId = null;
     this.hideCompleted = true;
     this.boardMode = 'status';
     this.taskSort = DEFAULT_TASK_SORT;

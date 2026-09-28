@@ -12,7 +12,7 @@ import {
   Sun,
   Sunrise,
 } from 'lucide-react';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { t } from '@/copy';
 import { addMonthsYmd, padYmd, ymdParts } from '@/lib/calendar-grid';
 import { DateField } from '@/ui/date-field';
@@ -71,6 +71,8 @@ export function SchedulePopover({
   compact,
   align = 'start',
   placement = 'bottom',
+  listenNonce,
+  onShortcutOpen,
   onChange,
 }: {
   draft: ScheduleDraft;
@@ -82,6 +84,9 @@ export function SchedulePopover({
   align?: 'start' | 'end';
   /** Opens upward when the trigger sits at the bottom of a scrolling pane. */
   placement?: 'top' | 'bottom';
+  /** Detail pane passes the service nonce so `s` can open this popover. */
+  listenNonce?: number;
+  onShortcutOpen?: () => boolean;
   onChange: (next: ScheduleDraft) => void;
 }) {
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -99,6 +104,11 @@ export function SchedulePopover({
     onChange(next);
   }
 
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const onShortcutOpenRef = useRef(onShortcutOpen);
+  onShortcutOpenRef.current = onShortcutOpen;
+
   function open() {
     setWorking(draft);
     setMonthCursor((draft.startYmd || today).slice(0, 7) + '-01');
@@ -106,6 +116,18 @@ export function SchedulePopover({
     setRangeFocus('start');
     popover.toggle();
   }
+
+  const setPopoverOpen = popover.setOpen;
+  useEffect(() => {
+    if (listenNonce === undefined) return;
+    if (!onShortcutOpenRef.current?.()) return;
+    const next = draftRef.current;
+    setWorking(next);
+    setMonthCursor((next.startYmd || today).slice(0, 7) + '-01');
+    setPanel('none');
+    setRangeFocus('start');
+    setPopoverOpen(true);
+  }, [listenNonce, setPopoverOpen, today]);
 
   const { y, m } = ymdParts(monthCursor);
   const days = monthDays(y, m, weekStartsOn);

@@ -221,6 +221,7 @@ export function DayEditor({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        data-shortcut-layer="true"
         data-testid="day-editor"
         className="flex max-h-[92vh] w-full max-w-[560px] flex-col overflow-hidden rounded-xl bg-elevated shadow-[var(--shadow)]"
       >

@@ -18,10 +18,12 @@ const LEADER_DOT_GAP_PX = 9;
 export function DaysTimeline({
   days,
   todayYmd,
+  selectedId,
   onOpen,
 }: {
   days: readonly Day[];
   todayYmd: string;
+  selectedId?: string | null;
   onOpen: (day: Day) => void;
 }) {
   const model = useMemo(() => buildDaysTimeline(days, todayYmd), [days, todayYmd]);
@@ -161,15 +163,17 @@ export function DaysTimeline({
             <span key={point.id}>
               <button
                 type="button"
+                id={`day-shortcut-${point.id}`}
                 onClick={() => day && onOpen(day)}
                 className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
                 style={{ left: `${point.leftPercent}%`, top: track.axisTop }}
                 aria-label={`${point.name} ${point.nextYmd}`}
+                aria-current={selectedId === point.id ? 'true' : undefined}
               >
                 <span
                   className={`mx-auto block size-[11px] rounded-full shadow-[0_0_0_2.5px_var(--bg-surface),0_1px_3px_rgb(20_34_24/25%)] ${
-                    point.amber ? 'bg-due' : 'bg-accent'
-                  }`}
+                    selectedId === point.id ? 'ring-2 ring-accent ring-offset-2 ring-offset-canvas' : ''
+                  } ${point.amber ? 'bg-due' : 'bg-accent'}`}
                 />
               </button>
               {placed && placed.lane !== null ? (

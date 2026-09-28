@@ -6,6 +6,7 @@ import {
   ChartColumn,
   History,
   Inbox,
+  Keyboard,
   ListChecks,
   PanelLeftClose,
   PanelLeftOpen,
@@ -26,6 +27,7 @@ import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
 import { InboxUiService } from '@/features/inbox';
 import { ReportUiService } from '@/features/reports/report-ui.service';
 import { SimilarOpenToast, TodosUiService } from '@/features/todos';
+import { TaskShortcutDialogs } from '@/features/todos/TaskShortcutDialogs';
 import { AccountMenu } from '@/shell/AccountMenu';
 import {
   loadPaneWidth,
@@ -38,6 +40,9 @@ import {
 } from '@/shell/chrome';
 import { SecondaryPane } from '@/shell/SecondaryPane';
 import { sectionOf, showsPane, type AppSection } from '@/shell/section';
+import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
+import { OPEN_SHORTCUTS_EVENT } from '@/shell/shortcuts';
+import { useAppShortcuts } from '@/shell/use-app-shortcuts';
 import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { RouteFallback } from '@/shell/route-fallback';
@@ -71,6 +76,7 @@ function railItemClass(active: boolean, collapsed: boolean): string {
 function ShellContent() {
   const todos = useService(TodosUiService);
   const location = useLocation();
+  useAppShortcuts();
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
   const [collapsed, setCollapsed] = useState<boolean>(() => loadRailCollapsed());
@@ -193,6 +199,16 @@ function ShellContent() {
             <Icon icon={Settings} className="shrink-0" />
             {collapsed ? null : <span className="truncate">{t.nav.settings}</span>}
           </NavLink>
+          <button
+            type="button"
+            title={collapsed ? t.shortcuts.open : undefined}
+            aria-label={t.shortcuts.open}
+            className={railItemClass(false, collapsed)}
+            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS_EVENT))}
+          >
+            <Icon icon={Keyboard} className="shrink-0" />
+            {collapsed ? null : <span className="truncate">{t.shortcuts.open}</span>}
+          </button>
           <AccountMenu collapsed={collapsed} railWidth={railWidth} />
         </div>
       </aside>
@@ -215,6 +231,8 @@ function ShellContent() {
       </div>
       {todos.similarOpen.length > 0 ? <SimilarOpenToast /> : null}
       <CommandPalette />
+      <ShortcutsDialog />
+      <TaskShortcutDialogs />
       <ActivationChecklist />
     </div>
   );

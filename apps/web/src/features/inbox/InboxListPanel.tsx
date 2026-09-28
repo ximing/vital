@@ -28,6 +28,7 @@ import { usePopover } from '@/ui/use-popover';
 import { useScrollVirtualizer, virtualItemStyle } from '@/ui/use-scroll-virtualizer';
 import { EmptyInbox, InboxSkeleton } from './EmptyInbox';
 import { InboxContextMenu } from './InboxContextMenu';
+import { useInboxKeyboard } from './keyboard';
 import { InboxPageService } from './inbox-page.service';
 import { PendingRow, SaveRow } from './InboxRow';
 import {
@@ -207,27 +208,48 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
   const { listRef, virtualizer } = useScrollVirtualizer({ rows, estimateSize: estimateInboxRow });
   const scrollToSelected = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (!selectedId || rows.length === 0) return;
-    if (scrollToSelected.current === selectedId) return;
-    const index = rowsRef.current.findIndex(
-      (row) => row.kind === 'item' && row.item.id === selectedId,
-    );
-    if (index < 0) return;
-    scrollToSelected.current = selectedId;
-    virtualizer.scrollToIndex(index, { align: 'auto' });
-  }, [selectedId, rows.length, virtualizer]);
-
-  const summary = `${totalCount} ${t.inbox.unit} · ${unreadCount} ${t.inbox.unread}`;
-  const empty =
-    items.length === 0 && pending.length === 0 && !inboxQuery.isLoading && inboxQuery.error === null;
-
   function patchStatus(id: string, status: 'later' | 'unread' | 'archived'): void {
     page.setActionError(null);
     void actions.patch.mutateAsync({ id, input: { status } }).catch((err) => {
       page.setActionError(humanError(err));
     });
   }
+
+  const itemIds = useMemo(
+    () => rows.flatMap((row) => (row.kind === 'item' ? [row.item.id] : [])),
+    [rows],
+  );
+  const cursorId = useInboxKeyboard({
+    ids: itemIds,
+    items,
+    routeId: selectedId,
+    suspended: pastePopover.open || menu !== null || pendingDelete !== null,
+    onOpen: (id) => navigate(`/inbox/${id}`),
+    onBack: () => navigate('/inbox'),
+    onPaste: () => inbox.requestPaste(),
+    onFavorite: (item) => patchStatus(item.id, nextFavoriteStatus(item)),
+    onArchive: (item) => patchStatus(item.id, item.status === 'archived' ? 'unread' : 'archived'),
+    onConvert: (item) => {
+      void page.convertKeepUrl(item.id).catch((err) => {
+        page.setActionError(humanError(err));
+      });
+    },
+    onDelete: (item) => setPendingDelete(item),
+  });
+
+  const focusId = selectedId ?? cursorId;
+  useEffect(() => {
+    if (!focusId || rows.length === 0) return;
+    if (scrollToSelected.current === focusId) return;
+    const index = rowsRef.current.findIndex((row) => row.kind === 'item' && row.item.id === focusId);
+    if (index < 0) return;
+    scrollToSelected.current = focusId;
+    virtualizer.scrollToIndex(index, { align: 'auto' });
+  }, [focusId, rows.length, virtualizer]);
+
+  const summary = `${totalCount} ${t.inbox.unit} · ${unreadCount} ${t.inbox.unread}`;
+  const empty =
+    items.length === 0 && pending.length === 0 && !inboxQuery.isLoading && inboxQuery.error === null;
 
   const pasteButton = (
     <button
@@ -262,6 +284,8 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
             {pasteButton}
             {pastePopover.open && pasteAnchor ? (
               <div
+                role="dialog"
+                aria-label={t.inbox.pasteUrl}
                 className={`fixed z-[var(--z-dropdown)] w-[min(26rem,calc(100vw-1rem))] ${FIELD_POPOVER_CLASS}`}
                 style={{
                   right: Math.max(8, Math.min(pasteAnchor.right, window.innerWidth - POPOVER_W - 8)),
@@ -365,7 +389,7 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
                       item={row.item}
                       tags={tags}
                       timeZone={timeZone}
-                      selected={selectedId === row.item.id}
+                      selected={selectedId === row.item.id || (!selectedId && cursorId === row.item.id)}
                       compact
                       onFavorite={
                         online && canPatchStatus(row.item)

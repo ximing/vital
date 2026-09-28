@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { t } from '@/copy';
+import { deleteShortcutLabel } from '@/shell/shortcut-guard';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { Overlay } from '@/ui/overlay';
@@ -27,6 +28,7 @@ function Item({
   active = false,
   filled = false,
   disabled = false,
+  kbd,
   onSelect,
 }: {
   label: string;
@@ -35,6 +37,7 @@ function Item({
   active?: boolean;
   filled?: boolean;
   disabled?: boolean;
+  kbd?: string;
   onSelect: () => void;
 }) {
   return (
@@ -53,7 +56,12 @@ function Item({
         className={`shrink-0 opacity-80 ${active ? 'text-accent' : ''}`}
         fill={filled ? 'currentColor' : 'none'}
       />
-      {label}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {kbd ? (
+        <span aria-hidden className="shrink-0 font-mono text-[length:var(--text-caption)] text-tertiary">
+          {kbd}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -177,6 +185,7 @@ export function InboxContextMenu({
             label={favorited ? t.inbox.unfavorite : t.inbox.favorite}
             active={favorited}
             filled={favorited}
+            kbd="F"
             disabled={disabled}
             onSelect={act(onFavorite)}
           />
@@ -185,6 +194,7 @@ export function InboxContextMenu({
           <Item
             icon={archived ? ArchiveRestore : Archive}
             label={archived ? t.inbox.unarchive : t.inbox.archive}
+            kbd="A"
             disabled={disabled}
             onSelect={act(onArchive)}
           />
@@ -193,6 +203,7 @@ export function InboxContextMenu({
           icon={ListTodo}
           label={converted ? t.inbox.converted : t.inbox.convert}
           active={converted}
+          kbd="C"
           disabled={disabled || converted}
           onSelect={act(onConvert)}
         />
@@ -244,6 +255,7 @@ export function InboxContextMenu({
         <Item
           icon={Trash2}
           label={t.inbox.deleteItem}
+          kbd={deleteShortcutLabel()}
           danger
           disabled={disabled}
           onSelect={act(onDelete)}

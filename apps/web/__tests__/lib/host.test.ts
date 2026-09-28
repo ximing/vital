@@ -9,6 +9,7 @@ function desktopHost(overrides: Partial<VitalHost> = {}): VitalHost {
     listenStickyAlerts: async () => () => undefined,
     closeStickyAlert() {},
     openInMain() {},
+    hideMain() {},
     ...overrides,
   };
 }

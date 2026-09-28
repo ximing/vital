@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -70,6 +70,29 @@ describe('search page', () => {
     await user.type(screen.getByLabelText(t.search.placeholder), '稍后');
     await waitFor(() => expect(client.search).toHaveBeenCalledWith({ q: '稍后', limit: 20 }));
     expect(await screen.findByText('一篇稍后读')).toBeInTheDocument();
+  });
+
+  it('opens the highlighted hit with Enter', async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    function LocationProbe() {
+      const location = useLocation();
+      return <output data-testid="location">{location.pathname}</output>;
+    }
+    render(
+      <RabRoot>
+        <QueryClientProvider client={qc}>
+          <MemoryRouter>
+            <SearchPage />
+            <LocationProbe />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RabRoot>,
+    );
+    await user.type(screen.getByLabelText(t.search.placeholder), '稍后');
+    expect(await screen.findByRole('option', { name: /一篇稍后读/ })).toHaveAttribute('aria-selected', 'true');
+    await user.keyboard('{Enter}');
+    expect(screen.getByTestId('location')).toHaveTextContent('/inbox/22222222-2222-4222-8222-222222222222');
   });
 
   it('uses a wide search canvas instead of shrinking to its empty-state content', () => {

@@ -160,7 +160,7 @@ export function StreakCalendar({
           <Icon icon={ChevronRight} size={16} />
         </button>
       </div>
-      <div className="grid grid-cols-7 text-center">
+      <div className="grid grid-cols-7 gap-y-1 text-center">
         {labels.map((label) => (
           <span key={label} className="pb-1 text-[length:var(--text-caption)] text-muted">
             {label}
@@ -187,33 +187,29 @@ export function StreakCalendar({
               onClick={() => onPick(cell.date)}
               aria-label={cellLabel(cell.date, 'day', cell.wrote)}
               aria-current={isToday ? 'date' : undefined}
-              className="flex aspect-square w-full items-center justify-center p-0.5"
+              className={`relative mx-auto flex h-8 w-8 items-center justify-center rounded-full text-[length:var(--text-caption)] tabular-nums ${
+                sel
+                  ? 'bg-accent text-on-accent'
+                  : inWeek
+                    ? 'bg-accent-subtle text-fg'
+                    : future
+                      ? 'text-muted/40'
+                      : isToday
+                        ? 'font-medium text-accent ring-1 ring-inset ring-accent'
+                        : 'text-fg'
+              }`}
+              style={
+                heat
+                  ? {
+                      backgroundColor: `color-mix(in srgb, var(--accent-primary) ${Math.round(fill * 100)}%, transparent)`,
+                    }
+                  : undefined
+              }
             >
-              <span
-                className={`relative flex h-full w-full items-center justify-center rounded-full text-[length:var(--text-caption)] tabular-nums ${
-                  sel
-                    ? 'bg-accent text-on-accent'
-                    : inWeek
-                      ? 'bg-accent-subtle text-fg'
-                      : future
-                        ? 'text-muted/40'
-                        : isToday
-                          ? 'font-medium text-accent ring-1 ring-inset ring-accent'
-                          : 'text-fg'
-                }`}
-                style={
-                  heat
-                    ? {
-                        backgroundColor: `color-mix(in srgb, var(--accent-primary) ${Math.round(fill * 100)}%, transparent)`,
-                      }
-                    : undefined
-                }
-              >
-                {Number(cell.date.slice(8))}
-                {cell.wrote && !sel ? (
-                  <span className="absolute bottom-[3px] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
-                ) : null}
-              </span>
+              {Number(cell.date.slice(8))}
+              {cell.wrote && !sel ? (
+                <span className="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />
+              ) : null}
             </button>
           );
         })}

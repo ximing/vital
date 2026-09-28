@@ -4,9 +4,12 @@ import { client } from '@/api/client';
 import { t } from '@/copy';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { useListsQuery } from '@/features/todos';
+import { isDesktopHost } from '@/host';
+import { OPEN_SHORTCUTS_EVENT } from '@/shell/shortcuts';
 import { Overlay } from '@/ui/overlay';
 import {
   OPEN_PALETTE_EVENT,
+  TOGGLE_PALETTE_EVENT,
   commandItems,
   filterItems,
   groupLabelOf,
@@ -75,7 +78,7 @@ export function CommandPalette() {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
-      if (!isPaletteToggle(event)) return;
+      if (!isPaletteToggle(event) || isDesktopHost()) return;
       event.preventDefault();
       if (open) {
         setOpen(false);
@@ -91,6 +94,18 @@ export function CommandPalette() {
     window.addEventListener(OPEN_PALETTE_EVENT, openPalette);
     return () => window.removeEventListener(OPEN_PALETTE_EVENT, openPalette);
   }, [openPalette]);
+
+  useEffect(() => {
+    function onToggle(): void {
+      if (open) {
+        setOpen(false);
+        return;
+      }
+      openPalette();
+    }
+    window.addEventListener(TOGGLE_PALETTE_EVENT, onToggle);
+    return () => window.removeEventListener(TOGGLE_PALETTE_EVENT, onToggle);
+  }, [open, openPalette]);
 
   useEffect(() => {
     if (!open) return;
@@ -119,6 +134,11 @@ export function CommandPalette() {
 
   const go = useCallback(
     (item: PaletteItem): void => {
+      if (item.id === 'help-shortcuts') {
+        close();
+        window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS_EVENT));
+        return;
+      }
       if (item.href.includes('type=weekly')) void markOnboarding({ openedWeekly: true });
       close();
       navigate(item.href);

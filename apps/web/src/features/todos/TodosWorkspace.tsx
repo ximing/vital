@@ -201,6 +201,9 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
     onComplete: (task) => void actions.complete(task),
     onUndo: () => void actions.undoComplete(),
     onPriority: (task, priority) => void actions.setPriority(task, priority),
+    onPin: (task) => {
+      void actions.patch.mutateAsync({ id: task.id, input: { pinned: !task.pinned } });
+    },
   });
 
   const inboxId = inbox?.id;

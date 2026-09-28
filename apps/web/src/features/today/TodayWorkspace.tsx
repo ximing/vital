@@ -126,6 +126,11 @@ function TodayWorkspaceContent() {
     onPriority: (task, priority) => {
       void actions.setPriority(task, priority).then(() => page.refresh());
     },
+    onPin: (task) => {
+      void actions.patch
+        .mutateAsync({ id: task.id, input: { pinned: !task.pinned } })
+        .then(() => page.refresh());
+    },
   });
 
   const loading = todayQuery.isLoading || tasksQuery.isLoading || listsQuery.isLoading;

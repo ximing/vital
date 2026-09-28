@@ -5,6 +5,7 @@ fn main() {
             "show_sticky_alert",
             "close_sticky_alert",
             "open_in_main",
+            "hide_main",
         ]),
     ))
     .expect("failed to run tauri-build");

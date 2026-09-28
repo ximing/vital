@@ -15,6 +15,8 @@ export type PaletteItem = {
 
 /** Window event that opens the command palette (rail search button dispatches it). */
 export const OPEN_PALETTE_EVENT = 'vital:open-palette';
+/** Desktop menu ⌘K toggles the palette. The page keydown does that in the browser. */
+export const TOGGLE_PALETTE_EVENT = 'vital:toggle-palette';
 
 export function isPaletteToggle(event: KeyboardEvent): boolean {
   if (!(event.metaKey || event.ctrlKey) || event.altKey) return false;
@@ -65,6 +67,13 @@ export function commandItems(): PaletteItem[] {
     },
     { id: 'goto-settings', kind: 'goto', title: t.nav.settings, hint: t.palette.goto, href: '/settings' },
     { id: 'goto-days', kind: 'goto', title: t.rail.days, hint: t.palette.goto, href: '/days' },
+    {
+      id: 'help-shortcuts',
+      kind: 'goto',
+      title: t.shortcuts.title,
+      hint: '?',
+      href: '/',
+    },
   ];
 }
 

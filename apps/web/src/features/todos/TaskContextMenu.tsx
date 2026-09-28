@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { t } from '@/copy';
+import { deleteShortcutLabel } from '@/shell/shortcut-guard';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { Overlay } from '@/ui/overlay';
@@ -28,11 +29,13 @@ function Item({
   label,
   icon,
   danger = false,
+  kbd,
   onSelect,
 }: {
   label: string;
   icon?: typeof Pin;
   danger?: boolean;
+  kbd?: string;
   onSelect: () => void;
 }) {
   return (
@@ -45,7 +48,12 @@ function Item({
       onClick={onSelect}
     >
       {icon ? <Icon icon={icon} size={14} className="shrink-0 opacity-80" /> : null}
-      {label}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {kbd ? (
+        <span aria-hidden className="shrink-0 font-mono text-[length:var(--text-caption)] text-tertiary">
+          {kbd}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -125,14 +133,15 @@ export function TaskContextMenu({
         className={`fixed w-60 ${FIELD_POPOVER_CLASS} p-1.5`}
         onClick={(event) => event.stopPropagation()}
       >
-        <Item icon={PanelRight} label={t.todos.openDetail} onSelect={act(onOpen)} />
+        <Item icon={PanelRight} label={t.todos.openDetail} kbd="Enter" onSelect={act(onOpen)} />
         {done ? null : (
-          <Item icon={Check} label={t.todos.complete} onSelect={act(() => onComplete(task))} />
+          <Item icon={Check} label={t.todos.complete} kbd="E" onSelect={act(() => onComplete(task))} />
         )}
         {task.parentId === null ? (
           <Item
             icon={task.pinned ? PinOff : Pin}
             label={task.pinned ? t.todos.unpin : t.todos.pin}
+            kbd="P"
             onSelect={act(() => onPatch(task, { pinned: !task.pinned }))}
           />
         ) : null}
@@ -170,6 +179,9 @@ export function TaskContextMenu({
             <p className="flex items-center gap-1.5 px-2 pb-1 pt-1.5 text-[length:var(--text-caption)] text-tertiary">
               <Icon icon={Folder} size={12} />
               {t.todos.moveTo}
+              <span aria-hidden className="ml-auto font-mono text-tertiary">
+                M
+              </span>
             </p>
             <div className="max-h-44 overflow-y-auto">
               {listOptions.map((option) => (
@@ -189,7 +201,13 @@ export function TaskContextMenu({
           </>
         ) : null}
         <Divider />
-        <Item icon={Trash2} label={t.todos.deleteTask} danger onSelect={act(() => onDelete(task))} />
+        <Item
+          icon={Trash2}
+          label={t.todos.deleteTask}
+          kbd={deleteShortcutLabel()}
+          danger
+          onSelect={act(() => onDelete(task))}
+        />
       </div>
     </Overlay>
   );

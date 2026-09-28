@@ -110,6 +110,15 @@ describe('primary rail', () => {
     expect(within(nav).getByRole('button', { name: t.nav.search })).toBeInTheDocument();
   });
 
+  it('opens the shortcut sheet from the lower rail button', async () => {
+    const user = userEvent.setup();
+    renderShell();
+    await user.click(screen.getByRole('button', { name: t.shortcuts.open }));
+    expect(await screen.findByRole('dialog', { name: t.shortcuts.title })).toBeInTheDocument();
+    expect(screen.getByText(t.shortcuts.schedule)).toBeInTheDocument();
+    expect(screen.getByText('g t')).toBeInTheDocument();
+  });
+
   it('opens the command palette from the rail search button', async () => {
     const user = userEvent.setup();
     renderShell();
@@ -128,7 +137,8 @@ describe('primary rail', () => {
     expect(kids[1]).toHaveAttribute('href', '/usage');
     expect(kids[2]).toHaveAttribute('aria-label', t.theme.switch);
     expect(kids[3]).toHaveAttribute('href', '/settings');
-    const avatar = kids[4]?.querySelector('[aria-haspopup="menu"]');
+    expect(kids[4]).toHaveAttribute('aria-label', t.shortcuts.open);
+    const avatar = kids[5]?.querySelector('[aria-haspopup="menu"]');
     expect(avatar).not.toBeNull();
     expect(avatar).toHaveClass('w-full', 'justify-center');
   });

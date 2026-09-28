@@ -12,6 +12,7 @@ export type VitalHost = {
   listenStickyAlerts(onItem: (input: StickyAlertInput) => void): Promise<() => void>;
   closeStickyAlert(): void;
   openInMain(url: string): void;
+  hideMain(): void;
 };
 
 const HOST_METHODS = [
@@ -20,6 +21,7 @@ const HOST_METHODS = [
   'listenStickyAlerts',
   'closeStickyAlert',
   'openInMain',
+  'hideMain',
 ] as const;
 
 function isVitalHost(value: unknown): value is VitalHost {

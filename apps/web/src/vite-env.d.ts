@@ -6,6 +6,8 @@ interface ImportMetaEnv {
 
 interface Window {
   __VITAL_HOST__?: import('./host').VitalHost;
+  __VITAL_CLOSE_LAYER__?: () => boolean;
+  __VITAL_UNDO_COMPLETE__?: () => boolean;
 }
 
 declare module '*.svg?react' {

@@ -9,6 +9,7 @@
     "allow-show-sticky-alert",
     "allow-close-sticky-alert",
     "allow-open-in-main",
+    "allow-hide-main",
     "notification:default"
   ]
 }
