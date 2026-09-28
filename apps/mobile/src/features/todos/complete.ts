@@ -4,6 +4,7 @@ import { copy } from '../../lib/copy';
 import { toast, UNDO_MS } from '../../components/toast';
 import { humanError } from '../../lib/errors';
 import { markOnboarding } from '../../lib/onboarding';
+import { notifyTaskMutation } from '../../lib/task-mutations';
 
 export async function toggleComplete(
   task: Task,
@@ -16,6 +17,7 @@ export async function toggleComplete(
     }
     const res = await client.completeTask(task.id);
     onTask(res.task);
+    notifyTaskMutation();
     if (onboarding) {
       await markOnboarding(onboarding.user, onboarding.refreshUser, { completedTask: true });
     }
@@ -27,7 +29,10 @@ export async function toggleComplete(
         onPress: () => {
           void client
             .uncompleteTask(task.id, { completionId: res.undo.completionId })
-            .then(onTask)
+            .then((next) => {
+              onTask(next);
+              notifyTaskMutation();
+            })
             .catch((err: unknown) => toast(humanError(err)));
         },
       },

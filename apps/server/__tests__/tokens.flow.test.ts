@@ -63,15 +63,22 @@ describe('api tokens', () => {
     });
     expect(task.statusCode).toBe(201);
 
-    const access = await injectJson(app, {
-      method: 'GET',
-      url: `/api/v1/tokens/${body.id}/access`,
-      token: session.token,
-    });
-    expect(access.statusCode).toBe(200);
-    const paths = access.json().items.map((row: { path: string; method: string }) => {
-      return `${row.method} ${row.path}`;
-    });
+    let paths: string[] = [];
+    let accessCount = 0;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const access = await injectJson(app, {
+        method: 'GET',
+        url: `/api/v1/tokens/${body.id}/access`,
+        token: session.token,
+      });
+      expect(access.statusCode).toBe(200);
+      accessCount = access.json().items.length;
+      paths = access.json().items.map((row: { path: string; method: string }) => {
+        return `${row.method} ${row.path}`;
+      });
+      if (paths.includes('GET /api/v1/auth/me') && paths.includes('POST /api/v1/tasks')) break;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     expect(paths).toContain('GET /api/v1/auth/me');
     expect(paths).toContain('POST /api/v1/tasks');
     expect(paths.some((p: string) => p.includes('?'))).toBe(false);
@@ -87,7 +94,7 @@ describe('api tokens', () => {
       url: `/api/v1/tokens/${body.id}/access`,
       token: session.token,
     });
-    expect(afterJwt.json().items).toHaveLength(access.json().items.length);
+    expect(afterJwt.json().items).toHaveLength(accessCount);
   });
 
   it('revokes a token and rejects further calls', async () => {

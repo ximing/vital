@@ -26,6 +26,13 @@ export interface NotificationChannelCollection {
 }
 ```
 
+```ts
+export interface PushDevice {
+  id: string;
+  provider: PushProvider;
+}
+```
+
 ## Endpoints
 
 #### `GET /api/v1/notification-channels`

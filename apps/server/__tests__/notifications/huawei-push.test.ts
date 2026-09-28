@@ -26,8 +26,9 @@ describe('huawei push', () => {
 
   it('treats an invalid device token as permanent', async () => {
     setHuaweiTransport({
-      postForm: async () => ({ httpStatus: 200, json: { access_token: 't', expires_in: 3600 } }),
-      postJson: async () => ({ httpStatus: 200, json: { code: '80300007', msg: 'All the tokens are invalid' } }),
+      postForm: () => Promise.resolve({ httpStatus: 200, json: { access_token: 't', expires_in: 3600 } }),
+      postJson: () =>
+        Promise.resolve({ httpStatus: 200, json: { code: '80300007', msg: 'All the tokens are invalid' } }),
     });
     const result = await sendHuaweiPush({
       token: 'gone',
