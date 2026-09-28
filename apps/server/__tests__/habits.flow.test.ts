@@ -41,17 +41,26 @@ describe('habits', () => {
       method: 'POST',
       url: '/api/v1/habits',
       token: alice.token,
-      payload: { name: '喝水', kind: 'count', targetCount: 8, windowStart: '08:00', windowEnd: '22:00' },
+      payload: {
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+      },
     });
     expect(created.statusCode).toBe(200);
     const habitId = created.json().id as string;
 
-    const noon = DateTime.now().setZone('Asia/Shanghai').set({
-      hour: 12,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-    }).toJSDate();
+    const noon = DateTime.now()
+      .setZone('Asia/Shanghai')
+      .set({
+        hour: 12,
+        minute: 0,
+        second: 0,
+        millisecond: 0,
+      })
+      .toJSDate();
     const spawned = await spawnDailyHabits(alice.id, 'Asia/Shanghai', noon);
     expect(spawned).toBe(1);
     // Idempotent: second run on the same day spawns nothing.
@@ -68,9 +77,9 @@ describe('habits', () => {
       url: '/api/v1/today',
       token: alice.token,
     });
-    const habitTasks = (today.json().tasks as { title: string; similarOpenTasks?: unknown }[]).filter(
-      (task) => task.title === '喝水',
-    );
+    const habitTasks = (
+      today.json().tasks as { title: string; similarOpenTasks?: unknown }[]
+    ).filter((task) => task.title === '喝水');
     expect(habitTasks.length).toBeGreaterThan(0);
     expect(habitTasks.every((task) => task.similarOpenTasks === undefined)).toBe(true);
   });
@@ -156,7 +165,13 @@ describe('habits', () => {
       method: 'POST',
       url: '/api/v1/habits',
       token: alice.token,
-      payload: { name: '喝水', kind: 'count', targetCount: 8, windowStart: '08:00', windowEnd: '22:00' },
+      payload: {
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+      },
     });
     const lateNight = new Date('2026-09-09T15:30:00Z'); // 23:30 Asia/Shanghai
     expect(await spawnDailyHabits(alice.id, 'Asia/Shanghai', lateNight)).toBe(0);
@@ -229,7 +244,13 @@ describe('habits', () => {
       method: 'POST',
       url: '/api/v1/habits',
       token: alice.token,
-      payload: { name: '喝水', kind: 'count', targetCount: 2, windowStart: '08:00', windowEnd: '22:00' },
+      payload: {
+        name: '喝水',
+        kind: 'count',
+        targetCount: 2,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+      },
     });
     const habitId = created.json().id as string;
 
@@ -297,19 +318,24 @@ describe('habits', () => {
     });
     expect(rejected.statusCode).toBe(404);
 
-    const noon = DateTime.now().setZone('Asia/Shanghai').set({
-      hour: 12,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-    }).toJSDate();
+    const noon = DateTime.now()
+      .setZone('Asia/Shanghai')
+      .set({
+        hour: 12,
+        minute: 0,
+        second: 0,
+        millisecond: 0,
+      })
+      .toJSDate();
     expect(await spawnDailyHabits(alice.id, 'Asia/Shanghai', noon)).toBe(1);
     const today = await injectJson(app, {
       method: 'GET',
       url: '/api/v1/today',
       token: alice.token,
     });
-    const instance = today.json().tasks.find((t: { habitId: string | null }) => t.habitId === created.json().id);
+    const instance = today
+      .json()
+      .tasks.find((t: { habitId: string | null }) => t.habitId === created.json().id);
     expect(instance).toBeTruthy();
     await injectJson(app, {
       method: 'POST',
@@ -333,11 +359,13 @@ describe('habits', () => {
     });
     expect(detail.statusCode).toBe(200);
     expect(detail.json().habits).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: created.json().id, name: '锻炼', outcomeId })]),
+      expect.arrayContaining([
+        expect.objectContaining({ id: created.json().id, name: '锻炼', outcomeId }),
+      ]),
     );
-    expect(detail.json().tasks.every((task: { habitId: string | null }) => task.habitId === null)).toBe(
-      true,
-    );
+    expect(
+      detail.json().tasks.every((task: { habitId: string | null }) => task.habitId === null),
+    ).toBe(true);
   });
 
   it('deletes a habit and soft-deletes open instances', async () => {
@@ -350,19 +378,24 @@ describe('habits', () => {
     });
     expect(created.statusCode).toBe(200);
     const habitId = created.json().id as string;
-    const noon = DateTime.now().setZone('Asia/Shanghai').set({
-      hour: 12,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-    }).toJSDate();
+    const noon = DateTime.now()
+      .setZone('Asia/Shanghai')
+      .set({
+        hour: 12,
+        minute: 0,
+        second: 0,
+        millisecond: 0,
+      })
+      .toJSDate();
     expect(await spawnDailyHabits(alice.id, 'Asia/Shanghai', noon)).toBe(1);
     const before = await injectJson(app, {
       method: 'GET',
       url: '/api/v1/today',
       token: alice.token,
     });
-    const instance = before.json().tasks.find((t: { habitId: string | null }) => t.habitId === habitId);
+    const instance = before
+      .json()
+      .tasks.find((t: { habitId: string | null }) => t.habitId === habitId);
     expect(instance).toBeTruthy();
 
     const deleted = await injectJson(app, {
@@ -545,7 +578,13 @@ describe('habits', () => {
       method: 'POST',
       url: '/api/v1/habits',
       token: alice.token,
-      payload: { name: '喝水', kind: 'count', targetCount: 8, windowStart: '08:00', windowEnd: '22:00' },
+      payload: {
+        name: '喝水',
+        kind: 'count',
+        targetCount: 8,
+        windowStart: '08:00',
+        windowEnd: '22:00',
+      },
     });
     const habitId = created.json().id as string;
     const now = DateTime.fromISO('2026-09-16T08:30:00', { zone: 'Asia/Shanghai' }).toJSDate();
@@ -573,7 +612,9 @@ describe('habits', () => {
     const [pending] = await getDb()
       .select()
       .from(notificationOutbox)
-      .where(and(eq(notificationOutbox.entityId, first.id), eq(notificationOutbox.status, 'pending')));
+      .where(
+        and(eq(notificationOutbox.entityId, first.id), eq(notificationOutbox.status, 'pending')),
+      );
     expect(pending?.payload.message).toBe('今天 0/8');
     expect(pending?.scheduledAt.toISOString()).not.toBe(now.toISOString());
 
@@ -612,7 +653,9 @@ describe('habits', () => {
     });
     expect(open.reminderAt?.toISOString()).toBe(secondRing?.scheduledAt.toISOString());
     if (!open.reminderAt) throw new Error('missing second reminder');
-    expect(open.reminderAt.getTime() - now.getTime()).toBeGreaterThan(20 * 60 * 1000);
+    expect(DateTime.fromJSDate(open.reminderAt, { zone: 'Asia/Shanghai' }).toFormat('HH:mm')).toBe(
+      '09:45',
+    );
 
     const later = DateTime.fromISO('2026-09-16T10:01:00', { zone: 'Asia/Shanghai' }).toJSDate();
     const [fresh] = await getDb().select().from(tasks).where(eq(tasks.id, open.id));
@@ -620,13 +663,15 @@ describe('habits', () => {
     await syncTaskNotifications(fresh, user, later);
     const [advanced] = await getDb().select().from(tasks).where(eq(tasks.id, open.id));
     if (!advanced?.reminderAt) throw new Error('missing advanced reminder');
-    expect(DateTime.fromJSDate(advanced.reminderAt, { zone: 'Asia/Shanghai' }).toFormat('HH:mm')).toBe(
-      '11:30',
-    );
+    expect(
+      DateTime.fromJSDate(advanced.reminderAt, { zone: 'Asia/Shanghai' }).toFormat('HH:mm'),
+    ).toBe('10:30');
     const live = await getDb()
       .select()
       .from(notificationOutbox)
-      .where(and(eq(notificationOutbox.entityId, open.id), eq(notificationOutbox.status, 'pending')));
+      .where(
+        and(eq(notificationOutbox.entityId, open.id), eq(notificationOutbox.status, 'pending')),
+      );
     expect(live).toHaveLength(1);
     expect(live[0]?.payload.message).toBe('今天 1/8');
   });
@@ -664,7 +709,9 @@ describe('habits', () => {
     const pending = await getDb()
       .select()
       .from(notificationOutbox)
-      .where(and(eq(notificationOutbox.entityId, open.id), eq(notificationOutbox.status, 'pending')));
+      .where(
+        and(eq(notificationOutbox.entityId, open.id), eq(notificationOutbox.status, 'pending')),
+      );
     expect(pending).toHaveLength(0);
   });
 });

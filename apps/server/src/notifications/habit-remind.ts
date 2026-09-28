@@ -2,8 +2,17 @@ import { DateTime } from 'luxon';
 import { applyQuietHours, parseHHmm } from './quiet-hours.js';
 import { MISSED_GRACE_MS } from './schedule.js';
 
-/** Floor after a completion, shortened when the window slice is already tighter. */
-export const COUNT_HABIT_FLOOR_MS = 20 * 60 * 1000;
+/**
+ * Soonest a late cup may ring. The effective gap is the wider of this and half
+ * a slice, and never a reason to ping faster than that.
+ */
+export const COUNT_HABIT_MIN_GAP_MS = 75 * 60 * 1000;
+
+/** One nudge when the planned ring may have been missed. */
+export const COUNT_HABIT_FOLLOW_UP_MS = 45 * 60 * 1000;
+
+/** No new catch-up rings in the last 90 minutes of the window. */
+export const COUNT_HABIT_WIND_DOWN_MS = 90 * 60 * 1000;
 
 /** Missing window end. Missing start uses the all-day notify clock instead. */
 export const COUNT_HABIT_DEFAULT_END = '21:00';
@@ -38,9 +47,11 @@ export type CountHabitRemind = {
 /**
  * Pace for a count habit (target >= 2). Returns the next ring on the open
  * instance, or null when this instance should stay quiet.
- * A window is split into `targetCount` slices. Either bound may be omitted.
- * No window at all: one ping at the all-day clock; only seq 1 may catch up
- * after that clock has passed.
+ * A window is split into `targetCount` slices. On pace, the open cup keeps its
+ * slice. Behind, the next cup is the remaining time divided by the remaining
+ * cups, clamped to a healthy gap. A missed ring gets one follow-up, then skips
+ * a cycle. No window at all: one ping at the all-day clock; only seq 1 may
+ * catch up after that clock has passed.
  */
 export function nextCountHabitReminder(input: CountHabitRemindInput): CountHabitRemind | null {
   if (input.targetCount < 2) return null;
@@ -56,12 +67,15 @@ export function nextCountHabitReminder(input: CountHabitRemindInput): CountHabit
 
 function atHm(day: string, hm: string, zone: string): Date {
   const { hour, minute } = parseHHmm(hm);
-  return DateTime.fromISO(day, { zone }).set({ hour, minute, second: 0, millisecond: 0 }).toJSDate();
+  return DateTime.fromISO(day, { zone })
+    .set({ hour, minute, second: 0, millisecond: 0 })
+    .toJSDate();
 }
 
 function sameLocalDay(a: Date, b: Date, zone: string): boolean {
   return (
-    DateTime.fromJSDate(a).setZone(zone).toISODate() === DateTime.fromJSDate(b).setZone(zone).toISODate()
+    DateTime.fromJSDate(a).setZone(zone).toISODate() ===
+    DateTime.fromJSDate(b).setZone(zone).toISODate()
   );
 }
 
@@ -116,6 +130,49 @@ function windowlessRemind(
   return { occurrenceAt: morning, scheduledAt: scheduled, done, total: input.targetCount };
 }
 
+type RingKind = 'slot' | 'follow' | 'reflow';
+
+type Ring = { at: number; kind: RingKind };
+
+/** Gap until the next cup. Never shorter than the healthy minimum. */
+function paceMs(remainingMs: number, left: number, sliceMs: number): number {
+  const minGap = Math.max(COUNT_HABIT_MIN_GAP_MS, sliceMs / 2);
+  if (!(left > 0) || minGap >= sliceMs) return minGap;
+  const raw = remainingMs / left;
+  return Math.min(Math.max(raw, minGap), sliceMs);
+}
+
+function gridRings(slots: number[], fromIndex: number, endMs: number): Ring[] {
+  const rings: Ring[] = [];
+  for (let i = fromIndex; i < slots.length; i += 2) {
+    const slot = slots[i];
+    if (slot === undefined || slot >= endMs) break;
+    rings.push({ at: slot, kind: 'slot' });
+    const follow = slot + COUNT_HABIT_FOLLOW_UP_MS;
+    if (follow < endMs) rings.push({ at: follow, kind: 'follow' });
+  }
+  return rings;
+}
+
+function reflowRings(anchorMs: number, sliceMs: number, endMs: number, limit: number): Ring[] {
+  const rings: Ring[] = [];
+  for (let k = 0; k < limit; k += 1) {
+    const primary = Math.round(anchorMs + k * 2 * sliceMs);
+    if (primary >= endMs) break;
+    rings.push({ at: primary, kind: 'reflow' });
+    const follow = primary + COUNT_HABIT_FOLLOW_UP_MS;
+    if (follow < endMs) rings.push({ at: follow, kind: 'reflow' });
+  }
+  return rings;
+}
+
+/** Catch-up rings stop 90 minutes before the window ends. Planned slots may still ring. */
+function visibleInWindow(ring: Ring, windDownAt: number, endMs: number): boolean {
+  if (ring.at >= endMs) return false;
+  if (ring.at < windDownAt) return true;
+  return ring.kind === 'slot' || ring.kind === 'follow';
+}
+
 function windowedRemind(
   input: CountHabitRemindInput,
   window: { start: Date; end: Date },
@@ -123,31 +180,37 @@ function windowedRemind(
   seq: number,
   done: number,
 ): CountHabitRemind | null {
-  const span = window.end.getTime() - window.start.getTime();
-  const interval = span / input.targetCount;
-  const floor = Math.min(COUNT_HABIT_FLOOR_MS, interval);
-  const slots: Date[] = [];
-  for (let i = 0; i < input.targetCount; i += 1) {
-    slots.push(new Date(Math.round(window.start.getTime() + i * interval)));
-  }
-  const planned = slots[seq - 1] ?? window.start;
-  let first = planned.getTime();
-  if (input.lastCompletedAt) {
-    first = Math.max(first, input.lastCompletedAt.getTime() + floor);
-  }
-  if (first < window.start.getTime()) first = window.start.getTime();
+  const startMs = window.start.getTime();
+  const endMs = window.end.getTime();
+  const slice = (endMs - startMs) / input.targetCount;
+  const slots = Array.from({ length: input.targetCount }, (_, i) =>
+    Math.round(startMs + i * slice),
+  );
+  const planned = slots[seq - 1] ?? startMs;
+  const last = input.lastCompletedAt?.getTime() ?? null;
+  const behind = last !== null && last >= planned;
+  const rings = behind
+    ? reflowRings(
+        Math.round(last + paceMs(endMs - last, input.targetCount - done, slice)),
+        slice,
+        endMs,
+        input.targetCount,
+      )
+    : gridRings(slots, seq - 1, endMs);
+  const windDownAt = endMs - COUNT_HABIT_WIND_DOWN_MS;
+  const nowMs = input.now.getTime();
 
-  const times = [new Date(first)];
-  for (const slot of slots) {
-    if (slot.getTime() > first) times.push(slot);
-  }
-
-  for (const candidate of times) {
-    if (candidate.getTime() >= window.end.getTime()) continue;
-    const scheduled = deliverableAt(candidate, input, day);
-    if (!scheduled || scheduled.getTime() >= window.end.getTime()) continue;
-    if (scheduled.getTime() < input.now.getTime() - MISSED_GRACE_MS) continue;
-    return { occurrenceAt: candidate, scheduledAt: scheduled, done, total: input.targetCount };
+  for (const ring of rings) {
+    if (!visibleInWindow(ring, windDownAt, endMs)) continue;
+    const scheduled = deliverableAt(new Date(ring.at), input, day);
+    if (!scheduled || scheduled.getTime() >= endMs) continue;
+    if (scheduled.getTime() < nowMs - MISSED_GRACE_MS) continue;
+    return {
+      occurrenceAt: new Date(ring.at),
+      scheduledAt: scheduled,
+      done,
+      total: input.targetCount,
+    };
   }
   return null;
 }
