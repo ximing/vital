@@ -64,6 +64,7 @@ describe('api tokens', () => {
     expect(task.statusCode).toBe(201);
 
     let paths: string[] = [];
+    let accessCount = 0;
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const access = await injectJson(app, {
         method: 'GET',
@@ -71,6 +72,7 @@ describe('api tokens', () => {
         token: session.token,
       });
       expect(access.statusCode).toBe(200);
+      accessCount = access.json().items.length;
       paths = access.json().items.map((row: { path: string; method: string }) => {
         return `${row.method} ${row.path}`;
       });
@@ -92,7 +94,7 @@ describe('api tokens', () => {
       url: `/api/v1/tokens/${body.id}/access`,
       token: session.token,
     });
-    expect(afterJwt.json().items).toHaveLength(access.json().items.length);
+    expect(afterJwt.json().items).toHaveLength(accessCount);
   });
 
   it('revokes a token and rejects further calls', async () => {
