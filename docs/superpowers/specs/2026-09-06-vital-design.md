@@ -31,7 +31,7 @@ Moment already solved the hard unglamorous parts of shipping a personal product 
 - Theme: CSS variables on `:root` / `[data-theme=dark]` mapped by Tailwind (`apps/web/src/styles/tokens.css`, `apps/web/tailwind.config.js`); RN duplicate as a TS object (`apps/app/src/theme/tokens.ts`) with `light` / `dark` / `system` persisted (`apps/web/src/lib/theme.ts`, `apps/app/src/theme/preference.ts`).
 - Ops: `dev.sh` boots API + web; Dockerfiles copy workspace manifests so pnpm does not leave dangling workspace symlinks; nginx later reverse-proxies `/api/` (`deploy/nginx.conf`).
 
-Vital is a different product (tasks + later-read + living reports) on the same operator machine, so it **must not collide** with Moment's ports (API `:3000`, Vite `:5173`) or MySQL (`222.128.65.91:13306`, databases `moment_*`). PostgreSQL is a user mandate. S3 is the same operator endpoint, **new bucket `vital`**, env split by prefix. **S3 access keys are never written in this spec** (see § Secrets).
+Vital is a different product (tasks + later-read + living reports) on the same operator machine, so it **must not collide** with Moment's ports (API `:3000`, Vite `:5173`) or MySQL (`203.0.113.20:13306`, databases `moment_*`). PostgreSQL is a user mandate. S3 is the same operator endpoint, **new bucket `vital`**, env split by prefix. **S3 access keys are never written in this spec** (see § Secrets).
 
 Pain this design removes up front:
 
@@ -1383,7 +1383,7 @@ Unique `(user_id, type, period_start)`. GIN tsv + title trgm.
 
 ### PostgreSQL provisioning
 
-Host `222.128.65.91`. Admin: `ssh root@222.128.65.91 -p 11023`. Moment MySQL on **13306** — do not reuse. **Assume Postgres `127.0.0.1:5432` until confirmed.**
+Host `203.0.113.20` (documentation example). Admin: `ssh root@203.0.113.20 -p 11023`. Moment MySQL on **13306** — do not reuse. **Assume Postgres `127.0.0.1:5432` until confirmed.**
 
 #### Numbered runbook
 
@@ -1442,7 +1442,7 @@ Repeat for `vital_prod` / `vital_prod_user`.
 6. Laptop tunnel:
 
 ```bash
-ssh -N -L 15432:127.0.0.1:5432 root@222.128.65.91 -p 11023
+ssh -N -L 15432:127.0.0.1:5432 root@203.0.113.20 -p 11023
 ```
 
 7. `pnpm --filter @vital/server migrate` as `vital_dev_user`.

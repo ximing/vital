@@ -11,7 +11,7 @@
 | PostgreSQL 16，已装 `pg_trgm` | 业务库。表没有外键，迁移由镜像里的 `migrate` 执行 |
 | 对象存储（S3 兼容） | 头像、收集箱图片、报告图片。客户端只拿服务端签好的 URL |
 | 域名和 TLS | 当前站点是 `https://vital.aimo.plus`。`WEB_ORIGIN` 必须等于浏览器看到的源，刷新 Cookie 才下得来 |
-| 入口反代 | [deploy/aimo.plus-vital.conf](../deploy/aimo.plus-vital.conf) 把该域名转到应用机的 `13005` |
+| 入口反代 | 把 `https://vital.aimo.plus` 转到应用机的 `13005`。`TRUST_PROXY_EXTRA` 填入口机地址，示例 `203.0.113.10` |
 | GHCR 拉取权限 | 应用机能拉 `ghcr.io/ximing/vital-server:stable` |
 | AppGallery Connect 项目 Vital | 包名 `plus.aimo.vital`，开通推送。应用级 OAuth 密钥给 worker |
 | 正式签名证书 | 已有的 GitHub Secret `ANDROID_KEYSTORE`。华为后台要填这张证书的 SHA-256 |
@@ -47,7 +47,7 @@ worker 是同一个镜像的第二个进程，提醒和后台 Agent 都在这里
 | `WEB_ORIGIN` | `https://vital.aimo.plus`。和证书上的主机名一致 |
 | `COOKIE_SECURE` | 生产为 `true`。明文 HTTP 下刷新 Cookie 不会写入 |
 | `ATTACHMENT_S3_*` | 桶、前缀、区域、Endpoint、访问密钥。生产前缀用 `prod/attachments`，和开发分开 |
-| `TRUST_PROXY_EXTRA` | 入口 Nginx 的地址。默认已是当前入口机的公网 IP |
+| `TRUST_PROXY_EXTRA` | 入口反代的地址，逗号分隔。示例 `203.0.113.10` 不是真机，不填则只信任本机和 Docker 网桥 |
 
 常用但有默认值：`PORT=3010`、`ACCESS_TOKEN_TTL_SECONDS=900`、`REFRESH_TOKEN_TTL_DAYS=30`、`PRESIGN_GET_TTL_SECONDS=21600`、`WORKER_POLL_MS=15000`、`AGENT_DAILY_MODEL_CALL_LIMIT=100`。Agent 调度项见 [agent-scheduling.md](agent-scheduling.md)。
 

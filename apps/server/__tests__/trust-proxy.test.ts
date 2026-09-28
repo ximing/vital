@@ -17,9 +17,10 @@ describe('isTrustedProxy', () => {
     expect(isTrustedProxy('::ffff:172.17.0.1')).toBe(true);
   });
 
-  it('trusts the default extra entry nginx 39.96.159.212', () => {
-    expect(isTrustedProxy('39.96.159.212')).toBe(true);
-    expect(isTrustedProxy('::ffff:39.96.159.212')).toBe(true);
+  it('trusts an entry proxy only when it is passed in', () => {
+    expect(isTrustedProxy('203.0.113.10')).toBe(false);
+    expect(isTrustedProxy('203.0.113.10', '203.0.113.10')).toBe(true);
+    expect(isTrustedProxy('::ffff:203.0.113.10', '203.0.113.10')).toBe(true);
   });
 
   it('trusts extra CIDRs passed as the second argument', () => {
@@ -38,22 +39,22 @@ describe('isTrustedProxy', () => {
   });
 
   it('parseTrustList skips blanks and junk', () => {
-    expect(parseTrustList(' 39.96.159.212 , not-an-ip, 10.0.0.0/8 ')).toEqual([
-      { kind: 'exact', exact: '39.96.159.212' },
+    expect(parseTrustList(' 203.0.113.10 , not-an-ip, 10.0.0.0/8 ')).toEqual([
+      { kind: 'exact', exact: '203.0.113.10' },
       { kind: 'cidr4', net: 0x0a000000, mask: 0xff000000 },
     ]);
   });
 });
 
 describe('trustProxy req.ip', () => {
-  it('uses X-Forwarded-For when remoteAddress is the entry nginx', async () => {
+  it('uses X-Forwarded-For when remoteAddress is the docker bridge', async () => {
     const app = Fastify({ logger: false, trustProxy: isTrustedProxy });
     app.get('/ip', (req) => ({ ip: req.ip }));
     await app.ready();
     const res = await app.inject({
       method: 'GET',
       url: '/ip',
-      remoteAddress: '39.96.159.212',
+      remoteAddress: '172.17.0.1',
       headers: { 'x-forwarded-for': '203.0.113.50' },
     });
     expect(res.statusCode).toBe(200);

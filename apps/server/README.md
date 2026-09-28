@@ -24,10 +24,10 @@ pnpm --filter @vital/server test
 
 ## PostgreSQL runbook (remote)
 
-Host `222.128.65.91`. Admin: `ssh root@222.128.65.91 -p 11023`. Assume Postgres `127.0.0.1:5432` until `ss` says otherwise. Laptop tunnel:
+Host addresses below are documentation examples (`203.0.113.20`), not the live machine. Assume Postgres `127.0.0.1:5432` until `ss` says otherwise. Laptop tunnel:
 
 ```bash
-ssh -N -L 15432:127.0.0.1:5432 root@222.128.65.91 -p 11023
+ssh -N -L 15432:127.0.0.1:5432 root@203.0.113.20 -p 11023
 ```
 
 Generate role passwords locally (`openssl rand -hex 32`). **Do not reuse leaked draft values.**
