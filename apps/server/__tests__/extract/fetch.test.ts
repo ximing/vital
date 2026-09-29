@@ -118,6 +118,7 @@ describe('pinned extract fetch', () => {
 });
 
 describe('raw html prefix', () => {
+  // eslint-disable-next-line @typescript-eslint/require-await -- 同步内存数据，仅为了满足 AsyncIterable 签名
   async function* zeros(total: number): AsyncGenerator<Uint8Array> {
     const chunk = new Uint8Array(64 * 1024);
     let left = total;
