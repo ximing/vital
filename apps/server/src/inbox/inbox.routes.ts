@@ -12,6 +12,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { extractUrl } from '../extract/extract.js';
+import { getExtractJob, startExtractJob } from './extract-jobs.js';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import { limitInbox, limitInwit } from '../plugins/rate-limit.js';
@@ -48,6 +49,24 @@ export function registerInboxRoutes(app: FastifyInstance): void {
       return extractUrl(body.url);
     },
   );
+
+  app.post(
+    '/api/v1/inbox/extract-jobs',
+    { preHandler: [requireAuth, limitInbox] },
+    async (req) => {
+      const user = req.user;
+      if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+      const body = extractInboxInputSchema.parse(req.body);
+      return startExtractJob(user.id, body.url);
+    },
+  );
+
+  app.get('/api/v1/inbox/extract-jobs/:id', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    return getExtractJob(user.id, id);
+  });
 
   app.get('/api/v1/inbox', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;

@@ -75,6 +75,11 @@ export const envSchema = z.object({
   WORKER_POLL_MS: z.coerce.number().int().min(1_000).default(15_000),
   WORKER_CLAIM_LIMIT: z.coerce.number().int().min(1).max(100).default(20),
   WORKER_HEAL_INTERVAL_MS: z.coerce.number().int().min(10_000).default(300_000),
+  // Headless browser for the link-only inbox fallback. A missing binary uses plain HTTP.
+  OBSCURA_BIN: z.preprocess(
+    (value) => (value === '' || value === undefined ? 'obscura' : value),
+    z.string().min(1),
+  ),
   AGENT_ENABLED: boolEnum.default('true'),
   AGENT_LEASE_MS: z.coerce.number().int().min(1000).default(300_000),
   AGENT_HEARTBEAT_MS: z.coerce.number().int().min(100).default(30_000),

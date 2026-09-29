@@ -1,60 +1,37 @@
-import { Readability } from '@mozilla/readability';
-import { htmlToArticleDoc, textToArticleDoc, type ArticleDoc } from '@vital/article-doc';
-import { MAX_EXTRACT_HTML_BYTES, type InboxPreview } from '@vital/dto';
-import { JSDOM } from 'jsdom';
+import type { InboxPreview } from '@vital/dto';
 import { AppError } from '../errors.js';
 import { idempotencyKeyForUrl } from '../inbox/canonical.js';
 import { logger } from '../utils/logger.js';
-import { fetchHtml } from './fetch.js';
-import { EXTRACT_TIMEOUT_MS } from './ssrf.js';
+import { loadRenderedArticle, type LoadedArticle } from './rendered.js';
 import { extractSemaphore } from './semaphore.js';
 
-function clip(value: string | null | undefined, max: number): string | null {
-  if (value === undefined || value === null) return null;
-  const trimmed = value.trim();
-  if (trimmed === '') return null;
-  return trimmed.length <= max ? trimmed : trimmed.slice(0, max);
-}
-
-function parseArticle(html: string, url: URL): {
-  title: string;
-  text: string | null;
-  doc: ArticleDoc | null;
-  excerpt: string | null;
-  byline: string | null;
-  siteName: string | null;
-} {
-  const dom = new JSDOM(html, { url: url.href, contentType: 'text/html' });
-  try {
-    const document = dom.window.document;
-    const article = new Readability(document).parse();
-    const title =
-      clip(article?.title, 500) ?? clip(document.title, 500) ?? clip(url.hostname, 500) ?? url.href;
-    const text = clip(article?.textContent ?? null, MAX_EXTRACT_HTML_BYTES);
-    const rawHtml = clip(article?.content ?? null, MAX_EXTRACT_HTML_BYTES);
-    // The converter's own whitelist is the sanitizer — no separate HTML sanitize pass.
-    const doc =
-      rawHtml !== null
-        ? htmlToArticleDoc(rawHtml)
-        : text !== null
-          ? textToArticleDoc(text)
-          : null;
-    return {
-      title,
-      text,
-      doc: doc !== null && doc.content.length > 0 ? doc : null,
-      excerpt: clip(article?.excerpt, 500),
-      byline: clip(article?.byline, 200),
-      siteName: clip(article?.siteName, 200),
-    };
-  } finally {
-    dom.window.close();
-  }
+export function toInboxPreview(rawUrl: string, loaded: LoadedArticle): InboxPreview {
+  const { canonicalUrl } = idempotencyKeyForUrl(loaded.url.href);
+  const article = loaded.article;
+  return {
+    title: article.title,
+    outcomeId: null,
+    originalUrl: rawUrl,
+    canonicalUrl,
+    extractedText: article.text,
+    contentJson: article.doc,
+    excerpt: article.excerpt,
+    byline: article.byline,
+    siteName: article.siteName,
+    status: 'unread',
+    source: 'web',
+    readAt: null,
+    convertedTaskId: null,
+    inwitDocumentId: null,
+    inwitExportedAt: null,
+    tagIds: [],
+    assets: [],
+  };
 }
 
 /**
- * v1 exception vs Moment worker-only getObject: HTML ingest runs on the
- * request thread, capped at 10s / 2MB and a process semaphore of 2.
+ * Paste preview. Obscura renders JS pages; the wait starts after a semaphore
+ * slot is free so queue time does not eat the navigation budget.
  */
 export async function extractUrl(rawUrl: string): Promise<InboxPreview> {
   let host = '';
@@ -64,31 +41,10 @@ export async function extractUrl(rawUrl: string): Promise<InboxPreview> {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
   await extractSemaphore.acquire();
-  // 10s is ingest time; queued wait for the semaphore must not burn the budget.
   const started = Date.now();
   try {
-    const fetched = await fetchHtml(rawUrl, EXTRACT_TIMEOUT_MS);
-    const article = parseArticle(fetched.html, fetched.url);
-    const { canonicalUrl } = idempotencyKeyForUrl(fetched.url.href);
-    return {
-      title: article.title,
-      outcomeId: null,
-      originalUrl: rawUrl,
-      canonicalUrl,
-      extractedText: article.text,
-      contentJson: article.doc,
-      excerpt: article.excerpt ?? clip(article.text, 500),
-      byline: article.byline,
-      siteName: article.siteName,
-      status: 'unread',
-      source: 'web',
-      readAt: null,
-      convertedTaskId: null,
-      inwitDocumentId: null,
-      inwitExportedAt: null,
-      tagIds: [],
-      assets: [],
-    };
+    const loaded = await loadRenderedArticle(rawUrl);
+    return toInboxPreview(rawUrl, loaded);
   } finally {
     extractSemaphore.release();
     logger.info('extract_ms', { host, ms: Date.now() - started });

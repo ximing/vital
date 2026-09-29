@@ -14,6 +14,7 @@ import {
   type PatchInboxAssetsInput,
   type PatchInboxInput,
 } from '@vital/dto';
+import { MIN_USEFUL_TEXT_CHARS } from '@vital/article-extract';
 import { and, desc, eq, inArray, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import {
@@ -37,6 +38,7 @@ import { createTaskInTx, fireIndexTask, getTask } from '../tasks/tasks.service.j
 import { bindUpload } from '../uploads/uploads.service.js';
 import { getStorage, type StorageMetadata } from '../storage/factory.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
+import { titleIsPlaceholder } from '../extract/title.js';
 import { idempotencyKeyForUrl } from './canonical.js';
 import {
   articleDocToText,
@@ -290,6 +292,16 @@ export async function loadBodiesByItemIds(ids: string[]): Promise<Map<string, In
   return map;
 }
 
+/** Link-only: no article doc, and extracted text under the extension's useful-text bar. */
+export function inboxBodyIsEmpty(
+  body: { extractedText: string | null; contentJson: ArticleDoc | null } | null | undefined,
+): boolean {
+  if (body == null) return true;
+  const nodes = body.contentJson?.content;
+  if (Array.isArray(nodes) && nodes.length > 0) return false;
+  return (body.extractedText ?? '').trim().length < MIN_USEFUL_TEXT_CHARS;
+}
+
 async function writeInboxBody(
   inboxItemId: string,
   extractedText: string | null,
@@ -303,6 +315,62 @@ async function writeInboxBody(
       target: inboxItemBodies.inboxItemId,
       set: { extractedText, contentJson },
     });
+}
+
+/**
+ * Fill a link-only item. No-ops when a body landed while the page was rendering.
+ * Title changes only when it is still the URL or hostname.
+ */
+export async function fillEmptyInboxFromExtract(
+  id: string,
+  extracted: {
+    title: string;
+    excerpt: string | null;
+    byline: string | null;
+    siteName: string | null;
+    extractedText: string | null;
+    contentJson: ArticleDoc | null;
+  },
+): Promise<InboxItemRow | null> {
+  if (extracted.contentJson === null && (extracted.extractedText === null || extracted.extractedText.trim() === '')) {
+    return null;
+  }
+  const saved = await getDb().transaction(async (tx) => {
+    const [row] = await tx.select().from(inboxItems).where(eq(inboxItems.id, id)).for('update');
+    if (!row || row.deletedAt !== null) return null;
+    const [body] = await tx
+      .select()
+      .from(inboxItemBodies)
+      .where(eq(inboxItemBodies.inboxItemId, id))
+      .limit(1);
+    if (!inboxBodyIsEmpty(body ?? null)) return null;
+    const now = new Date();
+    const patch: Partial<InboxItemRow> = { updatedAt: now };
+    if (row.originalUrl !== null && titleIsPlaceholder(row.title, row.originalUrl)) {
+      const title = clip(extracted.title, 500);
+      if (title !== null) patch.title = title;
+    }
+    if (row.excerpt === null || row.excerpt.trim() === '') {
+      const excerpt = clip(extracted.excerpt, 500);
+      if (excerpt !== null) patch.excerpt = excerpt;
+    }
+    if (row.byline === null || row.byline.trim() === '') {
+      const byline = clip(extracted.byline, 200);
+      if (byline !== null) patch.byline = byline;
+    }
+    if (row.siteName === null || row.siteName.trim() === '') {
+      const siteName = clip(extracted.siteName, 200);
+      if (siteName !== null) patch.siteName = siteName;
+    }
+    await tx.update(inboxItems).set(patch).where(eq(inboxItems.id, id));
+    const extractedText = clip(extracted.extractedText, 2 * 1024 * 1024);
+    await writeInboxBody(id, extractedText, extracted.contentJson, tx);
+    const [fresh] = await tx.select().from(inboxItems).where(eq(inboxItems.id, id)).limit(1);
+    return fresh ?? null;
+  });
+  if (saved === null) return null;
+  trackIndexJob(indexInboxItem(saved), 'indexInboxItem');
+  return saved;
 }
 
 export async function dtoOf(row: InboxItemRow): Promise<InboxItem> {

@@ -739,7 +739,7 @@ describe('todos workspace', () => {
     expect(client.patchList).toHaveBeenCalledWith('project-1', { pinned: true });
   });
 
-  it('sorts tasks by created date from the view menu', async () => {
+  it('defaults to operation time descending and switches order from the view menu', async () => {
     vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox, project] });
     vi.mocked(client.listTasks).mockResolvedValue({
       items: [
@@ -749,6 +749,7 @@ describe('todos workspace', () => {
           listId: project.id,
           sortOrder: 1,
           createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-09-02T00:00:00.000Z',
         }),
         makeTask({
           id: 'new',
@@ -756,6 +757,7 @@ describe('todos workspace', () => {
           listId: project.id,
           sortOrder: 2,
           createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-01-02T00:00:00.000Z',
         }),
       ],
       nextCursor: null,
@@ -763,16 +765,28 @@ describe('todos workspace', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderAt('/todos/lists/project-1');
     expect(await screen.findByRole('option', { name: '先建的' })).toBeInTheDocument();
-    const older = screen.getByRole('option', { name: '先建的' });
-    const newer = screen.getByRole('option', { name: '后建的' });
-    expect(older.compareDocumentPosition(newer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    await user.click(screen.getByRole('button', { name: t.todos.viewMenu }));
-    await user.click(screen.getByRole('menuitem', { name: new RegExp(t.todos.sortCreated) }));
-    const afterOlder = screen.getByRole('option', { name: '先建的' });
-    const afterNewer = screen.getByRole('option', { name: '后建的' });
+    const follows = (before: HTMLElement, after: HTMLElement) =>
+      Boolean(before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
-      afterNewer.compareDocumentPosition(afterOlder) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+      follows(screen.getByRole('option', { name: '先建的' }), screen.getByRole('option', { name: '后建的' })),
+    ).toBe(true);
+    await user.click(screen.getByRole('button', { name: t.todos.viewMenu }));
+    expect(screen.getByRole('menuitem', { name: t.todos.sortDesc })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await user.click(screen.getByRole('menuitem', { name: new RegExp(t.todos.sortCreated) }));
+    expect(
+      follows(screen.getByRole('option', { name: '后建的' }), screen.getByRole('option', { name: '先建的' })),
+    ).toBe(true);
+    await user.click(screen.getByRole('menuitem', { name: t.todos.sortAsc }));
+    expect(
+      follows(screen.getByRole('option', { name: '先建的' }), screen.getByRole('option', { name: '后建的' })),
+    ).toBe(true);
+    expect(screen.getByRole('menuitem', { name: t.todos.sortAsc })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
   });
 
   it('virtualizes a long list so offscreen rows are not in the document', async () => {

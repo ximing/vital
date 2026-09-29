@@ -83,6 +83,17 @@ export const extractInboxInputSchema = z.object({
 });
 export type ExtractInboxInput = z.infer<typeof extractInboxInputSchema>;
 
+export const extractJobStatusSchema = z.enum(['queued', 'running', 'succeeded', 'failed']);
+export type ExtractJobStatus = z.infer<typeof extractJobStatusSchema>;
+
+/** POST /inbox/extract-jobs returns immediately. `preview` is filled when status is succeeded. */
+export interface ExtractJob {
+  id: string;
+  status: ExtractJobStatus;
+  preview: InboxPreview | null;
+  errorCode: string | null;
+}
+
 export const createInboxInputSchema = z.object({
   title: z.string().trim().min(1).max(500),
   originalUrl: httpUrlSchema.nullable().optional(),

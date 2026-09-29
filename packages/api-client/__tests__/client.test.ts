@@ -304,6 +304,26 @@ describe('createVitalClient auth + upload methods', () => {
     ]);
     expect(calls[1]?.idem).toBe('a'.repeat(64));
   });
+
+  it('starts and polls an extract job without treating the poll as a create', async () => {
+    const store = memoryStore({ accessToken: 'a', refreshToken: 'r', expiresIn: 900 });
+    const calls: string[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'bearer',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        calls.push(`${init?.method ?? 'GET'} ${urlOf(url)}`);
+        return respond(200, { id: 'j1', status: 'queued', preview: null, errorCode: null });
+      },
+    });
+    await client.startInboxExtract({ url: 'https://example.com/a' });
+    await client.getInboxExtract('11111111-1111-4111-8111-111111111111');
+    expect(calls).toEqual([
+      'POST http://x/api/v1/inbox/extract-jobs',
+      'GET http://x/api/v1/inbox/extract-jobs/11111111-1111-4111-8111-111111111111',
+    ]);
+  });
 });
 
 describe('createVitalClient reports + sync', () => {

@@ -12,6 +12,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/article-doc/package.json packages/article-doc/
+COPY packages/article-extract/package.json packages/article-extract/
 COPY packages/dto/package.json packages/dto/
 COPY packages/markdown/package.json packages/markdown/
 COPY packages/article-html/package.json packages/article-html/
@@ -28,11 +29,12 @@ FROM deps AS build
 COPY packages/tsconfig packages/tsconfig
 COPY packages/eslint-config packages/eslint-config
 COPY packages/article-doc packages/article-doc
+COPY packages/article-extract packages/article-extract
 COPY packages/dto packages/dto
 COPY packages/markdown packages/markdown
 COPY packages/article-html packages/article-html
 COPY apps/server apps/server
-RUN pnpm --filter @vital/article-doc build && pnpm --filter @vital/dto build && pnpm --filter @vital/markdown build && pnpm --filter @vital/server build
+RUN pnpm --filter @vital/article-doc build && pnpm --filter @vital/dto build && pnpm --filter @vital/article-html build && pnpm --filter @vital/article-extract build && pnpm --filter @vital/markdown build && pnpm --filter @vital/server build
 
 # web 构建需要 web 自己的 devDependencies（vite 等），单独装一份；
 # 产物由 server 运行时直接托管（入口 nginx → server，无独立 web 容器）
@@ -41,6 +43,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/article-doc/package.json packages/article-doc/
+COPY packages/article-extract/package.json packages/article-extract/
 COPY packages/dto/package.json packages/dto/
 COPY packages/markdown/package.json packages/markdown/
 COPY packages/article-html/package.json packages/article-html/
@@ -77,6 +80,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 COPY packages/article-doc/package.json packages/article-doc/
+COPY packages/article-extract/package.json packages/article-extract/
 COPY packages/dto/package.json packages/dto/
 COPY packages/markdown/package.json packages/markdown/
 COPY packages/article-html/package.json packages/article-html/
@@ -95,10 +99,12 @@ WORKDIR /app
 COPY --from=prod-deps /app/package.json /app/pnpm-workspace.yaml ./
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=prod-deps /app/packages/article-doc ./packages/article-doc
+COPY --from=prod-deps /app/packages/article-extract ./packages/article-extract
 COPY --from=prod-deps /app/packages/dto ./packages/dto
 COPY --from=prod-deps /app/packages/markdown ./packages/markdown
 COPY --from=prod-deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/packages/article-doc/dist ./packages/article-doc/dist
+COPY --from=build /app/packages/article-extract/dist ./packages/article-extract/dist
 COPY --from=build /app/packages/dto/dist ./packages/dto/dist
 COPY --from=build /app/packages/markdown/dist ./packages/markdown/dist
 COPY --from=build /app/apps/server/dist ./apps/server/dist

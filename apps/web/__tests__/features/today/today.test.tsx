@@ -44,6 +44,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       patchTask: vi.fn(),
       completeTask: vi.fn(),
       uncompleteTask: vi.fn(),
+      tickHabit: vi.fn(),
       deleteTask: vi.fn(),
       reorderTasks: vi.fn(),
       createTag: vi.fn(),
@@ -518,6 +519,38 @@ describe('today workspace', () => {
     await waitFor(() => {
       expect(client.completeTask).toHaveBeenCalledWith('habit-task');
     });
+    expect(client.tickHabit).not.toHaveBeenCalled();
+  });
+
+  it('checks in a habit that has no open instance yet', async () => {
+    const user = userEvent.setup();
+    const habit = {
+      id: 'h-water',
+      name: '喝水',
+      kind: 'count' as const,
+      targetCount: 8,
+      windowStart: '08:00',
+      windowEnd: '22:00',
+      active: true,
+      createdBy: 'user' as const,
+      sortOrder: 0,
+      outcomeId: null,
+      createdAt: '2026-09-09T00:00:00.000Z',
+      updatedAt: '2026-09-09T00:00:00.000Z',
+      todayDone: 0,
+      todayTotal: 0,
+    };
+    vi.mocked(client.listHabits).mockResolvedValue([habit]);
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.tickHabit).mockResolvedValue({ ...habit, todayDone: 1, todayTotal: 1 });
+    renderToday();
+    const ring = await screen.findByRole('checkbox', { name: '喝水' });
+    expect(ring).toBeEnabled();
+    await user.click(ring);
+    await waitFor(() => {
+      expect(client.tickHabit).toHaveBeenCalledWith('h-water');
+    });
+    expect(client.completeTask).not.toHaveBeenCalled();
   });
 
   it('hides the habit empty card once a habit is active', async () => {

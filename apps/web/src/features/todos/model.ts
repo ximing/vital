@@ -34,7 +34,10 @@ export type TaskSortDir = 'asc' | 'desc';
 export type TaskSort = { key: TaskSortKey; dir: TaskSortDir };
 
 export const TASK_SORT_KEYS: TaskSortKey[] = ['manual', 'created', 'updated', 'due', 'title'];
-export const DEFAULT_TASK_SORT: TaskSort = { key: 'manual', dir: 'asc' };
+/** Drag order. Direction is ignored by `compareTasks`. */
+export const MANUAL_TASK_SORT: TaskSort = { key: 'manual', dir: 'asc' };
+/** Lists open on last-touched first. */
+export const DEFAULT_TASK_SORT: TaskSort = { key: 'updated', dir: 'desc' };
 
 export function defaultTaskSortDir(key: TaskSortKey): TaskSortDir {
   return key === 'created' || key === 'updated' ? 'desc' : 'asc';

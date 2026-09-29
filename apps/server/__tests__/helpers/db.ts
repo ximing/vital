@@ -21,6 +21,7 @@ import {
   habits,
   holidayCalendar,
   inboxAssets,
+  inboxExtractJobs,
   inboxIdempotencyResponses,
   inboxItemBodies,
   inboxItemTags,
@@ -88,6 +89,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(agentJobs);
     await db.delete(agentScheduling);
     await db.delete(agentModelBudgets);
+    await db.delete(inboxExtractJobs);
     await db.delete(inboxAssets);
     await db.delete(inboxItemTags);
     await db.delete(inboxItemBodies);

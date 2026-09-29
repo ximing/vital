@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import type { Task } from '@vital/dto';
 import {
+  ArrowDown,
+  ArrowUp,
   ArrowUpDown,
   CalendarDays,
   CheckSquare,
@@ -143,6 +145,18 @@ const TodosHomeContent = observer(function TodosHomeContent() {
             />
           );
         })}
+        <PickerOption
+          icon={ArrowUp}
+          label={copy.todos.sortAsc}
+          selected={list.taskSort.key !== 'manual' && list.taskSort.dir === 'asc'}
+          onPress={() => list.setTaskSortDir('asc')}
+        />
+        <PickerOption
+          icon={ArrowDown}
+          label={copy.todos.sortDesc}
+          selected={list.taskSort.key !== 'manual' && list.taskSort.dir === 'desc'}
+          onPress={() => list.setTaskSortDir('desc')}
+        />
         <PickerSection label={copy.todos.listMenu} />
         {s.current?.kind === 'user' ? (
           <PickerOption

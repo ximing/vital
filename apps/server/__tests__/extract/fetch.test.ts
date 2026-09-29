@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { AppError } from '../../src/errors.js';
-import { fetchHtml, setExtractTransport, type ExtractTransport, type PinnedHttpResponse } from '../../src/extract/fetch.js';
+import { MAX_RAW_HTML_BYTES, fetchHtml, setExtractTransport, type ExtractTransport, type PinnedHttpResponse } from '../../src/extract/fetch.js';
+import { readBodyPrefix } from '../../src/storage/bounded-read.js';
 
 afterEach(() => {
   setExtractTransport(null);
@@ -113,5 +114,28 @@ describe('pinned extract fetch', () => {
     await expect(fetchHtml('https://hang.example/', 50)).rejects.toBeInstanceOf(AppError);
     expect(Date.now() - started).toBeLessThan(1000);
     expect(requested).toBe(false);
+  });
+});
+
+describe('raw html prefix', () => {
+  function* zeros(total: number): Generator<Uint8Array> {
+    const chunk = new Uint8Array(64 * 1024);
+    let left = total;
+    while (left > 0) {
+      const take = Math.min(chunk.byteLength, left);
+      yield chunk.subarray(0, take);
+      left -= take;
+    }
+  }
+
+  it('keeps a document larger than the extracted-article cap', async () => {
+    const size = 3 * 1024 * 1024;
+    const body = await readBodyPrefix(zeros(size), MAX_RAW_HTML_BYTES);
+    expect(body.length).toBe(size);
+  });
+
+  it('stops at the raw ceiling instead of rejecting the response', async () => {
+    const body = await readBodyPrefix(zeros(MAX_RAW_HTML_BYTES + 50_000), MAX_RAW_HTML_BYTES);
+    expect(body.length).toBe(MAX_RAW_HTML_BYTES);
   });
 });

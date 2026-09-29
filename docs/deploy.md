@@ -53,6 +53,52 @@ worker 是同一个镜像的第二个进程，提醒和后台 Agent 都在这里
 
 健康检查：`GET /api/health` 看进程，`GET /api/v1/health/ready` 做 `SELECT 1`。
 
+## 只有链接的收藏
+
+扩展不进这个镜像。浏览器里已经打开的页面仍由扩展自己解析。容器要补的是服务端兜底，两条路径用同一张 `vital-server` 镜像：
+
+| 进程 | 做什么 |
+| --- | --- |
+| `server` | 粘贴链接时 `POST /api/v1/inbox/extract` 当场抓取 |
+| `worker` | 定期修复里补已经存下来、正文还空着的 http(s) 收藏。默认约 5 分钟一轮，每轮 2 条 |
+
+不要另起 `h4ckf0r0day/obscura` 容器，也不要暴露 9222。API 和 worker 各自启动本机的 `obscura` 命令，用完即退。二进制缺失时退回普通 HTTP；静态 HTML 里已经有正文的页面（例如这次测过的微信文章）仍能解析，靠脚本才出现正文的页面则不能。生产镜像要带上二进制。
+
+### 镜像里多出来的包
+
+`@vital/article-extract` 是新的 workspace 包，运行时还要它依赖的 `@vital/article-html`。`apps/server/Dockerfile` 的 COPY 白名单要补上，否则安装阶段会断，或者镜像能构建、上线后 `ERR_MODULE_NOT_FOUND`。web 构建用不到它们。
+
+| 阶段 | 补什么 |
+| --- | --- |
+| `deps`、`prod-deps` | 两个包的 `package.json` |
+| `build` | 两个包的源码，并在 server 构建前先 `pnpm --filter @vital/article-html build`，再 `pnpm --filter @vital/article-extract build` |
+| `runtime` | 从 `prod-deps` 拷包目录，从 `build` 覆盖各自的 `dist`。和现有的 `article-doc` 一样 |
+
+`jsdom` 已经在 server 依赖里。Readability 跟着 `@vital/article-extract` 的生产依赖装进镜像。
+
+### Obscura 二进制
+
+镜像构建平台是 `linux/amd64`，基础镜像 `node:22-bookworm-slim` 的 glibc 满足 Obscura 对 2.35+ 的要求。在 `runtime` 阶段装固定版本，不要用 `latest`。用 v0.2.3：这一版修了脚本引擎、并发会话和渲染正确性，我们调用的 `fetch`、`--quiet`、`--timeout`、`--wait`、`--wait-until`、`--user-agent`、`--eval` 都还在，`OBSCURA_NAV_TIMEOUT_MS`、`OBSCURA_FETCH_TIMEOUT_MS`、`OBSCURA_SCRIPT_DEADLINE_MS` 也还在。CDP / MCP 的令牌要求只作用于对外暴露的 `serve` / `mcp`，一次一退的 `fetch` 用不到。本机用这一版的 macOS 构建、同样的参数并且不走代理，抓过同一篇微信文章，解析结果仍是标题「终篇，Oh My Pi：把 Pi 变成真正的 AI 工作台」、作者「硅基铁匠」。
+
+```bash
+curl -fsSL -o /tmp/obscura.tar.gz \
+  https://github.com/h4ckf0r0day/obscura/releases/download/v0.2.3/obscura-x86_64-linux.tar.gz
+tar -xzf /tmp/obscura.tar.gz -C /usr/local/bin obscura obscura-worker
+rm /tmp/obscura.tar.gz
+```
+
+两个文件放在同一目录。`OBSCURA_BIN` 默认就是 `obscura`，在 `PATH` 上时不用写进 `.env`。换版本时改这个 URL，并再抓一篇微信文章确认正文还在。
+
+抓取时进程会清掉传给子进程的 `http_proxy`、`https_proxy`、`all_proxy`、`HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`、`OBSCURA_PROXY`。普通 HTTP 回退连的是事先查好的公网地址，也不走代理。微信走本机代理时 TLS 会失败。compose 里 `worker` 已经把这些变量置空（MeoW 也要直连）。`server` 服务要同样置空，避免宿主机 `.env` 里的代理进容器。不要加 `--proxy`，不要加 `--allow-private-network`。容器出网必须能直接访问公网。
+
+第一次抓取大约十几秒：等 `DOMContentLoaded`，并限制卡住的子资源和超大内联脚本。正文仍空时再放宽时间重试一次。最慢会先用满约 20 秒，再重试约 25 秒，然后才用普通 HTTP（10 秒）。入口 Nginx 对 `/api/` 的 `proxy_read_timeout` 至少留 90 秒，避免粘贴预览被反代掐断。请求体只是一个 URL，不用加大上传体积限制。2MB 限制的是提出来的正文；原始 HTML 里的脚本可以更大，进程最多读 16MB 再解析。
+
+### 发布时多做的检查
+
+迁移 `0046_link_extract_attempt` 增加可空列 `link_extract_attempted_at`。仍是先 `migrate` 成功，再启动 server 和 worker。worker 必须换成带这个列的新镜像。
+
+验收：`docker exec vital-server obscura --version` 打印 `0.2.3`，`vital-worker` 里同一条命令结果相同。用一篇公网微信文章走粘贴预览，正文应写入预览而不是只留下链接。登录才能看的站点，以及藏在 Shadow DOM 里的内容，仍然拿不到。
+
 ## 华为推送
 
 推送由 **worker** 发给华为，再由华为投到手机通知栏。服务器用的是应用的 OAuth 客户端，不是用户的华为账号。手机登录 Vital 之后，把华为发给这台安装的 token 登记到 `push_devices`，一行 token 只属于最后登录的那个账号。

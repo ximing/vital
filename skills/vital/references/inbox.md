@@ -65,6 +65,15 @@ export interface InboxCollection {
 ```
 
 ```ts
+export interface ExtractJob {
+  id: string;
+  status: ExtractJobStatus;
+  preview: InboxPreview | null;
+  errorCode: string | null;
+}
+```
+
+```ts
 export interface ConvertInboxResponse {
   inbox: InboxItem;
   task: Task;
@@ -235,7 +244,7 @@ Path params:
 
 #### `POST /api/v1/inbox/extract`
 
-Fetch a URL and return a preview (contentJson + extractedText). Follow with POST /api/v1/inbox using those fields.
+Fetch a URL and return a preview (contentJson + extractedText). Follow with POST /api/v1/inbox using those fields. Paste preview stays on this synchronous route.
 
 - Auth: Bearer required
 - Client: `extractInbox`
@@ -244,3 +253,27 @@ Fetch a URL and return a preview (contentJson + extractedText). Follow with POST
 Request body (`extractInboxInputSchema`):
 
 - `url`: string 0–2048 url
+
+#### `POST /api/v1/inbox/extract-jobs`
+
+Start an article extract and return immediately. Body is `{ url }`. A new job is `queued`. The same user and canonical URL reuses an in-flight job, or a succeeded job from the last hour, and that response keeps the existing status and preview. Save a succeeded preview with POST /api/v1/inbox.
+
+- Auth: Bearer required
+- Client: `startInboxExtract`
+- Response: `ExtractJob`
+
+Request body (`extractInboxInputSchema`):
+
+- `url`: string 0–2048 url
+
+#### `GET /api/v1/inbox/extract-jobs/:id`
+
+Poll an extract job. `status` is `queued`, `running`, `succeeded`, or `failed`. `preview` is set only when succeeded; an empty or rejected page is `failed` with `errorCode` `EXTRACT_EMPTY`. Does not count against the inbox write limit.
+
+- Auth: Bearer required
+- Client: `getInboxExtract`
+- Response: `ExtractJob`
+
+Path params:
+
+- `id`: uuid

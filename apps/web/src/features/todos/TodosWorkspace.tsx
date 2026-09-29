@@ -403,6 +403,25 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
                       </button>
                     );
                   })}
+                  <div className="mb-1 mt-0.5 flex rounded-md bg-surface-muted p-0.5">
+                    {(['asc', 'desc'] as const).map((dir) => {
+                      const active = taskSort.key !== 'manual' && taskSort.dir === dir;
+                      return (
+                        <button
+                          key={dir}
+                          type="button"
+                          role="menuitem"
+                          aria-checked={active}
+                          className={`h-8 flex-1 rounded-md text-[length:var(--text-caption)] ${
+                            active ? 'bg-elevated font-medium text-fg' : 'text-muted hover:text-fg'
+                          }`}
+                          onClick={() => todos.setTaskSortDir(dir)}
+                        >
+                          {dir === 'asc' ? t.todos.sortAsc : t.todos.sortDesc}
+                        </button>
+                      );
+                    })}
+                  </div>
                   {canPinList && currentList ? (
                     <button
                       type="button"

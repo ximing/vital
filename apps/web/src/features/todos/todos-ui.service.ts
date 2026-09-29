@@ -2,10 +2,12 @@ import { resolve, Service } from '@rabjs/react';
 import type { AgentAction, SimilarTaskHit, Task } from '@vital/dto';
 import {
   DEFAULT_TASK_SORT,
+  MANUAL_TASK_SORT,
   UNDO_COMPLETE_MS,
   defaultTaskSortDir,
   type BoardMode,
   type TaskSort,
+  type TaskSortDir,
   type TaskSortKey,
 } from './model';
 
@@ -109,14 +111,17 @@ export class TodosUiService extends Service {
 
   setTaskSortKey(key: TaskSortKey): void {
     if (key === 'manual') {
-      this.taskSort = DEFAULT_TASK_SORT;
+      this.taskSort = MANUAL_TASK_SORT;
       return;
     }
-    if (this.taskSort.key === key) {
-      this.taskSort = { key, dir: this.taskSort.dir === 'asc' ? 'desc' : 'asc' };
-      return;
-    }
-    this.taskSort = { key, dir: defaultTaskSortDir(key) };
+    if (this.taskSort.key === key) return;
+    const dir = this.taskSort.key === 'manual' ? defaultTaskSortDir(key) : this.taskSort.dir;
+    this.taskSort = { key, dir };
+  }
+
+  setTaskSortDir(dir: TaskSortDir): void {
+    const key = this.taskSort.key === 'manual' ? 'updated' : this.taskSort.key;
+    this.taskSort = { key, dir };
   }
 
   startComplete(task: Task): void {

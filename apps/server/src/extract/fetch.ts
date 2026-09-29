@@ -1,9 +1,8 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { MAX_EXTRACT_HTML_BYTES } from '@vital/dto';
 import { Agent, request } from 'undici';
 import { AppError } from '../errors.js';
-import { ObjectTooLargeError, readBodyWithLimit } from '../storage/bounded-read.js';
+import { readBodyPrefix } from '../storage/bounded-read.js';
 import {
   EXTRACT_TIMEOUT_MS,
   EXTRACT_USER_AGENT,
@@ -13,6 +12,12 @@ import {
   hostnameOf,
   resolveRedirect,
 } from './ssrf.js';
+
+/**
+ * Bytes of the raw response we will hold. The 2MB cap applies to the extracted
+ * article, after scripts and other non-body markup are discarded.
+ */
+export const MAX_RAW_HTML_BYTES = 16 * 1024 * 1024;
 
 export interface ResolvedAddress {
   address: string;
@@ -119,13 +124,8 @@ const defaultTransport: ExtractTransport = {
           accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
         },
       });
-      let body: Buffer;
-      try {
-        body = await readBodyWithLimit(res.body, MAX_EXTRACT_HTML_BYTES, url.href);
-      } catch (err) {
-        if (err instanceof ObjectTooLargeError) throw AppError.of(400, 'VALIDATION_ERROR');
-        throw err;
-      }
+      // Pinned connect: do not follow HTTP_PROXY / HTTPS_PROXY.
+      const body = await readBodyPrefix(res.body, MAX_RAW_HTML_BYTES);
       return {
         statusCode: res.statusCode,
         location: headerValue(res.headers.location),

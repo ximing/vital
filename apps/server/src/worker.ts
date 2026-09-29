@@ -2,6 +2,8 @@ import { drainAgentJobs, processDueAgentJobs, recoverStuckAgentJobs } from './ag
 import { runAgentScheduler } from './agent/scheduler.js';
 import { config } from './config.js';
 import { pool } from './db/index.js';
+import { processQueuedExtractJobs } from './inbox/extract-jobs.js';
+import { backfillLinkOnlyInbox } from './inbox/link-extract.js';
 import { healTaskNotifications, processDueNotifications } from './notifications/dispatch.js';
 import { enqueueEveningDigests } from './notifications/evening-digest.js';
 import { healDayNotifications } from './days/outbox.js';
@@ -17,6 +19,16 @@ function track(fn: () => Promise<void>): void {
   const task = fn();
   inFlight.add(task);
   void task.finally(() => { inFlight.delete(task); running.delete(fn); });
+}
+
+async function extractJobs(): Promise<void> {
+  if (stopping) return;
+  try {
+    const n = await processQueuedExtractJobs();
+    if (n.claimed > 0) logger.info('worker.extract-job', n);
+  } catch (err) {
+    logger.error('worker.extract-job.failed', err);
+  }
 }
 
 async function tick(): Promise<void> {
@@ -61,6 +73,12 @@ async function heal(): Promise<void> {
   } catch (err) {
     logger.error('worker.agent.heal.failed', err);
   }
+  try {
+    const n = await backfillLinkOnlyInbox();
+    if (n.claimed > 0) logger.info('worker.link-extract', n);
+  } catch (err) {
+    logger.error('worker.link-extract.failed', err);
+  }
 }
 
 async function schedule(): Promise<void> {
@@ -75,6 +93,7 @@ async function schedule(): Promise<void> {
 
 const poll = setInterval(() => {
   track(tick);
+  track(extractJobs);
 }, config.WORKER_POLL_MS);
 
 const healTimer = setInterval(() => {
@@ -94,6 +113,7 @@ logger.info('worker started', {
   agentEnabled: config.AGENT_ENABLED,
 });
 track(tick);
+track(extractJobs);
 track(heal);
 track(schedule);
 

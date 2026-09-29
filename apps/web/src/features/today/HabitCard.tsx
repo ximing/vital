@@ -1,23 +1,24 @@
-import type { Habit, Task } from '@vital/dto';
+import type { Habit } from '@vital/dto';
+import { useRef, useState } from 'react';
 import { t } from '@/copy';
 import { HabitRing } from './HabitRing';
 import { habitTodayProgress } from './model';
 
 /**
- * Compact habit card on /today: progress ring as the check-in control,
- * name + today's count beside it. Completed habits stay visible.
+ * Compact habit card on /today: the whole card checks in, the ring previews
+ * that on hover. Completed habits stay visible and are not clickable.
  */
 export function HabitCard({
   habit,
-  task,
-  onComplete,
+  onTick,
 }: {
   habit: Habit;
-  task: Task | null;
-  onComplete: (task: Task) => void;
+  onTick: () => void | Promise<void>;
 }) {
   const { done, total, complete } = habitTodayProgress(habit);
-  const canTick = !complete && task !== null;
+  const tickable = !complete;
+  const pendingRef = useRef(false);
+  const [pending, setPending] = useState(false);
   const sub =
     complete && habit.kind !== 'count'
       ? t.settings.habits.todayDone
@@ -25,26 +26,31 @@ export function HabitCard({
           .replace('{done}', String(done))
           .replace('{total}', String(total));
 
+  async function tick(): Promise<void> {
+    if (!tickable || pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    try {
+      await onTick();
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  }
+
   return (
-    <div
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={complete}
+      aria-label={habit.name}
+      disabled={!tickable || pending}
       data-region="habit-row"
       data-habit-id={habit.id}
-      className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-elevated px-3 py-2.5"
+      onClick={() => void tick()}
+      className="group/habit flex min-w-0 w-full items-center gap-3 rounded-xl border border-border bg-elevated px-3 py-2.5 text-left transition-[background-color,border-color] duration-[var(--ease-out)] cursor-pointer enabled:hover:border-accent enabled:hover:bg-surface disabled:cursor-default"
     >
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={complete}
-        aria-label={habit.name}
-        disabled={!canTick}
-        className="shrink-0 cursor-pointer rounded-full disabled:cursor-default"
-        onClick={(event) => {
-          event.stopPropagation();
-          if (task && canTick) onComplete(task);
-        }}
-      >
-        <HabitRing done={done} total={total} complete={complete} />
-      </button>
+      <HabitRing done={done} total={total} complete={complete} interactive={tickable && !pending} />
       <span className="flex min-w-0 flex-1 flex-col items-start">
         <span
           className={`block max-w-full truncate text-[length:var(--text-body)] font-semibold leading-[var(--text-body-lh)] ${
@@ -61,6 +67,6 @@ export function HabitCard({
           <span className="truncate">{sub}</span>
         </span>
       </span>
-    </div>
+    </button>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '@vital/dto';
-import { isOverdue, localDateStamp, startOfLocalDayIso } from '../../src/lib/format';
+import { isOverdue, localDateStamp, nestTasks, startOfLocalDayIso } from '../../src/lib/format';
 
 function sample(over: Partial<Task> & Pick<Task, 'dueAt' | 'timezone'>): Task {
   return {
@@ -35,6 +35,30 @@ function sample(over: Partial<Task> & Pick<Task, 'dueAt' | 'timezone'>): Task {
     ...over,
   };
 }
+
+describe('nestTasks', () => {
+  it('puts the most recently updated task first by default', () => {
+    const stale = sample({
+      id: 'a',
+      dueAt: null,
+      timezone: 'UTC',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      sortOrder: 1,
+    });
+    const fresh = sample({
+      id: 'b',
+      dueAt: null,
+      timezone: 'UTC',
+      updatedAt: '2026-06-01T00:00:00.000Z',
+      sortOrder: 2,
+    });
+    expect(nestTasks([stale, fresh]).map((row) => row.task.id)).toEqual(['b', 'a']);
+    expect(nestTasks([stale, fresh], { key: 'updated', dir: 'asc' }).map((row) => row.task.id)).toEqual([
+      'a',
+      'b',
+    ]);
+  });
+});
 
 describe('isOverdue / startOfLocalDayIso', () => {
   it('all-day due today at 15:00 local is not overdue', () => {

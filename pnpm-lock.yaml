@@ -40,6 +40,9 @@ importers:
       '@vital/article-doc':
         specifier: workspace:*
         version: link:../../packages/article-doc
+      '@vital/article-extract':
+        specifier: workspace:*
+        version: link:../../packages/article-extract
       '@vital/article-html':
         specifier: workspace:*
         version: link:../../packages/article-html
@@ -213,6 +216,9 @@ importers:
       '@vital/article-doc':
         specifier: workspace:*
         version: link:../../packages/article-doc
+      '@vital/article-extract':
+        specifier: workspace:*
+        version: link:../../packages/article-extract
       '@vital/dto':
         specifier: workspace:*
         version: link:../../packages/dto
@@ -484,6 +490,37 @@ importers:
       eslint:
         specifier: ^9.19.0
         version: 9.39.5(jiti@2.7.0)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@25.9.5)(jsdom@26.1.0)(vite@8.2.2(@types/node@25.9.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
+
+  packages/article-extract:
+    dependencies:
+      '@mozilla/readability':
+        specifier: ^0.6.0
+        version: 0.6.0
+      '@vital/article-html':
+        specifier: workspace:*
+        version: link:../article-html
+      '@vital/dto':
+        specifier: workspace:*
+        version: link:../dto
+    devDependencies:
+      '@vital/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@vital/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      eslint:
+        specifier: ^9.19.0
+        version: 9.39.5(jiti@2.7.0)
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3

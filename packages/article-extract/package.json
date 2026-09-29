@@ -1,0 +1,34 @@
+{
+  "name": "@vital/article-extract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@vital/article-html": "workspace:*",
+    "@vital/dto": "workspace:*"
+  },
+  "devDependencies": {
+    "@vital/eslint-config": "workspace:*",
+    "@vital/tsconfig": "workspace:*",
+    "eslint": "^9.19.0",
+    "jsdom": "^26.1.0",
+    "typescript": "^7.0.0",
+    "vitest": "^4.1.11"
+  }
+}

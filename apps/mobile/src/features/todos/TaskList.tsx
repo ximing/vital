@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { bindServices, observer, useService } from '@rabjs/react';
+import { observer, useService } from '@rabjs/react';
 import {
   CalendarDays,
   CheckCircle2,
@@ -656,7 +656,8 @@ function TaskListContent({
   );
 }
 
-export const TaskList = bindServices(observer(TaskListContent), [TaskListService]);
+/** Do not bind TaskListService here — a child container would hide the shared sort. */
+export const TaskList = observer(TaskListContent);
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({

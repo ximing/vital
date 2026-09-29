@@ -1,5 +1,6 @@
 import { type SQL, sql } from 'drizzle-orm';
 import type { ArticleDoc } from '@vital/article-doc';
+import type { InboxPreview } from '@vital/dto';
 import {
   char,
   check,
@@ -48,6 +49,11 @@ export const inboxItems = pgTable(
     /** inwit document created by 转存 (null = not exported). */
     inwitDocumentId: char('inwit_document_id', { length: 36 }),
     inwitExportedAt: timestamp('inwit_exported_at', { withTimezone: true, mode: 'date' }),
+    /**
+     * Set when the server fallback tried to fill a link-only body.
+     * Stays set after a miss so the worker does not refetch forever.
+     */
+    linkExtractAttemptedAt: timestamp('link_extract_attempted_at', { withTimezone: true, mode: 'date' }),
     deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'date' }),
     searchTsv: tsvector('search_tsv')
       .notNull()
@@ -69,6 +75,11 @@ export const inboxItems = pgTable(
     index('idx_inbox_items_live_captured')
       .on(t.userId, t.capturedAt)
       .where(sql`${t.deletedAt} IS NULL`),
+    index('idx_inbox_items_link_extract_attempt')
+      .on(t.capturedAt, t.id)
+      .where(
+        sql`${t.linkExtractAttemptedAt} IS NULL AND ${t.deletedAt} IS NULL AND ${t.originalUrl} IS NOT NULL`,
+      ),
     index('idx_inbox_items_search_tsv').using('gin', t.searchTsv),
     index('idx_inbox_items_title_trgm').using('gin', sql`${t.title} gin_trgm_ops`),
     check(
@@ -111,9 +122,43 @@ export const inboxAssets = pgTable(
   ],
 );
 
+/**
+ * Async article extract. The phone polls `preview` and then calls POST /inbox.
+ * In-flight rows for one user and canonical URL are unique.
+ */
+export const inboxExtractJobs = pgTable(
+  'inbox_extract_jobs',
+  {
+    id: char('id', { length: 36 }).primaryKey(),
+    userId: char('user_id', { length: 36 }).notNull(),
+    url: text('url').notNull(),
+    canonicalUrl: text('canonical_url').notNull(),
+    status: varchar('status', { length: 16 }).notNull(),
+    preview: jsonb('preview').$type<InboxPreview>(),
+    errorCode: varchar('error_code', { length: 64 }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    startedAt: timestamp('started_at', { withTimezone: true, mode: 'date' }),
+    finishedAt: timestamp('finished_at', { withTimezone: true, mode: 'date' }),
+  },
+  (t) => [
+    uniqueIndex('inbox_extract_jobs_inflight_uidx')
+      .on(t.userId, t.canonicalUrl)
+      .where(sql`${t.status} IN ('queued', 'running')`),
+    index('idx_inbox_extract_jobs_user_url').on(t.userId, t.canonicalUrl, t.createdAt),
+    index('idx_inbox_extract_jobs_queued')
+      .on(t.createdAt, t.id)
+      .where(sql`${t.status} = 'queued'`),
+    check(
+      'inbox_extract_jobs_status_check',
+      sql`${t.status} IN ('queued', 'running', 'succeeded', 'failed')`,
+    ),
+  ],
+);
+
 export type InboxItemRow = typeof inboxItems.$inferSelect;
 export type NewInboxItem = typeof inboxItems.$inferInsert;
 export type InboxItemBodyRow = typeof inboxItemBodies.$inferSelect;
 export type InboxIdempotencyResponseRow = typeof inboxIdempotencyResponses.$inferSelect;
+export type InboxExtractJobRow = typeof inboxExtractJobs.$inferSelect;
 export type InboxAssetRow = typeof inboxAssets.$inferSelect;
 export type NewInboxAsset = typeof inboxAssets.$inferInsert;

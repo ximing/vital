@@ -7,17 +7,21 @@ const RING_C = 2 * Math.PI * 17;
  * the chip beside it, not inside the ring). Once the target is met the ring
  * collapses into a filled ✓ circle — same language as mobile and the review
  * lists. Paused habits render as an empty track.
+ *
+ * `interactive` previews a check-in when an ancestor `group/habit` is hovered.
  */
 export function HabitRing({
   done,
   total,
   complete,
   paused = false,
+  interactive = false,
 }: {
   done: number;
   total: number;
   complete: boolean;
   paused?: boolean;
+  interactive?: boolean;
 }) {
   if (complete) {
     return (
@@ -31,18 +35,26 @@ export function HabitRing({
   }
   const progress = paused ? 0 : total > 0 ? Math.min(done / total, 1) : 0;
   return (
-    // inline-flex blockifies the span: inside a non-flex button an inline
-    // positioned ancestor gives the (removed) center overlay a broken
-    // containing block.
-    <span className="relative inline-flex h-10 w-10 shrink-0" aria-hidden="true">
-      <svg viewBox="0 0 40 40" className="h-10 w-10 -rotate-90">
+    <span
+      className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+        interactive
+          ? 'transition-[background-color,box-shadow] duration-[var(--ease-out)] group-hover/habit:bg-accent-subtle group-hover/habit:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent-primary)_32%,transparent)]'
+          : ''
+      }`}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 40 40" className="absolute inset-0 h-10 w-10 -rotate-90">
         <circle
           cx="20"
           cy="20"
           r="17"
           fill="none"
           strokeWidth="3.5"
-          className="stroke-border"
+          className={
+            interactive
+              ? 'stroke-border transition-[stroke] duration-[var(--ease-out)] group-hover/habit:stroke-accent'
+              : 'stroke-border'
+          }
         />
         {progress > 0 ? (
           <circle
@@ -58,6 +70,13 @@ export function HabitRing({
           />
         ) : null}
       </svg>
+      {interactive ? (
+        <Check
+          size={16}
+          strokeWidth={3.2}
+          className="relative scale-90 text-accent opacity-0 transition-[opacity,transform] duration-[var(--ease-out)] group-hover/habit:scale-100 group-hover/habit:opacity-100"
+        />
+      ) : null}
     </span>
   );
 }

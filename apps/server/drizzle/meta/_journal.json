@@ -323,6 +323,20 @@
       "when": 1790553600000,
       "tag": "0045_push_devices",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1790669322772,
+      "tag": "0046_link_extract_attempt",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1790690556104,
+      "tag": "0047_inbox_extract_jobs",
+      "breakpoints": true
     }
   ]
 }

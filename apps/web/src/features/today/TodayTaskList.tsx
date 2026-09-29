@@ -20,6 +20,7 @@ export function TodayTaskList({
   lists,
   timeZone,
   onComplete,
+  onCheckIn,
   onReorder,
   onPostpone,
 }: {
@@ -29,6 +30,7 @@ export function TodayTaskList({
   lists: List[];
   timeZone: string;
   onComplete: (task: Task) => void;
+  onCheckIn: (habit: Habit) => void | Promise<void>;
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
   onPostpone: (tasks: Task[]) => void;
 }) {
@@ -63,8 +65,11 @@ export function TodayTaskList({
               <HabitCard
                 key={habit.id}
                 habit={habit}
-                task={habitTodayTask(tasks, habit.id)}
-                onComplete={onComplete}
+                onTick={() => {
+                  const open = habitTodayTask(tasks, habit.id);
+                  if (open) return onComplete(open);
+                  return onCheckIn(habit);
+                }}
               />
             ))}
           </div>

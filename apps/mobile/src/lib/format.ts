@@ -147,8 +147,11 @@ export type NestedTask = { task: Task; children: Task[] };
 export type TaskSortKey = 'manual' | 'created' | 'updated' | 'due' | 'title';
 export type TaskSortDir = 'asc' | 'desc';
 export type TaskSort = { key: TaskSortKey; dir: TaskSortDir };
-export const DEFAULT_TASK_SORT: TaskSort = { key: 'manual', dir: 'asc' };
 export const TASK_SORT_KEYS: TaskSortKey[] = ['manual', 'created', 'updated', 'due', 'title'];
+/** Drag order. Direction is ignored by `compareTasks`. */
+export const MANUAL_TASK_SORT: TaskSort = { key: 'manual', dir: 'asc' };
+/** Lists open on last-touched first. */
+export const DEFAULT_TASK_SORT: TaskSort = { key: 'updated', dir: 'desc' };
 
 export function defaultTaskSortDir(key: TaskSortKey): TaskSortDir {
   return key === 'created' || key === 'updated' ? 'desc' : 'asc';

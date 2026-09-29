@@ -62,6 +62,7 @@ import type {
   CreateTaskFromTextInput,
   CreateTaskInput,
   ExtractInboxInput,
+  ExtractJob,
   InboxCollection,
   InboxItem,
   InboxMarkdown,
@@ -226,6 +227,10 @@ export interface VitalClient {
   /** Meilisearch 全局快搜：跨 任务/线程/收集箱 分组返回精简命中。 */
   searchAll(q: string, limit?: number): Promise<SearchResults>;
   extractInbox(input: ExtractInboxInput): Promise<InboxPreview>;
+  /** Start an article extract. Returns the existing in-flight or recent succeeded job for the same URL. */
+  startInboxExtract(input: ExtractInboxInput): Promise<ExtractJob>;
+  /** Poll an extract job. Does not count against the inbox rate limit. */
+  getInboxExtract(id: string): Promise<ExtractJob>;
   listInbox(query?: {
     status?: string;
     tagId?: string;
@@ -493,6 +498,9 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     searchAll: (q, limit) =>
       http.request('/api/v1/search', { query: { q, limit } }),
     extractInbox: (input) => http.request('/api/v1/inbox/extract', { method: 'POST', body: input }),
+    startInboxExtract: (input) =>
+      http.request('/api/v1/inbox/extract-jobs', { method: 'POST', body: input }),
+    getInboxExtract: (id) => http.request(`/api/v1/inbox/extract-jobs/${id}`),
     listInbox: (query = {}) => {
       const q: Record<string, string | number | boolean | undefined> = {};
       if (query.status !== undefined) q.status = query.status;

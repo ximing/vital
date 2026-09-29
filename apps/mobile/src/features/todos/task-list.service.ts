@@ -6,10 +6,12 @@ import { toast } from '../../components/toast';
 import { humanError, isNetworkError } from '../../lib/errors';
 import {
   DEFAULT_TASK_SORT,
+  MANUAL_TASK_SORT,
   defaultTaskSortDir,
   localDateStamp,
   zonedLocalMidnightIso,
   type TaskSort,
+  type TaskSortDir,
   type TaskSortKey,
 } from '../../lib/format';
 import { addDaysYmd, weekDays } from '../../lib/calendar-grid';
@@ -220,14 +222,17 @@ export class TaskListService extends Service {
 
   setTaskSortKey(key: TaskSortKey): void {
     if (key === 'manual') {
-      this.taskSort = DEFAULT_TASK_SORT;
+      this.taskSort = MANUAL_TASK_SORT;
       return;
     }
-    if (this.taskSort.key === key) {
-      this.taskSort = { key, dir: this.taskSort.dir === 'asc' ? 'desc' : 'asc' };
-      return;
-    }
-    this.taskSort = { key, dir: defaultTaskSortDir(key) };
+    if (this.taskSort.key === key) return;
+    const dir = this.taskSort.key === 'manual' ? defaultTaskSortDir(key) : this.taskSort.dir;
+    this.taskSort = { key, dir };
+  }
+
+  setTaskSortDir(dir: TaskSortDir): void {
+    const key = this.taskSort.key === 'manual' ? 'updated' : this.taskSort.key;
+    this.taskSort = { key, dir };
   }
 
   openContext(task: Task): void {

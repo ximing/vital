@@ -44,7 +44,7 @@ Resolve request/response fields from the **one** module in the table above. Pref
 
 **Threads.** `GET /api/v1/outcomes?status=open`. Create with `POST /api/v1/outcomes`. Drill-down: `GET /api/v1/outcomes/:id/detail`.
 
-**Capture a document.** `POST /api/v1/inbox` with `title` and `markdown` or `extractedHtml`. The server stores TipTap `contentJson`. Read the body as Markdown: `GET /api/v1/inbox/:id/markdown` (list/sync omit the body). URL capture: `POST /api/v1/inbox/extract` then `POST /api/v1/inbox` with the preview. Convert to a task: `POST /api/v1/inbox/:id/convert`.
+**Capture a document.** `POST /api/v1/inbox` with `title` and `markdown` or `extractedHtml`. The server stores TipTap `contentJson`. Read the body as Markdown: `GET /api/v1/inbox/:id/markdown` (list/sync omit the body). URL capture: `POST /api/v1/inbox/extract-jobs` with `{ "url" }`, then poll `GET /api/v1/inbox/extract-jobs/:id` until `succeeded` or `failed`. Save a succeeded `preview` with `POST /api/v1/inbox`. The same user and canonical URL reuses an in-flight job, or a succeeded job from the last hour. A paste-sized preview stays on `POST /api/v1/inbox/extract`. Convert to a task: `POST /api/v1/inbox/:id/convert`.
 
 **Habits.** `GET /api/v1/habits`, then `POST /api/v1/habits/:id/tick`.
 

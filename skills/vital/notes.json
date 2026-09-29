@@ -1,5 +1,7 @@
 {
-  "POST /api/v1/inbox/extract": "Fetch a URL and return a preview (contentJson + extractedText). Follow with POST /api/v1/inbox using those fields.",
+  "POST /api/v1/inbox/extract": "Fetch a URL and return a preview (contentJson + extractedText). Follow with POST /api/v1/inbox using those fields. Paste preview stays on this synchronous route.",
+  "POST /api/v1/inbox/extract-jobs": "Start an article extract and return immediately. Body is `{ url }`. A new job is `queued`. The same user and canonical URL reuses an in-flight job, or a succeeded job from the last hour, and that response keeps the existing status and preview. Save a succeeded preview with POST /api/v1/inbox.",
+  "GET /api/v1/inbox/extract-jobs/:id": "Poll an extract job. `status` is `queued`, `running`, `succeeded`, or `failed`. `preview` is set only when succeeded; an empty or rejected page is `failed` with `errorCode` `EXTRACT_EMPTY`. Does not count against the inbox write limit.",
   "POST /api/v1/inbox": "Capture an item. `source` defaults to `manual`. Send `markdown` or `extractedHtml` (or `contentJson`); the server stores TipTap `contentJson`. Priority: contentJson > html > markdown > extractedText. Optional header `Idempotency-Key` (64 hex chars); required when `source` is `extension`.",
   "GET /api/v1/inbox/:id/markdown": "Article body as Markdown from the stored TipTap doc. Empty string when there is no body. List/sync omit the body.",
   "POST /api/v1/tasks": "Create a task. `listId` must be a user or inbox list UUID, not a `smart:*` id. Call GET /api/v1/lists first. All-day due: `dueYmd` as YYYY-MM-DD in the task timezone (account default). Mutually exclusive with `dueAt`.",

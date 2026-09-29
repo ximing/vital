@@ -27,25 +27,34 @@ export function TaskCheckbox({
   const soon = isDueSoon(task, timeZone);
   const done = task.status === 'done';
   const ring = done
-    ? 'border-done bg-done'
+    ? 'border-done bg-done text-on-accent hover:shadow-[0_0_0_3px_color-mix(in_srgb,var(--status-done)_32%,transparent)]'
     : overdue
-      ? 'border-overdue'
+      ? 'border-overdue text-overdue hover:bg-overdue/15'
       : soon
-        ? 'border-due'
-        : 'border-tertiary';
+        ? 'border-due text-due hover:bg-due/15'
+        : 'border-tertiary text-tertiary hover:border-accent hover:bg-accent-subtle hover:text-accent';
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={done}
       aria-label={t.todos.complete}
-      className={`mt-0.5 flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] ${ring}`}
+      className={`group/check mt-0.5 flex h-[1.125rem] w-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-full border-[1.5px] transition-[background-color,border-color,color,box-shadow] duration-[var(--ease-out)] ${ring}`}
       onClick={(event) => {
         event.stopPropagation();
         onToggle();
       }}
     >
-      {done ? <Check size={11} strokeWidth={3.2} className="text-on-accent" aria-hidden /> : null}
+      <Check
+        size={11}
+        strokeWidth={3.2}
+        aria-hidden
+        className={
+          done
+            ? ''
+            : 'scale-90 opacity-0 transition-[opacity,transform] duration-[var(--ease-out)] group-hover/check:scale-100 group-hover/check:opacity-100'
+        }
+      />
     </button>
   );
 }

@@ -1,7 +1,8 @@
-import { llmReady, type Task } from '@vital/dto';
+import { llmReady, type Habit, type Task } from '@vital/dto';
 import { bindServices, useService } from '@rabjs/react';
 import type { FC } from 'react';
 import { Link } from 'react-router';
+import { client } from '@/api/client';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { AuthService } from '@/services/auth.service';
@@ -99,6 +100,14 @@ function TodayWorkspaceContent() {
   async function handleComplete(task: Task) {
     try {
       await actions.complete(task);
+    } finally {
+      await page.refresh();
+    }
+  }
+
+  async function handleCheckIn(habit: Habit) {
+    try {
+      await client.tickHabit(habit.id);
     } finally {
       await page.refresh();
     }
@@ -220,6 +229,7 @@ function TodayWorkspaceContent() {
                     lists={lists}
                     timeZone={timeZone}
                     onComplete={(task) => void handleComplete(task)}
+                    onCheckIn={(habit) => handleCheckIn(habit)}
                     onReorder={(input) => actions.reorder.mutate(input)}
                     onPostpone={(overdue) => page.postponeOverdue(overdue)}
                   />
