@@ -1,6 +1,7 @@
 /** Public API for other features. Workspace roots stay file-imported (App lazy + cycle break). */
+export { TaskShortcutDialogs } from './TaskShortcutDialogs';
 export { TaskSkeleton } from './EmptyTasks';
-export { useTodosKeyboard } from './keyboard';
+export { QUICK_ADD_ID, LIST_FILTER_ID, focusById, moveSelection, useTodosKeyboard } from './keyboard';
 export { ListView } from './ListView';
 export { ListShortcuts, UserListsNav } from './ListsNav';
 export {

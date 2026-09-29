@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { moveSelection } from '@/features/todos/keyboard';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { moveSelection } from '@/features/todos';
 import {
   isComposingEvent,
   isShortcutLayerBlocked,
@@ -16,9 +16,11 @@ export function useDaysKeyboard(opts: {
 }): string | null {
   const [cursor, setCursor] = useState<string | null>(null);
   const optsRef = useRef(opts);
-  optsRef.current = opts;
   const cursorRef = useRef(cursor);
-  cursorRef.current = cursor;
+  useLayoutEffect(() => {
+    optsRef.current = opts;
+    cursorRef.current = cursor;
+  });
 
   useEffect(() => {
     if (!opts.editing) return;

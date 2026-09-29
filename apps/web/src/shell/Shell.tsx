@@ -26,8 +26,7 @@ import { CommandPalette } from '@/features/palette/CommandPalette';
 import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
 import { InboxUiService } from '@/features/inbox';
 import { ReportUiService } from '@/features/reports/report-ui.service';
-import { SimilarOpenToast, TodosUiService } from '@/features/todos';
-import { TaskShortcutDialogs } from '@/features/todos/TaskShortcutDialogs';
+import { SimilarOpenToast, TaskShortcutDialogs, TodosUiService } from '@/features/todos';
 import { AccountMenu } from '@/shell/AccountMenu';
 import {
   loadPaneWidth,

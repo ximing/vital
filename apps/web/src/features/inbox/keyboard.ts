@@ -1,6 +1,6 @@
 import type { InboxItem } from '@vital/dto';
-import { useEffect, useRef, useState } from 'react';
-import { moveSelection } from '@/features/todos/keyboard';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { moveSelection } from '@/features/todos';
 import {
   isComposingEvent,
   isShortcutLayerBlocked,
@@ -25,9 +25,11 @@ export function useInboxKeyboard(opts: {
   const [cursor, setCursor] = useState<string | null>(null);
   const active = opts.routeId ?? cursor;
   const optsRef = useRef(opts);
-  optsRef.current = opts;
   const activeRef = useRef(active);
-  activeRef.current = active;
+  useLayoutEffect(() => {
+    optsRef.current = opts;
+    activeRef.current = active;
+  });
 
   useEffect(() => {
     if (!opts.routeId) return;

@@ -12,7 +12,7 @@ import {
   Sun,
   Sunrise,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { t } from '@/copy';
 import { addMonthsYmd, padYmd, ymdParts } from '@/lib/calendar-grid';
 import { DateField } from '@/ui/date-field';
@@ -116,9 +116,11 @@ export function SchedulePopover({
   }
 
   const draftRef = useRef(draft);
-  draftRef.current = draft;
   const onShortcutOpenRef = useRef(onShortcutOpen);
-  onShortcutOpenRef.current = onShortcutOpen;
+  useLayoutEffect(() => {
+    draftRef.current = draft;
+    onShortcutOpenRef.current = onShortcutOpen;
+  });
 
   function open() {
     setWorking(draft);
