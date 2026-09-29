@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -42,6 +41,7 @@ import { SectionHead } from '../../components/SectionHead';
 import { TaskRow } from '../../components/TaskRow';
 import { useOpenTask } from '../../components/TaskSheetHost';
 import { toggleComplete } from './complete';
+import { smartListIdOf } from './compose-task';
 import { NewTaskBar } from './NewTaskBar';
 import { TaskListService } from './task-list.service';
 
@@ -262,8 +262,10 @@ function TaskListContent({
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
+      {/* Keep the absolute composer inside the area above the keyboard padding. */}
+      <View style={styles.flex}>
       {offline ? <Banner tone="info">{copy.offline}</Banner> : null}
       {error ? (
         <Banner
@@ -514,6 +516,8 @@ function TaskListContent({
       {resolvedCreateId && !hideComposer ? (
         <NewTaskBar
           listId={resolvedCreateId}
+          smartListId={smartListIdOf(listId)}
+          contextDueYmd={view === 'week' ? selectedDay : undefined}
           extra={{
             ...createExtra,
             ...(view === 'week'
@@ -647,6 +651,7 @@ function TaskListContent({
             ))
           : null}
       </PickerSheet>
+      </View>
     </KeyboardAvoidingView>
   );
 }

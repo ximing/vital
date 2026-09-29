@@ -7,7 +7,7 @@ import { withAlpha } from '../../ui/color';
 import { heatAlphaHex, mondayFirstCol, todayYmd } from './period-label';
 
 /**
- * 月历式热力：day 粒度按周一起始 7 列网格（含前导空格）；
+ * 月历式热力：day 粒度按周一起始 7 列网格（含前导空格），日期是 32 圆形；
  * month/year 粒度保持简单格子流。绝对刻度 alpha 见 heatAlphaHex。
  */
 export function HeatmapCalendar({
@@ -35,21 +35,25 @@ export function HeatmapCalendar({
         const lit = cell.completed > 0;
         const selected = cell.date === selectedDate;
         const isToday = cell.date === today;
+        const round = grain === 'day';
         return (
-          <View key={cell.date} style={styles.cell}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={cell.date}
-              onPress={() => onPick(cell.date)}
-              style={({ pressed }) => [
-                styles.day,
+          <Pressable
+            key={cell.date}
+            accessibilityRole="button"
+            accessibilityLabel={cell.date}
+            accessibilityState={{ selected }}
+            onPress={() => onPick(cell.date)}
+            style={({ pressed }) => [styles.cell, pressed && styles.pressed]}
+          >
+            <View
+              style={[
+                round ? styles.day : styles.block,
                 lit &&
                   !selected && {
                     backgroundColor: withAlpha(t.accentPrimary, heatAlphaHex(cell.completed)),
                   },
                 selected && { backgroundColor: t.accentPrimary },
                 isToday && !selected && styles.today,
-                pressed && styles.pressed,
               ]}
             >
               <Text style={[styles.num, selected && styles.numSelected]}>
@@ -61,12 +65,12 @@ export function HeatmapCalendar({
               </Text>
               <View
                 style={[
-                  styles.dot,
+                  round ? styles.dot : styles.dotFlow,
                   cell.wrote && { backgroundColor: selected ? t.fgOnAccent : t.accentPrimary },
                 ]}
               />
-            </Pressable>
-          </View>
+            </View>
+          </Pressable>
         );
       })}
     </View>
@@ -76,8 +80,15 @@ export function HeatmapCalendar({
 const createStyles = (t: Theme) =>
   StyleSheet.create({
     grid: { flexDirection: 'row', flexWrap: 'wrap' },
-    cell: { width: '14.2857%', alignItems: 'center', paddingVertical: 2 },
+    cell: { width: '14.2857%', alignItems: 'center', justifyContent: 'center', paddingVertical: 2 },
     day: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    block: {
       width: 40,
       height: 44,
       borderRadius: t.radius.md,
@@ -94,5 +105,13 @@ const createStyles = (t: Theme) =>
       fontVariant: ['tabular-nums'],
     },
     numSelected: { color: t.fgOnAccent, fontWeight: '600' },
-    dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
+    dot: {
+      position: 'absolute',
+      bottom: 3,
+      width: 4,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: 'transparent',
+    },
+    dotFlow: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'transparent' },
   });

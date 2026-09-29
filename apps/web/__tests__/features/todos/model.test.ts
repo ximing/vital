@@ -2,6 +2,9 @@ import type { List, Task } from '@vital/dto';
 import { describe, expect, it } from 'vitest';
 import {
   applyOptimisticComplete,
+  intervalRecurrenceLabel,
+  recurrenceKind,
+  recurrenceMeta,
   countWithDescendants,
   createPayload,
   descendantListIds,
@@ -80,6 +83,21 @@ function makeTask(over: Partial<Task> & Pick<Task, 'id' | 'title'>): Task {
 }
 
 describe('todo model', () => {
+  it('labels an every-n rule and keeps a plain monthly rule', () => {
+    const everyTwoMonths = makeTask({
+      id: 'm2',
+      title: '擦菜板',
+      recurrence: 'FREQ=MONTHLY;INTERVAL=2',
+    });
+    expect(recurrenceKind('FREQ=MONTHLY;INTERVAL=2')).toBe('custom');
+    expect(intervalRecurrenceLabel('FREQ=MONTHLY;INTERVAL=2')).toBe('每 2 个月');
+    expect(recurrenceMeta(everyTwoMonths)).toBe('每 2 个月');
+    expect(recurrenceMeta(makeTask({ id: 'm1', title: '每月', recurrence: 'FREQ=MONTHLY' }))).toBe(
+      '每月',
+    );
+    expect(recurrenceKind('FREQ=WEEKLY')).toBe('weekly');
+  });
+
   it('maps local midnight in Asia/Shanghai to UTC', () => {
     expect(zonedLocalMidnightIso('2026-09-06', TZ)).toBe('2026-09-05T16:00:00.000Z');
   });

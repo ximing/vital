@@ -720,6 +720,10 @@ export function dueMeta(task: Task, timeZone: string, now = new Date()): string 
 }
 
 export function recurrenceMeta(task: Task): string | null {
+  if (task.recurrenceKind === null) {
+    const interval = intervalRecurrenceLabel(task.recurrence);
+    if (interval !== null) return interval;
+  }
   const kind: RecurrenceKind | 'none' | 'custom' =
     task.recurrenceKind ?? recurrenceKind(task.recurrence);
   if (kind === 'none') return null;
@@ -750,10 +754,32 @@ export function reminderMeta(task: Task, timeZone: string): string | null {
   return t.todos.remind;
 }
 
+function rruleInterval(rrule: string): number {
+  const match = /(?:^|;)INTERVAL=(\d+)(?:;|$)/i.exec(rrule.replace(/^RRULE:/i, ''));
+  if (match?.[1] === undefined) return 1;
+  const n = Number(match[1]);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
+/** 「每 2 个月」 for a plain FREQ + INTERVAL>1 rule. Complex rules stay unlabeled. */
+export function intervalRecurrenceLabel(rrule: string | null): string | null {
+  if (rrule === null || rrule === '') return null;
+  const interval = rruleInterval(rrule);
+  if (interval <= 1) return null;
+  if (/\b(?:BYDAY|BYMONTHDAY|COUNT|UNTIL)=/i.test(rrule)) return null;
+  const freq = /\bFREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)\b/i.exec(rrule)?.[1]?.toUpperCase();
+  if (freq === 'DAILY') return `每 ${interval} 天`;
+  if (freq === 'WEEKLY') return `每 ${interval} 周`;
+  if (freq === 'MONTHLY') return `每 ${interval} 个月`;
+  if (freq === 'YEARLY') return `每 ${interval} 年`;
+  return null;
+}
+
 export function recurrenceKind(
   rrule: string | null,
 ): 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom' {
   if (rrule === null || rrule === '') return 'none';
+  if (rruleInterval(rrule) > 1) return 'custom';
   if (/\bFREQ=DAILY\b/.test(rrule) && !/\bBYDAY=/.test(rrule)) return 'daily';
   if (/\bFREQ=WEEKLY\b/.test(rrule) && !/\bBYDAY=/.test(rrule)) return 'weekly';
   if (/\bFREQ=MONTHLY\b/.test(rrule)) return 'monthly';

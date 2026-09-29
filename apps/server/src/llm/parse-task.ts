@@ -20,6 +20,51 @@ import { completeText } from './pi.js';
 
 const OFFSETS = new Set<number>([5, 15, 30, 60, 1440]);
 
+const FREQ_KINDS = {
+  daily: 'DAILY',
+  weekly: 'WEEKLY',
+  monthly: 'MONTHLY',
+  yearly: 'YEARLY',
+} as const;
+type IntervalFreq = keyof typeof FREQ_KINDS;
+
+/** A bad interval must not fail the whole parse; the sentence can still carry it. */
+function recurrenceIntervalOf(value: unknown): number | undefined {
+  const n =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value.trim())
+        : Number.NaN;
+  if (!Number.isInteger(n) || n < 1 || n > 365) return undefined;
+  return n;
+}
+
+const REMINDER_VALUES = ['none', 'due', '5', '15', '30', '60', '1440'] as const;
+type ExtractedReminder = (typeof REMINDER_VALUES)[number];
+
+/** A bad reminder must not fail the whole parse. */
+function reminderOfRaw(value: unknown): ExtractedReminder | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const token = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  return (REMINDER_VALUES as readonly string[]).includes(token) ? (token as ExtractedReminder) : undefined;
+}
+
+function booleanOf(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
+/** Unknown kinds become null so a spoken interval can still be applied. */
+function recurrenceKindOf(value: unknown): RecurrenceKind | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const parsed = recurrenceKindSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
 const extractedSchema = z.object({
   title: z.string().trim().min(1).max(500).optional(),
   notes: z.string().max(50_000).nullable().optional(),
@@ -28,10 +73,14 @@ const extractedSchema = z.object({
   dueTime: z.string().nullable().optional(),
   startDate: z.string().nullable().optional(),
   startTime: z.string().nullable().optional(),
-  isAllDay: z.boolean().optional(),
-  someday: z.boolean().optional(),
-  reminder: z.enum(['none', 'due', '5', '15', '30', '60', '1440']).optional(),
-  recurrenceKind: recurrenceKindSchema.nullable().optional(),
+  isAllDay: z.preprocess(booleanOf, z.boolean().optional()),
+  someday: z.preprocess(booleanOf, z.boolean().optional()),
+  reminder: z.preprocess(reminderOfRaw, z.enum(REMINDER_VALUES).optional()),
+  recurrenceKind: z.preprocess(recurrenceKindOf, recurrenceKindSchema.nullable().optional()),
+  recurrenceInterval: z.preprocess(
+    recurrenceIntervalOf,
+    z.number().int().min(1).max(365).optional(),
+  ),
   listName: z.string().trim().min(1).max(80).nullable().optional(),
   tagNames: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 });
@@ -90,6 +139,141 @@ function wallIso(ymd: string, hm: string | null, zone: string): string {
 
 function todayYmd(zone: string, now: Date): string {
   return DateTime.fromJSDate(now).setZone(zone).toFormat('yyyy-MM-dd');
+}
+
+const ZH_DIGIT: Record<string, number> = {
+  零: 0,
+  〇: 0,
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+};
+
+function zhInt(raw: string): number | null {
+  if (/^\d{1,3}$/.test(raw)) {
+    const n = Number(raw);
+    return n >= 1 && n <= 365 ? n : null;
+  }
+  if (raw === '十') return 10;
+  const tens = /^([一二三四五六七八九两])?十([一二三四五六七八九])?$/.exec(raw);
+  if (tens) {
+    const hi = tens[1] === undefined ? 1 : ZH_DIGIT[tens[1]];
+    const lo = tens[2] === undefined ? 0 : ZH_DIGIT[tens[2]];
+    if (hi === undefined || lo === undefined || hi === 0) return null;
+    const n = hi * 10 + lo;
+    return n >= 1 && n <= 365 ? n : null;
+  }
+  const digit = ZH_DIGIT[raw];
+  return digit !== undefined && digit >= 1 ? digit : null;
+}
+
+const SPOKEN_REPEAT =
+  /(?:每间隔|每隔|每)\s*(\d{1,3}|[零〇一二三四五六七八九十两]{1,3})\s*个?\s*(星期|礼拜|天|日|周|月|年)/;
+
+/** Explicit 每隔/每间隔 N with N>1. Interval 1 stays with the model. */
+function spokenRepeat(text: string): { freq: IntervalFreq; interval: number } | null {
+  const match = SPOKEN_REPEAT.exec(text);
+  const raw = match?.[1];
+  const unit = match?.[2];
+  if (raw === undefined || unit === undefined) return null;
+  const interval = zhInt(raw);
+  if (interval === null || interval <= 1) return null;
+  const freq: IntervalFreq =
+    unit === '天' || unit === '日' ? 'daily' : unit === '月' ? 'monthly' : unit === '年' ? 'yearly' : 'weekly';
+  return { freq, interval };
+}
+
+function hourNum(raw: string): number | null {
+  if (/^\d{1,2}$/.test(raw)) {
+    const n = Number(raw);
+    return n >= 0 && n <= 23 ? n : null;
+  }
+  if (raw === '十') return 10;
+  if (raw === '十一') return 11;
+  if (raw === '十二') return 12;
+  const digit = ZH_DIGIT[raw];
+  return digit !== undefined && digit >= 1 ? digit : null;
+}
+
+function wallHour(period: string, hour: number): number | null {
+  if (hour >= 13 && hour <= 23) return hour;
+  if (hour < 0 || hour > 12) return null;
+  if (period === '凌晨') return hour === 12 ? 0 : hour;
+  if (period === '早上' || period === '上午') return hour;
+  if (period === '中午') {
+    if (hour === 12) return 12;
+    if (hour >= 1 && hour <= 2) return hour + 12;
+    return hour;
+  }
+  if (period === '下午') return hour === 12 ? 12 : hour + 12;
+  if (hour === 12) return 0;
+  return hour + 12;
+}
+
+function minuteNum(phrase: string | undefined, raw: string | undefined): number | null {
+  if (phrase === undefined) return 0;
+  if (phrase === '半') return 30;
+  if (phrase === '一刻') return 15;
+  if (phrase === '三刻') return 45;
+  if (raw === undefined) return null;
+  const n = zhInt(raw);
+  if (n === null || n > 59) return null;
+  return n;
+}
+
+const SPOKEN_CLOCK =
+  /(凌晨|早上|上午|中午|下午|傍晚|晚上|夜晚)\s*(十二|十一|十|\d{1,2}|[一二三四五六七八九两])\s*点\s*(半|一刻|三刻|(\d{1,2}|[零〇一二三四五六七八九十两]{1,3})分)?/;
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** Clock from the sentence when the model left dueTime empty. */
+function spokenHm(text: string): string | null {
+  const clock = SPOKEN_CLOCK.exec(text);
+  if (clock?.[1] !== undefined && clock[2] !== undefined) {
+    const hour = hourNum(clock[2]);
+    const minute = minuteNum(clock[3], clock[4]);
+    if (hour !== null && minute !== null) {
+      const wall = wallHour(clock[1], hour);
+      if (wall !== null) return `${pad2(wall)}:${pad2(minute)}`;
+    }
+  }
+  const colon = /(?:^|[^\d])([01]?\d|2[0-3])[:：]([0-5]\d)(?!\d)/.exec(text);
+  if (colon?.[1] !== undefined && colon[2] !== undefined) return `${pad2(Number(colon[1]))}:${colon[2]}`;
+  return null;
+}
+
+type ResolvedRepeat =
+  | { mode: 'none' }
+  | { mode: 'kind'; kind: RecurrenceKind }
+  | { mode: 'rrule'; rrule: string };
+
+function isIntervalFreq(kind: RecurrenceKind): kind is IntervalFreq {
+  return kind === 'daily' || kind === 'weekly' || kind === 'monthly' || kind === 'yearly';
+}
+
+function rruleOf(freq: IntervalFreq, interval: number): string {
+  return `FREQ=${FREQ_KINDS[freq]};INTERVAL=${String(interval)}`;
+}
+
+function resolveRepeat(text: string, extracted: ExtractedTask | null): ResolvedRepeat {
+  const spoken = spokenRepeat(text);
+  if (spoken) return { mode: 'rrule', rrule: rruleOf(spoken.freq, spoken.interval) };
+  const kind = extracted?.recurrenceKind ?? null;
+  if (kind === null) return { mode: 'none' };
+  const interval = extracted?.recurrenceInterval;
+  if (interval !== undefined && interval > 1 && isIntervalFreq(kind)) {
+    return { mode: 'rrule', rrule: rruleOf(kind, interval) };
+  }
+  return { mode: 'kind', kind };
 }
 
 function matchListId(name: string | null | undefined, lists: List[]): string | undefined {
@@ -155,19 +339,25 @@ export function buildCreateInputFromIntent(
     if (input.text.trim().length > title.length + 8) notes = input.text.trim();
   }
 
-  const dueYmd = extracted?.dueDate ?? input.dueYmd ?? null;
-  const dueHm = extracted?.dueTime ?? null;
+  let dueYmd = extracted?.dueDate ?? input.dueYmd ?? null;
+  const dueHm = extracted?.dueTime ?? spokenHm(input.text);
   const startYmd = extracted?.startDate ?? null;
   const startHm = extracted?.startTime ?? null;
+  const repeat = resolveRepeat(input.text, extracted);
 
   let dueAt: string | null | undefined;
   let startAt: string | null | undefined;
   let isAllDay: boolean | undefined;
 
+  // A repeat that only names a clock starts today at that time, not all-day.
+  if (dueYmd === null && dueHm !== null && repeat.mode !== 'none') {
+    dueYmd = todayYmd(zone, now);
+  }
+
   if (dueYmd) {
     const timed = dueHm !== null;
-    isAllDay = extracted?.isAllDay ?? !timed;
-    dueAt = wallIso(dueYmd, isAllDay ? null : dueHm, zone);
+    isAllDay = timed ? false : (extracted?.isAllDay ?? true);
+    dueAt = wallIso(dueYmd, timed ? dueHm : null, zone);
   }
   if (startYmd) {
     const timed = startHm !== null;
@@ -190,9 +380,16 @@ export function buildCreateInputFromIntent(
   }
 
   const hasDue = dueAt !== undefined && dueAt !== null;
-  const reminder = reminderOf(extracted?.reminder, hasDue);
-  let recurrenceKind: RecurrenceKind | null | undefined = extracted?.recurrenceKind;
-  if (recurrenceKind && !hasDue) recurrenceKind = null;
+  let reminderToken = extracted?.reminder;
+  if (
+    (reminderToken === undefined || reminderToken === 'none') &&
+    hasDue &&
+    dueHm !== null &&
+    input.text.includes('提醒')
+  ) {
+    reminderToken = 'due';
+  }
+  const reminder = reminderOf(reminderToken, hasDue);
 
   const priority: TaskPriority | undefined = input.priority ?? extracted?.priority;
 
@@ -211,7 +408,8 @@ export function buildCreateInputFromIntent(
   if (reminder.reminderOffsetMinutes !== undefined) {
     draft.reminderOffsetMinutes = reminder.reminderOffsetMinutes;
   }
-  if (recurrenceKind !== undefined) draft.recurrenceKind = recurrenceKind;
+  if (hasDue && repeat.mode === 'rrule') draft.recurrence = repeat.rrule;
+  if (hasDue && repeat.mode === 'kind') draft.recurrenceKind = repeat.kind;
   const tagIds = matchTagIds(extracted?.tagNames, ctx.tags);
   if (tagIds !== undefined) draft.tagIds = tagIds;
 
@@ -240,15 +438,17 @@ function buildPrompt(input: {
   const tags = input.tags.map((item) => item.name).join('、');
   const system = [
     '你把用户的一句话理解成一条待办任务，只输出 JSON 对象，不要 markdown。',
-    '字段：title, notes, priority, dueDate, dueTime, startDate, startTime, isAllDay, someday, reminder, recurrenceKind, listName, tagNames。',
+    '字段：title, notes, priority, dueDate, dueTime, startDate, startTime, isAllDay, someday, reminder, recurrenceKind, recurrenceInterval, listName, tagNames。',
     'title：短标题，去掉日期时间等调度用语。',
     'notes：仅当用户补充了说明、上下文或摘要时填写，否则 null。',
     'priority：0 最高紧急，3 普通。没说紧急程度时用 3。',
-    '日期用 YYYY-MM-DD，时间用 HH:mm，相对今天的时区计算。没有日期则 dueDate 为 null。',
+    '日期用 YYYY-MM-DD，时间用 HH:mm，按时区计算。没有日期也没有时刻则 dueDate 为 null。',
+    '只有时刻、没有日期，而且任务会重复时，dueDate 填今天，dueTime 填该时刻，isAllDay 为 false。不要编造别的日期。',
     '有日期无时刻则 isAllDay true，dueTime null。有时刻则 isAllDay false。',
     'someday：没有日期且用户表达"某天/以后/不着急"时 true，否则 false。',
-    'reminder：none / due / 5 / 15 / 30 / 60 / 1440。有明确时刻的约会默认 15；全天任务默认 none；没提提醒则 none。',
+    'reminder：none / due / 5 / 15 / 30 / 60 / 1440。用户说提醒我并且给了时刻时用 due。有明确时刻的约会但没说提醒时默认 15。全天或没提提醒则 none。',
     'recurrenceKind：daily weekly monthly yearly weekdays weekends holidays legal_workdays，否则 null。',
+    'recurrenceInterval：每隔或每间隔 N 个天、周、月、年时填整数 N（1 到 365）。每间隔两个月是 monthly 且 interval 为 2。没说间隔就省略。',
     'listName 必须是给定集合之一，否则 null。tagNames 必须是已有标签，否则 []。',
     '不要编造用户没说的截止日期。',
   ].join('');

@@ -20,7 +20,13 @@ import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { TimePicker } from '@/ui/time-field';
 import { usePopover } from '@/ui/use-popover';
-import { addDaysYmd, fromDatetimeLocal, toDatetimeLocal, todayYmd } from './model';
+import {
+  addDaysYmd,
+  fromDatetimeLocal,
+  intervalRecurrenceLabel,
+  toDatetimeLocal,
+  todayYmd,
+} from './model';
 import { draftChip, type ScheduleDraft, type ScheduleMode } from './schedule-draft';
 import { offsetLabel, REMINDER_OFFSETS, type ReminderValue } from './schedule-fields';
 
@@ -48,9 +54,14 @@ function reminderLabel(value: ReminderValue): string {
   return offsetLabel(Number(value) as ReminderOffsetMinutes);
 }
 
-function recurrenceLabel(kind: RecurrenceKind | null): string {
-  if (kind === null) return t.todos.recurrenceNone;
-  return RECURRENCE.find((item) => item.value === kind)?.label ?? t.todos.recurrence;
+function recurrenceLabel(draft: Pick<ScheduleDraft, 'recurrenceKind' | 'recurrence'>): string {
+  if (draft.recurrenceKind !== null) {
+    return RECURRENCE.find((item) => item.value === draft.recurrenceKind)?.label ?? t.todos.recurrence;
+  }
+  if (draft.recurrence !== null) {
+    return intervalRecurrenceLabel(draft.recurrence) ?? t.todos.recurrence;
+  }
+  return t.todos.recurrenceNone;
 }
 
 function monthDays(y: number, m: number, weekStartsOn: 0 | 1): string[] {
@@ -232,6 +243,7 @@ export function SchedulePopover({
       reminder: 'none',
       reminderAt: null,
       recurrenceKind: null,
+      recurrence: null,
     });
     popover.close();
   }
@@ -519,7 +531,7 @@ export function SchedulePopover({
 
           <FlyoutRow
             icon={Repeat}
-            label={recurrenceLabel(working.recurrenceKind)}
+            label={recurrenceLabel(working)}
             active={panel === 'repeat'}
             side={side}
             flyoutLabel={t.todos.recurrence}
@@ -532,7 +544,7 @@ export function SchedulePopover({
                   type="button"
                   className={`h-8 rounded-md px-2 text-left text-[length:var(--text-caption)] ${
                     (item.value === 'none'
-                      ? working.recurrenceKind === null
+                      ? working.recurrenceKind === null && working.recurrence === null
                       : working.recurrenceKind === item.value)
                       ? 'bg-accent-subtle text-fg'
                       : 'text-muted hover:bg-surface-muted hover:text-fg'
@@ -541,6 +553,7 @@ export function SchedulePopover({
                     edit({
                       ...working,
                       recurrenceKind: item.value === 'none' ? null : item.value,
+                      recurrence: null,
                     })
                   }
                 >

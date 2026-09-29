@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { llmReady } from '@vital/dto';
@@ -83,8 +83,10 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
     <SafeAreaView style={styles.flex} edges={['top']}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
+      {/* Keep the absolute composer inside the area above the keyboard padding. */}
+      <View style={styles.flex}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -154,6 +156,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
       {inboxId ? (
         <NewTaskBar
           listId={inboxId}
+          smartListId="smart:today"
           extra={{ dueAt: startOfLocalDayIso(tz), isAllDay: true, timezone: tz }}
           onCreated={(task) => {
             s.applyTask(task);
@@ -161,6 +164,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
           }}
         />
       ) : null}
+      </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

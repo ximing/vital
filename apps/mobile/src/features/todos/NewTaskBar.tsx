@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowUp, Calendar, Flag, Plus, Tag as TagIcon } from 'lucide-react-native';
 import {
-  llmReady,
   type CreateTaskInput,
   type SimilarTaskHit,
+  type SmartListId,
   type Tag,
   type Task,
   type TaskPriority,
@@ -16,13 +16,7 @@ import { toast } from '../../components/toast';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { humanError } from '../../lib/errors';
-import {
-  addDaysYmdStamp,
-  formatHumanDay,
-  fromDatetimeLocal,
-  localDateStamp,
-  zonedLocalMidnightIso,
-} from '../../lib/format';
+import { addDaysYmdStamp, formatHumanDay, localDateStamp } from '../../lib/format';
 import { markOnboarding } from '../../lib/onboarding';
 import { useAuth } from '../../services/auth.service';
 import { useTheme } from '../../theme/use-theme';
@@ -30,15 +24,11 @@ import { rnShadow } from '../../ui/card';
 import { Icon } from '../../ui/icon';
 import { TagCreateRow } from './TaskSheetFields';
 import { SimilarOpenSheet } from './SimilarOpenSheet';
+import { composeTaskRequest, willParseTaskText, type ComposeDue } from './compose-task';
 import { priorityColor } from './priority';
 
 const TIMES = ['09:00', '14:00', '18:00', '21:00'] as const;
 const PRIORITIES: TaskPriority[] = [0, 1, 2, 3];
-
-type DuePick =
-  | { source: 'preset' }
-  | { source: 'none' }
-  | { source: 'day'; ymd: string; allDay: boolean; hm: string | null };
 
 /**
  * Today and Todos share this. A corner button opens the bar and the keyboard.
@@ -48,10 +38,16 @@ type DuePick =
 export function NewTaskBar({
   listId,
   extra,
+  smartListId,
+  contextDueYmd,
   onCreated,
 }: {
   listId: string;
   extra?: Partial<CreateTaskInput>;
+  /** Smart list the composer is sitting on. Passed through to task.parse. */
+  smartListId?: SmartListId;
+  /** Week-view day. Fallback due for the parser when the user left the date chip alone. */
+  contextDueYmd?: string;
   onCreated: (task: Task) => void;
 }) {
   const t = useTheme();
@@ -63,7 +59,8 @@ export function NewTaskBar({
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
-  const [due, setDue] = useState<DuePick>({ source: 'preset' });
+  const [status, setStatus] = useState<string | null>(null);
+  const [due, setDue] = useState<ComposeDue>({ source: 'preset' });
   const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -84,6 +81,7 @@ export function NewTaskBar({
   const today = localDateStamp(tz);
   const tomorrow = addDaysYmdStamp(today, 1);
   const nextWeek = addDaysYmdStamp(today, 7);
+  const parses = willParseTaskText({ llm: auth.user?.llm, due, tagIds });
   const impliedYmd =
     due.source === 'preset' && extra?.dueAt != null
       ? localDateStamp(tz, new Date(extra.dueAt))
@@ -96,7 +94,8 @@ export function NewTaskBar({
       : impliedYmd !== null
         ? formatHumanDay(impliedYmd, tz)
         : copy.todos.composerDate;
-  const dateOn = chosen !== null || impliedYmd !== null;
+  // While the parser owns the sentence, a view due is only a fallback, not a locked chip.
+  const dateOn = chosen !== null || (impliedYmd !== null && !parses);
   const priorityOn = priority !== null && priority !== 3;
   const priorityLabel = priorityOn ? copy.todos.priorityLevel[priority] : copy.todos.priority;
   const tagOn = tagIds.length > 0;
@@ -146,20 +145,29 @@ export function NewTaskBar({
   async function submit(): Promise<void> {
     const trimmed = title.trim();
     if (trimmed === '' || busy) return;
+    const request = composeTaskRequest({
+      text: trimmed,
+      listId,
+      timezone: tz,
+      llm: auth.user?.llm,
+      due,
+      priority,
+      tagIds,
+      ...(extra !== undefined ? { extra } : {}),
+      ...(smartListId !== undefined ? { smartListId } : {}),
+      ...(contextDueYmd !== undefined ? { contextDueYmd } : {}),
+    });
     setBusy(true);
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    if (request.kind === 'text') {
+      setStatus(copy.todos.interpreting);
+      waitTimer = setTimeout(() => setStatus(copy.todos.creatingWait), 8000);
+    }
     try {
-      const explicit = due.source !== 'preset' || priority !== null || tagIds.length > 0;
-      const keepPresetDue = due.source === 'preset' && extra?.dueAt !== undefined;
       const task =
-        !explicit && !keepPresetDue && llmReady(auth.user?.llm)
-          ? await client.createTaskFromText({
-              text: trimmed,
-              listId,
-              ...(tz !== 'UTC' ? { timezone: tz } : {}),
-              ...(extra?.status === 'doing' || extra?.status === 'todo' ? { status: extra.status } : {}),
-              ...(extra?.priority !== undefined ? { priority: extra.priority } : {}),
-            })
-          : await client.createTask(buildInput(trimmed));
+        request.kind === 'text'
+          ? await client.createTaskFromText(request.body)
+          : await client.createTask(request.body);
       resetDraft();
       await markOnboarding(auth.user, auth.refreshUser, { createdTask: true });
       const hits = task.similarOpenTasks ?? [];
@@ -172,28 +180,10 @@ export function NewTaskBar({
     } catch (err) {
       toast(humanError(err));
     } finally {
+      if (waitTimer !== undefined) clearTimeout(waitTimer);
+      setStatus(null);
       setBusy(false);
     }
-  }
-
-  function buildInput(trimmed: string): CreateTaskInput {
-    const input: CreateTaskInput = { title: trimmed, listId };
-    if (due.source === 'preset') Object.assign(input, extra);
-    if (due.source === 'day') {
-      input.timezone = tz;
-      if (due.allDay || due.hm === null) {
-        input.dueAt = zonedLocalMidnightIso(tz, due.ymd);
-        input.isAllDay = true;
-      } else {
-        input.dueAt = fromDatetimeLocal(`${due.ymd}T${due.hm}`, tz);
-        input.isAllDay = false;
-      }
-    }
-    if (extra?.status === 'doing' || extra?.status === 'todo') input.status = extra.status;
-    if (priority !== null) input.priority = priority;
-    else if (due.source === 'preset' && extra?.priority !== undefined) input.priority = extra.priority;
-    if (tagIds.length > 0) input.tagIds = tagIds;
-    return input;
   }
 
   function finishSimilar(): void {
@@ -213,11 +203,12 @@ export function NewTaskBar({
         <TextInput
           ref={inputRef}
           style={styles.input}
-          placeholder={copy.todos.addTaskPlaceholder}
+          placeholder={parses ? copy.todos.composeIntent : copy.todos.addTaskPlaceholder}
           placeholderTextColor={t.textTertiary}
           value={title}
           onChangeText={setTitle}
           editable={!busy}
+          maxLength={parses ? 2000 : 500}
           onSubmitEditing={() => void submit()}
           returnKeyType="done"
           autoCapitalize="none"
@@ -336,6 +327,11 @@ export function NewTaskBar({
           />
         ))}
       </PickerSheet>
+      {status !== null ? (
+        <Text style={styles.status} accessibilityLiveRegion="polite">
+          {status}
+        </Text>
+      ) : null}
 
           </View>
         </>
@@ -424,6 +420,11 @@ const createStyles = (t: Theme) =>
       backgroundColor: t.bgSurfaceMuted,
     },
     sendOn: { backgroundColor: t.accentPrimary },
+    status: {
+      fontSize: t.type.caption.fontSize,
+      lineHeight: t.type.caption.lineHeight,
+      color: t.accentPrimary,
+    },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
     chip: {
       height: 28,

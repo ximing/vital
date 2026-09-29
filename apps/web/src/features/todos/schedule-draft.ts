@@ -10,6 +10,7 @@ import {
   formatHm,
   formatHumanDay,
   fromDatetimeLocal,
+  intervalRecurrenceLabel,
   toDateInput,
   toDatetimeLocal,
   todayYmd,
@@ -28,6 +29,8 @@ export type ScheduleDraft = {
   reminder: ReminderValue;
   reminderAt: string | null;
   recurrenceKind: RecurrenceKind | null;
+  /** Plain every-N rule. Fixed kinds leave this null. */
+  recurrence: string | null;
 };
 
 export function emptyScheduleDraft(): ScheduleDraft {
@@ -40,6 +43,7 @@ export function emptyScheduleDraft(): ScheduleDraft {
     reminder: 'none',
     reminderAt: null,
     recurrenceKind: null,
+    recurrence: null,
   };
 }
 
@@ -72,6 +76,10 @@ export function draftFromTask(task: Task, zone: string): ScheduleDraft {
     reminder,
     reminderAt: task.reminderAt,
     recurrenceKind: task.recurrenceKind,
+    recurrence:
+      task.recurrenceKind === null && intervalRecurrenceLabel(task.recurrence) !== null
+        ? task.recurrence
+        : null,
   };
 }
 
@@ -106,9 +114,12 @@ function reminderPatch(draft: ScheduleDraft): Pick<
 
 export function draftToPatch(draft: ScheduleDraft, zone: string): PatchTaskInput {
   const remind = reminderPatch(draft);
-  // The server rejects patches carrying both recurrence and recurrenceKind;
-  // the kind form alone also clears any legacy rrule.
-  const repeat = { recurrenceKind: draft.recurrenceKind };
+  // The server rejects patches carrying both recurrence and recurrenceKind.
+  // A fixed kind clears any rrule; an every-N rule is stored as the rrule alone.
+  const repeat =
+    draft.recurrence !== null && draft.recurrenceKind === null
+      ? { recurrence: draft.recurrence }
+      : { recurrenceKind: draft.recurrenceKind };
   if (draft.startYmd === null) {
     return {
       dueAt: null,
@@ -143,7 +154,12 @@ export function applyDraftToCreate(
   draft: ScheduleDraft,
   zone: string,
 ): CreateTaskInput {
-  if (draft.startYmd === null && draft.reminder === 'none' && draft.recurrenceKind === null) {
+  if (
+    draft.startYmd === null &&
+    draft.reminder === 'none' &&
+    draft.recurrenceKind === null &&
+    draft.recurrence === null
+  ) {
     return base;
   }
   const patch = draftToPatch(draft, zone);
@@ -157,6 +173,7 @@ export function applyDraftToCreate(
     next.reminderOffsetMinutes = patch.reminderOffsetMinutes;
   }
   if (patch.reminderAt !== undefined) next.reminderAt = patch.reminderAt;
+  if (patch.recurrence !== undefined) next.recurrence = patch.recurrence;
   if (patch.recurrenceKind !== undefined) next.recurrenceKind = patch.recurrenceKind;
   return next;
 }

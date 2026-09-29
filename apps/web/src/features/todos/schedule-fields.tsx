@@ -2,7 +2,7 @@ import type { PatchTaskInput, RecurrenceKind, ReminderOffsetMinutes, Task } from
 import { t } from '@/copy';
 import { DateField } from '@/ui/date-field';
 import { SelectField, type SelectOption } from '@/ui/select-field';
-import { fromDatetimeLocal, recurrenceKind, toDatetimeLocal } from './model';
+import { fromDatetimeLocal, intervalRecurrenceLabel, recurrenceKind, toDatetimeLocal } from './model';
 
 export type ReminderValue = 'none' | 'due' | 'custom' | '5' | '15' | '30' | '60' | '1440';
 export type RecurrenceValue = RecurrenceKind | 'none' | 'custom';
@@ -52,7 +52,11 @@ export function RecurrenceField({
     { value: 'legal_workdays', label: t.todos.recurrenceLegalWorkdays },
   ];
   if (value === 'custom') {
-    options.push({ value: 'custom', label: task.recurrence ?? t.todos.recurrence, disabled: true });
+    options.push({
+      value: 'custom',
+      label: intervalRecurrenceLabel(task.recurrence) ?? task.recurrence ?? t.todos.recurrence,
+      disabled: true,
+    });
   }
 
   return (

@@ -9,6 +9,7 @@ import { copy } from '../../lib/copy';
 import { fromDatetimeLocal, toDatetimeLocal } from '../../lib/format';
 import { useTheme } from '../../theme/use-theme';
 import {
+  intervalRecurrenceLabel,
   offsetLabel,
   recurrenceSelectValue,
   reminderSelectValue,
@@ -91,7 +92,11 @@ export function RecurrenceField({
     { value: 'legal_workdays', label: copy.todos.recurrenceLegalWorkdays },
   ];
   if (value === 'custom') {
-    options.push({ value: 'custom', label: task.recurrence ?? copy.todos.recurrence, disabled: true });
+    options.push({
+      value: 'custom',
+      label: intervalRecurrenceLabel(task.recurrence) ?? task.recurrence ?? copy.todos.recurrence,
+      disabled: true,
+    });
   }
   const selected = options.find((option) => option.value === value);
 

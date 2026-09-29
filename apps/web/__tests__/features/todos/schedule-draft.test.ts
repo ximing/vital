@@ -96,6 +96,18 @@ describe('schedule draft', () => {
     expect(patch).toHaveProperty('recurrenceKind', null);
   });
 
+  it('keeps an every-n interval when saving the schedule', () => {
+    const draft = draftFromTask(
+      task({ recurrence: 'FREQ=MONTHLY;INTERVAL=2', recurrenceKind: null }),
+      TZ,
+    );
+    expect(draft.recurrence).toBe('FREQ=MONTHLY;INTERVAL=2');
+    expect(draft.recurrenceKind).toBeNull();
+    const patch = draftToPatch(draft, TZ);
+    expect(patch.recurrence).toBe('FREQ=MONTHLY;INTERVAL=2');
+    expect(patch).not.toHaveProperty('recurrenceKind');
+  });
+
   it('collapses a same-day all-day range to one date', () => {
     const draft = draftFromTask(
       task({

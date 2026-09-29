@@ -67,6 +67,15 @@ describe('schedule semantic fields', () => {
     expect(reminderSelectValue(sample({ reminderMode: 'custom' }))).toBe('custom');
   });
 
+  it('labels an every-n rule and keeps a plain monthly rule', () => {
+    expect(recurrenceMeta(sample({ recurrence: 'FREQ=MONTHLY;INTERVAL=2' }))).toBe('每 2 个月');
+    expect(recurrenceSelectValue(sample({ recurrence: 'FREQ=MONTHLY;INTERVAL=2' }))).toBe('custom');
+    expect(recurrenceMeta(sample({ recurrence: 'FREQ=MONTHLY' }))).toBe(copy.todos.recurrenceMonthly);
+    expect(recurrenceMeta(sample({ recurrence: 'FREQ=DAILY;INTERVAL=3' }))).toBe('每 3 天');
+    expect(recurrenceMeta(sample({ recurrence: 'FREQ=WEEKLY;INTERVAL=2' }))).toBe('每 2 周');
+    expect(recurrenceMeta(sample({ recurrence: 'FREQ=YEARLY;INTERVAL=4' }))).toBe('每 4 年');
+  });
+
   it('shows due meta with today and overdue labels', () => {
     const now = new Date('2026-09-08T04:00:00.000Z');
     expect(dueMeta(sample({ isAllDay: true, dueAt: startOfLocalDayIso(TZ, now) }), TZ, now)).toBe('今天');
