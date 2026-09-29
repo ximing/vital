@@ -118,7 +118,7 @@ describe('pinned extract fetch', () => {
 });
 
 describe('raw html prefix', () => {
-  function* zeros(total: number): Generator<Uint8Array> {
+  async function* zeros(total: number): AsyncGenerator<Uint8Array> {
     const chunk = new Uint8Array(64 * 1024);
     let left = total;
     while (left > 0) {
