@@ -1,7 +1,7 @@
 import type { Task } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import { t } from '@/copy';
 import { todayKeys } from '@/features/today/query-keys';
 import { ConfirmDialog } from '@/ui/confirm-dialog';
@@ -10,7 +10,7 @@ import { inboxList, listPickerRows } from './model';
 import { useDetailTask, useListsQuery, useTodoActions } from './queries';
 import { TodosUiService } from './todos-ui.service';
 
-export const TaskShortcutDialogs = observer(function TaskShortcutDialogs() {
+export const TaskShortcutDialogs: FC = observer(function TaskShortcutDialogs() {
   const todos = useService(TodosUiService);
   const actions = useTodoActions();
   const queryClient = useQueryClient();
