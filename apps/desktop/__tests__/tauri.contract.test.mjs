@@ -28,6 +28,9 @@ describe('Tauri desktop contract', () => {
   it('uses a 1280x800 window, min 960x640, native titlebar that follows the app theme', () => {
     const win = conf.app.windows[0];
     assert.equal(win.label, 'main');
+    assert.equal(win.create, false);
+    assert.match(lib, /install_main_window/);
+    assert.match(lib, /NewWindowResponse::Deny/);
     assert.equal(win.width, 1280);
     assert.equal(win.height, 800);
     assert.equal(win.minWidth, 960);
@@ -109,6 +112,7 @@ describe('Tauri desktop contract', () => {
       'show_sticky_alert',
       'close_sticky_alert',
       'open_in_main',
+      'open_external',
       'hide_main',
     ]) {
       assert.match(build, new RegExp(command));
@@ -126,6 +130,7 @@ describe('Tauri desktop contract', () => {
         'allow-close-sticky-alert',
         'allow-hide-main',
         'allow-open-in-main',
+        'allow-open-external',
         'allow-show-sticky-alert',
         'notification:default',
       ].sort(),

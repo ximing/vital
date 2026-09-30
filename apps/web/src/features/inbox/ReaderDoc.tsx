@@ -1,6 +1,9 @@
 import { resolveDocMediaUrl, type ArticleBlockNode, type ArticleDoc, type ArticleInlineNode, type ArticleMark } from '@vital/article-doc';
 import type { InboxAsset } from '@vital/dto';
-import { Fragment, type ReactNode } from 'react';
+import { ArrowUpRight } from 'lucide-react';
+import { Fragment, type MouseEvent, type ReactNode } from 'react';
+import { Icon } from '@/ui/icon';
+import { openArticleLink } from './reader-link';
 
 /**
  * Article doc → React elements. Emits the same semantic tags the old purified
@@ -129,8 +132,17 @@ function applyMarks(text: string, marks: ArticleMark[]): ReactNode {
         break;
       case 'link':
         out = (
-          <a href={mark.attrs.href} title={mark.attrs.title} target="_blank" rel="noopener noreferrer">
+          <a
+            href={mark.attrs.href}
+            title={mark.attrs.title}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => openArticleLink(event, mark.attrs.href)}
+          >
             {out}
+            <span className="reader-link-icon">
+              <Icon icon={ArrowUpRight} size={12} />
+            </span>
           </a>
         );
         break;

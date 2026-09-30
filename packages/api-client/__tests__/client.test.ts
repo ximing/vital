@@ -319,9 +319,13 @@ describe('createVitalClient auth + upload methods', () => {
     });
     await client.startInboxExtract({ url: 'https://example.com/a' });
     await client.getInboxExtract('11111111-1111-4111-8111-111111111111');
+    await client.listInboxExtractJobs();
+    await client.listInboxExtractJobs({ page: 2, limit: 20 });
     expect(calls).toEqual([
       'POST http://x/api/v1/inbox/extract-jobs',
       'GET http://x/api/v1/inbox/extract-jobs/11111111-1111-4111-8111-111111111111',
+      'GET http://x/api/v1/inbox/extract-jobs',
+      'GET http://x/api/v1/inbox/extract-jobs?page=2&limit=20',
     ]);
   });
 });

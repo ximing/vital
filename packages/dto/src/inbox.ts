@@ -94,6 +94,41 @@ export interface ExtractJob {
   errorCode: string | null;
 }
 
+/** One row from GET /inbox/extract-jobs. No article body. */
+export interface ExtractJobListItem {
+  id: string;
+  url: string;
+  status: ExtractJobStatus;
+  errorCode: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+export interface ExtractJobList {
+  items: ExtractJobListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  /** Queued plus running, across every page. */
+  activeCount: number;
+}
+
+function boundedQueryInt(fallback: number, max: number) {
+  return z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined || value === '' ? fallback : Number(value)))
+    .pipe(z.number().int().min(1).max(max));
+}
+
+/** GET /inbox/extract-jobs. `page` starts at 1. `limit` defaults to 20. */
+export const listExtractJobsQuerySchema = z.object({
+  page: boundedQueryInt(1, 10_000),
+  limit: boundedQueryInt(20, 100),
+});
+export type ListExtractJobsQuery = z.infer<typeof listExtractJobsQuerySchema>;
+
 export const createInboxInputSchema = z.object({
   title: z.string().trim().min(1).max(500),
   originalUrl: httpUrlSchema.nullable().optional(),

@@ -2,6 +2,8 @@ import { htmlToArticleDoc } from '@vital/article-doc';
 import {
   DEFAULT_LLM_SETTINGS,
   DEFAULT_NOTIFICATION_PREFS,
+  type ExtractJobList,
+  type ExtractJobListItem,
   type InboxItem,
   type InboxPreview,
   type List,
@@ -17,7 +19,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { setAuthForTest } from '@/services/auth.service';
+import { ExtractJobsCanvas } from '../../../src/features/inbox/ExtractJobsCanvas';
 import { InboxReader } from '../../../src/features/inbox/InboxReader';
+import { formatCapturedAt } from '../../../src/features/inbox/model';
 import { InboxWorkspace } from '../../../src/features/inbox/InboxWorkspace';
 import { resetInboxUi } from '../../../src/features/inbox/inbox-ui.service';
 import { SimilarOpenToast } from '../../../src/features/todos/SimilarOpenToast';
@@ -38,6 +42,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       listTags: vi.fn(),
       createTag: vi.fn(),
       listInbox: vi.fn(),
+      listInboxExtractJobs: vi.fn(),
       getInbox: vi.fn(),
       extractInbox: vi.fn(),
       createInbox: vi.fn(),
@@ -147,6 +152,20 @@ function makeItem(over: Partial<InboxItem> & Pick<InboxItem, 'id' | 'title'>): I
   };
 }
 
+function jobsPage(
+  items: ExtractJobListItem[],
+  extra: Partial<Omit<ExtractJobList, 'items'>> = {},
+): ExtractJobList {
+  return {
+    items,
+    page: 1,
+    pageSize: 20,
+    total: items.length,
+    activeCount: items.filter((item) => item.status === 'queued' || item.status === 'running').length,
+    ...extra,
+  };
+}
+
 const preview: InboxPreview = {
   title: 'Example Domain',
   outcomeId: null,
@@ -185,6 +204,7 @@ function renderAt(path: string) {
               }
             >
               <Route path="/inbox" element={<InboxWorkspace />}>
+                <Route path="jobs" element={<ExtractJobsCanvas />} />
                 <Route path=":id" element={<InboxReader />} />
               </Route>
             </Route>
@@ -201,6 +221,7 @@ describe('inbox workspace', () => {
     resetInboxUi();
     setAuthForTest(mockUser);
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.listInboxExtractJobs).mockResolvedValue(jobsPage([]));
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });
     vi.mocked(client.listOutcomes).mockResolvedValue([]);
@@ -218,6 +239,144 @@ describe('inbox workspace', () => {
     vi.clearAllMocks();
     resetInboxUi();
     resetTodosUi();
+    Reflect.deleteProperty(window, '__VITAL_HOST__');
+  });
+
+  it('shows article job status from the header icon', async () => {
+    const startedAt = '2026-09-06T01:01:00.000Z';
+    vi.mocked(client.listInboxExtractJobs).mockResolvedValue(
+      jobsPage([
+        {
+          id: 'j-run',
+          url: 'https://news.example.com/article',
+          status: 'running',
+          errorCode: null,
+          createdAt: '2026-09-06T01:00:00.000Z',
+          startedAt,
+          finishedAt: null,
+        },
+        {
+          id: 'j-fail',
+          url: 'https://mp.weixin.qq.com/s/abc',
+          status: 'failed',
+          errorCode: 'EXTRACT_EMPTY',
+          createdAt: '2026-09-06T00:00:00.000Z',
+          startedAt: '2026-09-06T00:01:00.000Z',
+          finishedAt: '2026-09-06T00:02:00.000Z',
+        },
+        {
+          id: 'j-reject',
+          url: 'https://bad.example/secret',
+          status: 'failed',
+          errorCode: 'VALIDATION_ERROR',
+          createdAt: '2026-09-05T00:00:00.000Z',
+          startedAt: null,
+          finishedAt: '2026-09-05T00:01:00.000Z',
+        },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    const opener = await screen.findByRole('link', { name: '处理进度，1' });
+    expect(opener).toHaveTextContent('1');
+    expect(screen.queryByText('抓取')).not.toBeInTheDocument();
+    await user.click(opener);
+    const canvas = await screen.findByRole('main', { name: '处理进度' });
+    expect(screen.queryByRole('dialog', { name: '处理进度' })).not.toBeInTheDocument();
+    expect(within(canvas).getByTitle('https://news.example.com/article')).toHaveTextContent(
+      'news.example.com/article',
+    );
+    expect(canvas).toHaveTextContent('处理中');
+    expect(canvas).toHaveTextContent(formatCapturedAt(startedAt, TZ));
+    expect(within(canvas).getByTitle('https://mp.weixin.qq.com/s/abc')).toHaveTextContent(
+      'mp.weixin.qq.com/s/abc',
+    );
+    expect(canvas).toHaveTextContent('没有可用正文');
+    expect(canvas).toHaveTextContent('链接无法处理');
+    expect(within(canvas).getByRole('list')).not.toHaveTextContent('抓取');
+    expect(within(within(canvas).getByRole('list')).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(within(canvas).getByRole('list')).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('caps the in-flight count on the header icon', async () => {
+    vi.mocked(client.listInboxExtractJobs).mockResolvedValue(
+      jobsPage(
+        [
+          {
+            id: 'j0',
+            url: 'https://news.example.com/0',
+            status: 'queued',
+            errorCode: null,
+            createdAt: '2026-09-06T00:00:00.000Z',
+            startedAt: null,
+            finishedAt: null,
+          },
+        ],
+        { activeCount: 10, total: 10 },
+      ),
+    );
+    renderAt('/inbox');
+    expect(await screen.findByRole('link', { name: '处理进度，9+' })).toHaveTextContent('9+');
+  });
+
+  it('says there is no job history when the list is empty', async () => {
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    await user.click(await screen.findByRole('link', { name: '处理进度' }));
+    const canvas = await screen.findByRole('main', { name: '处理进度' });
+    expect(await within(canvas).findByText('最近没有记录')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '处理进度' })).not.toBeInTheDocument();
+  });
+
+  it('pages job history in the reading canvas', async () => {
+    vi.mocked(client.listInboxExtractJobs).mockImplementation(async (query) => {
+      const requested = query?.page ?? 1;
+      if (requested === 2) {
+        return jobsPage(
+          [
+            {
+              id: 'p2',
+              url: 'https://news.example.com/later',
+              status: 'succeeded',
+              errorCode: null,
+              createdAt: '2026-09-06T00:00:00.000Z',
+              startedAt: null,
+              finishedAt: '2026-09-06T02:00:00.000Z',
+            },
+          ],
+          { page: 2, total: 21, activeCount: 2 },
+        );
+      }
+      return jobsPage(
+        [
+          {
+            id: 'p1',
+            url: 'https://news.example.com/now',
+            status: 'running',
+            errorCode: null,
+            createdAt: '2026-09-06T01:00:00.000Z',
+            startedAt: '2026-09-06T01:01:00.000Z',
+            finishedAt: null,
+          },
+        ],
+        { total: 21, activeCount: 2 },
+      );
+    });
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    await user.click(await screen.findByRole('link', { name: '处理进度，2' }));
+    const canvas = await screen.findByRole('main', { name: '处理进度' });
+    expect(await within(canvas).findByTitle('https://news.example.com/now')).toBeInTheDocument();
+    expect(within(canvas).queryByRole('button', { name: '上一页' })).toBeDisabled();
+    await user.click(within(canvas).getByRole('button', { name: '下一页' }));
+    expect(await within(canvas).findByTitle('https://news.example.com/later')).toBeInTheDocument();
+    expect(within(canvas).queryByTitle('https://news.example.com/now')).not.toBeInTheDocument();
+    expect(canvas).toHaveTextContent('2 / 2');
+    expect(within(canvas).getByRole('button', { name: '下一页' })).toBeDisabled();
+    await user.click(within(canvas).getByRole('button', { name: '上一页' }));
+    expect(await within(canvas).findByTitle('https://news.example.com/now')).toBeInTheDocument();
+    expect(client.listInboxExtractJobs).toHaveBeenCalledWith({ page: 1, limit: 20 });
+    expect(client.listInboxExtractJobs).toHaveBeenCalledWith({ page: 2, limit: 20 });
   });
 
   it('marks the selected reader as a constrained reading canvas', async () => {
@@ -328,6 +487,33 @@ describe('inbox workspace', () => {
     await waitFor(() => {
       expect(screen.queryByText('无标签')).not.toBeInTheDocument();
     });
+  });
+
+  it('opens the source URL in the system browser from the desktop shell', async () => {
+    const openExternal = vi.fn();
+    Object.defineProperty(window, '__VITAL_HOST__', {
+      configurable: true,
+      value: {
+        kind: 'desktop',
+        applyChrome() {},
+        showStickyAlert() {},
+        listenStickyAlerts: async () => () => undefined,
+        closeStickyAlert() {},
+        openInMain() {},
+        hideMain() {},
+        openExternal,
+      },
+    });
+    const item = makeItem({ id: 'i1', title: '一篇' });
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [item], nextCursor: null });
+    vi.mocked(client.getInbox).mockResolvedValue(item);
+    renderAt('/inbox/i1');
+    const link = await screen.findByRole('link', { name: item.originalUrl ?? '' });
+    expect(link).toHaveAttribute('href', 'https://example.com/a');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(fireEvent.click(link)).toBe(false);
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(openExternal).toHaveBeenCalledWith('https://example.com/a');
   });
 
   it('adds a tag from the reader', async () => {

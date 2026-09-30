@@ -81,6 +81,11 @@ try {
             if (label && label !== "notify-alert") return;
             invoke("open_in_main", { url: url });
           },
+          openExternal: function (url) {
+            var label = windowLabel();
+            if ((label && label !== "main") || typeof url !== "string") return;
+            invoke("open_external", { url: url });
+          },
           hideMain: function () {
             var label = windowLabel();
             if (label && label !== "main") return;
@@ -136,6 +141,7 @@ pub fn run() {
             show_sticky_alert,
             close_sticky_alert,
             open_in_main,
+            open_external,
             hide_main,
         ])
         .menu(build_menu)
@@ -151,6 +157,7 @@ pub fn run() {
         })
         .setup(|app| {
             app.manage(AlertHub::default());
+            install_main_window(app)?;
             install_tray(app)?;
             Ok(())
         })
@@ -358,6 +365,28 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
     }
 }
 
+/// Config marks the main window `create: false` so this can deny popup
+/// webviews. `target="_blank"` and Command-click otherwise do nothing.
+fn install_main_window(app: &tauri::App) -> tauri::Result<()> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == MAIN_LABEL)
+        .cloned()
+        .expect("main window config");
+    tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?
+        .on_new_window(|url, _features| {
+            if let Some(target) = external_link_url(url.as_str()) {
+                let _ = spawn_external(&target);
+            }
+            tauri::webview::NewWindowResponse::Deny
+        })
+        .build()?;
+    Ok(())
+}
+
 fn install_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::image::Image;
     use tauri::menu::{Menu, MenuItem};
@@ -438,6 +467,74 @@ fn close_sticky_alert(window: tauri::WebviewWindow) -> Result<(), String> {
         return Err("close_sticky_alert is notify-alert-only".into());
     }
     window.close().map_err(|err| err.to_string())
+}
+
+/// System browser. The webview drops `target="_blank"` and Command-clicks.
+#[tauri::command]
+fn open_external(window: tauri::WebviewWindow, url: String) -> Result<(), String> {
+    if window.label() != MAIN_LABEL {
+        return Err("open_external is main-only".into());
+    }
+    let target = external_link_url(&url).ok_or_else(|| "rejected".to_string())?;
+    spawn_external(&target)
+}
+
+fn external_link_url(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() || trimmed.len() > 2048 {
+        return None;
+    }
+    if trimmed.chars().any(|ch| ch.is_control() || ch.is_whitespace()) {
+        return None;
+    }
+    let url = tauri::Url::parse(trimmed).ok()?;
+    match url.scheme() {
+        "http" | "https" => {
+            if url.host_str().map(str::is_empty).unwrap_or(true) {
+                return None;
+            }
+            Some(url.to_string())
+        }
+        "mailto" => {
+            if url.path().is_empty() {
+                return None;
+            }
+            Some(url.to_string())
+        }
+        _ => None,
+    }
+}
+
+fn spawn_external(url: &str) -> Result<(), String> {
+    let mut command = external_open_command(url);
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|err| err.to_string())
+}
+
+fn external_open_command(url: &str) -> std::process::Command {
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = std::process::Command::new("open");
+        command.arg(url);
+        return command;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/C", "start", "", url]);
+        return command;
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(url);
+        command
+    }
 }
 
 #[tauri::command]
@@ -817,6 +914,30 @@ mod tests {
         assert_eq!(normalize_open_path("JAVASCRIPT:alert(1)"), None);
         assert_eq!(normalize_open_path("file:///etc/passwd"), None);
         assert_eq!(normalize_open_path("https://evil.example//today"), None);
+    }
+
+    #[test]
+    fn external_links_are_http_https_or_mailto() {
+        assert_eq!(
+            external_link_url("https://example.com/a?b=1#c").as_deref(),
+            Some("https://example.com/a?b=1#c")
+        );
+        assert_eq!(
+            external_link_url("  http://example.com/path  ").as_deref(),
+            Some("http://example.com/path")
+        );
+        assert_eq!(
+            external_link_url("mailto:reader@example.com").as_deref(),
+            Some("mailto:reader@example.com")
+        );
+        assert_eq!(external_link_url("javascript:alert(1)"), None);
+        assert_eq!(external_link_url("file:///etc/passwd"), None);
+        assert_eq!(external_link_url("/today"), None);
+        assert_eq!(external_link_url("https://"), None);
+        assert_eq!(external_link_url("mailto:"), None);
+        assert_eq!(external_link_url("https://example.com/a\nb"), None);
+        assert_eq!(external_link_url("https://exa mple.com"), None);
+        assert_eq!(external_link_url(""), None);
     }
 
     #[test]

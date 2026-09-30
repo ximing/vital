@@ -74,6 +74,29 @@ export interface ExtractJob {
 ```
 
 ```ts
+export interface ExtractJobListItem {
+  id: string;
+  url: string;
+  status: ExtractJobStatus;
+  errorCode: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+```
+
+```ts
+export interface ExtractJobList {
+  items: ExtractJobListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  /** Queued plus running, across every page. */
+  activeCount: number;
+}
+```
+
+```ts
 export interface ConvertInboxResponse {
   inbox: InboxItem;
   task: Task;
@@ -253,6 +276,19 @@ Fetch a URL and return a preview (contentJson + extractedText). Follow with POST
 Request body (`extractInboxInputSchema`):
 
 - `url`: string 0–2048 url
+
+#### `GET /api/v1/inbox/extract-jobs`
+
+One page of this user's article jobs. Query page starts at 1 (default 1) and limit defaults to 20 (max 100). In-flight rows come first, then recently finished. Each item is id, url, status, errorCode, createdAt, startedAt, finishedAt. Response adds page, pageSize, total, and activeCount (queued plus running, across every page). Omits the preview. Read-only: does not start or kick work, and does not count against the inbox write limit.
+
+- Auth: Bearer required
+- Client: `listInboxExtractJobs`
+- Response: `ExtractJobList`
+
+Query (`listExtractJobsQuerySchema`):
+
+- `page`: number int min 1 max 10000
+- `limit`: number int min 1 max 100
 
 #### `POST /api/v1/inbox/extract-jobs`
 

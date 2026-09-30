@@ -12,7 +12,12 @@ import { markOnboarding } from '@/features/onboarding/mark';
 import { todoKeys } from '@/features/todos/query-keys';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
 import { humanError } from '@/lib/errors';
-import { createInputFromPreview, pendingIdForUrl, type PendingSave } from './model';
+import {
+  createInputFromPreview,
+  EXTRACT_JOB_PAGE_SIZE,
+  pendingIdForUrl,
+  type PendingSave,
+} from './model';
 import { useService } from '@rabjs/react';
 import { InboxUiService } from './inbox-ui.service';
 import { inboxKeys } from './query-keys';
@@ -27,6 +32,15 @@ export function useInboxListQuery() {
   return useQuery({
     queryKey: inboxKeys.list,
     queryFn: fetchAllInbox,
+  });
+}
+
+export function useInboxExtractJobsQuery(page: number) {
+  return useQuery({
+    queryKey: inboxKeys.extractJobs(page),
+    queryFn: () => client.listInboxExtractJobs({ page, limit: EXTRACT_JOB_PAGE_SIZE }),
+    refetchInterval: () => (document.visibilityState === 'visible' ? 5_000 : false),
+    refetchIntervalInBackground: false,
   });
 }
 

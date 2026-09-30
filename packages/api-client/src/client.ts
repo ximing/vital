@@ -63,6 +63,7 @@ import type {
   CreateTaskInput,
   ExtractInboxInput,
   ExtractJob,
+  ExtractJobList,
   InboxCollection,
   InboxItem,
   InboxMarkdown,
@@ -231,6 +232,8 @@ export interface VitalClient {
   startInboxExtract(input: ExtractInboxInput): Promise<ExtractJob>;
   /** Poll an extract job. Does not count against the inbox rate limit. */
   getInboxExtract(id: string): Promise<ExtractJob>;
+  /** One page of article jobs. Omits the preview and does not start work. */
+  listInboxExtractJobs(query?: { page?: number; limit?: number }): Promise<ExtractJobList>;
   listInbox(query?: {
     status?: string;
     tagId?: string;
@@ -501,6 +504,12 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     startInboxExtract: (input) =>
       http.request('/api/v1/inbox/extract-jobs', { method: 'POST', body: input }),
     getInboxExtract: (id) => http.request(`/api/v1/inbox/extract-jobs/${id}`),
+    listInboxExtractJobs: (query = {}) => {
+      const q: Record<string, string | number | boolean | undefined> = {};
+      if (query.page !== undefined) q.page = query.page;
+      if (query.limit !== undefined) q.limit = query.limit;
+      return http.request('/api/v1/inbox/extract-jobs', { query: q });
+    },
     listInbox: (query = {}) => {
       const q: Record<string, string | number | boolean | undefined> = {};
       if (query.status !== undefined) q.status = query.status;

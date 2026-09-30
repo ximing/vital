@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import type { InboxPreview } from '@vital/dto';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -192,6 +194,186 @@ describe('inbox extract jobs', () => {
     });
     expect(failed.json().status).toBe('failed');
     expect(failed.json().errorCode).toBe('EXTRACT_FAILED');
+  });
+
+  it('lists the current user without a preview and without starting work', async () => {
+    const alice = await registerUser(app);
+    const bob = await registerUser(app, 'bob');
+    const secret = { title: 'preview-secret-do-not-leak' } as InboxPreview;
+    const runningId = randomUUID();
+    const queuedId = randomUUID();
+    const failedId = randomUUID();
+    const succeededId = randomUUID();
+    await getDb().insert(inboxExtractJobs).values([
+      {
+        id: runningId,
+        userId: alice.id,
+        url: 'https://news.example.com/running',
+        canonicalUrl: 'https://news.example.com/running',
+        status: 'running',
+        startedAt: new Date('2026-09-06T09:00:00.000Z'),
+        createdAt: new Date('2026-09-06T07:00:00.000Z'),
+      },
+      {
+        id: queuedId,
+        userId: alice.id,
+        url: 'https://news.example.com/queued',
+        canonicalUrl: 'https://news.example.com/queued',
+        status: 'queued',
+        createdAt: new Date('2026-09-06T08:00:00.000Z'),
+      },
+      {
+        id: failedId,
+        userId: alice.id,
+        url: 'https://news.example.com/empty',
+        canonicalUrl: 'https://news.example.com/empty',
+        status: 'failed',
+        errorCode: 'EXTRACT_EMPTY',
+        finishedAt: new Date('2026-09-06T11:00:00.000Z'),
+        createdAt: new Date('2026-09-06T06:00:00.000Z'),
+      },
+      {
+        id: succeededId,
+        userId: alice.id,
+        url: 'https://news.example.com/done',
+        canonicalUrl: 'https://news.example.com/done',
+        status: 'succeeded',
+        preview: secret,
+        finishedAt: new Date('2026-09-06T10:00:00.000Z'),
+        createdAt: new Date('2026-09-06T05:00:00.000Z'),
+      },
+      {
+        id: randomUUID(),
+        userId: bob.id,
+        url: 'https://news.example.com/bob',
+        canonicalUrl: 'https://news.example.com/bob',
+        status: 'queued',
+      },
+    ]);
+
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox/extract-jobs',
+      token: alice.token,
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toMatchObject({ page: 1, pageSize: 20, total: 4, activeCount: 2 });
+    const items = listed.json().items as Array<{
+      id: string;
+      url: string;
+      status: string;
+      errorCode: string | null;
+      startedAt: string | null;
+      finishedAt: string | null;
+    }>;
+    expect(items.map((item) => item.status)).toEqual(['running', 'queued', 'failed', 'succeeded']);
+    expect(items.map((item) => item.id)).toEqual([runningId, queuedId, failedId, succeededId]);
+    expect(items[0]?.startedAt).toBe('2026-09-06T09:00:00.000Z');
+    expect(items[0]?.errorCode).toBeNull();
+    expect(items[2]?.errorCode).toBe('EXTRACT_EMPTY');
+    expect(items[2]?.finishedAt).toBe('2026-09-06T11:00:00.000Z');
+    expect(JSON.stringify(items)).not.toContain('preview');
+    expect(JSON.stringify(items)).not.toContain('preview-secret-do-not-leak');
+    expect(items.some((item) => item.url.includes('/bob'))).toBe(false);
+    expect(JSON.stringify(listed.json())).not.toContain('preview');
+
+    const page = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox/extract-jobs?page=2&limit=2',
+      token: alice.token,
+    });
+    expect(page.statusCode).toBe(200);
+    expect(page.json()).toMatchObject({ page: 2, pageSize: 2, total: 4, activeCount: 2 });
+    expect((page.json().items as Array<{ id: string }>).map((item) => item.id)).toEqual([
+      failedId,
+      succeededId,
+    ]);
+
+    const queued = await getDb()
+      .select({ status: inboxExtractJobs.status })
+      .from(inboxExtractJobs)
+      .where(eq(inboxExtractJobs.id, queuedId));
+    expect(queued[0]?.status).toBe('queued');
+  });
+
+  it('pages finished history without dropping in-flight jobs or starting work', async () => {
+    const alice = await registerUser(app);
+    const runningId = randomUUID();
+    const oldestId = randomUUID();
+    const finished = Array.from({ length: 50 }, (_, index) => ({
+      id: index === 0 ? oldestId : randomUUID(),
+      userId: alice.id,
+      url: `https://news.example.com/old-${index}`,
+      canonicalUrl: `https://news.example.com/old-${index}`,
+      status: 'succeeded' as const,
+      finishedAt: new Date(Date.UTC(2026, 8, 1, 0, 0, index)),
+      createdAt: new Date(Date.UTC(2026, 8, 1, 0, 0, index)),
+    }));
+    await getDb()
+      .insert(inboxExtractJobs)
+      .values([
+        {
+          id: runningId,
+          userId: alice.id,
+          url: 'https://news.example.com/running',
+          canonicalUrl: 'https://news.example.com/running',
+          status: 'running',
+          startedAt: new Date('2026-09-06T09:00:00.000Z'),
+          createdAt: new Date('2026-09-06T09:00:00.000Z'),
+        },
+        ...finished,
+      ]);
+
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox/extract-jobs',
+      token: alice.token,
+    });
+    expect(listed.json()).toMatchObject({ page: 1, pageSize: 20, total: 51, activeCount: 1 });
+    const items = listed.json().items as Array<{ id: string; status: string }>;
+    expect(items).toHaveLength(20);
+    expect(items[0]?.id).toBe(runningId);
+    expect(items.some((item) => item.id === oldestId)).toBe(false);
+    expect(JSON.stringify(listed.json())).not.toContain('preview');
+
+    const last = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox/extract-jobs?page=3&limit=20',
+      token: alice.token,
+    });
+    const lastItems = last.json().items as Array<{ id: string }>;
+    expect(last.json()).toMatchObject({ page: 3, pageSize: 20, total: 51, activeCount: 1 });
+    expect(lastItems).toHaveLength(11);
+    expect(lastItems.some((item) => item.id === oldestId)).toBe(true);
+
+    const past = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox/extract-jobs?page=4&limit=20',
+      token: alice.token,
+    });
+    expect(past.json()).toMatchObject({ page: 4, pageSize: 20, total: 51, activeCount: 1, items: [] });
+
+    const running = await getDb()
+      .select({ status: inboxExtractJobs.status })
+      .from(inboxExtractJobs)
+      .where(eq(inboxExtractJobs.id, runningId));
+    expect(running[0]?.status).toBe('running');
+  });
+
+  it('rejects an extract job page outside 1..10000 or a limit above 100', async () => {
+    const alice = await registerUser(app);
+    const badPage = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox/extract-jobs?page=0',
+      token: alice.token,
+    });
+    expect(badPage.statusCode).toBe(400);
+    const badLimit = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/inbox/extract-jobs?limit=101',
+      token: alice.token,
+    });
+    expect(badLimit.statusCode).toBe(400);
   });
 
   it('rejects a non-http URL before creating a job', async () => {

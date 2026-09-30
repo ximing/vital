@@ -1,7 +1,8 @@
 import { bindServices } from '@rabjs/react';
-import type { FC } from 'react';
+import { useEffect, type FC } from 'react';
 import { Outlet, useMatch } from 'react-router';
 import { t } from '@/copy';
+import { scheduleIdle, warmInboxReader } from '@/shell/warm';
 import { EmptyReader } from './EmptyInbox';
 import { InboxPageService } from './inbox-page.service';
 import { InboxListColumn } from './InboxListPanel';
@@ -20,12 +21,15 @@ function InboxEmptyCanvas() {
 }
 
 function InboxWorkspaceContent() {
+  useEffect(() => scheduleIdle(warmInboxReader), []);
+  const jobsOpen = useMatch('/inbox/jobs') != null;
   const readerMatch = useMatch('/inbox/:id');
-  const id = readerMatch?.params.id;
+  const id = jobsOpen ? undefined : readerMatch?.params.id;
+  const canvas = jobsOpen || id !== undefined;
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 bg-canvas">
-      <InboxListColumn selectedId={id} className={id ? 'hidden lg:flex' : 'flex'} />
-      {id ? <Outlet /> : <InboxEmptyCanvas />}
+      <InboxListColumn selectedId={id} className={canvas ? 'hidden lg:flex' : 'flex'} />
+      {canvas ? <Outlet /> : <InboxEmptyCanvas />}
     </div>
   );
 }

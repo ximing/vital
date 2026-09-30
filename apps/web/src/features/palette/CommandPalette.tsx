@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { markOnboarding } from '@/features/onboarding/mark';
-import { useListsQuery } from '@/features/todos';
+import { useListsQuery } from '@/features/todos/queries';
 import { isDesktopHost } from '@/host';
 import { OPEN_SHORTCUTS_EVENT } from '@/shell/shortcuts';
 import { Overlay } from '@/ui/overlay';

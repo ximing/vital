@@ -39,6 +39,7 @@ import { InboxPageService } from './inbox-page.service';
 import { useInboxActions, useInboxItemQuery } from './queries';
 import { ReaderArticle } from './ReaderArticle';
 import { InboxUiService } from './inbox-ui.service';
+import { openArticleLink } from './reader-link';
 
 const CONTENT_WIDTH = 'mx-auto w-full max-w-[700px] px-8 xl:max-w-[840px] 2xl:max-w-[920px]';
 
@@ -395,6 +396,7 @@ function InboxReaderContent() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex min-w-0 items-baseline gap-1 text-accent underline-offset-4 hover:underline"
+                    onClick={(event) => openArticleLink(event, originalUrl)}
                   >
                     <span className="min-w-0 truncate">{originalUrl}</span>
                     <Icon icon={ArrowUpRight} size={12} className="shrink-0 self-center" />

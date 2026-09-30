@@ -18,6 +18,44 @@ const reactRoot = path.dirname(require.resolve('react/package.json'));
 const reactDomRoot = path.dirname(require.resolve('react-dom/package.json'));
 const emojibaseRoot = path.dirname(require.resolve('emojibase-data/package.json'));
 
+/** Package name after the last `node_modules/` segment, query string stripped. */
+function packageName(id: string): string | null {
+  const clean = id.split('?')[0] ?? id;
+  const parts = clean.split('/node_modules/');
+  if (parts.length < 2) return null;
+  const tail = parts[parts.length - 1] ?? '';
+  if (tail.startsWith('@')) {
+    const [scope, name] = tail.split('/');
+    if (!scope || !name) return null;
+    return `${scope}/${name}`;
+  }
+  const name = tail.split('/')[0];
+  return name || null;
+}
+
+function isEditorPackage(name: string): boolean {
+  return (
+    name.startsWith('@tiptap/') ||
+    name.startsWith('prosemirror-') ||
+    name === 'linkifyjs' ||
+    name === 'orderedmap' ||
+    name === 'rope-sequence' ||
+    name === 'w3c-keyname'
+  );
+}
+
+function isMarkdownPackage(name: string): boolean {
+  return (
+    name === 'unified' ||
+    name === 'markdown-table' ||
+    name.startsWith('micromark') ||
+    name.startsWith('mdast') ||
+    name.startsWith('remark-') ||
+    name.startsWith('vfile') ||
+    name.startsWith('unist-util-')
+  );
+}
+
 function emojibasePlugin(): Plugin {
   return {
     name: 'emojibase-static',
@@ -86,12 +124,23 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        // Last node_modules segment. A pnpm path can contain `@tiptap` higher up
+        // while the file itself is react; matching the parent would preload the editor.
         manualChunks(id) {
-          if (id.includes('/node_modules/@tiptap/') || id.includes('/node_modules/prosemirror-')) {
-            return 'tiptap';
-          }
-          if (id.includes('emojibase-data')) {
-            return 'emoji';
+          const name = packageName(id);
+          if (!name) return undefined;
+          if (name === 'react' || name === 'react-dom' || name === 'scheduler') return 'react';
+          if (name === 'lucide-react') return 'icons';
+          if (isEditorPackage(name)) return 'editor';
+          if (isMarkdownPackage(name)) return 'markdown';
+          if (
+            name === 'react-router' ||
+            name === 'zod' ||
+            name === '@tanstack/react-query' ||
+            name === '@tanstack/query-core' ||
+            name.startsWith('@rabjs/')
+          ) {
+            return 'framework';
           }
           return undefined;
         },

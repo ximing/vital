@@ -14,6 +14,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Vital",
         "width": 1280,
         "height": 800,

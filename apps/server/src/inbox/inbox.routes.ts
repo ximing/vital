@@ -4,6 +4,7 @@ import {
   extractInboxInputSchema,
   idempotencyKeySchema,
   INBOX_JSON_BODY_LIMIT_BYTES,
+  listExtractJobsQuerySchema,
   listInboxQuerySchema,
   patchInboxAssetsInputSchema,
   patchInboxInputSchema,
@@ -12,7 +13,7 @@ import {
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { extractUrl } from '../extract/extract.js';
-import { getExtractJob, startExtractJob } from './extract-jobs.js';
+import { getExtractJob, listExtractJobs, startExtractJob } from './extract-jobs.js';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import { limitInbox, limitInwit } from '../plugins/rate-limit.js';
@@ -60,6 +61,12 @@ export function registerInboxRoutes(app: FastifyInstance): void {
       return startExtractJob(user.id, body.url);
     },
   );
+
+  app.get('/api/v1/inbox/extract-jobs', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    return listExtractJobs(user.id, listExtractJobsQuerySchema.parse(req.query));
+  });
 
   app.get('/api/v1/inbox/extract-jobs/:id', { preHandler: [requireAuth] }, async (req) => {
     const user = req.user;

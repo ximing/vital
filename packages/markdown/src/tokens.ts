@@ -1,5 +1,7 @@
 import { isEntityKind, type EntityKind, type EntityToken, type RenderPart } from './types.js';
 
+export type { EntityKind };
+
 /**
  * UUID versions 1–8, RFC variant 8/9/a/b. Spec §10.6; `i` so stored uppercase still matches.
  */

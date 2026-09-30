@@ -1,8 +1,9 @@
 import type { AgentAction, List, Outcome, PatchTaskInput, Tag, Task } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
 import { ChevronLeft, Ellipsis, Folder, Pin, Plus, Timer, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FC, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
+import { loadNotesEditor } from '@/shell/route-loaders';
 import { AuthService } from '@/services/auth.service';
 import { FIELD_CONTROL_OPEN_CLASS, FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
@@ -10,7 +11,6 @@ import { META_CHIP_CLASS, OutcomeField } from '@/ui/outcome-field';
 import { usePopover } from '@/ui/use-popover';
 import { DecomposeBanner } from '@/features/today';
 import { DraftSection } from './DraftSection';
-import { NotesEditor } from './NotesEditor';
 import { addDaysYmd, inboxList, listPickerRows, todayYmd } from './model';
 import { PriorityMenu } from './priority';
 import { useParentTask } from './queries';
@@ -18,6 +18,8 @@ import { draftFromTask, draftToPatch, scheduleDayPatch } from './schedule-draft'
 import { SchedulePopover } from './SchedulePopover';
 import { TaskCheckbox } from './TaskRow';
 import { TodosUiService } from './todos-ui.service';
+
+const NotesEditor = lazy(() => loadNotesEditor().then((m) => ({ default: m.NotesEditor })));
 
 export const TaskDetail: FC<{
   task: Task;
@@ -394,7 +396,17 @@ export const TaskDetail: FC<{
 
         <div className="mt-7">
           <p className="eyebrow eyebrow-rule mb-2.5">{t.todos.notes}</p>
-          <NotesEditor value={notes} onChange={queueNotes} />
+          <Suspense
+            fallback={
+              <div
+                className="skeleton-pulse min-h-[8rem] rounded-md"
+                aria-busy="true"
+                aria-label={t.todos.loading}
+              />
+            }
+          >
+            <NotesEditor value={notes} onChange={queueNotes} />
+          </Suspense>
         </div>
 
         {task.parentId === null ? (

@@ -2,10 +2,11 @@ import type { ReportType, SyncHead } from '@vital/dto';
 import { extractNotes, replaceNotes } from '@vital/dto';
 import { bindServices, useService } from '@rabjs/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, type FC } from 'react';
+import { lazy, Suspense, useEffect, useRef, type FC } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { loadReportEditor } from '@/shell/route-loaders';
 import { useOnline } from '@/features/inbox';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { humanError } from '@/lib/errors';
@@ -25,7 +26,10 @@ import { ReportsCalendar } from './ReportsCalendar';
 import { ReportsPageService, sessionDirty } from './reports-page.service';
 import { ReviewLists } from './ReviewLists';
 import { StatsBlock } from './StatsBlock';
-import { WysiwygEditor } from './WysiwygEditor';
+
+const WysiwygEditor = lazy(() =>
+  loadReportEditor().then((m) => ({ default: m.WysiwygEditor })),
+);
 
 /** Inline period stat — Sora numeral + caption label, no KPI card chrome. */
 function MetaStat({ tone, value, label }: { tone: string; value: number; label: string }) {
@@ -406,20 +410,30 @@ function ReportsWorkspaceContent() {
               </div>
 
               <div className="report-paper mt-6 flex min-h-[16rem] min-w-0 flex-1 flex-col">
-                <WysiwygEditor
-                  key={`${session.id}:${session.editorKey}`}
-                  reportId={session.id}
-                  bodyMd={extractNotes(session.draftMd, liveType)}
-                  editable={online && !session.filling}
-                  onChange={(md) =>
-                    page.patchLive((s) => ({
-                      ...s,
-                      draftMd: replaceNotes(s.draftMd, liveType, md),
-                    }))
+                <Suspense
+                  fallback={
+                    <div
+                      className="skeleton-pulse min-h-[16rem] flex-1 rounded-md"
+                      aria-busy="true"
+                      aria-label={t.reports.loading}
+                    />
                   }
-                  onHydrate={(md) => page.hydrateNotes(md, liveType)}
-                  onToggleTask={(taskId) => void page.toggleTask(taskId, liveType)}
-                />
+                >
+                  <WysiwygEditor
+                    key={`${session.id}:${session.editorKey}`}
+                    reportId={session.id}
+                    bodyMd={extractNotes(session.draftMd, liveType)}
+                    editable={online && !session.filling}
+                    onChange={(md) =>
+                      page.patchLive((s) => ({
+                        ...s,
+                        draftMd: replaceNotes(s.draftMd, liveType, md),
+                      }))
+                    }
+                    onHydrate={(md) => page.hydrateNotes(md, liveType)}
+                    onToggleTask={(taskId) => void page.toggleTask(taskId, liveType)}
+                  />
+                </Suspense>
               </div>
             </div>
           )}

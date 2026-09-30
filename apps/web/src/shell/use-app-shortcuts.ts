@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router';
 import { useService } from '@rabjs/react';
 import { InboxUiService } from '@/features/inbox';
 import { OPEN_PALETTE_EVENT, TOGGLE_PALETTE_EVENT } from '@/features/palette/model';
-import { QUICK_ADD_ID, TodosUiService, focusById } from '@/features/todos';
+import { QUICK_ADD_ID, focusById } from '@/features/todos/keyboard';
+import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
 import { isDesktopHost } from '@/host';
 import {

@@ -12,6 +12,8 @@ export type VitalHost = {
   listenStickyAlerts(onItem: (input: StickyAlertInput) => void): Promise<() => void>;
   closeStickyAlert(): void;
   openInMain(url: string): void;
+  /** System browser. Missing on shells built before article-link opening. */
+  openExternal?(url: string): void;
   hideMain(): void;
 };
 

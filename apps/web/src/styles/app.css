@@ -364,6 +364,26 @@ html:has([data-region='notify-alert']) body {
   text-underline-offset: 3px;
 }
 
+.reader-article a .reader-link-icon {
+  display: inline-flex;
+  width: 0;
+  margin-inline-start: 0;
+  overflow: hidden;
+  vertical-align: -0.125em;
+  opacity: 0;
+  transition:
+    width var(--ease-out),
+    margin-inline-start var(--ease-out),
+    opacity var(--ease-out);
+}
+
+.reader-article a:hover .reader-link-icon,
+.reader-article a:focus-visible .reader-link-icon {
+  width: 14px;
+  margin-inline-start: 2px;
+  opacity: 1;
+}
+
 .reader-article img,
 .reader-article video {
   display: block;

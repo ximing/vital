@@ -259,7 +259,7 @@ describe('reports workspace', () => {
     renderAt('/reports/r-daily');
     expect(await screen.findByDisplayValue(daily.title)).toBeInTheDocument();
     expect(await screen.findByText('写纪要')).toBeInTheDocument();
-    expect(screen.getByTestId('report-wysiwyg').textContent).not.toContain('##');
+    expect((await screen.findByTestId('report-wysiwyg')).textContent).not.toContain('##');
     expect(screen.queryByTestId('report-source')).not.toBeInTheDocument();
     expect(screen.getByTestId('streak-calendar')).toBeInTheDocument();
     expect(document.querySelector('[data-region="calendar-pane"]')).not.toBeNull();

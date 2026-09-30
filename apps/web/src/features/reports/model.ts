@@ -6,7 +6,7 @@ import type {
   SyncHead,
 } from '@vital/dto';
 import { ApiError } from '@vital/api-client';
-import { normalizeTrailingNewlines, renderToken, type EntityKind } from '@vital/markdown';
+import { normalizeTrailingNewlines, renderToken, type EntityKind } from '@vital/markdown/tokens';
 import { addDaysYmd } from '@/features/todos/model';
 
 export type { ReportType };

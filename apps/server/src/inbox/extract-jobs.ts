@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import type { ExtractJob, InboxPreview } from '@vital/dto';
+import type {
+  ExtractJob,
+  ExtractJobList,
+  ExtractJobListItem,
+  ExtractJobStatus,
+  InboxPreview,
+  ListExtractJobsQuery,
+} from '@vital/dto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { inboxExtractJobs } from '../db/schema.js';
@@ -28,14 +35,21 @@ function hasUsefulBody(article: {
   return article.text !== null && article.text.trim() !== '';
 }
 
+function asStatus(status: string): ExtractJobStatus | null {
+  if (status === 'queued' || status === 'running' || status === 'succeeded' || status === 'failed') {
+    return status;
+  }
+  return null;
+}
+
 function viewOf(row: {
   id: string;
   status: string;
   preview: InboxPreview | null;
   errorCode: string | null;
 }): ExtractJob {
-  const status = row.status;
-  if (status !== 'queued' && status !== 'running' && status !== 'succeeded' && status !== 'failed') {
+  const status = asStatus(row.status);
+  if (status === null) {
     return { id: row.id, status: 'failed', preview: null, errorCode: 'EXTRACT_FAILED' };
   }
   return {
@@ -99,6 +113,76 @@ export async function startExtractJob(userId: string, rawUrl: string): Promise<E
   }
   kickExtractJobs();
   return { id, status: 'queued', preview: null, errorCode: null };
+}
+
+function toListItem(row: {
+  id: string;
+  url: string;
+  status: string;
+  errorCode: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+}): ExtractJobListItem {
+  const known = asStatus(row.status);
+  const status = known ?? 'failed';
+  return {
+    id: row.id,
+    url: row.url,
+    status,
+    errorCode: known === null ? 'EXTRACT_FAILED' : status === 'failed' ? row.errorCode : null,
+    createdAt: row.createdAt.toISOString(),
+    startedAt: row.startedAt ? row.startedAt.toISOString() : null,
+    finishedAt: row.finishedAt ? row.finishedAt.toISOString() : null,
+  };
+}
+
+/**
+ * One page of jobs. In-flight rows first, then recently finished.
+ * Omits the preview and does not start work.
+ */
+export async function listExtractJobs(
+  userId: string,
+  query: ListExtractJobsQuery,
+): Promise<ExtractJobList> {
+  const where = eq(inboxExtractJobs.userId, userId);
+  const [summaryRows, rows] = await Promise.all([
+    getDb()
+      .select({
+        total: sql<number>`count(*)::int`,
+        activeCount: sql<number>`count(*) filter (where ${inboxExtractJobs.status} in ('queued', 'running'))::int`,
+      })
+      .from(inboxExtractJobs)
+      .where(where),
+    getDb()
+      .select({
+        id: inboxExtractJobs.id,
+        url: inboxExtractJobs.url,
+        status: inboxExtractJobs.status,
+        errorCode: inboxExtractJobs.errorCode,
+        createdAt: inboxExtractJobs.createdAt,
+        startedAt: inboxExtractJobs.startedAt,
+        finishedAt: inboxExtractJobs.finishedAt,
+      })
+      .from(inboxExtractJobs)
+      .where(where)
+      .orderBy(
+        sql`case ${inboxExtractJobs.status} when 'running' then 0 when 'queued' then 1 else 2 end`,
+        sql`case when ${inboxExtractJobs.status} in ('running', 'queued') then ${inboxExtractJobs.createdAt} end asc nulls last`,
+        sql`${inboxExtractJobs.finishedAt} desc nulls last`,
+        sql`${inboxExtractJobs.createdAt} desc`,
+      )
+      .limit(query.limit)
+      .offset((query.page - 1) * query.limit),
+  ]);
+  const summary = summaryRows[0];
+  return {
+    items: rows.map(toListItem),
+    page: query.page,
+    pageSize: query.limit,
+    total: Number(summary?.total ?? 0),
+    activeCount: Number(summary?.activeCount ?? 0),
+  };
 }
 
 export async function getExtractJob(userId: string, id: string): Promise<ExtractJob> {

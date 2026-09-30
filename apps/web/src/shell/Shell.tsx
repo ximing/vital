@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { bindServices, useService } from '@rabjs/react';
 import { NavLink, Outlet, useLocation } from 'react-router';
-import { Suspense, useState, type FC } from 'react';
+import { Suspense, useEffect, useState, type FC } from 'react';
 import { t } from '@/copy';
 import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
 import { ActivationChecklist } from '@/features/onboarding/ActivationChecklist';
@@ -26,7 +26,9 @@ import { CommandPalette } from '@/features/palette/CommandPalette';
 import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
 import { InboxUiService } from '@/features/inbox';
 import { ReportUiService } from '@/features/reports/report-ui.service';
-import { SimilarOpenToast, TaskShortcutDialogs, TodosUiService } from '@/features/todos';
+import { SimilarOpenToast } from '@/features/todos/SimilarOpenToast';
+import { TaskShortcutDialogs } from '@/features/todos/TaskShortcutDialogs';
+import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { AccountMenu } from '@/shell/AccountMenu';
 import {
   loadPaneWidth,
@@ -42,6 +44,7 @@ import { sectionOf, showsPane, type AppSection } from '@/shell/section';
 import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
 import { OPEN_SHORTCUTS_EVENT } from '@/shell/shortcuts';
 import { useAppShortcuts } from '@/shell/use-app-shortcuts';
+import { scheduleIdle, warmNeighbors, warmPath } from '@/shell/warm';
 import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { RouteFallback } from '@/shell/route-fallback';
@@ -78,6 +81,8 @@ function ShellContent() {
   useAppShortcuts();
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
+
+  useEffect(() => scheduleIdle(() => warmNeighbors(section)), [section]);
   const [collapsed, setCollapsed] = useState<boolean>(() => loadRailCollapsed());
   const railWidth = collapsed ? RAIL_COLLAPSED : RAIL_EXPANDED;
   const [paneWidths, setPaneWidths] = useState<Record<PaneSection, number>>(() => ({
@@ -131,6 +136,8 @@ function ShellContent() {
                 title={collapsed ? item.label : undefined}
                 aria-label={item.label}
                 className={railItemClass(active, collapsed)}
+                onMouseEnter={() => warmPath(item.to)}
+                onFocus={() => warmPath(item.to)}
               >
                 <Icon icon={item.icon} className="shrink-0" />
                 {collapsed ? null : <span className="truncate">{item.label}</span>}
@@ -157,6 +164,8 @@ function ShellContent() {
                 title={collapsed ? item.label : undefined}
                 aria-label={item.label}
                 className={railItemClass(active, collapsed)}
+                onMouseEnter={() => warmPath(item.to)}
+                onFocus={() => warmPath(item.to)}
               >
                 <Icon icon={item.icon} className="shrink-0" />
                 {collapsed ? null : <span className="truncate">{item.label}</span>}

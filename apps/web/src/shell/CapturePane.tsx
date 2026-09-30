@@ -9,7 +9,7 @@ import {
   useInboxListQuery,
   type InboxFilter,
 } from '@/features/inbox';
-import { useTagsQuery } from '@/features/todos';
+import { useTagsQuery } from '@/features/todos/queries';
 import { railNavClass } from '@/shell/rail-nav';
 import { Icon, type LucideIcon } from '@/ui/icon';
 

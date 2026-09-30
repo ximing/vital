@@ -1,6 +1,6 @@
 import type { InboxItem } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
-import { LoaderCircle, Plus } from 'lucide-react';
+import { Layers, LoaderCircle, Plus } from 'lucide-react';
 import {
   useEffect,
   useMemo,
@@ -10,7 +10,7 @@ import {
   type FC,
   type PointerEvent,
 } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useMatch, useNavigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { useTagsQuery } from '@/features/todos';
 import { humanError } from '@/lib/errors';
@@ -34,6 +34,8 @@ import { PendingRow, SaveRow } from './InboxRow';
 import {
   canPatchStatus,
   filterSaves,
+  inboxListPath,
+  jobBadge,
   groupSavesByDay,
   nextFavoriteStatus,
   parseInboxFilter,
@@ -44,10 +46,16 @@ import {
 } from './model';
 import { useOnline } from './online';
 import { PasteUrl } from './PasteUrl';
-import { useInboxActions, useInboxListQuery } from './queries';
+import { useInboxActions, useInboxExtractJobsQuery, useInboxListQuery } from './queries';
 import { InboxUiService } from './inbox-ui.service';
 
 const POPOVER_W = 416;
+
+function headerIconClass(open: boolean): string {
+  return `relative inline-flex h-8 w-8 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] ${
+    open ? 'bg-accent-subtle text-accent' : 'text-muted hover:bg-accent-subtle hover:text-accent'
+  }`;
+}
 
 type InboxVirtualRow =
   | { key: string; kind: 'pending'; save: PendingSave }
@@ -166,6 +174,9 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
   const pasteBtnRef = useRef<HTMLButtonElement>(null);
   const pastePopover = usePopover(pasteRef);
   const [pasteAnchor, setPasteAnchor] = useState<{ right: number; top: number } | null>(null);
+  const jobsOpen = useMatch('/inbox/jobs') != null;
+  const jobsQuery = useInboxExtractJobsQuery(1);
+  const jobBadgeLabel = jobBadge(jobsQuery.data?.activeCount ?? 0);
   const [pendingDelete, setPendingDelete] = useState<InboxItem | null>(null);
   const actionError = page.actionError;
   const statusNote = page.statusNote;
@@ -251,6 +262,29 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
   const empty =
     items.length === 0 && pending.length === 0 && !inboxQuery.isLoading && inboxQuery.error === null;
 
+  const jobsButtonLabel = jobBadgeLabel
+    ? `${t.inbox.jobs.label}，${jobBadgeLabel}`
+    : t.inbox.jobs.label;
+  const jobsButton = (
+    <Link
+      to={jobsOpen ? inboxListPath('/inbox', search) : inboxListPath('/inbox/jobs', search)}
+      aria-label={jobsButtonLabel}
+      aria-current={jobsOpen ? 'page' : undefined}
+      title={t.inbox.jobs.label}
+      className={headerIconClass(jobsOpen)}
+      onClick={() => pastePopover.close()}
+    >
+      <Icon icon={Layers} size={16} />
+      {jobBadgeLabel ? (
+        <span
+          aria-hidden="true"
+          className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-deep px-1 font-mono text-[10px] font-semibold leading-none text-on-accent tabular-nums"
+        >
+          {jobBadgeLabel}
+        </span>
+      ) : null}
+    </Link>
+  );
   const pasteButton = (
     <button
       ref={pasteBtnRef}
@@ -258,11 +292,7 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
       aria-label={t.inbox.pasteUrl}
       aria-expanded={pastePopover.open}
       title={t.inbox.pasteUrl}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] ${
-        pastePopover.open
-          ? 'bg-accent-subtle text-accent'
-          : 'text-muted hover:bg-accent-subtle hover:text-accent'
-      }`}
+      className={headerIconClass(pastePopover.open)}
       onClick={() => (pastePopover.open ? pastePopover.close() : openPaste())}
     >
       <Icon icon={Plus} size={16} />
@@ -280,21 +310,24 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
           <h1 className="font-display text-[length:var(--text-display)] font-bold leading-[var(--text-display-lh)] text-fg">
             {t.rail.capture}
           </h1>
-          <div ref={pasteRef} className="relative ml-auto">
-            {pasteButton}
-            {pastePopover.open && pasteAnchor ? (
-              <div
-                role="dialog"
-                aria-label={t.inbox.pasteUrl}
-                className={`fixed z-[var(--z-dropdown)] w-[min(26rem,calc(100vw-1rem))] ${FIELD_POPOVER_CLASS}`}
-                style={{
-                  right: Math.max(8, Math.min(pasteAnchor.right, window.innerWidth - POPOVER_W - 8)),
-                  top: pasteAnchor.top,
-                }}
-              >
-                <PasteUrl disabled={!online} />
-              </div>
-            ) : null}
+          <div className="ml-auto flex items-center gap-1">
+            {jobsButton}
+            <div ref={pasteRef} className="relative">
+              {pasteButton}
+              {pastePopover.open && pasteAnchor ? (
+                <div
+                  role="dialog"
+                  aria-label={t.inbox.pasteUrl}
+                  className={`fixed z-[var(--z-dropdown)] w-[min(26rem,calc(100vw-1rem))] ${FIELD_POPOVER_CLASS}`}
+                  style={{
+                    right: Math.max(8, Math.min(pasteAnchor.right, window.innerWidth - POPOVER_W - 8)),
+                    top: pasteAnchor.top,
+                  }}
+                >
+                  <PasteUrl disabled={!online} />
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
         <p className="mt-2 pl-4 font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums text-tertiary">

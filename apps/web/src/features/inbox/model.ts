@@ -1,7 +1,13 @@
-import type { CreateInboxInput, InboxItem, InboxPreview } from '@vital/dto';
-import { extractInboxInputSchema } from '@vital/dto';
+import {
+  extractInboxInputSchema,
+  type CreateInboxInput,
+  type ExtractJobListItem,
+  type InboxItem,
+  type InboxPreview,
+} from '@vital/dto';
 
 export const PASTE_URL_ID = 'inbox-paste-url';
+export const EXTRACT_JOB_PAGE_SIZE = 20;
 export const READER_SIZES = ['sm', 'md', 'lg'] as const;
 export type ReaderSize = (typeof READER_SIZES)[number];
 
@@ -107,6 +113,46 @@ export function createInputFromPreview(preview: InboxPreview, title?: string): C
     siteName: preview.siteName,
     source: 'web',
   };
+}
+
+export function jobLinkLabel(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const path = parsed.pathname === '/' ? '' : parsed.pathname;
+    return `${host}${path}`;
+  } catch {
+    return url;
+  }
+}
+
+export function jobWhen(item: ExtractJobListItem): string | null {
+  if (item.status === 'queued') return item.createdAt;
+  if (item.status === 'running') return item.startedAt ?? item.createdAt;
+  return item.finishedAt ?? item.createdAt;
+}
+
+export function parseJobPage(raw: string | null): number {
+  if (raw === null || !/^\d+$/.test(raw)) return 1;
+  const page = Number(raw);
+  if (page < 1) return 1;
+  return Math.min(page, 10_000);
+}
+
+/** Inbox list location, keeping the filter and tag and dropping the jobs page. */
+export function inboxListPath(pathname: '/inbox' | '/inbox/jobs', search: URLSearchParams): string {
+  const next = new URLSearchParams();
+  const filter = search.get('filter');
+  const tag = search.get('tag');
+  if (filter) next.set('filter', filter);
+  if (tag) next.set('tag', tag);
+  const qs = next.toString();
+  return qs === '' ? pathname : `${pathname}?${qs}`;
+}
+
+export function jobBadge(count: number): string | null {
+  if (count <= 0) return null;
+  return count > 9 ? '9+' : String(count);
 }
 
 export function hostLabel(url: string | null): string | null {

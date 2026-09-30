@@ -83,4 +83,25 @@ export default [
       ],
     },
   },
+  {
+    // Shell and the palette stay on the first paint. The todos barrel re-exports
+    // TaskDetail, so these files import the leaf module instead.
+    files: ['src/shell/**/*.{ts,tsx}', 'src/features/palette/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^@/features/todos(?:/index)?$',
+              message:
+                'The todos barrel re-exports TaskDetail. Import the leaf module so the notes editor stays off the shell.',
+            },
+            featureBarrel('inbox'),
+            featureBarrel('today'),
+          ],
+        },
+      ],
+    },
+  },
 ];

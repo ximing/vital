@@ -5,6 +5,7 @@ fn main() {
             "show_sticky_alert",
             "close_sticky_alert",
             "open_in_main",
+            "open_external",
             "hide_main",
         ]),
     ))
