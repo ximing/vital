@@ -180,8 +180,8 @@ export async function listExtractJobs(
     items: rows.map(toListItem),
     page: query.page,
     pageSize: query.limit,
-    total: Number(summary?.total ?? 0),
-    activeCount: Number(summary?.activeCount ?? 0),
+    total: summary?.total ?? 0,
+    activeCount: summary?.activeCount ?? 0,
   };
 }
 
