@@ -92,7 +92,10 @@ describe('search page', () => {
     await user.type(screen.getByLabelText(t.search.placeholder), '稍后');
     expect(await screen.findByRole('option', { name: /一篇稍后读/ })).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{Enter}');
-    expect(screen.getByTestId('location')).toHaveTextContent('/inbox/22222222-2222-4222-8222-222222222222');
+    // 导航是异步状态更新，高负载下同步断言会读到旧路径。
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/inbox/22222222-2222-4222-8222-222222222222'),
+    );
   });
 
   it('uses a wide search canvas instead of shrinking to its empty-state content', () => {

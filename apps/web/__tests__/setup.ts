@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { configure, cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import { resetInboxUi } from '@/features/inbox/inbox-ui.service';
 import { resetReportUi } from '@/features/reports/report-ui.service';
@@ -48,6 +48,9 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 
 registerVitalServices();
 registerSessionUiServicesForTest();
+
+// findBy* 默认 1s，高并行负载下懒加载路由 + 查询会超时（CI 偶发假失败）。
+configure({ asyncUtilTimeout: 5000 });
 
 afterEach(() => {
   cleanup();
