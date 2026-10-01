@@ -69,7 +69,7 @@ export class InboxPageService extends Service {
     try {
       const res = await client.exportInboxToInwit(id);
       this.query.setQueryData(inboxKeys.item(id), res.inbox);
-      this.setStatusNote(t.inbox.exportInwitNote);
+      this.setStatusNote(null);
       await this.refresh();
     } catch (err) {
       if (this.statusNote === t.inbox.exportingInwit) this.setStatusNote(null);

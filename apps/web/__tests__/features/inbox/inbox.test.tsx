@@ -802,8 +802,9 @@ describe('inbox reader', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText(t.inbox.exportInwitNote).length).toBeGreaterThan(0);
+      expect(screen.queryByText(t.inbox.exportingInwit)).not.toBeInTheDocument();
     });
+    expect(screen.queryByText('已转存到 inwit，可在 inwit 中查看。')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: t.inbox.exportingInwit })).not.toBeInTheDocument();
     expect(client.exportInboxToInwit).toHaveBeenCalledWith('i1');
   });
