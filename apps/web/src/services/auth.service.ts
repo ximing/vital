@@ -2,6 +2,7 @@ import { resolve, Service } from '@rabjs/react';
 import { isSessionInvalidError } from '@vital/api-client';
 import type { LoginInput, RegisterInput, UserProfile } from '@vital/dto';
 import { AUTH_CLEARED_EVENT, client } from '@/api/client';
+import { appQueryClient } from '@/services/query.service';
 import { ThemeService } from '@/services/theme.service';
 
 export type AuthStatus = 'booting' | 'ready' | 'unavailable';
@@ -79,6 +80,7 @@ export class AuthService extends Service {
     try {
       await client.logout();
     } finally {
+      appQueryClient.clear();
       this.user = null;
       this.status = 'ready';
     }

@@ -4,7 +4,6 @@ import {
   loadHabits,
   loadInbox,
   loadInboxReader,
-  loadNotesEditor,
   loadReportEditor,
   loadReports,
   loadThreads,
@@ -14,7 +13,7 @@ import {
 
 export type WarmTarget = 'today' | 'todos' | 'inbox' | 'habits' | 'reports' | 'days' | 'threads';
 
-export type NeighborWarm = 'today' | 'todos' | 'inbox' | 'notes' | 'report-editor';
+export type NeighborWarm = 'today' | 'todos' | 'inbox' | 'report-editor';
 
 /** Rail hover target. Settings, usage, memory, and activity stay cold. */
 export function warmTarget(path: string): WarmTarget | null {
@@ -29,10 +28,13 @@ export function warmTarget(path: string): WarmTarget | null {
   return null;
 }
 
-/** Idle warmup after the current section has painted. */
+/**
+ * Idle warmup after the current section has painted.
+ * The notes editor stays cold until a note is opened.
+ */
 export function neighborWarms(section: AppSection): NeighborWarm[] {
-  if (section === 'today') return ['todos', 'inbox', 'notes'];
-  if (section === 'todos') return ['today', 'inbox', 'notes'];
+  if (section === 'today') return ['todos', 'inbox'];
+  if (section === 'todos') return ['today', 'inbox'];
   if (section === 'capture') return ['today', 'todos'];
   if (section === 'reflect') return ['report-editor'];
   return [];
@@ -64,7 +66,6 @@ export function warmNeighbors(section: AppSection): void {
     if (item === 'today') warm('today', loadToday);
     else if (item === 'todos') warm('todos', loadTodos);
     else if (item === 'inbox') warm('inbox', loadInbox);
-    else if (item === 'notes') warm('notes', loadNotesEditor);
     else warm('report-editor', loadReportEditor);
   }
 }

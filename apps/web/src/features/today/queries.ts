@@ -9,7 +9,7 @@ import type {
 } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
-import { todayKeys } from './query-keys';
+import { TODAY_HOME_STALE_MS, todayKeys } from './query-keys';
 
 export { todayKeys } from './query-keys';
 
@@ -17,6 +17,7 @@ export function useTodayQuery() {
   return useQuery({
     queryKey: todayKeys.dashboard,
     queryFn: (): Promise<TodayDashboard> => client.getToday(),
+    staleTime: TODAY_HOME_STALE_MS,
   });
 }
 
@@ -48,6 +49,7 @@ export function useHabitsQuery() {
   return useQuery({
     queryKey: todayKeys.habits,
     queryFn: (): Promise<Habit[]> => client.listHabits(),
+    staleTime: TODAY_HOME_STALE_MS,
   });
 }
 

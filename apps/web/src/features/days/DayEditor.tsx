@@ -19,7 +19,7 @@ import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
 import { Overlay } from '@/ui/overlay';
 import { TimeField } from '@/ui/time-field';
-import { CoverImage } from './CoverImage';
+import { coverImageSrc, CoverImage } from './CoverImage';
 import { draftCoverMeta } from './headline';
 import { dayKeys } from './query-keys';
 
@@ -261,7 +261,11 @@ export function DayEditor({
                         : 'border-white/70'
                     }`}
                   >
-                    <img src={`/days/${preset}.jpg`} alt="" className="size-full object-cover" />
+                    <img
+                      src={coverImageSrc(`/days/${preset}.jpg`, preset, 'thumb')}
+                      alt=""
+                      className="size-full object-cover"
+                    />
                   </button>
                 );
               })}

@@ -19,8 +19,8 @@ describe('route warmup', () => {
   });
 
   it('idles the neighbors of the page that just painted', () => {
-    expect(neighborWarms('today')).toEqual(['todos', 'inbox', 'notes']);
-    expect(neighborWarms('todos')).toEqual(['today', 'inbox', 'notes']);
+    expect(neighborWarms('today')).toEqual(['todos', 'inbox']);
+    expect(neighborWarms('todos')).toEqual(['today', 'inbox']);
     expect(neighborWarms('capture')).toEqual(['today', 'todos']);
     expect(neighborWarms('reflect')).toEqual(['report-editor']);
     expect(neighborWarms('settings')).toEqual([]);

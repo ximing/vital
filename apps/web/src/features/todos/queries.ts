@@ -15,6 +15,7 @@ import { useService } from '@rabjs/react';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { markOnboarding } from '@/features/onboarding/mark';
+import { TODAY_HOME_STALE_MS } from '@/features/today/query-keys';
 import { fetchAllPages } from '@/lib/fetch-all-pages';
 import { todoKeys } from './query-keys';
 import { TodosUiService } from './todos-ui.service';
@@ -32,6 +33,7 @@ export function useListsQuery() {
       const res = await client.listLists();
       return res.items;
     },
+    staleTime: TODAY_HOME_STALE_MS,
   });
 }
 

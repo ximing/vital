@@ -1,6 +1,6 @@
 {
   "name": "@vital/web",
-  "version": "0.22.1",
+  "version": "0.22.2",
   "private": true,
   "type": "module",
   "scripts": {
@@ -28,16 +28,14 @@
     "@tiptap/react": "^2.27.2",
     "@tiptap/starter-kit": "^2.27.2",
     "@vital/api-client": "workspace:*",
+    "@vital/article-doc": "workspace:*",
     "@vital/dto": "workspace:*",
     "@vital/markdown": "workspace:*",
     "@vital/tokens": "workspace:*",
-    "emojibase-data": "^17.0.0",
-    "frimousse": "^0.3.0",
     "lucide-react": "^1.41.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "react-router": "^7.13.0",
-    "@vital/article-doc": "workspace:*"
+    "react-router": "^7.13.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.4",

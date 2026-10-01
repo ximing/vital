@@ -1,3 +1,6 @@
+/** Long enough that the boot prefetch is still fresh when Today mounts. */
+export const TODAY_HOME_STALE_MS = 15_000;
+
 export const todayKeys = {
   all: ['today'] as const,
   dashboard: ['today', 'dashboard'] as const,

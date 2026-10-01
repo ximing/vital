@@ -44,6 +44,7 @@ import { sectionOf, showsPane, type AppSection } from '@/shell/section';
 import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
 import { OPEN_SHORTCUTS_EVENT } from '@/shell/shortcuts';
 import { useAppShortcuts } from '@/shell/use-app-shortcuts';
+import { useTodayDataReady } from '@/shell/prefetch-today';
 import { scheduleIdle, warmNeighbors, warmPath } from '@/shell/warm';
 import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
@@ -81,8 +82,12 @@ function ShellContent() {
   useAppShortcuts();
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
+  const todayDataReady = useTodayDataReady(section === 'today');
 
-  useEffect(() => scheduleIdle(() => warmNeighbors(section)), [section]);
+  useEffect(() => {
+    if (!todayDataReady) return;
+    return scheduleIdle(() => warmNeighbors(section));
+  }, [section, todayDataReady]);
   const [collapsed, setCollapsed] = useState<boolean>(() => loadRailCollapsed());
   const railWidth = collapsed ? RAIL_COLLAPSED : RAIL_EXPANDED;
   const [paneWidths, setPaneWidths] = useState<Record<PaneSection, number>>(() => ({

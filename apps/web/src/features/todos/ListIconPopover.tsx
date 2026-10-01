@@ -1,15 +1,5 @@
 import { IMAGE_MIME_TYPES, type List } from '@vital/dto';
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ButtonHTMLAttributes,
-  type ChangeEvent,
-  type HTMLAttributes,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent } from 'react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { clampAnchorMenu, type MenuAnchor } from '@/ui/anchor-menu';
@@ -17,61 +7,56 @@ import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Overlay } from '@/ui/overlay';
 import { useTodoActions } from './queries';
 
-const EmojiGrid = lazy(async () => {
-  const { EmojiPicker } = await import('frimousse');
-  return {
-    default: function Grid({ onPick }: { onPick: (emoji: string) => void }) {
-      return (
-        <EmojiPicker.Root
-          className="flex h-72 w-72 flex-col"
-          locale="zh"
-          emojibaseUrl="/emojibase"
-          onEmojiSelect={(emoji) => onPick(emoji.emoji)}
-        >
-          <EmojiPicker.Search
-            placeholder={t.nav.search}
-            className="mx-1 mt-1 rounded-md border border-border bg-surface px-2 py-1.5 text-[length:var(--text-meta)] text-fg placeholder:text-muted"
-          />
-          <EmojiPicker.Viewport className="relative min-h-0 flex-1 overflow-auto overscroll-contain">
-            <EmojiPicker.Loading className="absolute inset-0 flex items-center justify-center text-[length:var(--text-caption)] text-muted">
-              {t.todos.loading}
-            </EmojiPicker.Loading>
-            <EmojiPicker.Empty className="absolute inset-0 flex items-center justify-center text-[length:var(--text-caption)] text-muted">
-              {t.palette.empty}
-            </EmojiPicker.Empty>
-            <EmojiPicker.List
-              className="pb-1"
-              components={{
-                CategoryHeader: ({ category, ...props }) => (
-                  <div
-                    className="sticky top-0 bg-elevated px-2 py-1 text-[11px] font-medium text-muted"
-                    {...(props as HTMLAttributes<HTMLDivElement>)}
-                  >
-                    {category.label}
-                  </div>
-                ),
-                Row: ({ children, ...props }) => (
-                  <div className="flex px-1" {...(props as HTMLAttributes<HTMLDivElement>)}>
-                    {children}
-                  </div>
-                ),
-                Emoji: ({ emoji, ...props }) => (
-                  <button
-                    type="button"
-                    className="flex size-8 items-center justify-center rounded-md text-lg hover:bg-surface-muted data-[active]:bg-surface-muted"
-                    {...(props as ButtonHTMLAttributes<HTMLButtonElement>)}
-                  >
-                    {emoji.emoji}
-                  </button>
-                ),
-              }}
-            />
-          </EmojiPicker.Viewport>
-        </EmojiPicker.Root>
-      );
-    },
-  };
-});
+/** Enough for a list glyph. The full emoji catalog stays off this screen. */
+const LIST_ICONS = [
+  '📥',
+  '⭐',
+  '❤️',
+  '🏠',
+  '💼',
+  '📚',
+  '🎯',
+  '✅',
+  '🌱',
+  '🔥',
+  '💡',
+  '🎁',
+  '🛒',
+  '🏃',
+  '☕',
+  '🌙',
+  '🎵',
+  '✈️',
+  '💰',
+  '🧪',
+  '📌',
+  '🗓️',
+  '👶',
+  '🐾',
+  '🌿',
+  '🍎',
+  '💻',
+  '📝',
+  '🎨',
+  '🏀',
+  '🌸',
+  '🏔️',
+  '🚗',
+  '📷',
+  '🎮',
+  '💤',
+  '🧠',
+  '📦',
+  '🔔',
+  '🏷️',
+  '🧩',
+  '🌈',
+  '☀️',
+  '🌊',
+  '🍀',
+  '📎',
+  '🔑',
+] as const;
 
 export function ListIconPopover({
   list,
@@ -171,15 +156,18 @@ export function ListIconPopover({
           </button>
         </div>
         {tab === 'emoji' ? (
-          <Suspense
-            fallback={
-              <p className="py-8 text-center text-[length:var(--text-caption)] text-muted">
-                {t.todos.loading}
-              </p>
-            }
-          >
-            <EmojiGrid onPick={(emoji) => void pickEmoji(emoji)} />
-          </Suspense>
+          <div className="grid grid-cols-8 gap-0.5 px-1 pb-1">
+            {LIST_ICONS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                className="flex size-8 items-center justify-center rounded-md text-lg hover:bg-surface-muted"
+                onClick={() => void pickEmoji(emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
         ) : (
           <div className="px-2 py-6 text-center">
             <button

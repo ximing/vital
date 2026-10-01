@@ -13,6 +13,7 @@ import { isNotifyAlertRuntime } from '@/features/notify/sticky-alert';
 import { startSync, stopSync } from '@/features/sync/sync-engine';
 import { AuthService } from '@/services/auth.service';
 import { appQueryClient } from '@/services/query.service';
+import { prefetchTodayHome } from '@/shell/prefetch-today';
 import { registerVitalServices } from '@/services/register';
 import { Button } from '@/ui/button';
 import { VitalMark } from '@/shell/VitalMark';
@@ -61,6 +62,7 @@ const Root = observer(function Root() {
       browserNotify().stop();
       return;
     }
+    prefetchTodayHome(appQueryClient);
     startSync(appQueryClient);
     browserNotify().start();
     return () => {

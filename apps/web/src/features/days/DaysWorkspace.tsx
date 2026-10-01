@@ -13,6 +13,25 @@ import { ConfirmDialog } from '@/ui/confirm-dialog';
 import { EmptyArt } from '@/ui/empty-art';
 import { Overlay } from '@/ui/overlay';
 import { CoverImage } from './CoverImage';
+
+/** Same cutoff as the `lg` column. A hidden image would still download. */
+function useHeroImage() {
+  const [show, setShow] = useState(() => {
+    try {
+      return window.matchMedia('(min-width: 64rem)').matches;
+    } catch {
+      return true;
+    }
+  });
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(min-width: 64rem)');
+    const onChange = () => setShow(media.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+  return show;
+}
 import {
   DayEditor,
   draftFromDay,
@@ -61,6 +80,7 @@ function NextUpHero({
   todayYmd: string;
   onOpen: () => void;
 }) {
+  const showHeroImage = useHeroImage();
   const holiday = day.holidayRange
     ? holidayChipText(day.holidayRange.from, day.holidayRange.to, todayYmd)
     : null;
@@ -133,19 +153,21 @@ function NextUpHero({
           </div>
         ) : null}
       </div>
-      <div className="relative hidden min-h-[220px] lg:block lg:min-h-full">
-        <CoverImage
-          src={day.coverUrl}
-          preset={day.coverPreset}
-          alt={day.name}
-          className="absolute inset-0 h-full w-full"
-        />
-        {day.pinned ? (
-          <span className="absolute top-3.5 right-3.5 grid size-[30px] place-items-center rounded-full bg-fg/45 text-white backdrop-blur-[4px]">
-            <PinMark className="size-3.5" />
-          </span>
-        ) : null}
-      </div>
+      {showHeroImage ? (
+        <div className="relative hidden min-h-[220px] lg:block lg:min-h-full">
+          <CoverImage
+            src={day.coverUrl}
+            preset={day.coverPreset}
+            alt={day.name}
+            className="absolute inset-0 h-full w-full"
+          />
+          {day.pinned ? (
+            <span className="absolute top-3.5 right-3.5 grid size-[30px] place-items-center rounded-full bg-fg/45 text-white backdrop-blur-[4px]">
+              <PinMark className="size-3.5" />
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -167,6 +189,7 @@ function TodayBand({ day, selected, onOpen }: { day: Day; selected: boolean; onO
       <CoverImage
         src={day.coverUrl}
         preset={day.coverPreset}
+        size="thumb"
         alt=""
         className="size-14 shrink-0 rounded-[12px]"
       />
@@ -213,6 +236,7 @@ function CountdownCard({
       <CoverImage
         src={day.coverUrl}
         preset={day.coverPreset}
+        size="thumb"
         alt=""
         className="size-16 shrink-0 rounded-md"
       />
@@ -264,6 +288,7 @@ function CountupRow({
       <CoverImage
         src={day.coverUrl}
         preset={day.coverPreset}
+        size="thumb"
         alt=""
         className="size-11 shrink-0 rounded-[8px]"
       />
