@@ -12,7 +12,7 @@ import {
   Star,
 } from 'lucide-react';
 import { observer, useService } from '@rabjs/react';
-import { useEffect, useRef, useState, type FC, type UIEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FC, type UIEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -107,6 +107,7 @@ function InboxReaderContent() {
   const item = query.data;
   const refetchItem = query.refetch;
   const markedRead = useRef<string | null>(null);
+  const scrollerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!item || item.readAt !== null || markedRead.current === item.id) return;
@@ -126,8 +127,15 @@ function InboxReaderContent() {
   const exporting = item != null && page.exportingId === item.id;
   const exportPending = page.exportingId !== null;
   const statusNote = page.statusNote;
-  const [readProgress, setReadProgress] = useState(0);
+  const [scrollProgress, setScrollProgress] = useState<{ id: string; value: number } | null>(null);
+  const readProgress = scrollProgress?.id === id ? scrollProgress.value : 0;
   const [copied, setCopied] = useState(false);
+
+  // 只跟路由 id。标已读会 refetch 同一篇，不能把滚动打回顶部。
+  useLayoutEffect(() => {
+    const el = scrollerRef.current;
+    if (el) el.scrollTop = 0;
+  }, [id]);
 
   async function onCopyUrl(): Promise<void> {
     if (!originalUrl) return;
@@ -143,7 +151,7 @@ function InboxReaderContent() {
   function onScroll(event: UIEvent<HTMLElement>): void {
     const el = event.currentTarget;
     const max = el.scrollHeight - el.clientHeight;
-    setReadProgress(max > 0 ? Math.min(1, el.scrollTop / max) : 0);
+    setScrollProgress({ id, value: max > 0 ? Math.min(1, el.scrollTop / max) : 0 });
   }
 
   async function onFavorite() {
@@ -195,6 +203,7 @@ function InboxReaderContent() {
 
   return (
     <main
+      ref={scrollerRef}
       id="main"
       data-region="reading-canvas"
       onScroll={onScroll}

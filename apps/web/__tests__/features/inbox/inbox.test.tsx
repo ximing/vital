@@ -824,6 +824,65 @@ describe('inbox reader', () => {
     expect(screen.queryByText(t.inbox.exportingInwit)).not.toBeInTheDocument();
   });
 
+  it('scrolls the reading canvas to the top when switching articles', async () => {
+    const first = makeItem({
+      id: 'i1',
+      title: '第一篇',
+      capturedAt: '2026-09-06T02:00:00.000Z',
+    });
+    const second = makeItem({
+      id: 'i2',
+      title: '第二篇',
+      capturedAt: '2026-09-06T01:00:00.000Z',
+    });
+    const byId: Record<string, InboxItem> = { i1: first, i2: second };
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [first, second], nextCursor: null });
+    vi.mocked(client.getInbox).mockImplementation(async (id) => byId[id] ?? first);
+    vi.mocked(client.patchInbox).mockImplementation(async (id) => ({
+      ...(byId[id] ?? first),
+      readAt: '2026-09-06T00:01:00.000Z',
+    }));
+    const user = userEvent.setup();
+    renderAt('/inbox/i1');
+    expect(await screen.findByRole('heading', { name: '第一篇' })).toBeInTheDocument();
+
+    const canvas = document.querySelector('[data-region="reading-canvas"]');
+    if (!(canvas instanceof HTMLElement)) throw new Error('missing reading canvas');
+    let scrollTop = 0;
+    Object.defineProperty(canvas, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value;
+      },
+    });
+    Object.defineProperty(canvas, 'scrollHeight', { configurable: true, get: () => 1000 });
+    Object.defineProperty(canvas, 'clientHeight', { configurable: true, get: () => 200 });
+    const bar = canvas.querySelector('.bg-accent');
+    if (!(bar instanceof HTMLElement)) throw new Error('missing read progress');
+
+    scrollTop = 400;
+    fireEvent.scroll(canvas);
+    await waitFor(() => {
+      expect(bar.style.width).toBe('50%');
+    });
+
+    await user.click(screen.getByRole('link', { name: /第二篇/ }));
+    expect(await screen.findByRole('heading', { name: '第二篇' })).toBeInTheDocument();
+    expect(scrollTop).toBe(0);
+    expect(bar.style.width).toBe('0%');
+
+    scrollTop = 400;
+    fireEvent.scroll(canvas);
+    await waitFor(() => {
+      expect(bar.style.width).toBe('50%');
+    });
+    await user.click(screen.getByRole('link', { name: /第一篇/ }));
+    expect(await screen.findByRole('heading', { name: '第一篇' })).toBeInTheDocument();
+    expect(scrollTop).toBe(0);
+    expect(bar.style.width).toBe('0%');
+  });
+
   it('shows reader empty copy when the item is missing', async () => {
     vi.mocked(client.getInbox).mockRejectedValue(
       new ApiError(404, 'INBOX_NOT_FOUND', '条目不存在'),
