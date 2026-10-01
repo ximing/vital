@@ -127,14 +127,14 @@ function InboxReaderContent() {
   const exporting = item != null && page.exportingId === item.id;
   const exportPending = page.exportingId !== null;
   const statusNote = page.statusNote;
-  const [readProgress, setReadProgress] = useState(0);
+  const [scrollProgress, setScrollProgress] = useState<{ id: string; value: number } | null>(null);
+  const readProgress = scrollProgress?.id === id ? scrollProgress.value : 0;
   const [copied, setCopied] = useState(false);
 
   // 只跟路由 id。标已读会 refetch 同一篇，不能把滚动打回顶部。
   useLayoutEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = 0;
-    setReadProgress(0);
   }, [id]);
 
   async function onCopyUrl(): Promise<void> {
@@ -151,7 +151,7 @@ function InboxReaderContent() {
   function onScroll(event: UIEvent<HTMLElement>): void {
     const el = event.currentTarget;
     const max = el.scrollHeight - el.clientHeight;
-    setReadProgress(max > 0 ? Math.min(1, el.scrollTop / max) : 0);
+    setScrollProgress({ id, value: max > 0 ? Math.min(1, el.scrollTop / max) : 0 });
   }
 
   async function onFavorite() {
