@@ -656,7 +656,6 @@ export const t = {
     exportInwit: '转存到 inwit',
     exportingInwit: '正在转存到 inwit…',
     exportedInwit: '已转存到 inwit',
-    exportInwitNote: '已转存到 inwit，可在 inwit 中查看。',
     attachOutcome: '挂到线程',
     convertKeptUrl: '原文链接已写进任务备注。',
     addToReport: '加入报告',
