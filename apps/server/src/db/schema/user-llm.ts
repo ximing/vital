@@ -53,7 +53,7 @@ export const userLlmRoutes = pgTable(
     index('idx_user_llm_routes_provider').on(t.providerId),
     check(
       'user_llm_routes_capability_check',
-      sql`${t.capability} IN ('default', 'task.parse', 'agent.headline', 'agent.cluster', 'agent.decompose', 'agent.draft', 'agent.report', 'agent.reflect', 'agent.distill', 'agent.notify', 'agent.critic')`,
+      sql`${t.capability} IN ('default', 'task.parse', 'agent.headline', 'agent.cluster', 'agent.decompose', 'agent.draft', 'agent.report', 'agent.reflect', 'agent.distill', 'agent.notify', 'agent.critic', 'agent.chat')`,
     ),
   ],
 );

@@ -81,6 +81,8 @@ export const envSchema = z.object({
     z.string().min(1),
   ),
   AGENT_ENABLED: boolEnum.default('true'),
+  /** Sidebar chat. Independent of AGENT_ENABLED. Set false to hide the rail entry. */
+  AGENT_CHAT_ENABLED: boolEnum.default('true'),
   AGENT_LEASE_MS: z.coerce.number().int().min(1000).default(300_000),
   AGENT_HEARTBEAT_MS: z.coerce.number().int().min(100).default(30_000),
   // Seeded onto new accounts. Each user can change it in Settings → 偏好.

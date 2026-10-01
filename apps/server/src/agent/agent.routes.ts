@@ -24,8 +24,10 @@ import { listExecutions } from './executions.service.js';
 import { SCHEDULED_CAPABILITIES, cancelAgentSchedule, dispatchAgentSchedule, listAgentSchedule } from './scheduling.js';
 import { dailyUsage } from './usage.service.js';
 import { limitLlm } from '../plugins/rate-limit.js';
+import { registerChatRoutes } from './chat/routes.js';
 
 export function registerAgentRoutes(app: FastifyInstance): void {
+  registerChatRoutes(app);
   /** Queue outcome.cluster (organize unassigned tasks into threads). */
   app.post('/api/v1/agent/cluster', { preHandler: [requireAuth, limitLlm] }, async (req, reply) => {
     if (!req.user) throw AppError.of(401, 'INVALID_TOKEN');

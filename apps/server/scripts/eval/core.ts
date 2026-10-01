@@ -6,6 +6,10 @@ import type { AgentMetricsResponse } from '@vital/dto';
 import { getDb } from '../../src/db/index.js';
 import {
   agentActions,
+  agentChatBudgets,
+  agentChatConversations,
+  agentChatMessages,
+  agentChatPreviews,
   agentMemory,
   agentUsage,
   days,
@@ -56,6 +60,10 @@ export interface AgentEvalSnapshot {
  */
 export async function buildSnapshot(opts: { tamper?: boolean } = {}): Promise<AgentEvalSnapshot> {
   const db = getDb();
+  await db.delete(agentChatMessages).where(eq(agentChatMessages.userId, FIXTURE_USER_ID));
+  await db.delete(agentChatPreviews).where(eq(agentChatPreviews.userId, FIXTURE_USER_ID));
+  await db.delete(agentChatConversations).where(eq(agentChatConversations.userId, FIXTURE_USER_ID));
+  await db.delete(agentChatBudgets).where(eq(agentChatBudgets.userId, FIXTURE_USER_ID));
   await db.delete(agentActions).where(eq(agentActions.userId, FIXTURE_USER_ID));
   await db.delete(agentUsage).where(eq(agentUsage.userId, FIXTURE_USER_ID));
   await db.delete(agentMemory).where(eq(agentMemory.userId, FIXTURE_USER_ID));

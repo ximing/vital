@@ -177,6 +177,11 @@ export class Http {
     return parseBody<T>(await this.send(path, options));
   }
 
+  /** Raw response for SSE. Still refreshes a 401 and throws on an error status. */
+  stream(path: string, options: RequestOptions = {}): Promise<Response> {
+    return this.send(path, options);
+  }
+
   async requestWithStatus(
     path: string,
     options: RequestOptions = {},

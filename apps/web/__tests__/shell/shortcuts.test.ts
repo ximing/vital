@@ -80,6 +80,14 @@ describe('shortcut chords', () => {
     expect(planGlobalKey(key({ key: 'z', meta: true, desktop: true }))).toEqual({ type: 'none' });
   });
 
+  it('toggles the agent with ⌘J outside of a text field', () => {
+    expect(planGlobalKey(key({ key: 'j', meta: true }))).toEqual({ type: 'agent' });
+    expect(planGlobalKey(key({ key: 'J', ctrl: true }))).toEqual({ type: 'agent' });
+    expect(planGlobalKey(key({ key: 'j', meta: true, typing: true }))).toEqual({ type: 'none' });
+    expect(planGlobalKey(key({ key: 'j', meta: true, desktop: true }))).toEqual({ type: 'none' });
+    expect(planGlobalKey(key({ key: 'j' }))).toEqual({ type: 'none' });
+  });
+
   it('ignores a primary layer dialog and still blocks menus', () => {
     document.body.innerHTML = '<div role="dialog" data-shortcut-layer="true"></div>';
     expect(isShortcutLayerBlocked()).toBe(false);

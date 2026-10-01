@@ -24,6 +24,8 @@ import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
 import { ActivationChecklist } from '@/features/onboarding/ActivationChecklist';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
+import { AgentChatRail } from '@/features/agent-chat/AgentChatRail';
+import { AgentChatService } from '@/features/agent-chat/agent-chat.service';
 import { InboxUiService } from '@/features/inbox';
 import { ReportUiService } from '@/features/reports/report-ui.service';
 import { SimilarOpenToast } from '@/features/todos/SimilarOpenToast';
@@ -78,8 +80,12 @@ function railItemClass(active: boolean, collapsed: boolean): string {
 
 function ShellContent() {
   const todos = useService(TodosUiService);
+  const chat = useService(AgentChatService);
   const location = useLocation();
   useAppShortcuts();
+  useEffect(() => {
+    void chat.load();
+  }, [chat]);
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
   const todayDataReady = useTodayDataReady(section === 'today');
@@ -242,6 +248,7 @@ function ShellContent() {
           <Outlet />
         </Suspense>
       </div>
+      <AgentChatRail />
       {todos.similarOpen.length > 0 ? <SimilarOpenToast /> : null}
       <CommandPalette />
       <ShortcutsDialog />
@@ -255,4 +262,5 @@ export const Shell: FC = bindServices(ShellContent, [
   TodosUiService,
   InboxUiService,
   ReportUiService,
+  AgentChatService,
 ]);

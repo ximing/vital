@@ -9,6 +9,10 @@ import {
   agentMemoryFeedback,
   agentMemoryHistory,
   agentMemoryMaintenance,
+  agentChatBudgets,
+  agentChatConversations,
+  agentChatMessages,
+  agentChatPreviews,
   agentModelBudgets,
   agentScheduling,
   agentUsage,
@@ -88,6 +92,10 @@ export async function resetDb(): Promise<void> {
     await db.delete(agentEditEvents);
     await db.delete(agentJobs);
     await db.delete(agentScheduling);
+    await db.delete(agentChatMessages);
+    await db.delete(agentChatPreviews);
+    await db.delete(agentChatConversations);
+    await db.delete(agentChatBudgets);
     await db.delete(agentModelBudgets);
     await db.delete(inboxExtractJobs);
     await db.delete(inboxAssets);

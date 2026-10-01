@@ -12,6 +12,9 @@ import type {
   AgentUsageSummary,
   AgentExecution,
   AgentMetricsResponse,
+  ChatInvalidateTag,
+  ChatSession,
+  PostChatMessageInput,
   AuthMode,
   AuthResponse,
   CalendarQuery,
@@ -194,6 +197,12 @@ export interface VitalClient {
   getAgentUsage(days?: number): Promise<AgentUsageSummary>;
   listAgentExecutions(days?: number): Promise<AgentExecution[]>;
   organizeAgentTasks(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
+  getChatSession(): Promise<ChatSession>;
+  resetChat(): Promise<ChatSession>;
+  postChatMessage(input: PostChatMessageInput, signal?: AbortSignal): Promise<Response>;
+  applyChatPreview(id: string): Promise<{ summary: string; invalidate: ChatInvalidateTag[]; errors: string[] }>;
+  cancelChatPreview(id: string): Promise<{ ok: true }>;
+  undoChat(hintId: string): Promise<{ ok: true; invalidate: ChatInvalidateTag[] }>;
   distillAgentMemory(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
   getAgentMetrics(days?: number): Promise<AgentMetricsResponse>;
   /** Read-only scheduling state per capability (settings schedule view). */
@@ -449,6 +458,17 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     listAgentExecutions: (days) =>
       http.request(`/api/v1/agent/executions${days ? `?days=${String(days)}` : ''}`),
     organizeAgentTasks: () => http.request('/api/v1/agent/cluster', { method: 'POST' }),
+    getChatSession: () => http.request('/api/v1/agent/chat'),
+    resetChat: () => http.request('/api/v1/agent/chat/reset', { method: 'POST' }),
+    postChatMessage: (input, signal) =>
+      http.stream('/api/v1/agent/chat/messages', {
+        method: 'POST',
+        body: input,
+        ...(signal ? { signal } : {}),
+      }),
+    applyChatPreview: (id) => http.request(`/api/v1/agent/chat/previews/${id}/apply`, { method: 'POST' }),
+    cancelChatPreview: (id) => http.request(`/api/v1/agent/chat/previews/${id}/cancel`, { method: 'POST' }),
+    undoChat: (hintId) => http.request('/api/v1/agent/chat/undo', { method: 'POST', body: { hintId } }),
     distillAgentMemory: () => http.request('/api/v1/agent/memory/distill', { method: 'POST' }),
     getAgentUsage: (days) =>
       http.request(`/api/v1/agent/usage${days ? `?days=${String(days)}` : ''}`),

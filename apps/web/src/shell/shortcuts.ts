@@ -16,7 +16,8 @@ export type MenuShortcut =
   | 'go-inbox'
   | 'go-habits'
   | 'go-reports'
-  | 'go-days';
+  | 'go-days'
+  | 'agent';
 
 export const MENU_SHORTCUTS: readonly MenuShortcut[] = [
   'new-task',
@@ -31,6 +32,7 @@ export const MENU_SHORTCUTS: readonly MenuShortcut[] = [
   'go-habits',
   'go-reports',
   'go-days',
+  'agent',
 ];
 
 export function isMenuShortcut(value: unknown): value is MenuShortcut {
@@ -122,6 +124,7 @@ export function shortcutGroups(mod = modKey()): ShortcutGroup[] {
       title: t.shortcuts.other,
       rows: [
         { label: t.shortcuts.help, keys: ['?'] },
+        { label: t.shortcuts.agent, keys: [combo(mod, 'J')] },
         { label: t.shortcuts.saveReport, keys: [combo(mod, 'S')] },
       ],
     },
@@ -135,6 +138,7 @@ export function shortcutGroups(mod = modKey()): ShortcutGroup[] {
         { label: t.shortcuts.closeWindow, keys: [combo(mod, 'W')] },
         { label: t.shortcuts.desktopSettings, keys: [combo(mod, ',')] },
         { label: t.shortcuts.desktopHelp, keys: [combo(mod, '/')] },
+        { label: t.shortcuts.agent, keys: [combo(mod, 'J')] },
       ],
     },
   ];

@@ -13,6 +13,7 @@ export function isMutatingApi(method: string, url: string): boolean {
   if (path.startsWith('/api/v1/auth')) return false;
   if (path.startsWith('/api/v1/sync')) return false;
   if (path === '/api/v1/search' || path.startsWith('/api/v1/search/')) return false;
+  if (path === '/api/v1/agent/chat' || path.startsWith('/api/v1/agent/chat/')) return false;
   return true;
 }
 

@@ -18,6 +18,7 @@ export * from './schema/extension-auth.js';
 export * from './schema/holiday-calendar.js';
 export * from './schema/api-tokens.js';
 export * from './schema/agent-budget.js';
+export * from './schema/agent-chat.js';
 export * from './schema/agent-scheduling.js';
 export * from './schema/agent-memory-history.js';
 export * from './schema/agent-edit-events.js';

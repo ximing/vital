@@ -46,6 +46,9 @@ export const ERROR_MESSAGES = {
   INWIT_RATE_LIMITED: 'inwit 转存太频繁，请稍后再试',
   INWIT_UNREACHABLE: 'inwit 服务暂时不可达，请检查服务地址',
   INWIT_REJECTED: 'inwit 拒绝了这次转存请求',
+  CHAT_TURN_LIMIT: '今日对话次数已用完',
+  CHAT_BUSY: '上一条还在回复',
+  CHAT_PREVIEW_CLOSED: '预览已失效',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useService } from '@rabjs/react';
+import { AgentChatService } from '@/features/agent-chat/agent-chat.service';
 import { InboxUiService } from '@/features/inbox';
 import { OPEN_PALETTE_EVENT, TOGGLE_PALETTE_EVENT } from '@/features/palette/model';
 import { QUICK_ADD_ID, focusById } from '@/features/todos/keyboard';
@@ -37,6 +38,7 @@ export function useAppShortcuts(): void {
   const location = useLocation();
   const todos = useService(TodosUiService);
   const inbox = useService(InboxUiService);
+  const chat = useService(AgentChatService);
   const pathRef = useRef(location.pathname);
   const chordUntil = useRef(0);
   const detailOpen = todos.detailOpen;
@@ -97,6 +99,10 @@ export function useAppShortcuts(): void {
       if (action === 'go-habits') navigate('/habits');
       if (action === 'go-reports') navigate('/reports');
       if (action === 'go-days') navigate('/days');
+      if (action === 'agent') {
+        if (isTypingTarget(document.activeElement)) return;
+        chat.toggle();
+      }
     }
 
     function onKey(event: KeyboardEvent): void {
@@ -146,6 +152,10 @@ export function useAppShortcuts(): void {
         document.getElementById(SEARCH_INPUT_ID)?.focus();
         return;
       }
+      if (plan.type === 'agent') {
+        chat.toggle();
+        return;
+      }
       openPalette();
     }
 
@@ -157,5 +167,5 @@ export function useAppShortcuts(): void {
       window.removeEventListener(MENU_SHORTCUT_EVENT, onMenu);
       window.removeEventListener('keydown', onKey, true);
     };
-  }, [inbox, navigate, todos]);
+  }, [chat, inbox, navigate, todos]);
 }

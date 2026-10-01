@@ -150,7 +150,7 @@ pub fn run() {
             "undo" => eval_main(app, MENU_UNDO_SCRIPT),
             "close-window" => eval_main(app, MENU_CLOSE_SCRIPT),
             "new-task" | "new-inbox" | "palette" | "find" | "shortcuts" | "settings" | "go-today"
-            | "go-todos" | "go-inbox" | "go-habits" | "go-reports" | "go-days" => {
+            | "go-todos" | "go-inbox" | "go-habits" | "go-reports" | "go-days" | "agent" => {
                 emit_menu(app, event.id().as_ref());
             }
             _ => {}
@@ -255,6 +255,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
     let reload = MenuItem::with_id(app, "reload", "重新加载", true, Some("CmdOrCtrl+R"))?;
     let palette = MenuItem::with_id(app, "palette", "命令面板", true, Some("CmdOrCtrl+K"))?;
     let find = MenuItem::with_id(app, "find", "搜索", true, Some("CmdOrCtrl+F"))?;
+    let agent = MenuItem::with_id(app, "agent", "助手", true, Some("CmdOrCtrl+J"))?;
     let go_today = MenuItem::with_id(app, "go-today", "今天", true, Some("CmdOrCtrl+1"))?;
     let go_todos = MenuItem::with_id(app, "go-todos", "待办", true, Some("CmdOrCtrl+2"))?;
     let go_inbox = MenuItem::with_id(app, "go-inbox", "收集", true, Some("CmdOrCtrl+3"))?;
@@ -284,6 +285,7 @@ fn build_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<tau
         &[
             &palette,
             &find,
+            &agent,
             &PredefinedMenuItem::separator(app)?,
             &go_today,
             &go_todos,

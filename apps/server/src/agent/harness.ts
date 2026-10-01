@@ -54,7 +54,7 @@ async function touchLastRetrievedAt(userId: string, ids: string[]): Promise<void
  */
 export async function loadAgentMemory(
   userId: string,
-  capability?: AgentMemoryScope,
+  capability?: AgentMemoryScope | 'chat',
   query?: string,
 ): Promise<MemoryItem[]> {
   if (query !== undefined && query.trim() !== '') {
@@ -81,7 +81,7 @@ export async function loadAgentMemory(
                   eq(agentMemory.manual, true),
                   or(
                     arrayContains(agentMemory.scope, ['all']),
-                    arrayContains(agentMemory.scope, [capability]),
+                    arrayContains(agentMemory.scope, [capability as AgentMemoryScope]),
                   ),
                 ),
           )
@@ -107,7 +107,7 @@ export async function loadAgentMemory(
             eq(agentMemory.userId, userId),
             or(
               arrayContains(agentMemory.scope, ['all']),
-              arrayContains(agentMemory.scope, [capability]),
+              arrayContains(agentMemory.scope, [capability as AgentMemoryScope]),
             ),
           ),
     )

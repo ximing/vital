@@ -26,7 +26,8 @@ export type GlobalAction =
   | { type: 'palette' }
   | { type: 'find' }
   | { type: 'focus-search' }
-  | { type: 'undo' };
+  | { type: 'undo' }
+  | { type: 'agent' };
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -130,6 +131,18 @@ export function planGlobalKey(input: GlobalKeyInput): GlobalAction {
     (input.key === 'f' || input.key === 'F')
   ) {
     return { type: 'find' };
+  }
+
+  if (
+    (input.meta || input.ctrl) &&
+    !input.alt &&
+    !input.shift &&
+    !input.typing &&
+    !input.blocked &&
+    !input.desktop &&
+    (input.key === 'j' || input.key === 'J')
+  ) {
+    return { type: 'agent' };
   }
 
   if (!free) return { type: 'none' };

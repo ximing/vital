@@ -337,6 +337,13 @@
       "when": 1790690556104,
       "tag": "0047_inbox_extract_jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1790784000000,
+      "tag": "0048_agent_chat",
+      "breakpoints": true
     }
   ]
 }

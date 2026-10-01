@@ -15,6 +15,7 @@ export const LLM_CAPABILITIES = [
   'agent.distill',
   'agent.notify',
   'agent.critic',
+  'agent.chat',
 ] as const;
 export type LlmCapability = (typeof LLM_CAPABILITIES)[number];
 

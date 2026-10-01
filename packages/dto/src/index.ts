@@ -13,6 +13,7 @@ export * from './inbox.js';
 export { imageSrcKeys } from '@vital/article-doc';
 export * from './outcomes.js';
 export * from './agent.js';
+export * from './agent-chat.js';
 export * from './habits.js';
 export * from './days.js';
 export * from './reportTemplates.js';
