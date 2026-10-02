@@ -18,10 +18,12 @@ export function TaskCheckbox({
   task,
   timeZone,
   onToggle,
+  className = 'mt-0.5',
 }: {
   task: Task;
   timeZone: string;
   onToggle: () => void;
+  className?: string;
 }) {
   const overdue = isOverdue(task, timeZone);
   const soon = isDueSoon(task, timeZone);
@@ -39,7 +41,7 @@ export function TaskCheckbox({
       role="checkbox"
       aria-checked={done}
       aria-label={t.todos.complete}
-      className={`group/check mt-0.5 flex h-[1.125rem] w-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-full border-[1.5px] transition-[background-color,border-color,color,box-shadow] duration-[var(--ease-out)] ${ring}`}
+      className={`group/check ${className} flex h-[1.125rem] w-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-full border-[1.5px] transition-[background-color,border-color,color,box-shadow] duration-[var(--ease-out)] ${ring}`}
       onClick={(event) => {
         event.stopPropagation();
         onToggle();

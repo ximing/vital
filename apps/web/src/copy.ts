@@ -500,6 +500,8 @@ export const t = {
     cancel: '取消',
     thinking: '正在想…',
     empty: '可以从任何页面开口。比如：明天下午三点买牛奶。',
+    model: '选择模型',
+    noModel: '未配置模型',
   },
   search: {
     placeholder: '搜任务、稍后读和报告',

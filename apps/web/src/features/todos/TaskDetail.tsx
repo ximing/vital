@@ -201,8 +201,8 @@ export const TaskDetail: FC<{
       className="flex h-full min-h-0 w-full shrink-0 flex-col border-l border-border bg-surface"
       aria-label={task.title}
     >
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-        <TaskCheckbox task={task} timeZone={zone} onToggle={() => onComplete(task)} />
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+        <TaskCheckbox task={task} timeZone={zone} className="mt-0" onToggle={() => onComplete(task)} />
         <SchedulePopover
           draft={schedule}
           zone={zone}

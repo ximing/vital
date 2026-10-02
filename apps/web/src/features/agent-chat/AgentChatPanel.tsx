@@ -1,14 +1,20 @@
 import { observer, useService } from '@rabjs/react';
-import type { ChatMessage, ChatToolCard, ChatUndoHint } from '@vital/dto';
-import { PanelRightClose } from 'lucide-react';
+import { DEFAULT_LLM_SETTINGS, type ChatMessage, type ChatToolCard, type ChatUndoHint } from '@vital/dto';
+import { ChevronDown, PanelRightClose } from 'lucide-react';
 import { useEffect, useRef, useState, type FC } from 'react';
 import { useLocation } from 'react-router';
+import { client } from '@/api/client';
 import { t } from '@/copy';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
+import { humanError } from '@/lib/errors';
+import { AuthService } from '@/services/auth.service';
+import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { usePopover } from '@/ui/use-popover';
 import { AgentChatService } from './agent-chat.service';
 import { chatPageContext } from './context';
 import { ChatMarkdown } from './markdown';
+import { chatModelChoices, routingWithChatModel, selectedChatModel } from './models';
 
 function payloadCard(message: ChatMessage): ChatToolCard | null {
   const payload = message.toolPayload;
@@ -70,6 +76,76 @@ function ToolCard({ card }: { card: ChatToolCard }) {
   );
 }
 
+const ChatModelPicker: FC = observer(function ChatModelPicker() {
+  const auth = useService(AuthService);
+  const root = useRef<HTMLDivElement>(null);
+  const popover = usePopover(root);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const llm = auth.user?.llm ?? DEFAULT_LLM_SETTINGS;
+  const choices = chatModelChoices(llm);
+  const selected = selectedChatModel(llm);
+
+  async function choose(value: string): Promise<void> {
+    const user = auth.user;
+    if (!user || value === selected?.value || saving) return;
+    const routing = routingWithChatModel(llm, value);
+    if (!routing) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const next = await client.putLlmRouting({ routing });
+      auth.setUser({ ...user, llm: next });
+      popover.close();
+    } catch (err) {
+      setSaveError(humanError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div ref={root} className="relative min-w-0">
+      <button
+        type="button"
+        aria-label={t.agentChat.model}
+        aria-haspopup="listbox"
+        aria-expanded={popover.open}
+        disabled={choices.length === 0 || saving}
+        title={saveError ?? selected?.label ?? t.agentChat.noModel}
+        className="inline-flex h-7 max-w-[11rem] items-center gap-1 rounded-md px-1.5 text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg disabled:opacity-50"
+        onClick={() => popover.toggle()}
+      >
+        <span className="truncate">{selected?.model ?? t.agentChat.noModel}</span>
+        <Icon icon={ChevronDown} size={14} className="shrink-0" />
+      </button>
+      {popover.open ? (
+        <div
+          role="listbox"
+          aria-label={t.agentChat.model}
+          className={`absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 max-h-64 w-64 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
+        >
+          {saveError ? <p className="px-2 py-1 text-[length:var(--text-caption)] text-muted">{saveError}</p> : null}
+          {choices.map((choice) => (
+            <button
+              key={choice.value}
+              type="button"
+              role="option"
+              aria-selected={choice.value === selected?.value}
+              className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-[length:var(--text-meta)] ${
+                choice.value === selected?.value ? 'bg-accent-subtle text-fg' : 'text-fg hover:bg-surface-muted'
+              }`}
+              onClick={() => void choose(choice.value)}
+            >
+              <span className="truncate">{choice.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
 export const AgentChatPanel: FC = observer(function AgentChatPanel() {
   const chat = useService(AgentChatService);
   const todos = useService(TodosUiService);
@@ -100,14 +176,14 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
       aria-label={t.agentChat.title}
       className="flex h-full min-h-0 w-full min-w-0 flex-col bg-surface"
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2.5">
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
         <h2 className="min-w-0 flex-1 truncate font-display text-[length:var(--text-body)] font-semibold">{t.agentChat.title}</h2>
         <button type="button" className="text-[length:var(--text-meta)] text-muted hover:text-fg" onClick={() => void chat.reset()}>
           {t.agentChat.reset}
         </button>
         <button
           type="button"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
           aria-label={t.agentChat.close}
           onClick={() => chat.close()}
         >
@@ -172,8 +248,9 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
             }
           }}
         />
-        <div className="mt-2 flex justify-end">
-          <button type="submit" className="rounded-md bg-accent px-3 py-1.5 text-[length:var(--text-meta)] text-canvas disabled:opacity-50" disabled={chat.sending || draft.trim() === ''}>
+        <div className="mt-2 flex items-center gap-2">
+          <ChatModelPicker />
+          <button type="submit" className="ml-auto rounded-md bg-accent px-3 py-1.5 text-[length:var(--text-meta)] text-canvas disabled:opacity-50" disabled={chat.sending || draft.trim() === ''}>
             {t.agentChat.send}
           </button>
         </div>
