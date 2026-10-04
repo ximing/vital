@@ -11,6 +11,9 @@ import {
   LIBRARY_DEFAULT,
   LIBRARY_MAX,
   LIBRARY_MIN,
+  REFLECT_DEFAULT,
+  REFLECT_MAX,
+  REFLECT_MIN,
 } from '../../src/shell/chrome';
 
 describe('chrome layout', () => {
@@ -25,6 +28,15 @@ describe('chrome layout', () => {
     expect(clampPaneWidth(9999, 'capture')).toBe(CAPTURE_MAX);
     expect(clampPaneWidth(300, 'capture')).toBe(CAPTURE_MAX);
     expect(clampPaneWidth(240, 'reflect')).toBe(240);
+    expect(clampPaneWidth(0, 'reflect')).toBe(REFLECT_MIN);
+    expect(clampPaneWidth(9999, 'reflect')).toBe(REFLECT_MAX);
+  });
+
+  it('lets the reflect pane shrink well below the library', () => {
+    expect(REFLECT_MIN).toBe(128);
+    expect(REFLECT_MIN).toBeLessThan(LIBRARY_MIN);
+    expect(REFLECT_DEFAULT).toBe(LIBRARY_DEFAULT);
+    expect(REFLECT_MAX).toBe(LIBRARY_MAX);
   });
 
   it('uses the Mineral Garden library range', () => {

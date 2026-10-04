@@ -2,16 +2,19 @@ import type { ReportType, SyncHead } from '@vital/dto';
 import { extractNotes, replaceNotes } from '@vital/dto';
 import { bindServices, useService } from '@rabjs/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useEffect, useRef, type FC } from 'react';
+import { History, PanelRightClose } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState, type FC } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { Icon } from '@/ui/icon';
 import { loadReportEditor } from '@/shell/route-loaders';
 import { useOnline } from '@/features/inbox';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
+import { Tip } from '@/ui/tip';
 import {
   decidePoll,
   formatPeriodRange,
@@ -30,6 +33,24 @@ import { StatsBlock } from './StatsBlock';
 const WysiwygEditor = lazy(() =>
   loadReportEditor().then((m) => ({ default: m.WysiwygEditor })),
 );
+
+const CALENDAR_PANE_KEY = 'vital:reports-calendar-collapsed';
+
+function loadCalendarCollapsed(): boolean {
+  try {
+    return localStorage.getItem(CALENDAR_PANE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveCalendarCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(CALENDAR_PANE_KEY, collapsed ? '1' : '0');
+  } catch {
+    // Private mode.
+  }
+}
 
 /** Inline period stat — Sora numeral + caption label, no KPI card chrome. */
 function MetaStat({ tone, value, label }: { tone: string; value: number; label: string }) {
@@ -64,6 +85,15 @@ function ReportsWorkspaceContent() {
       day: 'numeric',
     });
   const weekStartsOn = page.weekStartsOn;
+  const [calendarCollapsed, setCalendarCollapsed] = useState(loadCalendarCollapsed);
+
+  function toggleCalendarPane(): void {
+    setCalendarCollapsed((current) => {
+      const next = !current;
+      saveCalendarCollapsed(next);
+      return next;
+    });
+  }
 
   const reportQuery = useReportQuery(id, id !== '');
   const reviewQuery = useReportReviewQuery(id, id !== '');
@@ -363,6 +393,21 @@ function ReportsWorkspaceContent() {
                     {generating ? t.reports.generating : t.reports.generate}
                   </Button>
                 ) : null}
+                {calendarCollapsed ? (
+                  <Tip label={t.reports.showHistory} side="bottom">
+                    <button
+                      type="button"
+                      data-region="calendar-pane"
+                      data-collapsed="true"
+                      aria-expanded={false}
+                      aria-label={t.reports.showHistory}
+                      onClick={toggleCalendarPane}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center self-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
+                    >
+                      <Icon icon={History} strokeWidth={1.8} />
+                    </button>
+                  </Tip>
+                ) : null}
               </div>
 
               <div className="mt-2 flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1 pl-4">
@@ -439,24 +484,39 @@ function ReportsWorkspaceContent() {
           )}
         </div>
       </main>
-      <aside
-        data-region="calendar-pane"
-        aria-label={t.reports.history}
-        className="shrink-0 border-b border-border bg-surface px-5 py-5 lg:h-full lg:w-[20rem] lg:border-b-0 lg:border-l lg:px-5 lg:py-6"
-      >
-        <p className="eyebrow eyebrow-rule">{t.reports.history}</p>
-        <div className="mt-3">
-          <ReportsCalendar
-            type={liveType}
-            selectedStart={report?.periodStart}
-            weekStartsOn={weekStartsOn}
-            timeZone={timeZone}
-            onPick={(ymd) => void openPeriod(liveType, ymd)}
-          />
-        </div>
-        <p className="eyebrow eyebrow-rule mt-6">{t.reports.periodStats}</p>
-        <StatsBlock type={liveType} />
-      </aside>
+      {calendarCollapsed ? null : (
+        <aside
+          data-region="calendar-pane"
+          aria-label={t.reports.history}
+          className="shrink-0 border-b border-border bg-surface px-5 py-5 lg:h-full lg:w-[20rem] lg:border-b-0 lg:border-l lg:px-5 lg:py-6"
+        >
+          <div className="flex items-center gap-2">
+            <p className="eyebrow eyebrow-rule min-w-0 flex-1">{t.reports.history}</p>
+            <Tip label={t.reports.hideHistory} side="left">
+              <button
+                type="button"
+                aria-expanded
+                aria-label={t.reports.hideHistory}
+                onClick={toggleCalendarPane}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
+              >
+                <Icon icon={PanelRightClose} strokeWidth={1.8} />
+              </button>
+            </Tip>
+          </div>
+          <div className="mt-3">
+            <ReportsCalendar
+              type={liveType}
+              selectedStart={report?.periodStart}
+              weekStartsOn={weekStartsOn}
+              timeZone={timeZone}
+              onPick={(ymd) => void openPeriod(liveType, ymd)}
+            />
+          </div>
+          <p className="eyebrow eyebrow-rule mt-6">{t.reports.periodStats}</p>
+          <StatsBlock type={liveType} />
+        </aside>
+      )}
     </div>
   );
 }

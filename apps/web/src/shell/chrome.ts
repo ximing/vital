@@ -7,6 +7,10 @@ export const LIBRARY_DEFAULT = 248;
 export const CAPTURE_MIN = 224;
 export const CAPTURE_MAX = 264;
 export const CAPTURE_DEFAULT = 248;
+/** 日报 / 周报 only need an icon and two characters. */
+export const REFLECT_MIN = 128;
+export const REFLECT_MAX = LIBRARY_MAX;
+export const REFLECT_DEFAULT = LIBRARY_DEFAULT;
 
 export const INBOX_LIST_MIN = 320;
 export const INBOX_LIST_MAX = 520;
@@ -42,7 +46,7 @@ export type PaneSection = 'todos' | 'capture' | 'reflect';
 const RANGES: Record<PaneSection, { min: number; max: number; def: number }> = {
   todos: { min: LIBRARY_MIN, max: LIBRARY_MAX, def: LIBRARY_DEFAULT },
   capture: { min: CAPTURE_MIN, max: CAPTURE_MAX, def: CAPTURE_DEFAULT },
-  reflect: { min: LIBRARY_MIN, max: LIBRARY_MAX, def: LIBRARY_DEFAULT },
+  reflect: { min: REFLECT_MIN, max: REFLECT_MAX, def: REFLECT_DEFAULT },
 };
 
 const RAIL_KEY = 'vital:rail-collapsed';

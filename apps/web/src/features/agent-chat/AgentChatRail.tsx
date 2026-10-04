@@ -3,6 +3,7 @@ import { MessageSquare } from 'lucide-react';
 import { useEffect, useRef, useState, type FC, type PointerEvent as ReactPointerEvent } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { AgentChatPanel } from './AgentChatPanel';
 import { AgentChatService } from './agent-chat.service';
 import {
@@ -31,23 +32,24 @@ export const AgentChatRail: FC = observer(function AgentChatRail() {
 
   if (!chat.enabled) return null;
 
+  const overlay = viewport < AGENT_CHAT_DOCK_MIN_PX;
+
   if (!chat.open) {
     return (
-      <button
-        type="button"
-        data-region="agent-entry"
-        className="fixed top-[22%] right-0 z-20 flex w-8 flex-col items-center gap-2 rounded-l-[10px] border border-r-0 border-border bg-surface py-3 text-muted shadow-[var(--shadow)] hover:bg-surface-muted hover:text-fg"
-        aria-label={t.agentChat.expand}
-        aria-expanded={false}
-        onClick={() => chat.toggle()}
-      >
-        <Icon icon={MessageSquare} strokeWidth={1.8} />
-        <span className="text-[12px] tracking-[0.14em] [writing-mode:vertical-rl]">{t.agentChat.title}</span>
-      </button>
+      <Tip label={t.agentChat.expand} side="left">
+        <button
+          type="button"
+          data-region="agent-entry"
+          className="fixed bottom-6 right-6 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-muted shadow-[var(--shadow)] hover:bg-surface-muted hover:text-fg"
+          aria-label={t.agentChat.expand}
+          aria-expanded={false}
+          onClick={() => chat.toggle()}
+        >
+          <Icon icon={MessageSquare} strokeWidth={1.8} />
+        </button>
+      </Tip>
     );
   }
-
-  const overlay = viewport < AGENT_CHAT_DOCK_MIN_PX;
 
   function applyWidth(next: number): void {
     const clamped = clampAgentChatWidth(next);

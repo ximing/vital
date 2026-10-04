@@ -52,6 +52,8 @@ export const t = {
     retry: '重试',
     loading: '加载中',
     history: '往期',
+    hideHistory: '收起往期',
+    showHistory: '展开往期',
     period: '周期',
     periodStats: '周期统计',
     streakHint: '格子深浅是完成多少，小点是写下的日子。点一天打开。',

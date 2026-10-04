@@ -196,6 +196,7 @@ describe('reports workspace', () => {
   });
 
   beforeEach(() => {
+    localStorage.removeItem('vital:reports-calendar-collapsed');
     resetReportUi();
     setAuthForTest(mockUser);
     vi.mocked(client.getCurrentReport).mockImplementation(async (type) =>
@@ -269,6 +270,26 @@ describe('reports workspace', () => {
     expect(screen.getByRole('button', { name: t.reports.table })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.reports.attach })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.reports.link })).toBeInTheDocument();
+  });
+
+  it('collapses the history sidebar and restores that choice', async () => {
+    const user = userEvent.setup();
+    renderAt('/reports/r-daily');
+    expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: t.reports.hideHistory }));
+    expect(screen.queryByTestId('streak-calendar')).not.toBeInTheDocument();
+    expect(screen.queryByText(t.reports.periodStats)).not.toBeInTheDocument();
+    const collapsedPane = document.querySelector('[data-region="calendar-pane"]');
+    expect(collapsedPane).toHaveAttribute('data-collapsed', 'true');
+    expect(localStorage.getItem('vital:reports-calendar-collapsed')).toBe('1');
+
+    renderAt('/reports/r-daily');
+    const reopen = (await screen.findAllByRole('button', { name: t.reports.showHistory })).at(-1)!;
+    expect(reopen).toHaveAttribute('aria-expanded', 'false');
+    await user.click(reopen);
+    expect(await screen.findByTestId('streak-calendar')).toBeInTheDocument();
+    expect(screen.getAllByText(t.reports.periodStats).length).toBeGreaterThan(0);
+    expect(localStorage.getItem('vital:reports-calendar-collapsed')).toBe('0');
   });
 
   it('opens a past day from the streak calendar', async () => {
