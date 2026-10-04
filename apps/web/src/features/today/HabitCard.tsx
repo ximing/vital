@@ -45,12 +45,23 @@ export function HabitCard({
       aria-checked={complete}
       aria-label={habit.name}
       disabled={!tickable || pending}
+      aria-busy={pending || undefined}
       data-region="habit-row"
       data-habit-id={habit.id}
       onClick={() => void tick()}
-      className="group/habit flex min-w-0 w-full items-center gap-3 rounded-xl border border-border bg-elevated px-3 py-2.5 text-left transition-[background-color,border-color] duration-[var(--ease-out)] cursor-pointer enabled:hover:border-accent enabled:hover:bg-surface disabled:cursor-default"
+      className={`group/habit flex min-w-0 w-full items-center gap-3 rounded-xl border bg-elevated px-3 py-2.5 text-left transition-[background-color,border-color] duration-[var(--ease-out)] ${
+        pending
+          ? 'cursor-wait border-accent disabled:cursor-wait'
+          : 'cursor-pointer border-border enabled:hover:border-accent enabled:hover:bg-surface disabled:cursor-default'
+      }`}
     >
-      <HabitRing done={done} total={total} complete={complete} interactive={tickable && !pending} />
+      <HabitRing
+        done={done}
+        total={total}
+        complete={complete}
+        interactive={tickable && !pending}
+        pending={pending}
+      />
       <span className="flex min-w-0 flex-1 flex-col items-start">
         <span
           className={`block max-w-full truncate text-[length:var(--text-body)] font-semibold leading-[var(--text-body-lh)] ${

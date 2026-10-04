@@ -542,13 +542,27 @@ describe('today workspace', () => {
     };
     vi.mocked(client.listHabits).mockResolvedValue([habit]);
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
-    vi.mocked(client.tickHabit).mockResolvedValue({ ...habit, todayDone: 1, todayTotal: 1 });
+    let release: (value: typeof habit) => void = () => {};
+    vi.mocked(client.tickHabit).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
     renderToday();
     const ring = await screen.findByRole('checkbox', { name: '喝水' });
     expect(ring).toBeEnabled();
     await user.click(ring);
     await waitFor(() => {
+      expect(ring).toHaveAttribute('aria-busy', 'true');
+    });
+    expect(ring.querySelector('.animate-spin')).not.toBeNull();
+    release({ ...habit, todayDone: 1, todayTotal: 1 });
+    await waitFor(() => {
       expect(client.tickHabit).toHaveBeenCalledWith('h-water');
+    });
+    await waitFor(() => {
+      expect(ring).not.toHaveAttribute('aria-busy');
     });
     expect(client.completeTask).not.toHaveBeenCalled();
   });

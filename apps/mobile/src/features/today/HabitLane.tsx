@@ -1,5 +1,13 @@
-import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { router } from 'expo-router';
 import { Check } from 'lucide-react-native';
@@ -25,6 +33,7 @@ function HabitRing({
   done,
   total,
   complete,
+  pending = false,
   color,
   track,
   fillBg,
@@ -33,6 +42,7 @@ function HabitRing({
   done: number;
   total: number;
   complete: boolean;
+  pending?: boolean;
   color: string;
   track: string;
   fillBg: string;
@@ -71,6 +81,7 @@ function HabitRing({
           />
         ) : null}
       </Svg>
+      {pending ? <ActivityIndicator size="small" color={color} style={ringStyles.spinner} /> : null}
     </View>
   );
 }
@@ -84,12 +95,26 @@ function HabitCard({
   habit: Habit;
   width?: number;
   flex?: number;
-  onTick: (habit: Habit) => void;
+  onTick: (habit: Habit) => void | Promise<void>;
 }) {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const { done, total, complete } = habitProgress(habit);
-  const canTick = !complete;
+  const pendingRef = useRef(false);
+  const [pending, setPending] = useState(false);
+  const canTick = !complete && !pending;
+
+  async function tick(): Promise<void> {
+    if (complete || pendingRef.current) return;
+    pendingRef.current = true;
+    setPending(true);
+    try {
+      await onTick(habit);
+    } finally {
+      pendingRef.current = false;
+      setPending(false);
+    }
+  }
   const sub = complete
     ? copy.habits.todayDone
     : copy.today.habitLaneToday.replace('{done}', String(done)).replace('{total}', String(total));
@@ -101,12 +126,12 @@ function HabitCard({
     >
       <Pressable
         accessibilityRole="checkbox"
-        accessibilityState={{ checked: complete, disabled: !canTick }}
+        accessibilityState={{ checked: complete, disabled: !canTick, busy: pending }}
         accessibilityLabel={habit.name}
         disabled={!canTick}
         hitSlop={8}
         onPress={() => {
-          if (canTick) onTick(habit);
+          void tick();
         }}
         style={styles.ringHit}
       >
@@ -114,6 +139,7 @@ function HabitCard({
           done={done}
           total={total}
           complete={complete}
+          pending={pending}
           color={t.statusDone}
           track={t.borderSubtle}
           fillBg={t.statusDone}
@@ -141,7 +167,7 @@ export function HabitLane({
   onEnableHabit,
 }: {
   habits: Habit[];
-  onTick: (habit: Habit) => void;
+  onTick: (habit: Habit) => void | Promise<void>;
   onEnableHabit: (input: CreateHabitInput) => Promise<void>;
 }) {
   const t = useTheme();
@@ -247,8 +273,9 @@ const createStyles = (t: Theme) =>
   });
 
 const ringStyles = StyleSheet.create({
-  box: { width: RING, height: RING },
+  box: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
   svg: { transform: [{ rotate: '-90deg' }] },
+  spinner: { position: 'absolute' },
   fill: {
     width: RING,
     height: RING,

@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check, LoaderCircle } from 'lucide-react';
 
 const RING_C = 2 * Math.PI * 17;
 
@@ -9,6 +9,7 @@ const RING_C = 2 * Math.PI * 17;
  * lists. Paused habits render as an empty track.
  *
  * `interactive` previews a check-in when an ancestor `group/habit` is hovered.
+ * `pending` replaces that preview with a spinner until the check-in settles.
  */
 export function HabitRing({
   done,
@@ -16,12 +17,14 @@ export function HabitRing({
   complete,
   paused = false,
   interactive = false,
+  pending = false,
 }: {
   done: number;
   total: number;
   complete: boolean;
   paused?: boolean;
   interactive?: boolean;
+  pending?: boolean;
 }) {
   if (complete) {
     return (
@@ -51,9 +54,11 @@ export function HabitRing({
           fill="none"
           strokeWidth="3.5"
           className={
-            interactive
-              ? 'stroke-border transition-[stroke] duration-[var(--ease-out)] group-hover/habit:stroke-accent'
-              : 'stroke-border'
+            pending
+              ? 'stroke-accent'
+              : interactive
+                ? 'stroke-border transition-[stroke] duration-[var(--ease-out)] group-hover/habit:stroke-accent'
+                : 'stroke-border'
           }
         />
         {progress > 0 ? (
@@ -70,7 +75,14 @@ export function HabitRing({
           />
         ) : null}
       </svg>
-      {interactive ? (
+      {pending ? (
+        <LoaderCircle
+          size={16}
+          strokeWidth={2.25}
+          aria-hidden
+          className="relative animate-spin text-accent motion-reduce:animate-none"
+        />
+      ) : interactive ? (
         <Check
           size={16}
           strokeWidth={3.2}

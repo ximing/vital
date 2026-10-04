@@ -125,7 +125,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
 
         <HabitLane
           habits={habits}
-          onTick={(habit) => void s.tickHabit(habit)}
+          onTick={(habit) => s.tickHabit(habit)}
           onEnableHabit={(input) => s.enableHabit(input)}
         />
 

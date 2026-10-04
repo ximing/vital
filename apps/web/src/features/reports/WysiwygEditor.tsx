@@ -27,7 +27,7 @@ import {
   Strikethrough,
   Table as TableIcon,
 } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent, type FC, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FC, type MouseEvent } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
 import { Tip } from '@/ui/tip';
@@ -136,6 +136,63 @@ export const WysiwygEditor: FC<{
   const [, bump] = useState(0);
   const ingestRef = useRef<(files: FileList | File[]) => Promise<void>>(async () => undefined);
   const uploadUrls = useUploadUrls(liveMd);
+  // useEditor calls setOptions whenever extensions, content, or editorProps
+  // change identity. setOptions runs view.updateState, which redraws the doc
+  // and drops the caret (and IME) while typing. Keep these stable.
+  const [initialContent] = useState(() => asPm(bodyMd));
+  const extensions = useMemo(
+    () => [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+      }),
+      Link.configure({
+        openOnClick: false,
+        autolink: true,
+      }),
+      UploadedImage,
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Placeholder.configure({
+        placeholder: t.empty.reportEditor,
+      }),
+      VitalEntity,
+    ],
+    [],
+  );
+  const editorProps = useMemo(
+    () => ({
+      attributes: {
+        class: 'report-doc tiptap',
+        'aria-label': t.reports.body,
+        spellcheck: 'true' as const,
+      },
+      handleKeyDown: (_view: unknown, event: KeyboardEvent) => {
+        if (event.key === 'Enter' && reportsUi.slash) return true;
+        return false;
+      },
+      handlePaste: (_view: unknown, event: ClipboardEvent) => {
+        const files = event.clipboardData?.files;
+        if (files && files.length > 0) {
+          event.preventDefault();
+          void ingestRef.current(files);
+          return true;
+        }
+        return false;
+      },
+      handleDrop: (_view: unknown, event: DragEvent) => {
+        const files = event.dataTransfer?.files;
+        if (files && files.length > 0) {
+          event.preventDefault();
+          void ingestRef.current(files);
+          return true;
+        }
+        return false;
+      },
+    }),
+    [reportsUi],
+  );
 
   useEffect(() => {
     imageNodeUrlState.urls = uploadUrls;
@@ -191,56 +248,9 @@ export const WysiwygEditor: FC<{
   const editor = useEditor({
     immediatelyRender: false,
     editable,
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-      }),
-      Link.configure({
-        openOnClick: false,
-        autolink: true,
-      }),
-      UploadedImage,
-      Table.configure({ resizable: false }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Placeholder.configure({
-        placeholder: t.empty.reportEditor,
-      }),
-      VitalEntity,
-    ],
-    content: asPm(bodyMd),
-    editorProps: {
-      attributes: {
-        class: 'report-doc tiptap',
-        'aria-label': t.reports.body,
-        spellcheck: 'true',
-      },
-      handleKeyDown: (_view, event) => {
-        if (event.key === 'Enter' && reportsUi.slash) {
-          return true;
-        }
-        return false;
-      },
-      handlePaste: (_view, event) => {
-        const files = event.clipboardData?.files;
-        if (files && files.length > 0) {
-          event.preventDefault();
-          void ingestRef.current(files);
-          return true;
-        }
-        return false;
-      },
-      handleDrop: (_view, event) => {
-        const files = event.dataTransfer?.files;
-        if (files && files.length > 0) {
-          event.preventDefault();
-          void ingestRef.current(files);
-          return true;
-        }
-        return false;
-      },
-    },
+    extensions,
+    content: initialContent,
+    editorProps,
     onCreate: ({ editor: instance }) => {
       const md = serializePmJSONToMarkdown(instance.getJSON());
       hydrated.current = true;
