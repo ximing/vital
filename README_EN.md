@@ -125,11 +125,14 @@ The plugin manifest lives at [`.cursor-plugin/plugin.json`](.cursor-plugin/plugi
 
 ##### Grok Build CLI
 
-Copy into Grok's user skills directory (Grok loads `SKILL.md` from there):
+Install from [ximing/grok-plugins](https://github.com/ximing/grok-plugins). GitHub Actions vendors this skill when `skills/**` or the plugin manifest changes:
 
 ```bash
-cp -r skills/vital ~/.grok/skills/
+grok plugin marketplace add ximing/grok-plugins
+grok plugin install vital --trust
 ```
+
+Or manually: `cp -r skills/vital ~/.grok/skills/`.
 
 ##### Kimi Code
 

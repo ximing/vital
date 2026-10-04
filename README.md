@@ -125,11 +125,14 @@ codex plugin add vital@vital
 
 ##### Grok Build CLI
 
-复制到 Grok 的用户技能目录（Grok 会自动加载 `SKILL.md`）：
+从 [ximing/grok-plugins](https://github.com/ximing/grok-plugins) 安装。`skills/**` 或插件清单有变更时，GitHub Actions 会把这份 skill 同步过去：
 
 ```bash
-cp -r skills/vital ~/.grok/skills/
+grok plugin marketplace add ximing/grok-plugins
+grok plugin install vital --trust
 ```
+
+或手动：`cp -r skills/vital ~/.grok/skills/`。
 
 ##### Kimi Code
 
