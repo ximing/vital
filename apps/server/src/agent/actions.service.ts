@@ -254,6 +254,7 @@ async function materializeProposedSubtasks(
           isAllDay: created.isAllDay,
           timezone: created.timezone,
           deletedAt: created.deletedAt ?? null,
+          createdAt: created.createdAt,
         },
         user,
         now,

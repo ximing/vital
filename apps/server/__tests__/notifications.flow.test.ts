@@ -115,6 +115,38 @@ describe('notification channels and outbox', () => {
     expect(after[0]?.status).toBe('cancelled');
   });
 
+  it('does not push an all-day today task created after the morning slot', async () => {
+    const alice = await registerUser(app);
+    const listId = await inboxId(app, alice.token);
+    const prefs = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { notifications: { allDayNotifyTime: '00:00' } },
+    });
+    expect(prefs.statusCode).toBe(200);
+
+    const dueYmd = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '下午才记的事', listId, dueYmd },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const rows = await db
+      .select()
+      .from(notificationOutbox)
+      .where(eq(notificationOutbox.entityId, created.json().id as string));
+    expect(rows).toHaveLength(0);
+  });
+
   it('PATCH /auth/me stores notification prefs', async () => {
     const alice = await registerUser(app);
     const me = await injectJson(app, {
