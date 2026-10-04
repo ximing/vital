@@ -248,3 +248,45 @@ export const extensionAuthCodeResponseSchema = z.object({
   expiresIn: z.number().int().positive(),
 });
 export type ExtensionAuthCodeResponse = z.infer<typeof extensionAuthCodeResponseSchema>;
+
+/** Payload inside the web login QR. Secret is base64url and never contains `:`. */
+export const QR_LOGIN_PAYLOAD_PREFIX = 'vital-login:1:';
+
+export const qrLoginTicketInputSchema = z.object({
+  id: z.string().uuid(),
+  secret: z.string().regex(/^[A-Za-z0-9_-]{20,128}$/),
+});
+export type QrLoginTicketInput = z.infer<typeof qrLoginTicketInputSchema>;
+
+export interface QrLoginTicket {
+  id: string;
+  secret: string;
+  expiresAt: string;
+}
+
+export interface QrLoginDecision {
+  status: 'scanned' | 'confirmed' | 'cancelled';
+}
+
+export interface QrLoginPollResponse {
+  status: 'pending' | 'scanned' | 'expired' | 'cancelled' | 'confirmed';
+  user?: UserProfile;
+  tokens?: AuthTokens;
+}
+
+export function formatQrLoginPayload(ticket: QrLoginTicketInput): string {
+  return `${QR_LOGIN_PAYLOAD_PREFIX}${ticket.id}:${ticket.secret}`;
+}
+
+export function parseQrLoginPayload(raw: string): QrLoginTicketInput | null {
+  const text = raw.trim();
+  if (!text.startsWith(QR_LOGIN_PAYLOAD_PREFIX)) return null;
+  const rest = text.slice(QR_LOGIN_PAYLOAD_PREFIX.length);
+  const split = rest.indexOf(':');
+  if (split <= 0) return null;
+  const parsed = qrLoginTicketInputSchema.safeParse({
+    id: rest.slice(0, split),
+    secret: rest.slice(split + 1),
+  });
+  return parsed.success ? parsed.data : null;
+}

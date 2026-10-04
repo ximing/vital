@@ -96,6 +96,48 @@ describe('createVitalClient auth + upload methods', () => {
     ]);
   });
 
+  it('QR poll persists a cookie session only after the phone confirms', async () => {
+    const store = memoryStore();
+    const urls: string[] = [];
+    const client = createVitalClient({
+      baseUrl: 'http://x',
+      authMode: 'cookie',
+      tokenStore: store,
+      fetchImpl: (url, init) => {
+        const u = urlOf(url);
+        urls.push(`${init?.method ?? 'GET'} ${u}`);
+        if (u.endsWith('/auth/qr')) {
+          return respond(201, {
+            id: '11111111-1111-4111-8111-111111111111',
+            secret: 'a'.repeat(32),
+            expiresAt: '2026-10-04T00:02:00.000Z',
+          });
+        }
+        const body = bodyOf(init) as { secret?: string };
+        if (body.secret === 'pending') return respond(200, { status: 'pending' });
+        return respond(200, {
+          status: 'confirmed',
+          user,
+          tokens: { accessToken: 'web', refreshToken: 'should-not-stick', expiresIn: 900 },
+        });
+      },
+    });
+    const ticket = await client.createQrLogin();
+    expect(ticket.secret).toHaveLength(32);
+    const pending = await client.pollQrLogin({ id: ticket.id, secret: 'pending' });
+    expect(pending.status).toBe('pending');
+    expect(store.tokens).toBeNull();
+    const confirmed = await client.pollQrLogin({ id: ticket.id, secret: ticket.secret });
+    expect(confirmed.status).toBe('confirmed');
+    expect(store.tokens?.accessToken).toBe('web');
+    expect(store.tokens?.refreshToken).toBeUndefined();
+    expect(urls).toEqual([
+      'POST http://x/api/v1/auth/qr',
+      'POST http://x/api/v1/auth/qr/poll',
+      'POST http://x/api/v1/auth/qr/poll',
+    ]);
+  });
+
   it('cookie login does not persist a leaked refreshToken string', async () => {
     const store = memoryStore();
     const client = createVitalClient({

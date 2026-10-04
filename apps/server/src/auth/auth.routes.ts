@@ -2,6 +2,7 @@ import {
   changePasswordInputSchema,
   exchangeExtensionAuthInputSchema,
   loginInputSchema,
+  qrLoginTicketInputSchema,
   refreshInputSchema,
   registerInputSchema,
   updateMeInputSchema,
@@ -16,6 +17,9 @@ import {
   limitChangePassword,
   limitExtensionAuth,
   limitLogin,
+  limitQrCreate,
+  limitQrDecide,
+  limitQrPoll,
   limitRefresh,
   limitRegister,
 } from '../plugins/rate-limit.js';
@@ -36,6 +40,13 @@ import {
   readRefreshCookie,
   setRefreshCookie,
 } from './cookies.js';
+import {
+  cancelQrLogin,
+  confirmQrLogin,
+  createQrLogin,
+  pollQrLogin,
+  scanQrLogin,
+} from './qr-login.service.js';
 import { redeemRefreshToken, revokeRefreshToken, signAccessToken } from './token.service.js';
 
 function modeOf(req: FastifyRequest): AuthMode {
@@ -70,6 +81,49 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     if (mode === 'cookie') setRefreshCookie(reply, refreshToken);
     return reply.send(response);
   });
+
+  app.post('/api/v1/auth/qr', { preHandler: [limitQrCreate] }, async (_req, reply) => {
+    const ticket = await createQrLogin();
+    return reply.code(201).send(ticket);
+  });
+
+  app.post('/api/v1/auth/qr/poll', { preHandler: [limitQrPoll] }, async (req, reply) => {
+    const input = qrLoginTicketInputSchema.parse(req.body);
+    const mode = modeOf(req);
+    const result = await pollQrLogin(input, mode, deviceInfoFrom(req));
+    if (result.status !== 'confirmed') return reply.send(result);
+    if (mode === 'cookie') setRefreshCookie(reply, result.refreshToken);
+    return reply.send({ status: 'confirmed', ...result.response });
+  });
+
+  app.post(
+    '/api/v1/auth/qr/scan',
+    { preHandler: [requireAuth, limitQrDecide] },
+    async (req, reply) => {
+      const input = qrLoginTicketInputSchema.parse(req.body);
+      return reply.send(await scanQrLogin(input));
+    },
+  );
+
+  app.post(
+    '/api/v1/auth/qr/confirm',
+    { preHandler: [requireAuth, limitQrDecide] },
+    async (req, reply) => {
+      const user = req.user;
+      if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+      const input = qrLoginTicketInputSchema.parse(req.body);
+      return reply.send(await confirmQrLogin(user.id, input));
+    },
+  );
+
+  app.post(
+    '/api/v1/auth/qr/cancel',
+    { preHandler: [requireAuth, limitQrDecide] },
+    async (req, reply) => {
+      const input = qrLoginTicketInputSchema.parse(req.body);
+      return reply.send(await cancelQrLogin(input));
+    },
+  );
 
   app.post('/api/v1/auth/refresh', { preHandler: [limitRefresh] }, async (req, reply) => {
     const resolved = resolveRefreshRaw(req);

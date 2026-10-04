@@ -100,6 +100,14 @@ const config: ExpoConfig = {
         photosPermission: '允许 Vital 选取头像。',
       },
     ],
+    [
+      'expo-camera',
+      {
+        cameraPermission: '允许 Vital 扫描网页登录二维码。',
+        microphonePermission: false,
+        recordAudioAndroid: false,
+      },
+    ],
     withEnvReleaseSigning as unknown as string,
     withHuaweiPush as unknown as string,
   ],

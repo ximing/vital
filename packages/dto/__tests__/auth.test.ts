@@ -3,7 +3,11 @@ import {
   changePasswordInputSchema,
   chromeExtensionIdSchema,
   exchangeExtensionAuthInputSchema,
+  formatQrLoginPayload,
   loginInputSchema,
+  parseQrLoginPayload,
+  QR_LOGIN_PAYLOAD_PREFIX,
+  qrLoginTicketInputSchema,
   registerInputSchema,
   updateMeInputSchema,
   updateOnboardingInputSchema,
@@ -61,6 +65,23 @@ describe('registerInputSchema', () => {
       displayName: 'A',
     });
     expect(input.password).toHaveLength(128);
+  });
+});
+
+describe('qr login payload', () => {
+  it('parses a web login QR payload and rejects anything else', () => {
+    const ticket = {
+      id: '11111111-1111-4111-8111-111111111111',
+      secret: 'a'.repeat(32),
+    };
+    const payload = formatQrLoginPayload(ticket);
+    expect(parseQrLoginPayload(payload)).toEqual(ticket);
+    expect(parseQrLoginPayload(`  ${payload}  `)).toEqual(ticket);
+    expect(parseQrLoginPayload('https://example.com')).toBeNull();
+    expect(parseQrLoginPayload(`${QR_LOGIN_PAYLOAD_PREFIX}${ticket.id}:short`)).toBeNull();
+    expect(qrLoginTicketInputSchema.safeParse({ id: 'nope', secret: 'a'.repeat(32) }).success).toBe(
+      false,
+    );
   });
 });
 

@@ -90,6 +90,9 @@ const defaults = {
   inbox: isTest ? 1000 : 30,
   notify: isTest ? 1000 : 10,
   extensionAuth: isTest ? 1000 : 20,
+  qrCreate: isTest ? 1000 : 10,
+  qrPoll: isTest ? 1000 : 90,
+  qrDecide: isTest ? 1000 : 30,
   llm: isTest ? 1000 : 20,
   inwit: isTest ? 1000 : 20,
 };
@@ -204,6 +207,22 @@ export function limitNotify(req: FastifyRequest): Promise<void> {
 export function limitExtensionAuth(req: FastifyRequest): Promise<void> {
   const userId = req.user?.id ?? '';
   hit('extensionAuth', `${ipFrom(req)}:${userId}`);
+  return Promise.resolve();
+}
+
+export function limitQrCreate(req: FastifyRequest): Promise<void> {
+  hit('qrCreate', ipFrom(req));
+  return Promise.resolve();
+}
+
+export function limitQrPoll(req: FastifyRequest): Promise<void> {
+  hit('qrPoll', ipFrom(req));
+  return Promise.resolve();
+}
+
+export function limitQrDecide(req: FastifyRequest): Promise<void> {
+  const userId = req.user?.id ?? '';
+  hit('qrDecide', `${ipFrom(req)}:${userId}`);
   return Promise.resolve();
 }
 

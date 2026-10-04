@@ -40,6 +40,7 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 | `EMAIL_ALREADY_REGISTERED` | 邮箱已注册 |
 | `INVALID_OLD_PASSWORD` | 原密码错误 |
 | `AUTH_CODE_INVALID` | 授权码无效或已过期 |
+| `QR_LOGIN_INVALID` | 二维码无效或已过期 |
 | `ATTACHMENT_NOT_FOUND` | 附件不存在 |
 | `MEDIA_TOO_LARGE` | 文件过大 |
 | `MEDIA_INVALID_STATE` | 上传状态不允许此操作 |

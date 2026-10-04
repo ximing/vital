@@ -21,6 +21,7 @@ import {
   attachments,
   entityLinks,
   extensionAuthCodes,
+  qrLoginTickets,
   days,
   habits,
   holidayCalendar,
@@ -119,6 +120,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(apiTokenAccessLogs);
     await db.delete(apiTokens);
     await db.delete(extensionAuthCodes);
+    await db.delete(qrLoginTickets);
     await db.delete(userLlmRoutes);
     await db.delete(userLlmProviders);
     await db.delete(userInwitConfig);

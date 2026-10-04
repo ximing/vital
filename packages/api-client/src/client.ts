@@ -39,6 +39,10 @@ import type {
   CurrentReportQuery,
   ExchangeExtensionAuthInput,
   ExtensionAuthCodeResponse,
+  QrLoginDecision,
+  QrLoginPollResponse,
+  QrLoginTicket,
+  QrLoginTicketInput,
   FillReportInput,
   GetReportQuery,
   ReportGenerateTrigger,
@@ -130,6 +134,11 @@ export interface VitalClient {
   login(input: LoginInput): Promise<AuthResponse>;
   createExtensionAuthCode(): Promise<ExtensionAuthCodeResponse>;
   exchangeExtensionAuth(input: ExchangeExtensionAuthInput): Promise<AuthResponse>;
+  createQrLogin(): Promise<QrLoginTicket>;
+  pollQrLogin(input: QrLoginTicketInput): Promise<QrLoginPollResponse>;
+  scanQrLogin(input: QrLoginTicketInput): Promise<QrLoginDecision>;
+  confirmQrLogin(input: QrLoginTicketInput): Promise<QrLoginDecision>;
+  cancelQrLogin(input: QrLoginTicketInput): Promise<QrLoginDecision>;
   refresh(): Promise<AuthResponse>;
   logout(): Promise<void>;
   me(): Promise<UserProfile>;
@@ -339,6 +348,31 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
           body: input,
         }),
       ),
+    createQrLogin: () =>
+      http.request('/api/v1/auth/qr', {
+        method: 'POST',
+        skipAuth: true,
+        skipAuthRefresh: true,
+        body: {},
+      }),
+    pollQrLogin: async (input) => {
+      const data: QrLoginPollResponse = await http.request('/api/v1/auth/qr/poll', {
+        method: 'POST',
+        skipAuth: true,
+        skipAuthRefresh: true,
+        body: input,
+      });
+      if (data.status === 'confirmed' && data.user && data.tokens) {
+        await persistAuth(options, { user: data.user, tokens: data.tokens });
+      }
+      return data;
+    },
+    scanQrLogin: (input) =>
+      http.request('/api/v1/auth/qr/scan', { method: 'POST', body: input }),
+    confirmQrLogin: (input) =>
+      http.request('/api/v1/auth/qr/confirm', { method: 'POST', body: input }),
+    cancelQrLogin: (input) =>
+      http.request('/api/v1/auth/qr/cancel', { method: 'POST', body: input }),
     refresh: () => http.refresh(),
     logout: async () => {
       let body: { refreshToken?: string } = {};

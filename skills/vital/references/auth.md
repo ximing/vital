@@ -49,6 +49,28 @@ export interface AuthResponse {
 }
 ```
 
+```ts
+export interface QrLoginTicket {
+  id: string;
+  secret: string;
+  expiresAt: string;
+}
+```
+
+```ts
+export interface QrLoginDecision {
+  status: 'scanned' | 'confirmed' | 'cancelled';
+}
+```
+
+```ts
+export interface QrLoginPollResponse {
+  status: 'pending' | 'scanned' | 'expired' | 'cancelled' | 'confirmed';
+  user?: UserProfile;
+  tokens?: AuthTokens;
+}
+```
+
 ## Endpoints
 
 #### `POST /api/v1/auth/change-password`
@@ -148,6 +170,67 @@ Request body (`updateOnboardingInputSchema`):
 - `openedWeekly`: boolean (optional)
 - `pinnedTask`: boolean (optional)
 - `dismissed`: boolean (optional)
+
+#### `POST /api/v1/auth/qr`
+
+Create Qr Login
+
+- Auth: none
+- Client: `createQrLogin`
+- Status: 201
+- Response: `QrLoginTicket`
+
+#### `POST /api/v1/auth/qr/cancel`
+
+Cancel Qr Login
+
+- Auth: Bearer required
+- Client: `cancelQrLogin`
+- Response: `QrLoginDecision`
+
+Request body (`qrLoginTicketInputSchema`):
+
+- `id`: uuid
+- `secret`: string pattern
+
+#### `POST /api/v1/auth/qr/confirm`
+
+Confirm Qr Login
+
+- Auth: Bearer required
+- Client: `confirmQrLogin`
+- Response: `QrLoginDecision`
+
+Request body (`qrLoginTicketInputSchema`):
+
+- `id`: uuid
+- `secret`: string pattern
+
+#### `POST /api/v1/auth/qr/poll`
+
+Poll Qr Login
+
+- Auth: none
+- Client: `pollQrLogin`
+- Response: `QrLoginPollResponse`
+
+Request body (`qrLoginTicketInputSchema`):
+
+- `id`: uuid
+- `secret`: string pattern
+
+#### `POST /api/v1/auth/qr/scan`
+
+Scan Qr Login
+
+- Auth: Bearer required
+- Client: `scanQrLogin`
+- Response: `QrLoginDecision`
+
+Request body (`qrLoginTicketInputSchema`):
+
+- `id`: uuid
+- `secret`: string pattern
 
 #### `POST /api/v1/auth/refresh`
 

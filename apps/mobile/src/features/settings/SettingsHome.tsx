@@ -10,10 +10,11 @@ import {
   ONBOARDING_CHECKLIST_KEYS,
 } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
-import { Activity, Brain, CalendarDays, Repeat, Waypoints } from 'lucide-react-native';
+import { Activity, Brain, CalendarDays, Repeat, ScanLine, Waypoints } from 'lucide-react-native';
 import { Banner } from '../../components/Banner';
 import { Button } from '../../components/Button';
 import { Field } from '../../components/Field';
+import { IconButton } from '../../components/IconButton';
 import { NavRow } from '../../components/NavRow';
 import { PageHeader } from '../../components/PageHeader';
 import { PickerOption, PickerSheet } from '../../components/PickerSheet';
@@ -29,6 +30,8 @@ import type { LucideIcon } from '../../ui/icon';
 import { formatProgress, progressRatio } from './app-update';
 import { LlmSection } from './LlmSection';
 import { InwitSection } from './InwitSection';
+import { QrLoginScanner } from './QrLoginScanner';
+import { QrLoginScanService } from './qr-login.service';
 import { SettingsService } from './settings.service';
 
 const ZONES = [
@@ -51,6 +54,7 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const s = useService(SettingsService);
+  const scan = useService(QrLoginScanService);
   const auth = s.auth;
   const user = auth.user;
   useFocusReload(useCallback(() => s.load(), [s]));
@@ -121,7 +125,13 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
 
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
-      <PageHeader title={copy.nav.me} />
+      <PageHeader
+        title={copy.nav.me}
+        trailing={
+          <IconButton icon={ScanLine} label={copy.me.scanLogin} onPress={() => scan.show()} />
+        }
+      />
+      {scan.open ? <QrLoginScanner /> : null}
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {error ? (
           <View style={styles.bannerWrap}>
@@ -502,7 +512,10 @@ function versionValue(update: {
   return update.current.versionName;
 }
 
-export const SettingsHome = bindServices(SettingsHomeContent, [SettingsService]);
+export const SettingsHome = bindServices(SettingsHomeContent, [
+  SettingsService,
+  QrLoginScanService,
+]);
 
 const createStyles = (t: Theme) =>
   StyleSheet.create({
