@@ -7,6 +7,7 @@ import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { Button } from '@/ui/button';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { InboxPageService } from './inbox-page.service';
 import {
   EXTRACT_JOB_PAGE_SIZE,
@@ -34,15 +35,18 @@ function JobRows({ items, timeZone }: { items: ExtractJobListItem[]; timeZone: s
         const failed = item.status === 'failed';
         return (
           <li key={item.id} className="border-b border-border py-4 last:border-b-0">
-            <p
-              className="truncate text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-fg"
-              title={item.url}
-            >
-              {jobLinkLabel(item.url)}
-            </p>
+            <Tip label={item.url}>
+              <p className="truncate text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-fg">
+                {jobLinkLabel(item.url)}
+              </p>
+            </Tip>
             <p className="mt-1 font-mono text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] tabular-nums text-tertiary">
-              <span className={failed ? 'text-danger' : undefined}>{t.inbox.jobs.status[item.status]}</span>
-              {failed ? <span className="text-danger"> · {jobErrorLabel(item.errorCode)}</span> : null}
+              <span className={failed ? 'text-danger' : undefined}>
+                {t.inbox.jobs.status[item.status]}
+              </span>
+              {failed ? (
+                <span className="text-danger"> · {jobErrorLabel(item.errorCode)}</span>
+              ) : null}
               {when ? <span> · {formatCapturedAt(when, timeZone)}</span> : null}
             </p>
           </li>

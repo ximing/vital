@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import type { CalendarInstance } from '@vital/dto';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { formatHumanDay } from './model';
 import { priorityBarClass, PriorityMark } from './priority';
 import { addDaysYmd, formatHm, formatYmd, todayYmd, weekdayInZone } from './model';
@@ -51,14 +52,16 @@ export function WeekView({
           {heading}
         </p>
         <div className="flex items-center gap-0.5 rounded-2xl bg-surface p-0.5 shadow-[inset_0_0_0_1px_var(--border-subtle)]">
-          <button
-            type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-surface-muted hover:text-fg"
-            onClick={() => onSelectDay(addDaysYmd(start, -7))}
-            aria-label={t.todos.weekPrev}
-          >
-            <Icon icon={ChevronLeft} size={16} />
-          </button>
+          <Tip label={t.todos.weekPrev}>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-surface-muted hover:text-fg"
+              onClick={() => onSelectDay(addDaysYmd(start, -7))}
+              aria-label={t.todos.weekPrev}
+            >
+              <Icon icon={ChevronLeft} size={16} />
+            </button>
+          </Tip>
           <button
             type="button"
             className="h-8 rounded-xl px-3 text-[length:var(--text-caption)] text-muted hover:bg-surface-muted hover:text-fg"
@@ -66,14 +69,16 @@ export function WeekView({
           >
             {t.todos.weekThis}
           </button>
-          <button
-            type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-surface-muted hover:text-fg"
-            onClick={() => onSelectDay(addDaysYmd(start, 7))}
-            aria-label={t.todos.weekNext}
-          >
-            <Icon icon={ChevronRight} size={16} />
-          </button>
+          <Tip label={t.todos.weekNext}>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted hover:bg-surface-muted hover:text-fg"
+              onClick={() => onSelectDay(addDaysYmd(start, 7))}
+              aria-label={t.todos.weekNext}
+            >
+              <Icon icon={ChevronRight} size={16} />
+            </button>
+          </Tip>
         </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-7 overflow-hidden rounded-2xl bg-surface shadow-[var(--shadow)]">

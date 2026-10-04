@@ -11,6 +11,7 @@ import {
   type CalendarView,
 } from '@/lib/calendar-grid';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
@@ -100,16 +101,32 @@ export function CalendarPanel({
   return (
     <div data-testid={`calendar-view-${view}`}>
       <div className="mb-2 flex items-center">
-        <button type="button" className={NAV_BTN} aria-label={labels.superPrev} onClick={() => shift('super', -1)}>
-          <Icon icon={ChevronsLeft} size={16} />
-        </button>
-        <button type="button" className={NAV_BTN} aria-label={labels.innerPrev} onClick={() => shift('inner', -1)}>
-          <Icon icon={ChevronLeft} size={16} />
-        </button>
+        <Tip label={labels.superPrev}>
+          <button
+            type="button"
+            className={NAV_BTN}
+            aria-label={labels.superPrev}
+            onClick={() => shift('super', -1)}
+          >
+            <Icon icon={ChevronsLeft} size={16} />
+          </button>
+        </Tip>
+        <Tip label={labels.innerPrev}>
+          <button
+            type="button"
+            className={NAV_BTN}
+            aria-label={labels.innerPrev}
+            onClick={() => shift('inner', -1)}
+          >
+            <Icon icon={ChevronLeft} size={16} />
+          </button>
+        </Tip>
         <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5">
           {view === 'year' ? (
             <p className="text-[length:var(--text-meta)] font-medium tabular-nums">
-              {t.calendar.decade.replace('{from}', String(decade)).replace('{to}', String(decade + 9))}
+              {t.calendar.decade
+                .replace('{from}', String(decade))
+                .replace('{to}', String(decade + 9))}
             </p>
           ) : (
             <>
@@ -134,12 +151,26 @@ export function CalendarPanel({
             </>
           )}
         </div>
-        <button type="button" className={NAV_BTN} aria-label={labels.innerNext} onClick={() => shift('inner', 1)}>
-          <Icon icon={ChevronRight} size={16} />
-        </button>
-        <button type="button" className={NAV_BTN} aria-label={labels.superNext} onClick={() => shift('super', 1)}>
-          <Icon icon={ChevronsRight} size={16} />
-        </button>
+        <Tip label={labels.innerNext}>
+          <button
+            type="button"
+            className={NAV_BTN}
+            aria-label={labels.innerNext}
+            onClick={() => shift('inner', 1)}
+          >
+            <Icon icon={ChevronRight} size={16} />
+          </button>
+        </Tip>
+        <Tip label={labels.superNext}>
+          <button
+            type="button"
+            className={NAV_BTN}
+            aria-label={labels.superNext}
+            onClick={() => shift('super', 1)}
+          >
+            <Icon icon={ChevronsRight} size={16} />
+          </button>
+        </Tip>
       </div>
 
       {view === 'date' ? (

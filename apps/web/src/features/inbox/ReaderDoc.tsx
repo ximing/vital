@@ -1,8 +1,15 @@
-import { resolveDocMediaUrl, type ArticleBlockNode, type ArticleDoc, type ArticleInlineNode, type ArticleMark } from '@vital/article-doc';
+import {
+  resolveDocMediaUrl,
+  type ArticleBlockNode,
+  type ArticleDoc,
+  type ArticleInlineNode,
+  type ArticleMark,
+} from '@vital/article-doc';
 import type { InboxAsset } from '@vital/dto';
 import { ArrowUpRight } from 'lucide-react';
 import { Fragment, type MouseEvent, type ReactNode } from 'react';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { openArticleLink } from './reader-link';
 
 /**
@@ -23,7 +30,11 @@ function renderBlock(block: ArticleBlockNode, assets: InboxAsset[], key: number)
       return <Tag key={key}>{renderInline(block.content)}</Tag>;
     }
     case 'blockquote':
-      return <blockquote key={key}>{block.content.map((child, i) => renderBlock(child, assets, i))}</blockquote>;
+      return (
+        <blockquote key={key}>
+          {block.content.map((child, i) => renderBlock(child, assets, i))}
+        </blockquote>
+      );
     case 'codeBlock':
       return (
         <pre key={key}>
@@ -31,7 +42,9 @@ function renderBlock(block: ArticleBlockNode, assets: InboxAsset[], key: number)
         </pre>
       );
     case 'bulletList':
-      return <ul key={key}>{block.content.map((item, i) => renderListItem(item.content, assets, i))}</ul>;
+      return (
+        <ul key={key}>{block.content.map((item, i) => renderListItem(item.content, assets, i))}</ul>
+      );
     case 'orderedList': {
       const start = block.attrs?.start;
       return (
@@ -50,7 +63,11 @@ function renderBlock(block: ArticleBlockNode, assets: InboxAsset[], key: number)
               <tr key={i}>
                 {row.content.map((cell, j) => {
                   const Tag = cell.type === 'tableHeader' ? 'th' : 'td';
-                  return <Tag key={j}>{cell.content.map((child, k) => renderBlock(child, assets, k))}</Tag>;
+                  return (
+                    <Tag key={j}>
+                      {cell.content.map((child, k) => renderBlock(child, assets, k))}
+                    </Tag>
+                  );
                 })}
               </tr>
             ))}
@@ -74,7 +91,8 @@ function renderBlock(block: ArticleBlockNode, assets: InboxAsset[], key: number)
     case 'video': {
       const url = resolveDocMediaUrl(block.attrs.src, assets);
       if (url === null) return null;
-      const poster = block.attrs.poster !== undefined ? resolveDocMediaUrl(block.attrs.poster, assets) : null;
+      const poster =
+        block.attrs.poster !== undefined ? resolveDocMediaUrl(block.attrs.poster, assets) : null;
       return (
         <video
           key={key}
@@ -132,18 +150,21 @@ function applyMarks(text: string, marks: ArticleMark[]): ReactNode {
         break;
       case 'link':
         out = (
-          <a
-            href={mark.attrs.href}
-            title={mark.attrs.title}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event: MouseEvent<HTMLAnchorElement>) => openArticleLink(event, mark.attrs.href)}
-          >
-            {out}
-            <span className="reader-link-icon">
-              <Icon icon={ArrowUpRight} size={12} />
-            </span>
-          </a>
+          <Tip label={mark.attrs.title}>
+            <a
+              href={mark.attrs.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event: MouseEvent<HTMLAnchorElement>) =>
+                openArticleLink(event, mark.attrs.href)
+              }
+            >
+              {out}
+              <span className="reader-link-icon">
+                <Icon icon={ArrowUpRight} size={12} />
+              </span>
+            </a>
+          </Tip>
         );
         break;
     }

@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import {
   FIELD_CLEAR_CLASS,
   FIELD_CONTROL_CLASS,
@@ -83,9 +84,7 @@ function WheelColumn({
             aria-selected={value === active}
             aria-label={`${Number(value)}${label}`}
             className={`flex h-8 w-full items-center justify-center rounded-md text-[length:var(--text-meta)] tabular-nums ${
-              value === active
-                ? 'bg-accent text-on-accent'
-                : 'text-fg hover:bg-surface-muted'
+              value === active ? 'bg-accent text-on-accent' : 'text-fg hover:bg-surface-muted'
             }`}
             onClick={() => onPick(value)}
           >
@@ -184,7 +183,9 @@ export function TimeField({
 
   return (
     <div ref={popoverRef} className={`relative ${className}`}>
-      <p className="mb-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">{label}</p>
+      <p className="mb-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+        {label}
+      </p>
       <div className="flex items-center gap-1">
         <button
           type="button"
@@ -199,17 +200,19 @@ export function TimeField({
           {summary}
         </button>
         {clearable && !empty ? (
-          <button
-            type="button"
-            className={FIELD_CLEAR_CLASS}
-            aria-label={t.todos.clearTime}
-            onClick={() => {
-              onChange('');
-              popover.close();
-            }}
-          >
-            <Icon icon={X} size={14} />
-          </button>
+          <Tip label={t.todos.clearTime}>
+            <button
+              type="button"
+              className={FIELD_CLEAR_CLASS}
+              aria-label={t.todos.clearTime}
+              onClick={() => {
+                onChange('');
+                popover.close();
+              }}
+            >
+              <Icon icon={X} size={14} />
+            </button>
+          </Tip>
         ) : null}
       </div>
       {popover.open ? (

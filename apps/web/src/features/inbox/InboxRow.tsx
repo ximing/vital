@@ -16,6 +16,7 @@ import { Link } from 'react-router';
 import { t } from '@/copy';
 import { Button } from '@/ui/button';
 import { Icon, type LucideIcon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { formatCapturedAt, hostLabel, statusLabelKey, type PendingSave } from './model';
 
 const SOURCE_ICONS: Record<InboxSource, LucideIcon> = {
@@ -52,13 +53,14 @@ export function inboxSourceTextClass(source: InboxSource): string {
 
 function SourceTile({ source }: { source: InboxSource }) {
   return (
-    <span
-      className={`mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${SOURCE_TILE_CLASS[source]}`}
-      title={t.inbox.source[source]}
-    >
-      <Icon icon={SOURCE_ICONS[source]} size={13} />
-      <span className="sr-only">{t.inbox.source[source]}</span>
-    </span>
+    <Tip label={t.inbox.source[source]}>
+      <span
+        className={`mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${SOURCE_TILE_CLASS[source]}`}
+      >
+        <Icon icon={SOURCE_ICONS[source]} size={13} />
+        <span className="sr-only">{t.inbox.source[source]}</span>
+      </span>
+    </Tip>
   );
 }
 
@@ -116,7 +118,10 @@ export function SaveRow({
       onContextMenu={onContextMenu}
     >
       {selected ? (
-        <span aria-hidden="true" className="absolute inset-y-2.5 left-0.5 w-[3px] rounded-full bg-accent" />
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-2.5 left-0.5 w-[3px] rounded-full bg-accent"
+        />
       ) : null}
       <SourceTile source={item.source} />
       <span className="min-w-0 flex-1">
@@ -180,34 +185,36 @@ export function SaveRow({
       {onFavorite || onArchive ? (
         <span className="absolute right-2 top-2 hidden gap-0.5 rounded-md border border-border bg-elevated p-0.5 shadow-[var(--shadow-xs)] group-hover:flex">
           {onFavorite ? (
-            <button
-              type="button"
-              aria-label={status === 'favorite' ? t.inbox.unfavorite : t.inbox.favorite}
-              title={status === 'favorite' ? t.inbox.unfavorite : t.inbox.favorite}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onFavorite();
-              }}
-            >
-              <Icon icon={Star} size={13} />
-            </button>
+            <Tip label={status === 'favorite' ? t.inbox.unfavorite : t.inbox.favorite}>
+              <button
+                type="button"
+                aria-label={status === 'favorite' ? t.inbox.unfavorite : t.inbox.favorite}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onFavorite();
+                }}
+              >
+                <Icon icon={Star} size={13} />
+              </button>
+            </Tip>
           ) : null}
           {onArchive ? (
-            <button
-              type="button"
-              aria-label={archived ? t.inbox.unarchive : t.inbox.archive}
-              title={archived ? t.inbox.unarchive : t.inbox.archive}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onArchive();
-              }}
-            >
-              <Icon icon={archived ? ArchiveRestore : Archive} size={13} />
-            </button>
+            <Tip label={archived ? t.inbox.unarchive : t.inbox.archive}>
+              <button
+                type="button"
+                aria-label={archived ? t.inbox.unarchive : t.inbox.archive}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onArchive();
+                }}
+              >
+                <Icon icon={archived ? ArchiveRestore : Archive} size={13} />
+              </button>
+            </Tip>
           ) : null}
         </span>
       ) : null}

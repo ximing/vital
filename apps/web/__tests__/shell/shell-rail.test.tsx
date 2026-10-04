@@ -132,7 +132,9 @@ describe('primary rail', () => {
     const group = document.querySelector('[data-region="rail-account"]');
     expect(group).not.toBeNull();
     expect(group).toHaveClass('gap-1');
-    const kids = [...(group as HTMLElement).children];
+    const kids = [...(group as HTMLElement).children].map((node) =>
+      node.classList.contains('contents') ? (node.firstElementChild ?? node) : node,
+    );
     expect(kids[0]).toHaveAttribute('aria-label', t.rail.expand);
     expect(kids[1]).toHaveAttribute('href', '/usage');
     expect(kids[2]).toHaveAttribute('aria-label', t.theme.switch);

@@ -9,6 +9,7 @@ import { listIdFrom, rhythmHref } from '@/shell/section';
 import { pointAnchor, type MenuAnchor } from '@/ui/anchor-menu';
 import { ConfirmDialog } from '@/ui/confirm-dialog';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { ListContextMenu } from './ListContextMenu';
 import { ListIconPopover } from './ListIconPopover';
 import { countWithDescendants, listChildren, listRoots } from './model';
@@ -344,19 +345,19 @@ export function ListShortcuts() {
       {lists.map((list) => {
         const badge = listBadge(list);
         return (
-          <NavLink
-            key={list.id}
-            to={rhythmHref(list.id, location.pathname)}
-            title={badge.name}
-            className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 ${
-              current === list.id ? 'bg-accent-subtle' : 'hover:bg-surface-muted'
-            }`}
-          >
-            <ListGlyph list={list} fallback={Folder} />
-            <span className="w-full truncate text-center text-[11px] leading-tight text-secondary">
-              {badge.name}
-            </span>
-          </NavLink>
+          <Tip key={list.id} label={badge.name}>
+            <NavLink
+              to={rhythmHref(list.id, location.pathname)}
+              className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 ${
+                current === list.id ? 'bg-accent-subtle' : 'hover:bg-surface-muted'
+              }`}
+            >
+              <ListGlyph list={list} fallback={Folder} />
+              <span className="w-full truncate text-center text-[11px] leading-tight text-secondary">
+                {badge.name}
+              </span>
+            </NavLink>
+          </Tip>
         );
       })}
     </div>

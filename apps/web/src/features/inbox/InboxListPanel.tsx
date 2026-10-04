@@ -14,16 +14,13 @@ import { Link, useMatch, useNavigate, useSearchParams } from 'react-router';
 import { t } from '@/copy';
 import { useTagsQuery } from '@/features/todos';
 import { humanError } from '@/lib/errors';
-import {
-  clampInboxListWidth,
-  loadInboxListWidth,
-  saveInboxListWidth,
-} from '@/shell/chrome';
+import { clampInboxListWidth, loadInboxListWidth, saveInboxListWidth } from '@/shell/chrome';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { ConfirmDialog } from '@/ui/confirm-dialog';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { usePopover } from '@/ui/use-popover';
 import { useScrollVirtualizer, virtualItemStyle } from '@/ui/use-scroll-virtualizer';
 import { EmptyInbox, InboxSkeleton } from './EmptyInbox';
@@ -252,7 +249,9 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
   useEffect(() => {
     if (!focusId || rows.length === 0) return;
     if (scrollToSelected.current === focusId) return;
-    const index = rowsRef.current.findIndex((row) => row.kind === 'item' && row.item.id === focusId);
+    const index = rowsRef.current.findIndex(
+      (row) => row.kind === 'item' && row.item.id === focusId,
+    );
     if (index < 0) return;
     scrollToSelected.current = focusId;
     virtualizer.scrollToIndex(index, { align: 'auto' });
@@ -260,43 +259,48 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
 
   const summary = `${totalCount} ${t.inbox.unit} · ${unreadCount} ${t.inbox.unread}`;
   const empty =
-    items.length === 0 && pending.length === 0 && !inboxQuery.isLoading && inboxQuery.error === null;
+    items.length === 0 &&
+    pending.length === 0 &&
+    !inboxQuery.isLoading &&
+    inboxQuery.error === null;
 
   const jobsButtonLabel = jobBadgeLabel
     ? `${t.inbox.jobs.label}，${jobBadgeLabel}`
     : t.inbox.jobs.label;
   const jobsButton = (
-    <Link
-      to={jobsOpen ? inboxListPath('/inbox', search) : inboxListPath('/inbox/jobs', search)}
-      aria-label={jobsButtonLabel}
-      aria-current={jobsOpen ? 'page' : undefined}
-      title={t.inbox.jobs.label}
-      className={headerIconClass(jobsOpen)}
-      onClick={() => pastePopover.close()}
-    >
-      <Icon icon={Layers} size={16} />
-      {jobBadgeLabel ? (
-        <span
-          aria-hidden="true"
-          className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-deep px-1 font-mono text-[10px] font-semibold leading-none text-on-accent tabular-nums"
-        >
-          {jobBadgeLabel}
-        </span>
-      ) : null}
-    </Link>
+    <Tip label={t.inbox.jobs.label}>
+      <Link
+        to={jobsOpen ? inboxListPath('/inbox', search) : inboxListPath('/inbox/jobs', search)}
+        aria-label={jobsButtonLabel}
+        aria-current={jobsOpen ? 'page' : undefined}
+        className={headerIconClass(jobsOpen)}
+        onClick={() => pastePopover.close()}
+      >
+        <Icon icon={Layers} size={16} />
+        {jobBadgeLabel ? (
+          <span
+            aria-hidden="true"
+            className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-deep px-1 font-mono text-[10px] font-semibold leading-none text-on-accent tabular-nums"
+          >
+            {jobBadgeLabel}
+          </span>
+        ) : null}
+      </Link>
+    </Tip>
   );
   const pasteButton = (
-    <button
-      ref={pasteBtnRef}
-      type="button"
-      aria-label={t.inbox.pasteUrl}
-      aria-expanded={pastePopover.open}
-      title={t.inbox.pasteUrl}
-      className={headerIconClass(pastePopover.open)}
-      onClick={() => (pastePopover.open ? pastePopover.close() : openPaste())}
-    >
-      <Icon icon={Plus} size={16} />
-    </button>
+    <Tip label={t.inbox.pasteUrl}>
+      <button
+        ref={pasteBtnRef}
+        type="button"
+        aria-label={t.inbox.pasteUrl}
+        aria-expanded={pastePopover.open}
+        className={headerIconClass(pastePopover.open)}
+        onClick={() => (pastePopover.open ? pastePopover.close() : openPaste())}
+      >
+        <Icon icon={Plus} size={16} />
+      </button>
+    </Tip>
   );
 
   return (
@@ -320,7 +324,10 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
                   aria-label={t.inbox.pasteUrl}
                   className={`fixed z-[var(--z-dropdown)] w-[min(26rem,calc(100vw-1rem))] ${FIELD_POPOVER_CLASS}`}
                   style={{
-                    right: Math.max(8, Math.min(pasteAnchor.right, window.innerWidth - POPOVER_W - 8)),
+                    right: Math.max(
+                      8,
+                      Math.min(pasteAnchor.right, window.innerWidth - POPOVER_W - 8),
+                    ),
                     top: pasteAnchor.top,
                   }}
                 >
@@ -422,7 +429,9 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
                       item={row.item}
                       tags={tags}
                       timeZone={timeZone}
-                      selected={selectedId === row.item.id || (!selectedId && cursorId === row.item.id)}
+                      selected={
+                        selectedId === row.item.id || (!selectedId && cursorId === row.item.id)
+                      }
                       compact
                       onFavorite={
                         online && canPatchStatus(row.item)

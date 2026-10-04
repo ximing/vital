@@ -1,5 +1,10 @@
 import { observer, useService } from '@rabjs/react';
-import { DEFAULT_LLM_SETTINGS, type ChatMessage, type ChatToolCard, type ChatUndoHint } from '@vital/dto';
+import {
+  DEFAULT_LLM_SETTINGS,
+  type ChatMessage,
+  type ChatToolCard,
+  type ChatUndoHint,
+} from '@vital/dto';
 import { ChevronDown, PanelRightClose } from 'lucide-react';
 import { useEffect, useRef, useState, type FC } from 'react';
 import { useLocation } from 'react-router';
@@ -10,6 +15,7 @@ import { humanError } from '@/lib/errors';
 import { AuthService } from '@/services/auth.service';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { usePopover } from '@/ui/use-popover';
 import { AgentChatService } from './agent-chat.service';
 import { chatPageContext } from './context';
@@ -20,7 +26,8 @@ function payloadCard(message: ChatMessage): ChatToolCard | null {
   const payload = message.toolPayload;
   if (!payload || typeof payload !== 'object' || !('status' in payload)) return null;
   const status = (payload as { status?: unknown }).status;
-  if (status !== 'ok' && status !== 'preview' && status !== 'needs_input' && status !== 'error') return null;
+  if (status !== 'ok' && status !== 'preview' && status !== 'needs_input' && status !== 'error')
+    return null;
   const body = payload as {
     status: ChatToolCard['status'];
     summary?: string;
@@ -32,7 +39,8 @@ function payloadCard(message: ChatMessage): ChatToolCard | null {
   return {
     tool: message.toolName ?? '',
     status: body.status,
-    summary: body.status === 'needs_input' ? (body.question ?? body.summary ?? '') : (body.summary ?? ''),
+    summary:
+      body.status === 'needs_input' ? (body.question ?? body.summary ?? '') : (body.summary ?? ''),
     ...(body.previewId ? { previewId: body.previewId } : {}),
     ...(body.undo ? { undo: { hintId: message.id } } : {}),
     ...(body.question ? { question: body.question } : {}),
@@ -106,26 +114,29 @@ const ChatModelPicker: FC = observer(function ChatModelPicker() {
 
   return (
     <div ref={root} className="relative min-w-0">
-      <button
-        type="button"
-        aria-label={t.agentChat.model}
-        aria-haspopup="listbox"
-        aria-expanded={popover.open}
-        disabled={choices.length === 0 || saving}
-        title={saveError ?? selected?.label ?? t.agentChat.noModel}
-        className="inline-flex h-7 max-w-[11rem] items-center gap-1 rounded-md px-1.5 text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg disabled:opacity-50"
-        onClick={() => popover.toggle()}
-      >
-        <span className="truncate">{selected?.model ?? t.agentChat.noModel}</span>
-        <Icon icon={ChevronDown} size={14} className="shrink-0" />
-      </button>
+      <Tip label={saveError ?? selected?.label ?? t.agentChat.noModel}>
+        <button
+          type="button"
+          aria-label={t.agentChat.model}
+          aria-haspopup="listbox"
+          aria-expanded={popover.open}
+          disabled={choices.length === 0 || saving}
+          className="inline-flex h-7 max-w-[11rem] items-center gap-1 rounded-md px-1.5 text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg disabled:opacity-50"
+          onClick={() => popover.toggle()}
+        >
+          <span className="truncate">{selected?.model ?? t.agentChat.noModel}</span>
+          <Icon icon={ChevronDown} size={14} className="shrink-0" />
+        </button>
+      </Tip>
       {popover.open ? (
         <div
           role="listbox"
           aria-label={t.agentChat.model}
           className={`absolute bottom-full left-0 z-[var(--z-dropdown)] mb-1 max-h-64 w-64 overflow-y-auto ${FIELD_POPOVER_CLASS} p-1`}
         >
-          {saveError ? <p className="px-2 py-1 text-[length:var(--text-caption)] text-muted">{saveError}</p> : null}
+          {saveError ? (
+            <p className="px-2 py-1 text-[length:var(--text-caption)] text-muted">{saveError}</p>
+          ) : null}
           {choices.map((choice) => (
             <button
               key={choice.value}
@@ -133,7 +144,9 @@ const ChatModelPicker: FC = observer(function ChatModelPicker() {
               role="option"
               aria-selected={choice.value === selected?.value}
               className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-[length:var(--text-meta)] ${
-                choice.value === selected?.value ? 'bg-accent-subtle text-fg' : 'text-fg hover:bg-surface-muted'
+                choice.value === selected?.value
+                  ? 'bg-accent-subtle text-fg'
+                  : 'text-fg hover:bg-surface-muted'
               }`}
               onClick={() => void choose(choice.value)}
             >
@@ -177,18 +190,26 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
       className="flex h-full min-h-0 w-full min-w-0 flex-col bg-surface"
     >
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
-        <h2 className="min-w-0 flex-1 truncate font-display text-[length:var(--text-body)] font-semibold">{t.agentChat.title}</h2>
-        <button type="button" className="text-[length:var(--text-meta)] text-muted hover:text-fg" onClick={() => void chat.reset()}>
-          {t.agentChat.reset}
-        </button>
+        <h2 className="min-w-0 flex-1 truncate font-display text-[length:var(--text-body)] font-semibold">
+          {t.agentChat.title}
+        </h2>
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
-          aria-label={t.agentChat.close}
-          onClick={() => chat.close()}
+          className="text-[length:var(--text-meta)] text-muted hover:text-fg"
+          onClick={() => void chat.reset()}
         >
-          <Icon icon={PanelRightClose} strokeWidth={1.8} />
+          {t.agentChat.reset}
         </button>
+        <Tip label={t.agentChat.close}>
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
+            aria-label={t.agentChat.close}
+            onClick={() => chat.close()}
+          >
+            <Icon icon={PanelRightClose} strokeWidth={1.8} />
+          </button>
+        </Tip>
       </header>
       <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3">
         {chat.messages.length === 0 && !chat.sending ? (
@@ -201,7 +222,10 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
           }
           if (message.role === 'user') {
             return (
-              <p key={message.id} className="ml-8 whitespace-pre-wrap rounded-md bg-accent-subtle px-3 py-2 text-[length:var(--text-body)]">
+              <p
+                key={message.id}
+                className="ml-8 whitespace-pre-wrap rounded-md bg-accent-subtle px-3 py-2 text-[length:var(--text-body)]"
+              >
                 {message.text}
               </p>
             );
@@ -217,7 +241,11 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
         ))}
         {chat.sending ? (
           <div className="mr-6 text-[length:var(--text-body)]" data-region="agent-stream">
-            {chat.streamingText ? <ChatMarkdown text={chat.streamingText} /> : <p className="text-muted">{t.agentChat.thinking}</p>}
+            {chat.streamingText ? (
+              <ChatMarkdown text={chat.streamingText} />
+            ) : (
+              <p className="text-muted">{t.agentChat.thinking}</p>
+            )}
           </div>
         ) : null}
         {chat.error ? (
@@ -250,7 +278,11 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
         />
         <div className="mt-2 flex items-center gap-2">
           <ChatModelPicker />
-          <button type="submit" className="ml-auto rounded-md bg-accent px-3 py-1.5 text-[length:var(--text-meta)] text-canvas disabled:opacity-50" disabled={chat.sending || draft.trim() === ''}>
+          <button
+            type="submit"
+            className="ml-auto rounded-md bg-accent px-3 py-1.5 text-[length:var(--text-meta)] text-canvas disabled:opacity-50"
+            disabled={chat.sending || draft.trim() === ''}
+          >
             {t.agentChat.send}
           </button>
         </div>

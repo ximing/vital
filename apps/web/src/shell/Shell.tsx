@@ -52,6 +52,7 @@ import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
 import { RouteFallback } from '@/shell/route-fallback';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 
 const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
   { id: 'today', to: HOME_PATH, icon: Sun, label: t.rail.today },
@@ -123,13 +124,15 @@ function ShellContent() {
             collapsed ? 'justify-center px-1' : 'gap-2 px-4'
           }`}
         >
-          <NavLink
-            to={HOME_PATH}
-            className="flex shrink-0 items-center justify-center"
-            title={collapsed ? t.brand.wordmark : undefined}
-          >
-            <VitalMark className="h-8 w-8 shrink-0 text-accent" />
-          </NavLink>
+          <Tip label={collapsed ? t.brand.wordmark : undefined} side="right">
+            <NavLink
+              to={HOME_PATH}
+              aria-label={collapsed ? t.brand.wordmark : undefined}
+              className="flex shrink-0 items-center justify-center"
+            >
+              <VitalMark className="h-8 w-8 shrink-0 text-accent" />
+            </NavLink>
+          </Tip>
           {collapsed ? null : (
             <span className="truncate text-[length:var(--text-body)] font-semibold leading-none">
               {t.brand.wordmark}
@@ -141,46 +144,47 @@ function ShellContent() {
           {PRIMARY.map((item) => {
             const active = section === item.id;
             return (
-              <NavLink
-                key={item.id}
-                to={item.to}
-                title={collapsed ? item.label : undefined}
-                aria-label={item.label}
-                className={railItemClass(active, collapsed)}
-                onMouseEnter={() => warmPath(item.to)}
-                onFocus={() => warmPath(item.to)}
-              >
-                <Icon icon={item.icon} className="shrink-0" />
-                {collapsed ? null : <span className="truncate">{item.label}</span>}
-              </NavLink>
+              <Tip key={item.id} label={collapsed ? item.label : undefined} side="right">
+                <NavLink
+                  to={item.to}
+                  aria-label={item.label}
+                  className={railItemClass(active, collapsed)}
+                  onMouseEnter={() => warmPath(item.to)}
+                  onFocus={() => warmPath(item.to)}
+                >
+                  <Icon icon={item.icon} className="shrink-0" />
+                  {collapsed ? null : <span className="truncate">{item.label}</span>}
+                </NavLink>
+              </Tip>
             );
           })}
           {/* 全局快搜入口：打开命令面板（任务/线程/收集箱分组结果）。 */}
-          <button
-            type="button"
-            title={collapsed ? t.nav.searchHint : undefined}
-            aria-label={t.nav.search}
-            className={railItemClass(false, collapsed)}
-            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT))}
-          >
-            <Icon icon={Search} className="shrink-0" />
-            {collapsed ? null : <span className="truncate">{t.nav.search}</span>}
-          </button>
+          <Tip label={collapsed ? t.nav.searchHint : undefined} side="right">
+            <button
+              type="button"
+              aria-label={t.nav.search}
+              className={railItemClass(false, collapsed)}
+              onClick={() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT))}
+            >
+              <Icon icon={Search} className="shrink-0" />
+              {collapsed ? null : <span className="truncate">{t.nav.search}</span>}
+            </button>
+          </Tip>
           {AI_NAV.map((item) => {
             const active = section === item.id;
             return (
-              <NavLink
-                key={item.id}
-                to={item.to}
-                title={collapsed ? item.label : undefined}
-                aria-label={item.label}
-                className={railItemClass(active, collapsed)}
-                onMouseEnter={() => warmPath(item.to)}
-                onFocus={() => warmPath(item.to)}
-              >
-                <Icon icon={item.icon} className="shrink-0" />
-                {collapsed ? null : <span className="truncate">{item.label}</span>}
-              </NavLink>
+              <Tip key={item.id} label={collapsed ? item.label : undefined} side="right">
+                <NavLink
+                  to={item.to}
+                  aria-label={item.label}
+                  className={railItemClass(active, collapsed)}
+                  onMouseEnter={() => warmPath(item.to)}
+                  onFocus={() => warmPath(item.to)}
+                >
+                  <Icon icon={item.icon} className="shrink-0" />
+                  {collapsed ? null : <span className="truncate">{item.label}</span>}
+                </NavLink>
+              </Tip>
             );
           })}
         </nav>
@@ -189,45 +193,49 @@ function ShellContent() {
           data-region="rail-account"
           className="mt-auto flex shrink-0 flex-col gap-1 border-t border-border pb-2 pt-1"
         >
-          <button
-            type="button"
-            title={collapsed ? t.rail.expand : undefined}
-            aria-label={collapsed ? t.rail.expand : t.rail.collapse}
-            className={railItemClass(false, collapsed)}
-            onClick={toggleRail}
-          >
-            <Icon icon={collapsed ? PanelLeftOpen : PanelLeftClose} className="shrink-0" />
-            {collapsed ? null : <span className="truncate">{t.rail.collapse}</span>}
-          </button>
-          <NavLink
-            to="/usage"
-            title={collapsed ? t.rail.usage : undefined}
-            aria-label={t.rail.usage}
-            className={railItemClass(section === 'usage', collapsed)}
-          >
-            <Icon icon={ChartColumn} className="shrink-0" />
-            {collapsed ? null : <span className="truncate">{t.rail.usage}</span>}
-          </NavLink>
+          <Tip label={collapsed ? t.rail.expand : undefined} side="right">
+            <button
+              type="button"
+              aria-label={collapsed ? t.rail.expand : t.rail.collapse}
+              className={railItemClass(false, collapsed)}
+              onClick={toggleRail}
+            >
+              <Icon icon={collapsed ? PanelLeftOpen : PanelLeftClose} className="shrink-0" />
+              {collapsed ? null : <span className="truncate">{t.rail.collapse}</span>}
+            </button>
+          </Tip>
+          <Tip label={collapsed ? t.rail.usage : undefined} side="right">
+            <NavLink
+              to="/usage"
+              aria-label={t.rail.usage}
+              className={railItemClass(section === 'usage', collapsed)}
+            >
+              <Icon icon={ChartColumn} className="shrink-0" />
+              {collapsed ? null : <span className="truncate">{t.rail.usage}</span>}
+            </NavLink>
+          </Tip>
           <ThemeSwitch variant="rail" expanded={!collapsed} />
-          <NavLink
-            to="/settings"
-            title={collapsed ? t.nav.settings : undefined}
-            aria-label={t.nav.settings}
-            className={railItemClass(section === 'settings', collapsed)}
-          >
-            <Icon icon={Settings} className="shrink-0" />
-            {collapsed ? null : <span className="truncate">{t.nav.settings}</span>}
-          </NavLink>
-          <button
-            type="button"
-            title={collapsed ? t.shortcuts.open : undefined}
-            aria-label={t.shortcuts.open}
-            className={railItemClass(false, collapsed)}
-            onClick={() => window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS_EVENT))}
-          >
-            <Icon icon={Keyboard} className="shrink-0" />
-            {collapsed ? null : <span className="truncate">{t.shortcuts.open}</span>}
-          </button>
+          <Tip label={collapsed ? t.nav.settings : undefined} side="right">
+            <NavLink
+              to="/settings"
+              aria-label={t.nav.settings}
+              className={railItemClass(section === 'settings', collapsed)}
+            >
+              <Icon icon={Settings} className="shrink-0" />
+              {collapsed ? null : <span className="truncate">{t.nav.settings}</span>}
+            </NavLink>
+          </Tip>
+          <Tip label={collapsed ? t.shortcuts.open : undefined} side="right">
+            <button
+              type="button"
+              aria-label={t.shortcuts.open}
+              className={railItemClass(false, collapsed)}
+              onClick={() => window.dispatchEvent(new CustomEvent(OPEN_SHORTCUTS_EVENT))}
+            >
+              <Icon icon={Keyboard} className="shrink-0" />
+              {collapsed ? null : <span className="truncate">{t.shortcuts.open}</span>}
+            </button>
+          </Tip>
           <AccountMenu collapsed={collapsed} railWidth={railWidth} />
         </div>
       </aside>

@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import { t } from '@/copy';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { usePopover } from '@/ui/use-popover';
 import { priorityLabel } from './model';
 
@@ -40,15 +41,19 @@ export function PriorityMark({
   const label = t.todos.priority[priorityLabel(priority)];
   if (priority === 0) {
     return (
-      <span className={`inline-flex items-center ${TONE[0]} ${className}`} title={label}>
-        <Icon icon={Circle} size={9} fill="currentColor" strokeWidth={0} />
-      </span>
+      <Tip label={label}>
+        <span className={`inline-flex items-center ${TONE[0]} ${className}`}>
+          <Icon icon={Circle} size={9} fill="currentColor" strokeWidth={0} />
+        </span>
+      </Tip>
     );
   }
   return (
-    <span className={`inline-flex items-center ${TONE[priority]} ${className}`} title={label}>
-      <Icon icon={Flag} size={12} fill={priority === 1 ? 'currentColor' : 'none'} />
-    </span>
+    <Tip label={label}>
+      <span className={`inline-flex items-center ${TONE[priority]} ${className}`}>
+        <Icon icon={Flag} size={12} fill={priority === 1 ? 'currentColor' : 'none'} />
+      </span>
+    </Tip>
   );
 }
 
@@ -67,17 +72,19 @@ export function PriorityMenu({
   const popover = usePopover(popoverRef);
   return (
     <div ref={popoverRef} className="relative">
-      <button
-        type="button"
-        aria-label={t.todos.priorityLabel}
-        aria-expanded={popover.open}
-        onClick={() => popover.toggle()}
-        className={`inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface-muted hover:text-fg ${
-          value < 3 ? TONE[value] : 'text-muted'
-        }`}
-      >
-        <Icon icon={Flag} size={15} fill={value === 1 ? 'currentColor' : 'none'} />
-      </button>
+      <Tip label={t.todos.priority[priorityLabel(value)]}>
+        <button
+          type="button"
+          aria-label={t.todos.priorityLabel}
+          aria-expanded={popover.open}
+          onClick={() => popover.toggle()}
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-surface-muted hover:text-fg ${
+            value < 3 ? TONE[value] : 'text-muted'
+          }`}
+        >
+          <Icon icon={Flag} size={15} fill={value === 1 ? 'currentColor' : 'none'} />
+        </button>
+      </Tip>
       {popover.open ? (
         <div
           role="menu"

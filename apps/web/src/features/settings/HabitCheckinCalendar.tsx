@@ -2,10 +2,16 @@ import type { Habit, HabitCheckinDay } from '@vital/dto';
 import { t } from '@/copy';
 import { monthGrid, ymdParts } from '@/lib/calendar-grid';
 import { habitTodayProgress } from '@/features/today';
+import { Tip } from '@/ui/tip';
 
 const copy = t.settings.habits;
 
-function dayLabel(ymd: string, done: number, total: number, state: 'done' | 'missed' | 'empty'): string {
+function dayLabel(
+  ymd: string,
+  done: number,
+  total: number,
+  state: 'done' | 'missed' | 'empty',
+): string {
   const m = String(Number(ymd.slice(5, 7)));
   const d = String(Number(ymd.slice(8)));
   if (state === 'done') {
@@ -69,46 +75,45 @@ export function HabitCheckinCalendar({
           const beforeStart = ymd < createdOn;
           const complete = done > 0 && done >= total;
           const partial = done > 0 && done < total;
-          const missed =
-            !paused && !future && !beforeStart && done === 0 && ymd !== today;
+          const missed = !paused && !future && !beforeStart && done === 0 && ymd !== today;
           const state: 'done' | 'missed' | 'empty' =
             complete || partial ? 'done' : missed ? 'missed' : 'empty';
           const fill = complete ? 1 : partial ? Math.max(0.22, done / Math.max(total, 1)) : 0;
           return (
-            <span
-              key={ymd}
-              data-checkin={ymd}
-              data-checkin-done={String(done)}
-              title={dayLabel(ymd, done, total, state)}
-              aria-label={dayLabel(ymd, done, total, state)}
-              aria-current={isToday ? 'date' : undefined}
-              className="flex h-[34px] w-full items-center justify-center"
-            >
+            <Tip key={ymd} label={dayLabel(ymd, done, total, state)}>
               <span
-                className={`flex h-[30px] w-[30px] items-center justify-center rounded-full text-[11px] tabular-nums ${
-                  complete
-                    ? `bg-accent font-semibold text-on-accent ${isToday ? 'ring-1 ring-accent-deep ring-offset-1 ring-offset-surface' : ''}`
-                    : future || beforeStart || (paused && done === 0)
-                      ? 'text-muted/40'
-                      : isToday
-                        ? 'text-fg ring-1 ring-accent/70'
-                        : missed
-                          ? 'text-muted'
-                          : 'text-fg'
-                }`}
-                style={
-                  partial
-                    ? {
-                        backgroundColor: `color-mix(in srgb, var(--accent-primary) ${Math.round(fill * 100)}%, var(--bg-surface-muted))`,
-                        color: 'var(--accent-deep)',
-                        fontWeight: 600,
-                      }
-                    : undefined
-                }
+                data-checkin={ymd}
+                data-checkin-done={String(done)}
+                aria-label={dayLabel(ymd, done, total, state)}
+                aria-current={isToday ? 'date' : undefined}
+                className="flex h-[34px] w-full items-center justify-center"
               >
-                {Number(ymd.slice(8))}
+                <span
+                  className={`flex h-[30px] w-[30px] items-center justify-center rounded-full text-[11px] tabular-nums ${
+                    complete
+                      ? `bg-accent font-semibold text-on-accent ${isToday ? 'ring-1 ring-accent-deep ring-offset-1 ring-offset-surface' : ''}`
+                      : future || beforeStart || (paused && done === 0)
+                        ? 'text-muted/40'
+                        : isToday
+                          ? 'text-fg ring-1 ring-accent/70'
+                          : missed
+                            ? 'text-muted'
+                            : 'text-fg'
+                  }`}
+                  style={
+                    partial
+                      ? {
+                          backgroundColor: `color-mix(in srgb, var(--accent-primary) ${Math.round(fill * 100)}%, var(--bg-surface-muted))`,
+                          color: 'var(--accent-deep)',
+                          fontWeight: 600,
+                        }
+                      : undefined
+                  }
+                >
+                  {Number(ymd.slice(8))}
+                </span>
               </span>
-            </span>
+            </Tip>
           );
         })}
       </div>

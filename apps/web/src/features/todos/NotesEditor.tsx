@@ -19,6 +19,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { PromptDialog } from '@/ui/prompt-dialog';
 
 function asPm(md: string): PmNode {
@@ -207,17 +208,19 @@ function ToolbarBtn({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active}
-      onClick={onClick}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md ${
-        active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
-      }`}
-    >
-      {children}
-    </button>
+    <Tip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        onClick={onClick}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-md ${
+          active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'
+        }`}
+      >
+        {children}
+      </button>
+    </Tip>
   );
 }
 

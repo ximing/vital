@@ -30,6 +30,7 @@ import {
 import { useEffect, useRef, useState, type ChangeEvent, type FC, type MouseEvent } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { PromptDialog } from '@/ui/prompt-dialog';
 import { markOnboarding } from '@/features/onboarding/mark';
 import { VitalEntity } from './entity-extension';
@@ -418,7 +419,12 @@ export const WysiwygEditor: FC<{
           <Icon icon={Code} size={14} />
         </ToolbarBtn>
         <ToolbarSep />
-        <ToolbarBtn label={t.reports.link} active={editor?.isActive('link') === true} disabled={!canEdit} onClick={setLink}>
+        <ToolbarBtn
+          label={t.reports.link}
+          active={editor?.isActive('link') === true}
+          disabled={!canEdit}
+          onClick={setLink}
+        >
           <Icon icon={Link2} size={14} />
         </ToolbarBtn>
         <ToolbarBtn
@@ -476,7 +482,10 @@ export const WysiwygEditor: FC<{
         />
       </div>
       {uploadError ? (
-        <p className="mt-2 rounded-md bg-danger/10 px-3 py-1.5 text-[length:var(--text-caption)] text-danger" role="alert">
+        <p
+          className="mt-2 rounded-md bg-danger/10 px-3 py-1.5 text-[length:var(--text-caption)] text-danger"
+          role="alert"
+        >
           {uploadError}
         </p>
       ) : null}
@@ -484,11 +493,7 @@ export const WysiwygEditor: FC<{
         <EditorContent editor={editor} />
       </div>
       {reportsUi.slash && editor ? (
-        <SlashMenu
-          slash={reportsUi.slash}
-          onPick={pick}
-          onClose={() => reportsUi.setSlash(null)}
-        />
+        <SlashMenu slash={reportsUi.slash} onPick={pick} onClose={() => reportsUi.setSlash(null)} />
       ) : null}
       {linkDraft !== null ? (
         <PromptDialog
@@ -522,21 +527,23 @@ function ToolbarBtn({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
-        disabled
-          ? 'text-muted/40'
-          : active
-            ? 'bg-accent-subtle text-fg'
-            : 'text-muted hover:bg-surface-muted hover:text-fg'
-      }`}
-    >
-      {children}
-    </button>
+    <Tip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        disabled={disabled}
+        onClick={onClick}
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
+          disabled
+            ? 'text-muted/40'
+            : active
+              ? 'bg-accent-subtle text-fg'
+              : 'text-muted hover:bg-surface-muted hover:text-fg'
+        }`}
+      >
+        {children}
+      </button>
+    </Tip>
   );
 }

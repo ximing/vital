@@ -4,6 +4,7 @@ import { t } from '@/copy';
 import { formatHumanDay, toDateInput, todayYmd } from '@/features/todos/model';
 import { CalendarPanel } from '@/ui/calendar-panel';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import {
   FIELD_CLEAR_CLASS,
   FIELD_CONTROL_CLASS,
@@ -71,17 +72,19 @@ export function DateField({
           {summary}
         </button>
         {selectedYmd !== '' ? (
-          <button
-            type="button"
-            className={FIELD_CLEAR_CLASS}
-            aria-label={t.todos.clearDate}
-            onClick={() => {
-              onChange('');
-              popover.close();
-            }}
-          >
-            <Icon icon={X} size={14} />
-          </button>
+          <Tip label={t.todos.clearDate}>
+            <button
+              type="button"
+              className={FIELD_CLEAR_CLASS}
+              aria-label={t.todos.clearDate}
+              onClick={() => {
+                onChange('');
+                popover.close();
+              }}
+            >
+              <Icon icon={X} size={14} />
+            </button>
+          </Tip>
         ) : null}
       </div>
       {popover.open ? (

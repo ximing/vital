@@ -115,6 +115,7 @@
   --z-overlay: 60;
   --z-toast: 70;
   --z-lightbox: 80;
+  --z-tooltip: 90;
 
   --ease-out: 180ms cubic-bezier(0.2, 0, 0, 1);
   --ease-in: 120ms cubic-bezier(0.2, 0, 0, 1);

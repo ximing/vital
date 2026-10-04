@@ -22,6 +22,7 @@ import { humanError } from '@/lib/errors';
 import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { Icon, type LucideIcon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { OutcomeField } from '@/ui/outcome-field';
 import { EmptyReader, InboxSkeleton } from './EmptyInbox';
 import { inboxSourceIcon, inboxSourceTextClass } from './InboxRow';
@@ -63,29 +64,30 @@ function ActionButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      aria-pressed={active || undefined}
-      aria-busy={loading || undefined}
-      disabled={disabled || loading}
-      onClick={onClick}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] disabled:cursor-not-allowed ${
-        loading
-          ? 'text-accent'
-          : active
-            ? activeClass
-            : 'text-muted hover:bg-surface-muted hover:text-fg disabled:opacity-40'
-      }`}
-    >
-      <Icon
-        icon={loading ? LoaderCircle : icon}
-        size={15}
-        fill={filled && !loading ? 'currentColor' : 'none'}
-        className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
-      />
-    </button>
+    <Tip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active || undefined}
+        aria-busy={loading || undefined}
+        disabled={disabled || loading}
+        onClick={onClick}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] disabled:cursor-not-allowed ${
+          loading
+            ? 'text-accent'
+            : active
+              ? activeClass
+              : 'text-muted hover:bg-surface-muted hover:text-fg disabled:opacity-40'
+        }`}
+      >
+        <Icon
+          icon={loading ? LoaderCircle : icon}
+          size={15}
+          fill={filled && !loading ? 'currentColor' : 'none'}
+          className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
+        />
+      </button>
+    </Tip>
   );
 }
 
@@ -393,7 +395,9 @@ function InboxReaderContent() {
                 className={`shrink-0 ${inboxSourceTextClass(item.source)}`}
               />
               <span className="shrink-0">
-                {[t.inbox.source[item.source], item.byline, item.siteName].filter(Boolean).join(' · ')}
+                {[t.inbox.source[item.source], item.byline, item.siteName]
+                  .filter(Boolean)
+                  .join(' · ')}
               </span>
               {originalUrl ? (
                 <>
@@ -410,19 +414,18 @@ function InboxReaderContent() {
                     <span className="min-w-0 truncate">{originalUrl}</span>
                     <Icon icon={ArrowUpRight} size={12} className="shrink-0 self-center" />
                   </a>
-                  <button
-                    type="button"
-                    aria-label={copied ? t.inbox.copied : t.inbox.copyLink}
-                    title={copied ? t.inbox.copied : t.inbox.copyLink}
-                    onClick={() => void onCopyUrl()}
-                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] ${
-                      copied
-                        ? 'text-done'
-                        : 'text-tertiary hover:bg-surface-muted hover:text-fg'
-                    }`}
-                  >
-                    <Icon icon={copied ? Check : Copy} size={13} />
-                  </button>
+                  <Tip label={copied ? t.inbox.copied : t.inbox.copyLink}>
+                    <button
+                      type="button"
+                      aria-label={copied ? t.inbox.copied : t.inbox.copyLink}
+                      onClick={() => void onCopyUrl()}
+                      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-[background-color,color] duration-[var(--ease-out)] ${
+                        copied ? 'text-done' : 'text-tertiary hover:bg-surface-muted hover:text-fg'
+                      }`}
+                    >
+                      <Icon icon={copied ? Check : Copy} size={13} />
+                    </button>
+                  </Tip>
                 </>
               ) : null}
             </p>
@@ -447,20 +450,18 @@ function InboxReaderContent() {
                 disabled={!online}
                 onChange={(tagIds) => {
                   page.setActionError(null);
-                  void actions.patch.mutateAsync({ id: item.id, input: { tagIds } }).catch((err) => {
-                    page.setActionError(humanError(err));
-                  });
+                  void actions.patch
+                    .mutateAsync({ id: item.id, input: { tagIds } })
+                    .catch((err) => {
+                      page.setActionError(humanError(err));
+                    });
                 }}
                 onCreate={(name) => actions.createTag.mutateAsync(name)}
               />
             </div>
             {item.contentJson !== null || item.assets.length > 0 ? (
               <div className="mt-7">
-                <ReaderArticle
-                  doc={item.contentJson}
-                  assets={item.assets}
-                  size={fontSize}
-                />
+                <ReaderArticle doc={item.contentJson} assets={item.assets} size={fontSize} />
               </div>
             ) : (
               <p className="mt-3 text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">

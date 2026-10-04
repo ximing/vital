@@ -4,6 +4,7 @@ import { t } from '@/copy';
 import { addMonthsYmd, ymdParts } from '@/lib/calendar-grid';
 import { addDaysYmd, todayYmd } from '@/features/todos/model';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 
 function cellLabel(date: string, grain: 'day' | 'month' | 'year', wrote: boolean): string {
   const base =
@@ -50,7 +51,11 @@ export function StreakCalendar({
 
   if (grain === 'year') {
     return (
-      <div className="rounded-lg bg-surface p-1" data-testid="streak-calendar" data-context="calendar">
+      <div
+        className="rounded-lg bg-surface p-1"
+        data-testid="streak-calendar"
+        data-context="calendar"
+      >
         <p className="mb-3 text-[length:var(--text-meta)] font-medium">{t.reports.yearly}</p>
         <div className="flex flex-col gap-2">
           {heatmap.map((cell) => {
@@ -77,7 +82,9 @@ export function StreakCalendar({
                     <span className={sel ? 'text-on-accent' : 'text-muted'}>{cell.completed}</span>
                   ) : null}
                   {cell.wrote ? (
-                    <span className={`h-2 w-2 rounded-full ${sel ? 'bg-on-accent' : 'bg-accent'}`} />
+                    <span
+                      className={`h-2 w-2 rounded-full ${sel ? 'bg-on-accent' : 'bg-accent'}`}
+                    />
                   ) : null}
                 </span>
               </button>
@@ -92,7 +99,11 @@ export function StreakCalendar({
   if (grain === 'month') {
     const year = (heatmap[0]?.date ?? today).slice(0, 4);
     return (
-      <div className="rounded-lg bg-surface p-1" data-testid="streak-calendar" data-context="calendar">
+      <div
+        className="rounded-lg bg-surface p-1"
+        data-testid="streak-calendar"
+        data-context="calendar"
+      >
         <p className="mb-3 text-[length:var(--text-meta)] font-medium">{year}年</p>
         <div className="grid grid-cols-3 gap-2">
           {heatmap.map((cell) => {
@@ -112,7 +123,9 @@ export function StreakCalendar({
                 style={
                   sel || future || fill === 0
                     ? undefined
-                    : { backgroundColor: `color-mix(in srgb, var(--accent-primary) ${Math.round(fill * 100)}%, var(--bg-canvas))` }
+                    : {
+                        backgroundColor: `color-mix(in srgb, var(--accent-primary) ${Math.round(fill * 100)}%, var(--bg-canvas))`,
+                      }
                 }
               >
                 {Number(cell.date.slice(5, 7))}月
@@ -138,27 +151,35 @@ export function StreakCalendar({
   })();
 
   return (
-    <div className="rounded-lg bg-surface p-1" data-testid="streak-calendar" data-context="calendar">
+    <div
+      className="rounded-lg bg-surface p-1"
+      data-testid="streak-calendar"
+      data-context="calendar"
+    >
       <div className="mb-3 flex items-center justify-between">
-        <button
-          type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-muted"
-          onClick={() => onCursorMonth?.(addMonthsYmd(first, -1))}
-          aria-label={t.todos.weekPrev}
-        >
-          <Icon icon={ChevronLeft} size={16} />
-        </button>
+        <Tip label={t.todos.weekPrev}>
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-muted"
+            onClick={() => onCursorMonth?.(addMonthsYmd(first, -1))}
+            aria-label={t.todos.weekPrev}
+          >
+            <Icon icon={ChevronLeft} size={16} />
+          </button>
+        </Tip>
         <p className="text-[length:var(--text-meta)] font-medium">
           {y}年{m}月
         </p>
-        <button
-          type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-muted"
-          onClick={() => onCursorMonth?.(addMonthsYmd(first, 1))}
-          aria-label={t.todos.weekNext}
-        >
-          <Icon icon={ChevronRight} size={16} />
-        </button>
+        <Tip label={t.todos.weekNext}>
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-surface-muted"
+            onClick={() => onCursorMonth?.(addMonthsYmd(first, 1))}
+            aria-label={t.todos.weekNext}
+          >
+            <Icon icon={ChevronRight} size={16} />
+          </button>
+        </Tip>
       </div>
       <div className="grid grid-cols-7 gap-y-1 text-center">
         {labels.map((label) => (

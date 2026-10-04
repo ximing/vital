@@ -7,6 +7,7 @@ import { resolveTheme, type ThemeChoice } from '@/lib/theme';
 import { AuthService } from '@/services/auth.service';
 import { ThemeService } from '@/services/theme.service';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 
 const OPTIONS: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
   { value: 'system', label: t.theme.system, icon: Monitor },
@@ -23,64 +24,66 @@ function persistTheme(theme: ThemeService, next: ThemeChoice, signedIn: boolean)
 
 export const ThemeSwitch: FC<{ variant?: 'menu' | 'rail'; expanded?: boolean }> = observer(
   function ThemeSwitch({ variant = 'menu', expanded = false }) {
-  const user = useService(AuthService).user;
-  const theme = useService(ThemeService);
-  const choice = theme.choice;
-  const dark = resolveTheme(choice) === 'dark';
+    const user = useService(AuthService).user;
+    const theme = useService(ThemeService);
+    const choice = theme.choice;
+    const dark = resolveTheme(choice) === 'dark';
 
-  function toggle() {
-    const next = resolveTheme(theme.choice) === 'dark' ? 'light' : 'dark';
-    persistTheme(theme, next, Boolean(user));
-  }
+    function toggle() {
+      const next = resolveTheme(theme.choice) === 'dark' ? 'light' : 'dark';
+      persistTheme(theme, next, Boolean(user));
+    }
 
-  if (variant === 'rail') {
+    if (variant === 'rail') {
+      return (
+        <Tip label={expanded ? undefined : dark ? t.theme.dark : t.theme.light} side="right">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={dark}
+            aria-label={t.theme.switch}
+            onClick={toggle}
+            className={`relative mx-1 flex h-9 items-center rounded-md text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg ${
+              expanded ? 'gap-2 px-3' : 'justify-center'
+            }`}
+          >
+            <Icon icon={dark ? Moon : Sun} className="shrink-0" />
+            {expanded ? (
+              <span className="truncate">{dark ? t.theme.dark : t.theme.light}</span>
+            ) : null}
+          </button>
+        </Tip>
+      );
+    }
+
     return (
       <button
         type="button"
         role="switch"
         aria-checked={dark}
         aria-label={t.theme.switch}
-        title={expanded ? undefined : dark ? t.theme.dark : t.theme.light}
         onClick={toggle}
-        className={`relative mx-1 flex h-9 items-center rounded-md text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg ${
-          expanded ? 'gap-2 px-3' : 'justify-center'
-        }`}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg hover:bg-surface-muted"
       >
-        <Icon icon={dark ? Moon : Sun} className="shrink-0" />
-        {expanded ? (
-          <span className="truncate">{dark ? t.theme.dark : t.theme.light}</span>
-        ) : null}
+        <span className="flex items-center gap-2">
+          <Icon icon={dark ? Moon : Sun} size={16} />
+          {dark ? t.theme.dark : t.theme.light}
+        </span>
+        <span
+          className={`relative h-5 w-9 shrink-0 rounded-full transition-[background-color] duration-[var(--ease-out)] ${
+            dark ? 'bg-accent' : 'bg-surface-muted'
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-[left] duration-[var(--ease-out)] ${
+              dark ? 'left-4' : 'left-0.5'
+            }`}
+          />
+        </span>
       </button>
     );
-  }
-
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={dark}
-      aria-label={t.theme.switch}
-      onClick={toggle}
-      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg hover:bg-surface-muted"
-    >
-      <span className="flex items-center gap-2">
-        <Icon icon={dark ? Moon : Sun} size={16} />
-        {dark ? t.theme.dark : t.theme.light}
-      </span>
-      <span
-        className={`relative h-5 w-9 shrink-0 rounded-full transition-[background-color] duration-[var(--ease-out)] ${
-          dark ? 'bg-accent' : 'bg-surface-muted'
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-[left] duration-[var(--ease-out)] ${
-            dark ? 'left-4' : 'left-0.5'
-          }`}
-        />
-      </span>
-    </button>
-  );
-});
+  },
+);
 
 export const ThemeToggle: FC<{ compact?: boolean }> = observer(function ThemeToggle({
   compact = false,
@@ -99,22 +102,22 @@ export const ThemeToggle: FC<{ compact?: boolean }> = observer(function ThemeTog
         {OPTIONS.map((option) => {
           const active = choice === option.value;
           return (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              aria-label={option.label}
-              title={option.label}
-              onClick={() => onChoose(option.value)}
-              className={`flex h-[var(--touch-min)] flex-1 items-center justify-center rounded-md transition-[color,background-color] duration-[var(--ease-out)] ${
-                active
-                  ? 'bg-accent-subtle text-fg'
-                  : 'text-muted hover:bg-surface-muted hover:text-fg'
-              }`}
-            >
-              <Icon icon={option.icon} />
-            </button>
+            <Tip key={option.value} label={option.label}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={option.label}
+                onClick={() => onChoose(option.value)}
+                className={`flex h-[var(--touch-min)] flex-1 items-center justify-center rounded-md transition-[color,background-color] duration-[var(--ease-out)] ${
+                  active
+                    ? 'bg-accent-subtle text-fg'
+                    : 'text-muted hover:bg-surface-muted hover:text-fg'
+                }`}
+              >
+                <Icon icon={option.icon} />
+              </button>
+            </Tip>
           );
         })}
       </div>

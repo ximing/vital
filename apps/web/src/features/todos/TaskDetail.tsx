@@ -202,7 +202,12 @@ export const TaskDetail: FC<{
       aria-label={task.title}
     >
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
-        <TaskCheckbox task={task} timeZone={zone} className="mt-0" onToggle={() => onComplete(task)} />
+        <TaskCheckbox
+          task={task}
+          timeZone={zone}
+          className="mt-0"
+          onToggle={() => onComplete(task)}
+        />
         <SchedulePopover
           draft={schedule}
           zone={zone}
@@ -607,7 +612,6 @@ function SaveStatus({
         data-region="save-status"
         data-state={state}
         onClick={onRetry}
-        title={t.todos.retry}
         className={`shrink-0 rounded-md px-1.5 py-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] transition-[background-color] duration-[var(--ease-out)] hover:bg-surface-muted ${color}`}
       >
         {text}

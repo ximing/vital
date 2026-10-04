@@ -18,6 +18,7 @@ import { addMonthsYmd, padYmd, ymdParts } from '@/lib/calendar-grid';
 import { DateField } from '@/ui/date-field';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { TimePicker } from '@/ui/time-field';
 import { usePopover } from '@/ui/use-popover';
 import {
@@ -56,7 +57,9 @@ function reminderLabel(value: ReminderValue): string {
 
 function recurrenceLabel(draft: Pick<ScheduleDraft, 'recurrenceKind' | 'recurrence'>): string {
   if (draft.recurrenceKind !== null) {
-    return RECURRENCE.find((item) => item.value === draft.recurrenceKind)?.label ?? t.todos.recurrence;
+    return (
+      RECURRENCE.find((item) => item.value === draft.recurrenceKind)?.label ?? t.todos.recurrence
+    );
   }
   if (draft.recurrence !== null) {
     return intervalRecurrenceLabel(draft.recurrence) ?? t.todos.recurrence;
@@ -301,7 +304,9 @@ export function SchedulePopover({
                 key={mode}
                 type="button"
                 className={`h-8 rounded-md text-[length:var(--text-caption)] ${
-                  working.mode === mode ? 'bg-elevated text-fg shadow-sm' : 'text-muted hover:text-fg'
+                  working.mode === mode
+                    ? 'bg-elevated text-fg shadow-sm'
+                    : 'text-muted hover:text-fg'
                 }`}
                 onClick={() => setMode(mode)}
               >
@@ -314,7 +319,10 @@ export function SchedulePopover({
             <IconBtn label={t.todos.quickToday} onClick={() => quick(today, null)}>
               <Icon icon={Sun} size={16} />
             </IconBtn>
-            <IconBtn label={t.todos.quickTomorrow} onClick={() => quick(addDaysYmd(today, 1), null)}>
+            <IconBtn
+              label={t.todos.quickTomorrow}
+              onClick={() => quick(addDaysYmd(today, 1), null)}
+            >
               <Icon icon={Sunrise} size={16} />
             </IconBtn>
             <IconBtn label={t.todos.quickWeek} onClick={() => quick(addDaysYmd(today, 7), null)}>
@@ -329,33 +337,39 @@ export function SchedulePopover({
             <p className="min-w-0 flex-1 text-[length:var(--text-meta)] font-medium">
               {y}年{m}月
             </p>
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
-              onClick={() => setMonthCursor(addMonthsYmd(monthCursor, -1))}
-              aria-label={t.todos.weekPrev}
-            >
-              <Icon icon={ChevronLeft} size={16} />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
-              onClick={() => {
-                setMonthCursor(`${today.slice(0, 7)}-01`);
-                pickDay(today);
-              }}
-              aria-label={t.todos.quickToday}
-            >
-              <Icon icon={Circle} size={12} />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
-              onClick={() => setMonthCursor(addMonthsYmd(monthCursor, 1))}
-              aria-label={t.todos.weekNext}
-            >
-              <Icon icon={ChevronRight} size={16} />
-            </button>
+            <Tip label={t.todos.weekPrev}>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
+                onClick={() => setMonthCursor(addMonthsYmd(monthCursor, -1))}
+                aria-label={t.todos.weekPrev}
+              >
+                <Icon icon={ChevronLeft} size={16} />
+              </button>
+            </Tip>
+            <Tip label={t.todos.quickToday}>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
+                onClick={() => {
+                  setMonthCursor(`${today.slice(0, 7)}-01`);
+                  pickDay(today);
+                }}
+                aria-label={t.todos.quickToday}
+              >
+                <Icon icon={Circle} size={12} />
+              </button>
+            </Tip>
+            <Tip label={t.todos.weekNext}>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
+                onClick={() => setMonthCursor(addMonthsYmd(monthCursor, 1))}
+                aria-label={t.todos.weekNext}
+              >
+                <Icon icon={ChevronRight} size={16} />
+              </button>
+            </Tip>
           </div>
           <div className="grid grid-cols-7 gap-y-1 text-center text-[length:var(--text-caption)] text-muted">
             {labels.map((label) => (
@@ -484,7 +498,9 @@ export function SchedulePopover({
                 [
                   ['none', t.todos.reminderNone],
                   ['due', t.todos.reminderDue],
-                  ...REMINDER_OFFSETS.map((minutes) => [String(minutes), offsetLabel(minutes)] as const),
+                  ...REMINDER_OFFSETS.map(
+                    (minutes) => [String(minutes), offsetLabel(minutes)] as const,
+                  ),
                   ['custom', t.todos.reminderCustom],
                 ] as const
               ).map(([value, label]) => (
@@ -545,9 +561,11 @@ export function SchedulePopover({
                   key={item.value}
                   type="button"
                   className={`h-8 rounded-md px-2 text-left text-[length:var(--text-caption)] ${
-                    (item.value === 'none'
-                      ? working.recurrenceKind === null && working.recurrence === null
-                      : working.recurrenceKind === item.value)
+                    (
+                      item.value === 'none'
+                        ? working.recurrenceKind === null && working.recurrence === null
+                        : working.recurrenceKind === item.value
+                    )
                       ? 'bg-accent-subtle text-fg'
                       : 'text-muted hover:bg-surface-muted hover:text-fg'
                   }`}
@@ -597,15 +615,16 @@ function IconBtn({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
-    >
-      {children}
-    </button>
+    <Tip label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-surface-muted hover:text-fg"
+      >
+        {children}
+      </button>
+    </Tip>
   );
 }
 

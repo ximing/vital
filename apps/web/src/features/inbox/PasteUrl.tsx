@@ -8,6 +8,7 @@ import { Banner } from '@/ui/banner';
 import { Button } from '@/ui/button';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { Icon } from '@/ui/icon';
+import { Tip } from '@/ui/tip';
 import { hostLabel, normalizePasteUrl, PASTE_URL_ID } from './model';
 import { useInboxActions } from './queries';
 import { InboxUiService } from './inbox-ui.service';
@@ -98,19 +99,26 @@ export const PasteUrl: FC<{ disabled?: boolean }> = observer(function PasteUrl({
             aria-label={t.inbox.pastePlaceholder}
             className={`${FIELD_CONTROL_CLASS} w-full min-w-0 pl-8 pr-9 text-[length:var(--text-meta)]`}
           />
-          <button
-            type="submit"
-            aria-label={extracting ? t.inbox.extracting : t.inbox.extract}
-            title={t.inbox.extract}
-            disabled={disabled || busy || displayed.trim() === ''}
-            className="absolute right-1 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-tertiary transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          <span
+            className={`absolute right-1 top-1/2 -translate-y-1/2 ${
+              disabled || busy || displayed.trim() === '' ? 'cursor-not-allowed' : ''
+            }`}
           >
-            <Icon
-              icon={extracting ? LoaderCircle : Sparkles}
-              size={14}
-              className={extracting ? 'animate-spin' : undefined}
-            />
-          </button>
+            <Tip label={extracting ? t.inbox.extracting : t.inbox.extract}>
+              <button
+                type="submit"
+                aria-label={extracting ? t.inbox.extracting : t.inbox.extract}
+                disabled={disabled || busy || displayed.trim() === ''}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-tertiary transition-[background-color,color] duration-[var(--ease-out)] hover:bg-accent-subtle hover:text-accent disabled:opacity-40"
+              >
+                <Icon
+                  icon={extracting ? LoaderCircle : Sparkles}
+                  size={14}
+                  className={extracting ? 'animate-spin' : undefined}
+                />
+              </button>
+            </Tip>
+          </span>
         </div>
       </form>
       {error ? (

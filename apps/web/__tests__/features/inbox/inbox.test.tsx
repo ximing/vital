@@ -161,7 +161,8 @@ function jobsPage(
     page: 1,
     pageSize: 20,
     total: items.length,
-    activeCount: items.filter((item) => item.status === 'queued' || item.status === 'running').length,
+    activeCount: items.filter((item) => item.status === 'queued' || item.status === 'running')
+      .length,
     ...extra,
   };
 }
@@ -283,14 +284,17 @@ describe('inbox workspace', () => {
     await user.click(opener);
     const canvas = await screen.findByRole('main', { name: '处理进度' });
     expect(screen.queryByRole('dialog', { name: '处理进度' })).not.toBeInTheDocument();
-    expect(within(canvas).getByTitle('https://news.example.com/article')).toHaveTextContent(
-      'news.example.com/article',
+    const article = within(canvas).getByText('news.example.com/article');
+    await user.hover(article);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(
+      'https://news.example.com/article',
     );
     expect(canvas).toHaveTextContent('处理中');
     expect(canvas).toHaveTextContent(formatCapturedAt(startedAt, TZ));
-    expect(within(canvas).getByTitle('https://mp.weixin.qq.com/s/abc')).toHaveTextContent(
-      'mp.weixin.qq.com/s/abc',
-    );
+    await user.unhover(article);
+    const wechat = within(canvas).getByText('mp.weixin.qq.com/s/abc');
+    await user.hover(wechat);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('https://mp.weixin.qq.com/s/abc');
     expect(canvas).toHaveTextContent('没有可用正文');
     expect(canvas).toHaveTextContent('链接无法处理');
     expect(within(canvas).getByRole('list')).not.toHaveTextContent('抓取');
@@ -366,15 +370,15 @@ describe('inbox workspace', () => {
     renderAt('/inbox');
     await user.click(await screen.findByRole('link', { name: '处理进度，2' }));
     const canvas = await screen.findByRole('main', { name: '处理进度' });
-    expect(await within(canvas).findByTitle('https://news.example.com/now')).toBeInTheDocument();
+    expect(await within(canvas).findByText('news.example.com/now')).toBeInTheDocument();
     expect(within(canvas).queryByRole('button', { name: '上一页' })).toBeDisabled();
     await user.click(within(canvas).getByRole('button', { name: '下一页' }));
-    expect(await within(canvas).findByTitle('https://news.example.com/later')).toBeInTheDocument();
-    expect(within(canvas).queryByTitle('https://news.example.com/now')).not.toBeInTheDocument();
+    expect(await within(canvas).findByText('news.example.com/later')).toBeInTheDocument();
+    expect(within(canvas).queryByText('news.example.com/now')).not.toBeInTheDocument();
     expect(canvas).toHaveTextContent('2 / 2');
     expect(within(canvas).getByRole('button', { name: '下一页' })).toBeDisabled();
     await user.click(within(canvas).getByRole('button', { name: '上一页' }));
-    expect(await within(canvas).findByTitle('https://news.example.com/now')).toBeInTheDocument();
+    expect(await within(canvas).findByText('news.example.com/now')).toBeInTheDocument();
     expect(client.listInboxExtractJobs).toHaveBeenCalledWith({ page: 1, limit: 20 });
     expect(client.listInboxExtractJobs).toHaveBeenCalledWith({ page: 2, limit: 20 });
   });
