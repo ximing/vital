@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowUp, Calendar, Flag, Plus, Tag as TagIcon } from 'lucide-react-native';
+import { Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ArrowUp, Calendar, Flag, Plus, Sparkles, Tag as TagIcon } from 'lucide-react-native';
 import {
   type CreateTaskInput,
   type SimilarTaskHit,
@@ -29,6 +29,9 @@ import { priorityColor } from './priority';
 
 const TIMES = ['09:00', '14:00', '18:00', '21:00'] as const;
 const PRIORITIES: TaskPriority[] = [0, 1, 2, 3];
+// AI 解析等待态的流动配色（设计稿 apps/web/design/ai-parsing.html）
+const AI_FLOW_B = '#3D8FBE';
+const AI_FLOW_C = '#7A5FC9';
 
 /**
  * Today and Todos share this. A corner button opens the bar and the keyboard.
@@ -60,6 +63,9 @@ export function NewTaskBar({
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [slow, setSlow] = useState(false);
+  const [stageIdx, setStageIdx] = useState(0);
   const [due, setDue] = useState<ComposeDue>({ source: 'preset' });
   const [priority, setPriority] = useState<TaskPriority | null>(null);
   const [tagIds, setTagIds] = useState<string[]>([]);
@@ -77,6 +83,70 @@ export function NewTaskBar({
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
     return () => clearTimeout(timer);
   }, [open]);
+
+  // AI 解析等待态：边框流光（颜色插值）+ ✦ 呼吸 + 阶段文案轮播；
+  // 超过 8s（slow）表演停止，退回克制的纯文字提示。
+  const [flowAnim] = useState(() => new Animated.Value(0));
+  const [breathAnim] = useState(() => new Animated.Value(0));
+  const [stageFade] = useState(() => new Animated.Value(1));
+  const aiLive = parsing && !slow;
+
+  useEffect(() => {
+    if (!aiLive) return;
+    const timer = setInterval(
+      () => setStageIdx((i) => Math.min(i + 1, copy.todos.interpretingStages.length - 1)),
+      1200,
+    );
+    return () => clearInterval(timer);
+  }, [aiLive]);
+
+  useEffect(() => {
+    if (!aiLive) return;
+    flowAnim.setValue(0);
+    breathAnim.setValue(0);
+    const flow = Animated.loop(
+      Animated.timing(flowAnim, {
+        toValue: 1,
+        duration: 3200,
+        easing: Easing.linear,
+        useNativeDriver: false,
+      }),
+    );
+    const breath = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(breathAnim, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    flow.start();
+    breath.start();
+    return () => {
+      flow.stop();
+      breath.stop();
+    };
+  }, [aiLive, flowAnim, breathAnim]);
+
+  useEffect(() => {
+    stageFade.setValue(0);
+    Animated.timing(stageFade, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+  }, [stageIdx, stageFade]);
+
+  const flowBorderColor = flowAnim.interpolate({
+    inputRange: [0, 0.33, 0.66, 1],
+    outputRange: [t.accentPrimary, AI_FLOW_B, AI_FLOW_C, t.accentPrimary],
+  });
+  const breathScale = breathAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] });
+  const breathOpacity = breathAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
 
   const today = localDateStamp(tz);
   const tomorrow = addDaysYmdStamp(today, 1);
@@ -160,8 +230,13 @@ export function NewTaskBar({
     setBusy(true);
     let waitTimer: ReturnType<typeof setTimeout> | undefined;
     if (request.kind === 'text') {
-      setStatus(copy.todos.interpreting);
-      waitTimer = setTimeout(() => setStatus(copy.todos.creatingWait), 8000);
+      setParsing(true);
+      setSlow(false);
+      setStageIdx(0);
+      waitTimer = setTimeout(() => {
+        setSlow(true);
+        setStatus(copy.todos.creatingWait);
+      }, 8000);
     }
     try {
       const task =
@@ -182,6 +257,8 @@ export function NewTaskBar({
     } finally {
       if (waitTimer !== undefined) clearTimeout(waitTimer);
       setStatus(null);
+      setParsing(false);
+      setSlow(false);
       setBusy(false);
     }
   }
@@ -200,6 +277,17 @@ export function NewTaskBar({
           {kept ? null : <Pressable style={styles.backdrop} onPress={dismiss} />}
           <View style={styles.wrap}>
       <View style={styles.field}>
+        {aiLive ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, styles.aiFrame, { borderColor: flowBorderColor }]}
+          />
+        ) : null}
+        {aiLive ? (
+          <Animated.View style={{ opacity: breathOpacity, transform: [{ scale: breathScale }] }}>
+            <Icon icon={Sparkles} size={14} color={AI_FLOW_C} />
+          </Animated.View>
+        ) : null}
         <TextInput
           ref={inputRef}
           style={styles.input}
@@ -327,7 +415,16 @@ export function NewTaskBar({
           />
         ))}
       </PickerSheet>
-      {status !== null ? (
+      {aiLive ? (
+        <View style={styles.statusRow} accessibilityLiveRegion="polite">
+          <Animated.View style={{ opacity: breathOpacity, transform: [{ scale: breathScale }] }}>
+            <Icon icon={Sparkles} size={12} color={AI_FLOW_C} />
+          </Animated.View>
+          <Animated.Text style={[styles.status, styles.aiStatus, { opacity: stageFade }]}>
+            {copy.todos.interpretingStages[stageIdx]}
+          </Animated.Text>
+        </View>
+      ) : status !== null ? (
         <Text style={styles.status} accessibilityLiveRegion="polite">
           {status}
         </Text>
@@ -404,6 +501,17 @@ const createStyles = (t: Theme) =>
       alignItems: 'center',
       gap: t.space[2],
     },
+    aiFrame: {
+      margin: -6,
+      borderWidth: 1.5,
+      borderRadius: t.radius.md + 6,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    aiStatus: { color: t.fgMuted },
     input: {
       flex: 1,
       minWidth: 0,

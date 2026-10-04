@@ -579,6 +579,7 @@ export const copy = {
     addTaskPlaceholder: '添加任务',
     composeIntent: '用一句话说要做的事，日期和优先级会自动填',
     interpreting: '正在解析任务…',
+    interpretingStages: ['正在理解语义…', '识别日期与时间…', '推断优先级与清单…'],
     creatingWait: '仍在处理，请稍候，无需重复提交。',
     composerDate: '日期',
     describe: '描述',

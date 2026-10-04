@@ -569,6 +569,7 @@ export const t = {
     composeWhat: '准备做什么？',
     composeIntent: '用一句话说要做的事，日期和优先级会自动填',
     interpreting: '正在解析任务…',
+    interpretingStages: ['正在理解语义…', '识别日期与时间…', '推断优先级与清单…'],
     creating: '正在创建任务…',
     creatingWait: '仍在处理，请稍候，无需重复提交。',
     similarOpenPrefix: '可能已有：',

@@ -301,6 +301,133 @@ html:has([data-region='notify-alert']) body {
     0 0 0 3px var(--focus-ring);
 }
 
+/* ===== AI 解析等待态（设计稿 design/ai-parsing.html）=====
+   intent 模式提交后：输入壳外包三色流光描边，阶段文案 shimmer 扫光轮播；
+   超过 8s 降级为静态描边 + 克制文案（.ai-shell-slow）。 */
+:root {
+  --ai-flow-a: var(--accent-primary);
+  --ai-flow-b: #3d8fbe;
+  --ai-flow-c: #7a5fc9;
+}
+
+@property --ai-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.ai-shell {
+  border-radius: var(--ai-radius, 14px);
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--ai-angle),
+    var(--ai-flow-a) 0%,
+    var(--ai-flow-b) 22%,
+    var(--ai-flow-c) 42%,
+    var(--ai-flow-a) 58%,
+    var(--ai-flow-b) 78%,
+    var(--ai-flow-c) 92%,
+    var(--ai-flow-a) 100%
+  );
+  animation: ai-flow 3.2s linear infinite;
+  box-shadow:
+    0 0 0 4px rgb(61 143 190 / 6%),
+    0 0 18px rgb(122 95 201 / 10%);
+}
+
+.ai-shell-slow {
+  animation: none;
+  box-shadow: none;
+  background: linear-gradient(90deg, var(--ai-flow-a), var(--ai-flow-b));
+}
+
+@keyframes ai-flow {
+  to {
+    --ai-angle: 360deg;
+  }
+}
+
+.ai-shell-inner {
+  border-radius: calc(var(--ai-radius, 14px) - 1.5px);
+}
+
+.ai-spark {
+  display: inline-flex;
+  color: var(--ai-flow-c);
+  animation: ai-spark-breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes ai-spark-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.ai-shimmer-text {
+  background: linear-gradient(
+    100deg,
+    var(--fg-muted) 20%,
+    var(--ai-flow-b) 42%,
+    var(--ai-flow-c) 50%,
+    var(--ai-flow-b) 58%,
+    var(--fg-muted) 80%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: ai-shimmer-slide 2.4s linear infinite;
+}
+
+@keyframes ai-shimmer-slide {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+.ai-stage-in {
+  animation: ai-stage-in 0.32s ease;
+}
+
+@keyframes ai-stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-shell {
+    animation: none;
+    box-shadow: none;
+    background: linear-gradient(90deg, var(--ai-flow-a), var(--ai-flow-b));
+  }
+  .ai-shimmer-text {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: var(--fg-muted);
+  }
+  .ai-spark,
+  .ai-stage-in {
+    animation: none;
+  }
+}
+
 .reader-article {
   font-family: var(--font-sans);
   color: var(--fg-primary);

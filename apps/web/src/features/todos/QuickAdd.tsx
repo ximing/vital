@@ -1,7 +1,7 @@
 import type { List, TaskPriority } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
-import { CircleArrowUp, Folder, LoaderCircle, Plus } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type FC, type FormEvent } from 'react';
+import { CircleArrowUp, Folder, LoaderCircle, Plus, Sparkles } from 'lucide-react';
+import { useEffect, useId, useRef, useState, type CSSProperties, type FC, type FormEvent, type ReactNode } from 'react';
 import { t } from '@/copy';
 import { humanError } from '@/lib/errors';
 import { FIELD_POPOVER_CLASS } from '@/ui/field';
@@ -73,6 +73,7 @@ export const QuickAdd: FC<{
   const [prevDefaultListId, setPrevDefaultListId] = useState(defaultListId);
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false);
+  const [stage, setStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [hasText, setHasText] = useState(false);
 
@@ -91,6 +92,20 @@ export const QuickAdd: FC<{
     const timer = window.setTimeout(() => setWaiting(true), 8000);
     return () => window.clearTimeout(timer);
   }, [busy]);
+
+  // intent 解析中：阶段文案逐段推进，停在最后一段直到请求结束；
+  // 进入慢请求（waiting）后表演停止，退回克制文案。
+  const aiBusy = intent && busy;
+  const aiLive = aiBusy && !waiting;
+  useEffect(() => {
+    if (!aiLive) return;
+    setStage(0);
+    const timer = window.setInterval(
+      () => setStage((s) => Math.min(s + 1, t.todos.interpretingStages.length - 1)),
+      1200,
+    );
+    return () => window.clearInterval(timer);
+  }, [aiLive]);
 
   async function handle(event: FormEvent) {
     event.preventDefault();
@@ -169,16 +184,25 @@ export const QuickAdd: FC<{
   const progressNode = (
     <div id={statusId} role="status" aria-live="polite" aria-atomic="true">
       {busy ? (
-        <p className="flex items-center gap-2 px-1 pt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-accent">
-          <Icon
-            icon={LoaderCircle}
-            size={14}
-            className="shrink-0 animate-spin motion-reduce:animate-none"
-          />
-          <span>
-            {waiting ? t.todos.creatingWait : intent ? t.todos.interpreting : t.todos.creating}
-          </span>
-        </p>
+        aiLive ? (
+          <p className="flex items-center gap-2 px-1 pt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)]">
+            <Icon icon={Sparkles} size={14} className="ai-spark shrink-0" />
+            <span key={stage} className="ai-shimmer-text ai-stage-in">
+              {t.todos.interpretingStages[stage]}
+            </span>
+          </p>
+        ) : (
+          <p className="flex items-center gap-2 px-1 pt-2 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-accent">
+            <Icon
+              icon={LoaderCircle}
+              size={14}
+              className="shrink-0 animate-spin motion-reduce:animate-none"
+            />
+            <span>
+              {waiting ? t.todos.creatingWait : intent ? t.todos.interpreting : t.todos.creating}
+            </span>
+          </p>
+        )
       ) : null}
     </div>
   );
@@ -194,7 +218,14 @@ export const QuickAdd: FC<{
   if (card) {
     return (
       <form onSubmit={(event) => void handle(event)} className="pb-2">
-        <div className="rounded-xl bg-elevated px-3 py-2 shadow-[0_0_0_1px_var(--border-subtle)] transition-shadow duration-[var(--ease-out)] focus-within:shadow-[0_0_0_1px_var(--border-focus),0_0_0_4px_var(--focus-ring)]">
+        <AiShell active={aiBusy} slow={waiting} radius={12}>
+          <div
+            className={
+              aiBusy
+                ? 'ai-shell-inner bg-elevated px-3 py-2'
+                : 'rounded-xl bg-elevated px-3 py-2 shadow-[0_0_0_1px_var(--border-subtle)] transition-shadow duration-[var(--ease-out)] focus-within:shadow-[0_0_0_1px_var(--border-focus),0_0_0_4px_var(--focus-ring)]'
+            }
+          >
           <input
             id={captureId ? QUICK_ADD_ID : undefined}
             ref={inputRef}
@@ -229,6 +260,7 @@ export const QuickAdd: FC<{
             </button>
           </div>
         </div>
+        </AiShell>
         {progressNode}
         {errorNode}
       </form>
@@ -244,12 +276,21 @@ export const QuickAdd: FC<{
         data-region="today-compose"
         className="group/compose mt-1 border-t border-border pb-1"
       >
-        <div className="field-shell flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2">
+        <AiShell active={aiBusy} slow={waiting} radius={10}>
+        <div
+          className={
+            aiBusy
+              ? 'ai-shell-inner flex min-h-[41px] items-center gap-2.5 px-3 py-2'
+              : 'field-shell flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2'
+          }
+        >
           <span
             aria-hidden
             className="flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center rounded-full border-[1.5px] border-tertiary text-accent"
           >
-            {busy ? (
+            {aiLive ? (
+              <Icon icon={Sparkles} size={11} className="ai-spark" />
+            ) : busy ? (
               <Icon
                 icon={LoaderCircle}
                 size={11}
@@ -296,6 +337,7 @@ export const QuickAdd: FC<{
             />
           </button>
         </div>
+        </AiShell>
         {progressNode}
         {errorNode}
       </form>
@@ -307,9 +349,18 @@ export const QuickAdd: FC<{
       onSubmit={(event) => void handle(event)}
       className="w-full min-w-0 self-stretch pb-4 pt-1"
     >
-      <div className="field-shell flex h-[46px] w-full min-w-0 items-center gap-2 rounded-[14px] border border-border bg-surface px-4 shadow-[var(--shadow-xs)]">
+      <AiShell active={aiBusy} slow={waiting} radius={14}>
+      <div
+        className={
+          aiBusy
+            ? 'ai-shell-inner flex h-[43px] w-full min-w-0 items-center gap-2 bg-surface px-4'
+            : 'field-shell flex h-[46px] w-full min-w-0 items-center gap-2 rounded-[14px] border border-border bg-surface px-4 shadow-[var(--shadow-xs)]'
+        }
+      >
         <span aria-hidden className="shrink-0 text-[17px] font-medium leading-none text-accent">
-          {busy ? (
+          {aiLive ? (
+            <Icon icon={Sparkles} size={17} className="ai-spark" />
+          ) : busy ? (
             <Icon
               icon={LoaderCircle}
               size={17}
@@ -342,14 +393,43 @@ export const QuickAdd: FC<{
           {t.todos.add}
         </button>
       </div>
+      </AiShell>
       {progressNode}
       {errorNode}
     </form>
   );
 });
 
-function ListMenu({
-  lists,
+/** intent 解析中的流光描边壳（设计稿 design/ai-parsing.html）：active 时包一层
+ *  三色流动渐变边框，slow（>8s）时静止为静态渐变。
+ *  非 active 也必须渲染同一个 div（display:contents 对布局透明）——
+ *  切换包裹结构会 remount 输入框，丢掉用户刚提交的原话和焦点。 */
+function AiShell({
+  active,
+  slow,
+  radius,
+  children,
+}: {
+  active: boolean;
+  slow: boolean;
+  radius: number;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={active ? (slow ? 'ai-shell ai-shell-slow' : 'ai-shell') : undefined}
+      style={
+        active
+          ? ({ '--ai-radius': `${String(radius)}px` } as CSSProperties)
+          : { display: 'contents' }
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+function ListMenu({  lists,
   value,
   onChange,
   placement = 'bottom',

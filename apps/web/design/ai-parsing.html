@@ -1,0 +1,245 @@
+<!-- 设计稿 · AI 任务解析等待态 · QuickAdd intent 模式 · 流光边框 + shimmer 文案 + 阶段轮播 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital · AI 解析等待态 · 设计稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* emerald garden tokens —— 与 packages/tokens 对齐 */
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-deep:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --dim:#555E56; --faint:#98A098; --line:#E2E6E0;
+    --danger:#CE4A45;
+    --shadow:0 1px 2px rgb(20 34 24/5%),0 10px 28px rgb(20 34 24/7%);
+    --shadow-xs:0 1px 2px rgb(20 34 24/5%);
+    --display:Sora,Inter,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --sans:Inter,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+    /* AI 解析专属：主色 → 青 → 紫 的流动渐变，克制不霓虹 */
+    --ai-a:#1C7A4F; --ai-b:#3D8FBE; --ai-c:#7A5FC9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:#E7EBE6;color:var(--ink);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:21px;
+    display:flex;flex-direction:column;align-items:center;gap:56px;padding:48px 0 96px}
+  .art-label{font-size:12px;color:var(--dim);letter-spacing:.06em;margin-bottom:-40px}
+  .art-label b{color:var(--ink)}
+  .board{width:1280px;background:var(--canvas);position:relative;overflow:hidden;
+    border-radius:12px;box-shadow:0 24px 64px rgb(20 34 24/14%)}
+
+  /* ===== 状态板通用 ===== */
+  .scene{padding:48px 56px 56px}
+  .scene h2{font-family:var(--display);font-size:15px;font-weight:600;letter-spacing:-0.01em;margin-bottom:6px}
+  .scene .cap{font-size:12px;color:var(--dim);margin-bottom:28px;max-width:640px}
+  .stack{display:flex;flex-direction:column;gap:36px}
+  .rowitem .tag{font-size:11px;color:var(--faint);letter-spacing:.05em;margin-bottom:10px}
+
+  /* ============ 核心：流光边框 ============ */
+  /* 解析中：输入壳外层包一个渐变描边层，背景层旋转流动 */
+  @property --ai-angle { syntax:'<angle>'; initial-value:0deg; inherits:false }
+  @keyframes ai-flow { to { --ai-angle:360deg } }
+  .ai-shell{position:relative;border-radius:14px;padding:1.5px; /* 描边厚度 */
+    background:conic-gradient(from var(--ai-angle),
+      var(--ai-a) 0%, var(--ai-b) 22%, var(--ai-c) 42%,
+      var(--ai-a) 58%, var(--ai-b) 78%, var(--ai-c) 92%, var(--ai-a) 100%);
+    animation:ai-flow 3.2s linear infinite;
+    box-shadow:0 0 0 4px rgb(61 143 190/6%), 0 0 18px rgb(122 95 201/10%);}
+  .ai-shell-inner{border-radius:12.5px;background:var(--surface);
+    display:flex;align-items:center;gap:10px;padding:0 16px;height:46px}
+  @media (prefers-reduced-motion:reduce){
+    .ai-shell{animation:none;background:linear-gradient(90deg,var(--ai-a),var(--ai-b))}
+    .shimmer-text{animation:none !important;background:none !important;color:var(--dim) !important;-webkit-text-fill-color:currentColor}
+    .spark{animation:none !important}
+  }
+
+  .spark{color:var(--ai-c);display:inline-flex;animation:spark-breathe 1.8s ease-in-out infinite}
+  @keyframes spark-breathe{0%,100%{opacity:.55;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}
+
+  .ai-shell input{flex:1;min-width:0;border:0;background:transparent;height:32px;
+    font-size:14px;color:var(--faint);outline:none;font-family:inherit}
+
+  /* ============ 阶段文案 + shimmer ============ */
+  .ai-status{display:flex;align-items:center;gap:8px;padding:2px 4px 0;margin-top:8px;
+    font-size:12px;line-height:16px}
+  .shimmer-text{
+    background:linear-gradient(100deg,
+      var(--dim) 20%, var(--ai-b) 42%, var(--ai-c) 50%, var(--ai-b) 58%, var(--dim) 80%);
+    background-size:220% 100%;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:shimmer-slide 2.4s linear infinite}
+  @keyframes shimmer-slide{from{background-position:180% 0}to{background-position:-40% 0}}
+
+  /* 阶段切换：淡入 + 轻微上浮 */
+  .stage{transition:opacity .28s ease,transform .28s ease}
+  .stage.out{opacity:0;transform:translateY(-3px)}
+  .stage.in{animation:stage-in .32s ease}
+  @keyframes stage-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* 慢请求提示（>8s）：回到克制的普通文案，不再 shimmer */
+  .slow{color:var(--faint)}
+
+  /* ============ 静态对照：普通（非 intent）创建中 ============ */
+  .plain-shell{display:flex;align-items:center;gap:10px;height:46px;border-radius:14px;
+    border:1px solid var(--line);background:var(--surface);padding:0 16px;box-shadow:var(--shadow-xs)}
+  .plain-shell .plus{font-size:17px;font-weight:500;color:var(--accent)}
+  .spin{width:14px;height:14px;border-radius:50%;flex:none;
+    border:2px solid var(--accent-subtle);border-top-color:var(--accent);
+    animation:rot .8s linear infinite}
+  @keyframes rot{to{transform:rotate(360deg)}}
+  .plain-status{display:flex;align-items:center;gap:8px;padding:2px 4px 0;margin-top:8px;
+    font-size:12px;color:var(--accent)}
+
+  /* Today row 变体（列表内嵌行） */
+  .row-shell{display:flex;align-items:center;gap:10px;min-height:44px;border-radius:10px;
+    background:var(--surface);padding:8px 12px;box-shadow:0 0 0 1px var(--line)}
+  .ai-shell.row{padding:1.5px;border-radius:11px}
+  .ai-shell.row .ai-shell-inner{border-radius:9.5px;height:41px;padding:0 12px;background:var(--surface)}
+  .checkbox-mark{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--faint);
+    display:flex;align-items:center;justify-content:center;flex:none;color:var(--ai-c)}
+
+  .ctrl{position:absolute;top:20px;right:24px;display:flex;gap:8px}
+  .ctrl button{height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--line);
+    background:var(--elevated);font-size:12px;font-family:inherit;color:var(--ink);cursor:pointer}
+  .ctrl button:hover{background:var(--muted)}
+</style>
+</head>
+<body>
+
+<p class="art-label">画板 1 / 3 · <b>解析中状态</b> — 点击「重播」可看阶段轮播与完成回落；边框流光 3.2s/圈，shimmer 2.4s/次</p>
+<div class="board">
+  <div class="scene">
+    <div class="ctrl">
+      <button onclick="replay('demo1')">▶ 重播解析流程</button>
+    </div>
+    <h2>intent 模式 · 解析中（流光边框 + 阶段文案）</h2>
+    <p class="cap">提交后输入框锁定，壳层出现三色流光描边（主色→青→紫，取色克制）；下方阶段文案 shimmer 扫光并逐段轮播。用户输入的话原样保留在框内，让 AI「在读懂这句话」的意图可视化。</p>
+
+    <div class="stack">
+      <div class="rowitem" id="demo1">
+        <p class="tag">BAR 变体 · 任务页底部输入条</p>
+        <div class="ai-shell">
+          <div class="ai-shell-inner">
+            <span class="spark">✦</span>
+            <input value="明天下午3点和设计过首页方案" readonly />
+          </div>
+        </div>
+        <div class="ai-status">
+          <span class="spark" style="animation-delay:.3s">✦</span>
+          <span class="shimmer-text stage" data-stages="正在理解语义…|识别日期与时间…|推断优先级与清单…">正在理解语义…</span>
+        </div>
+      </div>
+
+      <div class="rowitem">
+        <p class="tag">ROW 变体 · Today 列表内嵌行（复选框位置变为 ✦ 呼吸）</p>
+        <div class="ai-shell row">
+          <div class="ai-shell-inner">
+            <span class="checkbox-mark"><span class="spark" style="font-size:11px">✦</span></span>
+            <input value="周五前把年度总结初稿发给老板" readonly />
+          </div>
+        </div>
+        <div class="ai-status">
+          <span class="spark" style="animation-delay:.5s">✦</span>
+          <span class="shimmer-text stage" data-stages="正在理解语义…|识别日期与时间…|推断优先级与清单…" style="animation-delay:.15s">识别日期与时间…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="art-label">画板 2 / 3 · <b>慢请求与边界</b> — 超过 8s 停止表演、回到克制文案；motion-reduce 下流光/shimmer 全部降级</p>
+<div class="board">
+  <div class="scene">
+    <h2>慢请求（>8s）与降级策略</h2>
+    <p class="cap">AI 表演不能无限拖：8 秒未完成时流光淡出为静态描边，文案切换为普通灰色的「仍在处理」。系统开启减弱动态效果时，流光变静态渐变、shimmer 变纯文字。</p>
+    <div class="stack">
+      <div class="rowitem">
+        <p class="tag">慢请求 · 流光静止 + 克制文案</p>
+        <div class="ai-shell" style="animation:none;box-shadow:none;background:linear-gradient(90deg,var(--ai-a),var(--ai-b))">
+          <div class="ai-shell-inner">
+            <span class="spark" style="animation:none;opacity:.7">✦</span>
+            <input value="下个月挑个周末去杭州两天一夜" readonly />
+          </div>
+        </div>
+        <div class="ai-status slow">
+          <span class="spin"></span>
+          <span>仍在处理，请稍候，无需重复提交。</span>
+        </div>
+      </div>
+
+      <div class="rowitem">
+        <p class="tag">对照 · 非 intent 模式的普通创建（保持现状，不加 AI 皮肤）</p>
+        <div class="plain-shell">
+          <span class="plus"><span class="spin"></span></span>
+          <input style="flex:1;border:0;background:transparent;outline:none;font:inherit;color:var(--faint)" value="买牛奶" readonly />
+        </div>
+        <div class="plain-status">
+          <span class="spin"></span>
+          <span>正在创建任务…</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="art-label">画板 3 / 3 · <b>完成瞬间</b> — 任务落入列表，输入条回落；解析出的日期/优先级以 chips 淡入，是「AI 填好了」的收束信号</p>
+<div class="board">
+  <div class="scene">
+    <h2>解析完成 · 结果回落</h2>
+    <p class="cap">流光在 200ms 内收拢消失，输入框清空回 placeholder；新建任务行的元信息（日期、优先级）以淡入呈现，让用户看到 AI 解析出了什么。</p>
+    <div class="stack">
+      <div class="rowitem">
+        <p class="tag">任务行 · 元信息淡入（chips 为 AI 推断结果）</p>
+        <div class="row-shell" style="box-shadow:0 0 0 1px var(--line)">
+          <span class="checkbox-mark"></span>
+          <span style="flex:1">明天下午3点和设计过首页方案</span>
+          <span style="font-size:12px;color:var(--accent);background:var(--accent-subtle);border-radius:6px;padding:2px 8px;animation:stage-in .4s ease both">明天 15:00</span>
+          <span style="font-size:12px;color:var(--danger);background:#F9E9E8;border-radius:6px;padding:2px 8px;animation:stage-in .4s .08s ease both">P1</span>
+        </div>
+        <div style="margin-top:16px">
+          <p class="tag">输入条已回落</p>
+          <div class="plain-shell">
+            <span class="plus">+</span>
+            <input style="flex:1;border:0;background:transparent;outline:none;font:inherit" placeholder="用一句话说要做的事，日期和优先级会自动填" readonly />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 阶段文案轮播演示：提交 → 三段轮播 → 完成回落
+  const INTERVAL = 1100;
+  function replay(id){
+    const root = document.getElementById(id);
+    const stage = root.querySelector('.stage');
+    const stages = stage.dataset.stages.split('|');
+    let i = 0;
+    stage.textContent = stages[0];
+    stage.classList.remove('out'); stage.classList.add('in');
+    const tick = setInterval(() => {
+      stage.classList.remove('in'); stage.classList.add('out');
+      setTimeout(() => {
+        i++;
+        if (i >= stages.length){ clearInterval(tick); stage.textContent = stages[0]; }
+        else stage.textContent = stages[i];
+        stage.classList.remove('out'); stage.classList.add('in');
+      }, 280);
+    }, INTERVAL);
+  }
+  // 页面加载时给画板1两个示例错开自动播
+  document.querySelectorAll('#demo1 .stage').forEach(s => {
+    const stages = s.dataset.stages.split('|'); let i = 0;
+    setInterval(() => {
+      s.classList.add('out');
+      setTimeout(() => { i = (i+1) % stages.length; s.textContent = stages[i];
+        s.classList.remove('out'); s.classList.add('in'); }, 280);
+    }, 1400);
+  });
+</script>
+</body>
+</html>
