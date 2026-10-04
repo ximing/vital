@@ -29,10 +29,6 @@ import { priorityColor } from './priority';
 
 const TIMES = ['09:00', '14:00', '18:00', '21:00'] as const;
 const PRIORITIES: TaskPriority[] = [0, 1, 2, 3];
-// AI 解析等待态的流动配色（设计稿 apps/web/design/ai-parsing.html）
-const AI_FLOW_B = '#3D8FBE';
-const AI_FLOW_C = '#7A5FC9';
-
 /**
  * Today and Todos share this. A corner button opens the bar and the keyboard.
  * With a title or a chosen date, priority, or tag, tapping outside only dismisses
@@ -143,7 +139,7 @@ export function NewTaskBar({
 
   const flowBorderColor = flowAnim.interpolate({
     inputRange: [0, 0.33, 0.66, 1],
-    outputRange: [t.accentPrimary, AI_FLOW_B, AI_FLOW_C, t.accentPrimary],
+    outputRange: [t.accentPrimary, t.aiFlowB, t.aiFlowC, t.accentPrimary],
   });
   const breathScale = breathAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] });
   const breathOpacity = breathAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
@@ -285,7 +281,7 @@ export function NewTaskBar({
         ) : null}
         {aiLive ? (
           <Animated.View style={{ opacity: breathOpacity, transform: [{ scale: breathScale }] }}>
-            <Icon icon={Sparkles} size={14} color={AI_FLOW_C} />
+            <Icon icon={Sparkles} size={14} color={t.aiFlowC} />
           </Animated.View>
         ) : null}
         <TextInput
@@ -418,7 +414,7 @@ export function NewTaskBar({
       {aiLive ? (
         <View style={styles.statusRow} accessibilityLiveRegion="polite">
           <Animated.View style={{ opacity: breathOpacity, transform: [{ scale: breathScale }] }}>
-            <Icon icon={Sparkles} size={12} color={AI_FLOW_C} />
+            <Icon icon={Sparkles} size={12} color={t.aiFlowC} />
           </Animated.View>
           <Animated.Text style={[styles.status, styles.aiStatus, { opacity: stageFade }]}>
             {copy.todos.interpretingStages[stageIdx]}

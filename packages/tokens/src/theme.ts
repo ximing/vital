@@ -14,6 +14,9 @@ export interface ColorTokens {
   accentPrimary: string;
   accentPrimaryHover: string;
   accentDeep: string;
+  /** AI 解析等待态流动渐变的中间色（设计稿 apps/web/design/ai-parsing.html）。 */
+  aiFlowB: string;
+  aiFlowC: string;
   focusRing: string;
   statusTodo: string;
   statusDoing: string;
@@ -50,6 +53,8 @@ export const lightColors: ColorTokens = {
   accentPrimary: '#1C7A4F',
   accentPrimaryHover: '#155E3D',
   accentDeep: '#155E3D',
+  aiFlowB: '#3D8FBE',
+  aiFlowC: '#7A5FC9',
   focusRing: 'rgb(28 122 79 / 0.16)',
   statusTodo: '#555E56',
   statusDoing: '#3D6FD1',
@@ -86,6 +91,8 @@ export const darkColors: ColorTokens = {
   accentPrimary: '#5FD3A1',
   accentPrimaryHover: '#82E0B6',
   accentDeep: '#5FD3A1',
+  aiFlowB: '#3D8FBE',
+  aiFlowC: '#7A5FC9',
   focusRing: 'rgb(95 211 161 / 0.22)',
   statusTodo: '#A4ACA1',
   statusDoing: '#6FA0EE',
