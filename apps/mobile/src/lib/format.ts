@@ -100,6 +100,16 @@ export function localDateStamp(timeZone: string, at = new Date()): string {
   }).format(at);
 }
 
+/** True when `completedAt` falls on the local calendar day of `now`. */
+export function completedOnLocalDay(
+  completedAt: string | null,
+  timeZone: string,
+  now = new Date(),
+): boolean {
+  if (completedAt === null) return false;
+  return localDateStamp(timeZone, new Date(completedAt)) === localDateStamp(timeZone, now);
+}
+
 function zoneOffsetMs(at: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -187,10 +197,11 @@ export function compareTasks(a: Task, b: Task, sort: TaskSort): number {
 
 export function nestTasks(items: Task[], sort: TaskSort = DEFAULT_TASK_SORT): NestedTask[] {
   const sorted = [...items].sort((a, b) => compareTasks(a, b, sort));
+  const ids = new Set(items.map((task) => task.id));
   const byParent = new Map<string, Task[]>();
   const roots: Task[] = [];
   for (const task of sorted) {
-    if (task.parentId !== null) {
+    if (task.parentId !== null && ids.has(task.parentId)) {
       const bucket = byParent.get(task.parentId) ?? [];
       bucket.push(task);
       byParent.set(task.parentId, bucket);

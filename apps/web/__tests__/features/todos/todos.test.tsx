@@ -275,6 +275,39 @@ describe('todos workspace', () => {
     expect(todayHeads.length).toBeGreaterThan(0);
   });
 
+  it('lists tasks completed today under 已完成', async () => {
+    const open = makeTask({
+      id: 'open-1',
+      title: '还没做',
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+    });
+    const doneToday = makeTask({
+      id: 'done-1',
+      title: '今天做完了',
+      status: 'done',
+      completedAt: '2026-09-06T01:00:00.000Z',
+      dueAt: zonedLocalMidnightIso('2026-09-04', TZ),
+    });
+    const doneYesterday = makeTask({
+      id: 'done-0',
+      title: '昨天做完了',
+      status: 'done',
+      completedAt: '2026-09-05T10:00:00.000Z',
+    });
+    vi.mocked(client.listTasks).mockImplementation(async ({ listId }) => {
+      if (listId === 'smart:done') return { items: [doneToday, doneYesterday], nextCursor: null };
+      return { items: [open], nextCursor: null };
+    });
+    renderAt('/todos/lists/smart:today');
+    expect(await screen.findByRole('option', { name: '今天做完了' })).toBeInTheDocument();
+    expect(screen.queryByText('昨天做完了')).not.toBeInTheDocument();
+    expect(screen.getByText(t.lists.done)).toBeInTheDocument();
+    const doneHead = screen.getByText(t.lists.done);
+    expect(
+      screen.getByText('还没做').compareDocumentPosition(doneHead) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('shows a task context line with project, note, schedule, and tags', async () => {
     const task = makeTask({
       id: 'context-task',

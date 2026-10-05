@@ -24,6 +24,7 @@ import type { Theme } from '@vital/tokens';
 import { Icon } from '../../ui/icon';
 import { copy } from '../../lib/copy';
 import {
+  completedOnLocalDay,
   isOverdue,
   localDateStamp,
   nestTasks,
@@ -126,14 +127,21 @@ function TaskListContent({
   const scope = s.scope;
   const showScopeTabs = !isSmart && view === 'list';
   const doneScope = showScopeTabs && scope === 'done';
-  const nested = useMemo(
-    () =>
-      nestTasks(
-        items.filter((row) => row.deletedAt === null),
-        s.taskSort,
-      ),
-    [items, s.taskSort],
-  );
+  const nested = useMemo(() => {
+    const live = items.filter((row) => row.deletedAt === null);
+    const source = isTodayList ? live.filter((row) => row.status !== 'done') : live;
+    return nestTasks(source, s.taskSort);
+  }, [items, isTodayList, s.taskSort]);
+  const doneNested = useMemo(() => {
+    if (!isTodayList) return [];
+    const done = items.filter(
+      (row) =>
+        row.deletedAt === null &&
+        row.status === 'done' &&
+        completedOnLocalDay(row.completedAt, tz),
+    );
+    return nestTasks(done, s.taskSort);
+  }, [items, isTodayList, s.taskSort, tz]);
   const pinnedRoots = grouped
     ? nested.filter((row) => {
         if (!row.task.pinned) return false;
@@ -146,8 +154,9 @@ function TaskListContent({
           (row) => !row.task.pinned && row.task.status !== 'done' && isOverdue(row.task),
         )
       : [];
-  const doneRoots =
-    grouped && !isDoneList && !showScopeTabs
+  const doneRoots = isTodayList
+    ? doneNested
+    : grouped && !isDoneList && !showScopeTabs
       ? nested.filter((row) => row.task.status === 'done')
       : [];
   const restNested = grouped
@@ -451,7 +460,12 @@ function TaskListContent({
                 {!isDoneList &&
                 !useCategories &&
                 !doneScope &&
-                (isTodayList || pinnedRoots.length > 0 || overdueRoots.length > 0) ? (
+                ((isTodayList &&
+                  (restNested.length > 0 ||
+                    pinnedRoots.length > 0 ||
+                    overdueRoots.length > 0 ||
+                    doneRoots.length === 0)) ||
+                  (!isTodayList && (pinnedRoots.length > 0 || overdueRoots.length > 0))) ? (
                   <SectionHead
                     first={pinnedRoots.length === 0 && overdueRoots.length === 0}
                     title={isTodayList ? copy.lists.today : copy.todos.openGroup}
@@ -477,7 +491,10 @@ function TaskListContent({
           }
           ListEmptyComponent={
             grouped &&
-            (pinnedRoots.length > 0 || overdueRoots.length > 0 || useCategories) ? null : (
+            (pinnedRoots.length > 0 ||
+              overdueRoots.length > 0 ||
+              doneRoots.length > 0 ||
+              useCategories) ? null : (
               <EmptyState title={doneScope ? copy.empty.done : empty} icon={CheckCircle2} />
             )
           }

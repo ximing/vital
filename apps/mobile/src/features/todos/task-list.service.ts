@@ -8,6 +8,7 @@ import {
   DEFAULT_TASK_SORT,
   MANUAL_TASK_SORT,
   defaultTaskSortDir,
+  completedOnLocalDay,
   localDateStamp,
   zonedLocalMidnightIso,
   type TaskSort,
@@ -36,7 +37,7 @@ export class TaskListService extends Service {
   selectedDay = '';
   instances: CalendarInstance[] = [];
   primed = false;
-  doneOpen = false;
+  doneOpen = true;
   scope: 'open' | 'done' = 'open';
   taskSort: TaskSort = DEFAULT_TASK_SORT;
   contextTask: Task | null = null;
@@ -61,7 +62,10 @@ export class TaskListService extends Service {
     const listChanged = listId !== this.listId;
     this.listId = listId;
     this.createFromInbox = createFromInbox;
-    if (listChanged) this.scope = 'open';
+    if (listChanged) {
+      this.scope = 'open';
+      this.doneOpen = listId === 'smart:today';
+    }
     if (this.weekAnchor === '') {
       const today = localDateStamp(this.tz);
       this.weekAnchor = today;
@@ -114,12 +118,25 @@ export class TaskListService extends Service {
         const lists = await client.listLists();
         this.inboxCreateId = lists.items.find((row) => row.kind === 'inbox')?.id;
       }
-      const [page, listRes, tagRes] = await Promise.all([
+      const donePromise =
+        this.listId === 'smart:today'
+          ? client.listTasks({ listId: 'smart:done', limit: 100 }).catch(() => null)
+          : Promise.resolve(null);
+      const [page, listRes, tagRes, donePage] = await Promise.all([
         client.listTasks({ listId: this.listId }),
         client.listLists(),
         client.listTags(),
+        donePromise,
       ]);
-      this.items = page.items;
+      const seen = new Set(page.items.map((task) => task.id));
+      const doneToday = (donePage?.items ?? []).filter(
+        (task) =>
+          task.deletedAt === null &&
+          task.status === 'done' &&
+          !seen.has(task.id) &&
+          completedOnLocalDay(task.completedAt, this.tz),
+      );
+      this.items = doneToday.length === 0 ? page.items : [...page.items, ...doneToday];
       this.lists = listRes.items;
       this.tags = tagRes.items;
       this.cursor = page.nextCursor;

@@ -29,6 +29,7 @@ import { useOutcomesQuery, usePendingDecomposeQuery } from '@/features/today';
 import {
   applyOptimisticComplete,
   boardVisibleIds,
+  completedOnLocalDay,
   filterTasks,
   formatHumanDay,
   inboxList,
@@ -124,6 +125,8 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
 
   const listsQuery = useListsQuery();
   const tasksQuery = useTasksQuery(listId);
+  const showTodayDone = view === 'list' && listId === 'smart:today';
+  const doneQuery = useTasksQuery('smart:done', showTodayDone);
   const tagsQuery = useTagsQuery();
   const outcomesQuery = useOutcomesQuery();
   const actions = useTodoActions();
@@ -166,7 +169,15 @@ function TodosWorkspaceContent({ view }: { view: TodoView }) {
   const showId = completeUndo?.wantUndo ? completeUndo.taskId : null;
   const rawTasks = applyOptimisticComplete(tasksQuery.data ?? [], new Set(completingIds), showId);
   const filtered = filterTasks(rawTasks, listFilter);
-  const tasks = visibleListTasks(filtered, listId, view, listScope, hideCompleted);
+  const visible = visibleListTasks(filtered, listId, view, listScope, hideCompleted);
+  const tasks = useMemo(() => {
+    if (!showTodayDone) return visible;
+    const seen = new Set(visible.map((task) => task.id));
+    const doneToday = filterTasks(doneQuery.data ?? [], listFilter).filter(
+      (task) => completedOnLocalDay(task, timeZone) && !seen.has(task.id),
+    );
+    return doneToday.length === 0 ? visible : [...visible, ...doneToday];
+  }, [showTodayDone, visible, doneQuery.data, listFilter, timeZone]);
   const visibleIds =
     view === 'board'
       ? boardVisibleIds(tasks, boardMode, taskSort)

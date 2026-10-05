@@ -173,6 +173,12 @@ export function todayYmd(timeZone: string, now = new Date()): string {
   return formatYmd(now, timeZone);
 }
 
+/** Done during the local calendar day of `now`. Recurring roll-forwards stay open. */
+export function completedOnLocalDay(task: Task, timeZone: string, now = new Date()): boolean {
+  if (task.deletedAt !== null || task.status !== 'done' || task.completedAt === null) return false;
+  return formatYmd(new Date(task.completedAt), timeZone) === todayYmd(timeZone, now);
+}
+
 export function addDaysYmd(ymd: string, days: number): string {
   const [year, month, day] = ymd.split('-').map(Number);
   const dt = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, (day ?? 1) + days));
@@ -488,11 +494,13 @@ export function listSections(
   const pinnedSection: ListSection = { key: 'pinned', heading: 'pinned', nodes: pinnedNodes };
 
   if (listId === 'smart:today') {
+    const doneToday = done.filter((task) => completedOnLocalDay(task, timeZone, now));
     const { overdue, today } = partitionToday(openNodes, timeZone, now);
     return nonempty([
       pinnedSection,
       { key: 'overdue', heading: 'overdue', nodes: overdue },
       { key: 'today', heading: 'today', nodes: today },
+      { key: 'done', heading: 'done', nodes: nestPinnedFirst(doneToday, sort) },
     ]);
   }
   if (listId === 'smart:upcoming') {

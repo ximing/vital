@@ -15,6 +15,7 @@ import {
   isOverdue,
   listChildren,
   listRoots,
+  completedOnLocalDay,
   listSections,
   listVisibleIds,
   nestTasks,
@@ -161,6 +162,47 @@ describe('todo model', () => {
     expect(listVisibleIds('smart:today', [todayTask, overdueTask], TZ, NOW)).toEqual([
       'over',
       'now',
+    ]);
+  });
+
+  it('lists tasks completed today after the open today rows', () => {
+    const open = makeTask({
+      id: 'open',
+      title: '未完成',
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+    });
+    const doneToday = makeTask({
+      id: 'done',
+      title: '今天完成',
+      status: 'done',
+      pinned: true,
+      completedAt: '2026-09-06T01:00:00.000Z',
+      dueAt: zonedLocalMidnightIso('2026-09-05', TZ),
+    });
+    const yesterday = makeTask({
+      id: 'y',
+      title: '昨天完成',
+      status: 'done',
+      completedAt: '2026-09-05T10:00:00.000Z',
+    });
+    const child = makeTask({
+      id: 'child',
+      title: '子任务',
+      parentId: 'open',
+      status: 'done',
+      completedAt: '2026-09-06T02:00:00.000Z',
+    });
+    expect(completedOnLocalDay(doneToday, TZ, NOW)).toBe(true);
+    expect(completedOnLocalDay(yesterday, TZ, NOW)).toBe(false);
+    const sections = listSections('smart:today', [open, doneToday, yesterday, child], TZ, NOW);
+    expect(sections.map((section) => section.heading)).toEqual(['today', 'done']);
+    expect(sections[0]?.nodes.map((node) => node.task.id)).toEqual(['open']);
+    expect(sections[0]?.nodes[0]?.children).toEqual([]);
+    expect(sections[1]?.nodes.map((node) => node.task.id)).toEqual(['done', 'child']);
+    expect(listVisibleIds('smart:today', [open, doneToday, yesterday, child], TZ, NOW)).toEqual([
+      'open',
+      'done',
+      'child',
     ]);
   });
 

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '@vital/dto';
-import { isOverdue, localDateStamp, nestTasks, startOfLocalDayIso } from '../../src/lib/format';
+import {
+  completedOnLocalDay,
+  isOverdue,
+  localDateStamp,
+  nestTasks,
+  startOfLocalDayIso,
+} from '../../src/lib/format';
 
 function sample(over: Partial<Task> & Pick<Task, 'dueAt' | 'timezone'>): Task {
   return {
@@ -57,6 +63,25 @@ describe('nestTasks', () => {
       'a',
       'b',
     ]);
+  });
+
+  it('shows a completed subtask when its parent is not in the set', () => {
+    const child = sample({
+      id: 'child',
+      parentId: 'parent',
+      dueAt: null,
+      timezone: 'UTC',
+      status: 'done',
+      completedAt: '2026-09-06T01:00:00.000Z',
+    });
+    const nodes = nestTasks([child]);
+    expect(nodes.map((row) => row.task.id)).toEqual(['child']);
+    expect(completedOnLocalDay(child.completedAt, 'Asia/Shanghai', new Date('2026-09-06T00:00:00.000Z'))).toBe(
+      true,
+    );
+    expect(completedOnLocalDay('2026-09-05T10:00:00.000Z', 'Asia/Shanghai', new Date('2026-09-06T00:00:00.000Z'))).toBe(
+      false,
+    );
   });
 });
 
