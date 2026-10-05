@@ -483,6 +483,10 @@ function ReportsWorkspaceContent() {
                   />
                 </Suspense>
               </div>
+
+              {/* End-of-page breathing room: a real box, not a margin — trailing
+                  margins/padding get clipped out of the scroll overflow area. */}
+              <div className="h-[12vh] shrink-0" aria-hidden />
             </div>
           )}
         </div>
