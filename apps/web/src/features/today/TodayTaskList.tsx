@@ -29,7 +29,7 @@ export function TodayTaskList({
   tags: Tag[];
   lists: List[];
   timeZone: string;
-  onComplete: (task: Task) => void;
+  onComplete: (task: Task) => void | Promise<void>;
   onCheckIn: (habit: Habit) => void | Promise<void>;
   onReorder: (input: { listId: string; parentId: string | null; orderedIds: string[] }) => void;
   onPostpone: (tasks: Task[]) => void;

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CreateHabitInput } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { copy } from '../../lib/copy';
@@ -38,11 +38,20 @@ export function HabitEmptyCard({
           <Pressable
             key={template.name}
             accessibilityRole="button"
+            accessibilityState={{ busy: pending === template.name, disabled: pending !== null }}
             disabled={pending !== null}
             onPress={() => void enable(template)}
-            style={({ pressed }) => [styles.pill, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.pill,
+              pending === template.name && styles.pillBusy,
+              pressed && styles.pressed,
+            ]}
           >
-            <Text style={styles.pillLabel}>{template.name}</Text>
+            {pending === template.name ? (
+              <ActivityIndicator size="small" color={t.accentPrimary} />
+            ) : (
+              <Text style={styles.pillLabel}>{template.name}</Text>
+            )}
           </Pressable>
         ))}
       </View>
@@ -67,11 +76,14 @@ const createStyles = (t: Theme) =>
     pills: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
     pill: {
       height: 28,
+      minWidth: 52,
       borderRadius: t.radius.pill,
       backgroundColor: t.bgAccentSubtle,
       paddingHorizontal: t.space[3],
+      alignItems: 'center',
       justifyContent: 'center',
     },
+    pillBusy: { opacity: 0.7 },
     pressed: { opacity: 0.7 },
     pillLabel: { fontSize: t.type.caption.fontSize, fontWeight: '500', color: t.accentPrimary },
   });

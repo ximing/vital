@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { LoaderCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { client } from '@/api/client';
@@ -47,8 +48,11 @@ export function HabitEmptyCard() {
             disabled={pending !== null}
             aria-busy={pending === template.name}
             onClick={() => void enable(index)}
-            className="h-7 rounded-full bg-accent-subtle px-2.5 text-[length:var(--text-caption)] font-medium text-accent transition-opacity duration-[var(--ease-out)] hover:opacity-75 disabled:opacity-50"
+            className="inline-flex h-7 items-center gap-1 rounded-full bg-accent-subtle px-2.5 text-[length:var(--text-caption)] font-medium text-accent transition-opacity duration-[var(--ease-out)] hover:opacity-75 disabled:opacity-50"
           >
+            {pending === template.name ? (
+              <LoaderCircle size={12} strokeWidth={2.25} aria-hidden className="animate-spin" />
+            ) : null}
             {template.name}
           </button>
         ))}

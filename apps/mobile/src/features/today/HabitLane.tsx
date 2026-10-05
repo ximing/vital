@@ -275,7 +275,13 @@ const createStyles = (t: Theme) =>
 const ringStyles = StyleSheet.create({
   box: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
   svg: { transform: [{ rotate: '-90deg' }] },
-  spinner: { position: 'absolute' },
+  spinner: {
+    position: 'absolute',
+    width: RING,
+    height: RING,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   fill: {
     width: RING,
     height: RING,

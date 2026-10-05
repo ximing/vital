@@ -228,7 +228,7 @@ function TodayWorkspaceContent() {
                     tags={tags}
                     lists={lists}
                     timeZone={timeZone}
-                    onComplete={(task) => void handleComplete(task)}
+                    onComplete={(task) => handleComplete(task)}
                     onCheckIn={(habit) => handleCheckIn(habit)}
                     onReorder={(input) => actions.reorder.mutate(input)}
                     onPostpone={(overdue) => page.postponeOverdue(overdue)}
