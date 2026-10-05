@@ -76,29 +76,18 @@ export function TodayTaskList({
         </div>
       ) : null}
       {habits.length === 0 ? <HabitEmptyCard /> : null}
-      {habitLane && listTasks.length === 0 ? (
-        // ListView short-circuits to the empty state when there are no tasks;
-        // keep the task group divider so the habit lane still reads as its
-        // own group above it.
-        <div className="flex items-center gap-1 px-2 pb-2 pt-2" data-region="tasks-group-divider">
-          <p className="eyebrow eyebrow-rule min-w-0 flex-1">
-            <span className="truncate">{t.lists.today}</span>
-            <span className="shrink-0 font-mono font-normal normal-case tracking-normal tabular-nums opacity-80">
-              0
-            </span>
-          </p>
-        </div>
+      {listTasks.length > 0 ? (
+        <ListView
+          listId={TODAY_LIST_ID}
+          tasks={listTasks}
+          tags={tags}
+          lists={lists}
+          timeZone={timeZone}
+          onComplete={onComplete}
+          onReorder={onReorder}
+          onPostpone={onPostpone}
+        />
       ) : null}
-      <ListView
-        listId={TODAY_LIST_ID}
-        tasks={listTasks}
-        tags={tags}
-        lists={lists}
-        timeZone={timeZone}
-        onComplete={onComplete}
-        onReorder={onReorder}
-        onPostpone={onPostpone}
-      />
     </div>
   );
 }

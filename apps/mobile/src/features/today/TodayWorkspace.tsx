@@ -143,14 +143,16 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
           />
 
           <SectionHead title={copy.today.tasksSection} count={openCount} />
-          <View style={[styles.taskCard, rnShadow(t)]}>
-            <TodayTaskList
-              tasks={tasks}
-              tags={s.tags}
-              lists={s.lists}
-              onComplete={(task) => void s.completeTask(task)}
-            />
-          </View>
+          {tasks.some((task) => task.deletedAt === null && task.habitId === null) ? (
+            <View style={[styles.taskCard, rnShadow(t)]}>
+              <TodayTaskList
+                tasks={tasks}
+                tags={s.tags}
+                lists={s.lists}
+                onComplete={(task) => void s.completeTask(task)}
+              />
+            </View>
+          ) : null}
         </View>
       </ScrollView>
       {inboxId ? (

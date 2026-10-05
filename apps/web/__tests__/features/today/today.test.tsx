@@ -608,7 +608,7 @@ describe('today workspace', () => {
     });
   });
 
-  it('keeps the task group divider when habits exist but there are no tasks', async () => {
+  it('does not leave an empty task band when habits exist but there are no tasks', async () => {
     vi.mocked(client.listHabits).mockResolvedValue([
       {
         id: 'h1',
@@ -630,9 +630,9 @@ describe('today workspace', () => {
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     const { container } = renderToday();
     await screen.findByRole('checkbox', { name: '喝水' });
-    const divider = container.querySelector('[data-region="tasks-group-divider"]');
-    expect(divider).not.toBeNull();
-    expect(divider).toHaveTextContent(t.lists.today);
+    expect(container.querySelector('[data-region="tasks-group-divider"]')).toBeNull();
+    expect(screen.queryByText(t.empty.today)).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: t.todos.quickAddPlaceholder })).toBeInTheDocument();
   });
 });
 
