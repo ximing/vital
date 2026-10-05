@@ -125,8 +125,9 @@ export const BoardView: FC<{
                   const id = event.dataTransfer.getData('text/plain');
                   const task = tasks.find((item) => item.id === id);
                   if (!task) return;
-                  if (status === 'done') onComplete(task);
-                  else onStatus(task, status);
+                  if (status === 'done') {
+                    if (task.status !== 'done') onComplete(task);
+                  } else onStatus(task, status);
                 }}
               >
                 <h2 className="px-2 pb-2 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">

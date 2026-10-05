@@ -13,6 +13,11 @@ export async function toggleComplete(
 ): Promise<void> {
   try {
     if (task.status === 'done') {
+      const completionId = task.completionId ?? null;
+      if (completionId === null) return;
+      const next = await client.uncompleteTask(task.id, { completionId });
+      onTask(next);
+      notifyTaskMutation();
       return;
     }
     const res = await client.completeTask(task.id);

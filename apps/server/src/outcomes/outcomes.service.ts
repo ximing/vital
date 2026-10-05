@@ -39,6 +39,7 @@ import {
 import { upcomingDay } from '../days/days.service.js';
 import { listTasks } from '../tasks/tasks.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
+import { latestCompletionIdByTask } from '../tasks/tasks.shared.js';
 import { computeNow } from './now-engine.js';
 import {
   computeSignal,
@@ -364,6 +365,9 @@ export async function getOutcomeDetail(userId: string, id: string): Promise<Outc
     if (current) current.push(tagRow.tagId);
     else tagsByTask.set(tagRow.taskId, [tagRow.tagId]);
   }
+  const completions = await latestCompletionIdByTask(
+    taskRows.filter((row) => row.status === 'done').map((row) => row.id),
+  );
 
   const materialRows = await getDb()
     .select({
@@ -425,7 +429,9 @@ export async function getOutcomeDetail(userId: string, id: string): Promise<Outc
 
   return {
     outcome: toOutcomeDto(row, stats.get(id)),
-    tasks: taskRows.map((r) => toTaskDto(r, tagsByTask.get(r.id) ?? [])),
+    tasks: taskRows.map((r) =>
+      toTaskDto(r, tagsByTask.get(r.id) ?? [], completions.get(r.id) ?? null),
+    ),
     habits: linkedHabits,
     materials,
     agentActions: actionRows.map((action) => ({

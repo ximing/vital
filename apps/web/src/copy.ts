@@ -654,6 +654,7 @@ export const t = {
     listIconClear: '清除图标',
     thisList: '本集合',
     complete: '完成',
+    uncomplete: '取消完成',
     more: '更多',
     loading: '加载中',
     weekPrev: '上一周',

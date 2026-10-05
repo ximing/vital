@@ -134,9 +134,12 @@ export function TaskContextMenu({
         onClick={(event) => event.stopPropagation()}
       >
         <Item icon={PanelRight} label={t.todos.openDetail} kbd="Enter" onSelect={act(onOpen)} />
-        {done ? null : (
-          <Item icon={Check} label={t.todos.complete} kbd="E" onSelect={act(() => onComplete(task))} />
-        )}
+        <Item
+          icon={Check}
+          label={done ? t.todos.uncomplete : t.todos.complete}
+          kbd="E"
+          onSelect={act(() => onComplete(task))}
+        />
         {task.parentId === null ? (
           <Item
             icon={task.pinned ? PinOff : Pin}

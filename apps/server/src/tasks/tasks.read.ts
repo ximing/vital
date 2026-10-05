@@ -35,7 +35,7 @@ import { getInboxList, listIdAndDescendants } from '../lists/lists.service.js';
 import { decodeCursor, encodeCursor } from '../utils/cursor.js';
 import { expandFixedTask, expandTask } from './recurrence.js';
 import { asPriority, asRecurrenceKind, toTaskDto } from './task-dto.js';
-import { dtoOf, tagIdsByTask, toRecurrence } from './tasks.shared.js';
+import { dtoOf, latestCompletionIdByTask, tagIdsByTask, toRecurrence } from './tasks.shared.js';
 
 export async function getOwnedTaskOr404(
   userId: string,
@@ -158,8 +158,12 @@ export async function listTasks(userId: string, query: ListTasksQuery): Promise<
     .orderBy(...order)
     .limit(limit + 1);
   const page = rows.slice(0, limit);
-  const tags = await tagIdsByTask(page.map((r) => r.id));
-  const items = page.map((r) => toTaskDto(r, tags.get(r.id) ?? []));
+  const doneIds = page.filter((row) => row.status === 'done').map((row) => row.id);
+  const [tags, completions] = await Promise.all([
+    tagIdsByTask(page.map((r) => r.id)),
+    latestCompletionIdByTask(doneIds),
+  ]);
+  const items = page.map((r) => toTaskDto(r, tags.get(r.id) ?? [], completions.get(r.id) ?? null));
   let nextCursor: string | null = null;
   if (rows.length > limit) {
     const last = page[page.length - 1];

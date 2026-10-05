@@ -19,6 +19,7 @@ import {
 import { loadAssetsByItemIds, tagIdsByInbox, toInboxDto } from '../inbox/inbox.service.js';
 import { toReportListItem } from '../reports/reports.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
+import { latestCompletionIdByTask } from '../tasks/tasks.shared.js';
 import { decodeSearchCursor, encodeSearchCursor } from '../utils/cursor.js';
 
 function escapeLike(q: string): string {
@@ -170,14 +171,21 @@ export async function searchTasks(userId: string, input: SearchInput): Promise<S
       if (list) list.push(link.tagId);
     }
   }
-  const [assetMap, inboxTagMap] = await Promise.all([
+  const doneIds = page
+    .filter((row) => row.type === 'task' && row.row.status === 'done')
+    .map((row) => row.id);
+  const [assetMap, inboxTagMap, completions] = await Promise.all([
     loadAssetsByItemIds(inboxIds),
     tagIdsByInbox(inboxIds),
+    latestCompletionIdByTask(doneIds),
   ]);
 
   const items: SearchHit[] = page.map((row) => {
     if (row.type === 'task') {
-      return { type: 'task' as const, task: toTaskDto(row.row, tagMap.get(row.id) ?? []) };
+      return {
+        type: 'task' as const,
+        task: toTaskDto(row.row, tagMap.get(row.id) ?? [], completions.get(row.id) ?? null),
+      };
     }
     if (row.type === 'report') {
       const report: ReportListItem = toReportListItem(row.row);

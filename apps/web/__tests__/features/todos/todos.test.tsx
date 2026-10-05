@@ -308,6 +308,40 @@ describe('todos workspace', () => {
     ).toBeTruthy();
   });
 
+  it('uncompletes a task completed today from its checkbox', async () => {
+    const open = makeTask({
+      id: 'open-1',
+      title: '还没做',
+      dueAt: zonedLocalMidnightIso('2026-09-06', TZ),
+    });
+    const doneToday = makeTask({
+      id: 'done-1',
+      title: '今天做完了',
+      status: 'done',
+      completedAt: '2026-09-06T01:00:00.000Z',
+      completionId: 'comp-done-1',
+      dueAt: zonedLocalMidnightIso('2026-09-04', TZ),
+    });
+    vi.mocked(client.listTasks).mockImplementation(async ({ listId }) => {
+      if (listId === 'smart:done') return { items: [doneToday], nextCursor: null };
+      return { items: [open], nextCursor: null };
+    });
+    vi.mocked(client.uncompleteTask).mockResolvedValue({
+      ...doneToday,
+      status: 'todo',
+      completedAt: null,
+      completionId: null,
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderAt('/todos/lists/smart:today');
+    const row = await screen.findByRole('option', { name: '今天做完了' });
+    await user.click(within(row).getByRole('checkbox', { name: t.todos.uncomplete }));
+    await waitFor(() => {
+      expect(client.uncompleteTask).toHaveBeenCalledWith('done-1', { completionId: 'comp-done-1' });
+    });
+    expect(client.completeTask).not.toHaveBeenCalled();
+  });
+
   it('shows a task context line with project, note, schedule, and tags', async () => {
     const task = makeTask({
       id: 'context-task',

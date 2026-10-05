@@ -40,7 +40,7 @@ export function TaskCheckbox({
       type="button"
       role="checkbox"
       aria-checked={done}
-      aria-label={t.todos.complete}
+      aria-label={done ? t.todos.uncomplete : t.todos.complete}
       className={`group/check ${className} flex h-[1.125rem] w-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-full border-[1.5px] transition-[background-color,border-color,color,box-shadow] duration-[var(--ease-out)] ${ring}`}
       onClick={(event) => {
         event.stopPropagation();

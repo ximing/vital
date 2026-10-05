@@ -132,6 +132,16 @@ describe('tasks', () => {
     expect(done.statusCode).toBe(200);
     expect(done.json().undo.completionId).toBeTruthy();
     expect(done.json().task.status).toBe('done');
+    expect(done.json().task.completionId).toBe(done.json().undo.completionId);
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks?listId=smart:done',
+      token: alice.token,
+    });
+    const listedTask = (listed.json().items as { id: string; completionId: string | null }[]).find(
+      (item) => item.id === created.json().id,
+    );
+    expect(listedTask?.completionId).toBe(done.json().undo.completionId);
     const undone = await injectJson(app, {
       method: 'POST',
       url: `/api/v1/tasks/${created.json().id}/uncomplete`,
@@ -141,6 +151,7 @@ describe('tasks', () => {
     expect(undone.statusCode).toBe(200);
     expect(undone.json().dueAt).toBeNull();
     expect(undone.json().status).toBe('todo');
+    expect(undone.json().completionId).toBeNull();
   });
 
   it('complete without dueAt still returns completionId', async () => {

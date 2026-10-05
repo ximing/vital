@@ -564,7 +564,10 @@ function TaskListContent({
                 onPress={() => {
                   const task = contextTask;
                   s.closeContext();
-                  void s.patchContext(task, { status: 'todo' });
+                  void toggleComplete(task, (next) => s.applyMutation(next), {
+                    user: auth.user,
+                    refreshUser: auth.refreshUser,
+                  });
                 }}
               />
             ) : (

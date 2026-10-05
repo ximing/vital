@@ -47,6 +47,11 @@ export interface Task {
   recurrenceKind: RecurrenceKind | null;
   recurrenceDtstart: string | null;
   completedAt: string | null;
+  /**
+   * Latest completion row when `status` is `done`. Null otherwise.
+   * Checkbox uncomplete sends this to `POST /tasks/:id/uncomplete`.
+   */
+  completionId?: string | null;
   sortOrder: number;
   tagIds: string[];
   deletedAt: string | null;

@@ -20,6 +20,7 @@ import { AppError } from '../errors.js';
 import { loadAssetsByItemIds, tagIdsByInbox, toInboxDto } from '../inbox/inbox.service.js';
 import { toReportListItem } from '../reports/reports.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
+import { latestCompletionIdByTask } from '../tasks/tasks.shared.js';
 
 function iso(d: Date | null | undefined): string | null {
   return d ? d.toISOString() : null;
@@ -150,13 +151,17 @@ export async function getSyncChanges(
   const reportPage = reportRows.slice(0, limit);
 
   const inboxIds = inboxPage.map((row) => row.id);
-  const [tags, inboxTags, assets] = await Promise.all([
+  const doneIds = taskPage.filter((row) => row.status === 'done').map((row) => row.id);
+  const [tags, completions, inboxTags, assets] = await Promise.all([
     tagIdsByTask(taskPage.map((row) => row.id)),
+    latestCompletionIdByTask(doneIds),
     tagIdsByInbox(inboxIds),
     loadAssetsByItemIds(inboxIds),
   ]);
 
-  const mappedTasks: Task[] = taskPage.map((row) => toTaskDto(row, tags.get(row.id) ?? []));
+  const mappedTasks: Task[] = taskPage.map((row) =>
+    toTaskDto(row, tags.get(row.id) ?? [], completions.get(row.id) ?? null),
+  );
   const mappedInbox: InboxItem[] = inboxPage.map((row) =>
     toInboxDto(row, assets.get(row.id) ?? [], inboxTags.get(row.id) ?? []),
   );

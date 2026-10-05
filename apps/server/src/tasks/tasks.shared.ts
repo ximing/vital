@@ -1,7 +1,7 @@
 import type { Task } from '@vital/dto';
-import { eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
-import { taskTags, type TaskRow } from '../db/schema.js';
+import { taskCompletions, taskTags, type TaskRow } from '../db/schema.js';
 import { indexTask, removeTaskIndex, trackTaskIndexJob } from '../retrieval/tasks.js';
 import type { RecurrenceTask } from './recurrence.js';
 import { toTaskDto } from './task-dto.js';
@@ -36,9 +36,26 @@ export async function tagIdsByTask(taskIds: string[]): Promise<Map<string, strin
   return map;
 }
 
+/** Latest completion per task. Later rows win; pass only done task ids. */
+export async function latestCompletionIdByTask(taskIds: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (taskIds.length === 0) return map;
+  const rows = await getDb()
+    .select({ id: taskCompletions.id, taskId: taskCompletions.taskId })
+    .from(taskCompletions)
+    .where(inArray(taskCompletions.taskId, taskIds))
+    .orderBy(asc(taskCompletions.completedAt), asc(taskCompletions.id));
+  for (const row of rows) map.set(row.taskId, row.id);
+  return map;
+}
+
 export async function dtoOf(row: TaskRow): Promise<Task> {
-  const tags = await tagIdsByTask([row.id]);
-  return toTaskDto(row, tags.get(row.id) ?? []);
+  const doneIds = row.status === 'done' ? [row.id] : [];
+  const [tags, completions] = await Promise.all([
+    tagIdsByTask([row.id]),
+    latestCompletionIdByTask(doneIds),
+  ]);
+  return toTaskDto(row, tags.get(row.id) ?? [], completions.get(row.id) ?? null);
 }
 
 /**

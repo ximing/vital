@@ -45,7 +45,7 @@ function iso(d: Date | null): string | null {
   return d ? d.toISOString() : null;
 }
 
-export function toTaskDto(row: TaskRow, tagIds: string[]): Task {
+export function toTaskDto(row: TaskRow, tagIds: string[], completionId: string | null = null): Task {
   return {
     id: row.id,
     listId: row.listId,
@@ -72,6 +72,7 @@ export function toTaskDto(row: TaskRow, tagIds: string[]): Task {
     recurrenceKind: asRecurrenceKind(row.recurrenceKind),
     recurrenceDtstart: iso(row.recurrenceDtstart),
     completedAt: iso(row.completedAt),
+    completionId: row.status === 'done' ? completionId : null,
     sortOrder: row.sortOrder,
     tagIds,
     deletedAt: iso(row.deletedAt),

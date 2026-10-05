@@ -207,12 +207,22 @@ export function useTodoActions() {
     onSuccess: () => invalidate(),
   });
 
+  async function uncompleteDone(task: Task): Promise<void> {
+    const completionId = todos.lastCompletionId[task.id] ?? task.completionId ?? null;
+    if (completionId === null) return;
+    await client.uncompleteTask(task.id, { completionId });
+    await invalidate();
+  }
+
   async function complete(task: Task): Promise<void> {
     if (task.status === 'canceled') return;
-    if (task.status === 'done' && task.recurrence === null) return;
     const ui = todos;
     if (ui.completeUndo && !ui.completeUndo.wantUndo && ui.completeUndo.taskId === task.id) {
       await undoComplete();
+      return;
+    }
+    if (task.status === 'done') {
+      await uncompleteDone(task);
       return;
     }
     ui.startComplete(task);
@@ -251,7 +261,7 @@ export function useTodoActions() {
 
   async function setStatus(task: Task, status: 'todo' | 'doing'): Promise<void> {
     if (task.status === 'done') {
-      const completionId = todos.lastCompletionId[task.id];
+      const completionId = todos.lastCompletionId[task.id] ?? task.completionId ?? undefined;
       if (completionId === undefined) return;
       await client.uncompleteTask(task.id, { completionId });
       if (status === 'doing') await client.patchTask(task.id, { status: 'doing' });
