@@ -443,6 +443,7 @@ function ReportsWorkspaceContent() {
               <div className="mt-5 shrink-0">
                 {reviewQuery.data ? (
                   <ReviewLists
+                    key={reviewQuery.data.reportId}
                     review={reviewQuery.data}
                     onToggleTask={(task) => void page.toggleReviewTask(task, liveType)}
                     onOpenTask={(taskId) => navigate(`/todos/lists/smart:today?task=${taskId}`)}
@@ -454,11 +455,13 @@ function ReportsWorkspaceContent() {
                 )}
               </div>
 
-              <div className="report-paper mt-6 flex min-h-[16rem] min-w-0 flex-1 flex-col">
+              <p className="eyebrow eyebrow-rule mt-10 shrink-0 px-2">{t.reports.wrote}</p>
+
+              <div className="report-paper mt-3 flex min-h-[max(20rem,48vh)] min-w-0 flex-1 flex-col">
                 <Suspense
                   fallback={
                     <div
-                      className="skeleton-pulse min-h-[16rem] flex-1 rounded-md"
+                      className="skeleton-pulse min-h-[max(20rem,48vh)] flex-1 rounded-md"
                       aria-busy="true"
                       aria-label={t.reports.loading}
                     />

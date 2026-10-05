@@ -11,6 +11,18 @@ const CAPTURED_TONE = 'var(--status-doing)';
 /** Toggle payload shared by completed and carried rows. */
 export type ReviewToggleTask = { taskId: string; completionId: string | null };
 
+/** Sections longer than this start collapsed — a wall of rows shouldn't bury the editor. */
+const LONG_SECTION_COUNT = 20;
+
+function initialCollapsed(review: ReportReview): ReadonlySet<string> {
+  const next = new Set<string>();
+  if (review.completed.length > LONG_SECTION_COUNT) next.add('completed');
+  if ((review.habitProgress?.length ?? 0) > LONG_SECTION_COUNT) next.add('habit-progress');
+  if (review.carried.length > LONG_SECTION_COUNT) next.add('carried');
+  if (review.captured.length > LONG_SECTION_COUNT) next.add('captured');
+  return next;
+}
+
 export function ReviewLists({
   review,
   onToggleTask,
@@ -25,7 +37,7 @@ export function ReviewLists({
   /** Renders a completion instant in the user's timezone, e.g. "9月7日". */
   formatCompletedAt: (iso: string) => string;
 }) {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => initialCollapsed(review));
   const empty =
     review.completed.length === 0 && review.carried.length === 0 && review.captured.length === 0 && (review.habitProgress?.length ?? 0) === 0;
 

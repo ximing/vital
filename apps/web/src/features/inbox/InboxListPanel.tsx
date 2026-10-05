@@ -175,6 +175,8 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
   const jobsQuery = useInboxExtractJobsQuery(1);
   const jobBadgeLabel = jobBadge(jobsQuery.data?.activeCount ?? 0);
   const [pendingDelete, setPendingDelete] = useState<InboxItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const actionError = page.actionError;
   const statusNote = page.statusNote;
   const menu = page.itemMenu;
@@ -242,7 +244,10 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
         page.setActionError(humanError(err));
       });
     },
-    onDelete: (item) => setPendingDelete(item),
+    onDelete: (item) => {
+      setDeleteError(null);
+      setPendingDelete(item);
+    },
   });
 
   const focusId = selectedId ?? cursorId;
@@ -497,6 +502,7 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
           }}
           onCreateTag={(name) => actions.createTag.mutateAsync(name)}
           onDelete={() => {
+            setDeleteError(null);
             setPendingDelete(menuItem);
             page.closeItemMenu();
           }}
@@ -509,17 +515,30 @@ export const InboxListPanel: FC<{ selectedId?: string }> = observer(function Inb
           confirmLabel={t.inbox.deleteItem}
           cancelLabel={t.inbox.cancel}
           danger
-          onCancel={() => setPendingDelete(null)}
-          onConfirm={() => {
-            const item = pendingDelete;
+          pending={deleting}
+          focusConfirm
+          error={deleteError}
+          onCancel={() => {
+            if (deleting) return;
+            setDeleteError(null);
             setPendingDelete(null);
+          }}
+          onConfirm={() => {
+            if (deleting || pendingDelete === null) return;
+            const item = pendingDelete;
+            setDeleting(true);
+            setDeleteError(null);
             void actions.remove
               .mutateAsync(item.id)
               .then(() => {
+                setDeleting(false);
+                setDeleteError(null);
+                setPendingDelete(null);
                 if (selectedId === item.id) navigate('/inbox');
               })
               .catch((err) => {
-                page.setActionError(humanError(err));
+                setDeleting(false);
+                setDeleteError(humanError(err));
               });
           }}
         />

@@ -578,7 +578,13 @@ describe('inbox workspace', () => {
   });
 
   it('asks in a dialog before deleting an inbox item', async () => {
-    vi.mocked(client.deleteInbox).mockResolvedValue(undefined);
+    let resolveDelete: (() => void) | undefined;
+    vi.mocked(client.deleteInbox).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDelete = () => resolve(undefined);
+        }),
+    );
     vi.mocked(client.listInbox).mockResolvedValue({
       items: [makeItem({ id: 'i1', title: '未读文章' })],
       nextCursor: null,
@@ -586,13 +592,41 @@ describe('inbox workspace', () => {
     renderAt('/inbox');
     fireEvent.contextMenu(await screen.findByRole('link', { name: /未读文章/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: t.inbox.deleteItem }));
-    expect(screen.getByRole('dialog', { name: t.inbox.deleteItem })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: t.inbox.deleteItem });
+    expect(dialog).toBeInTheDocument();
     expect(screen.getByText(t.inbox.deleteItemConfirm)).toBeInTheDocument();
+    const confirm = screen.getByRole('button', { name: t.inbox.deleteItem });
+    expect(confirm).toHaveFocus();
     expect(client.deleteInbox).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: t.inbox.deleteItem }));
+
+    fireEvent.click(confirm);
+    expect(screen.getByRole('dialog', { name: t.inbox.deleteItem })).toBeInTheDocument();
+    expect(confirm).toHaveAttribute('aria-busy', 'true');
+    expect(confirm.querySelector('.animate-spin')).not.toBeNull();
+    expect(screen.getByRole('button', { name: t.inbox.cancel })).toBeDisabled();
     await waitFor(() => {
       expect(client.deleteInbox).toHaveBeenCalledWith('i1');
     });
+
+    resolveDelete?.();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: t.inbox.deleteItem })).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps the delete dialog open when the request fails', async () => {
+    vi.mocked(client.deleteInbox).mockRejectedValue(new Error('删除失败'));
+    vi.mocked(client.listInbox).mockResolvedValue({
+      items: [makeItem({ id: 'i1', title: '未读文章' })],
+      nextCursor: null,
+    });
+    renderAt('/inbox');
+    fireEvent.contextMenu(await screen.findByRole('link', { name: /未读文章/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: t.inbox.deleteItem }));
+    fireEvent.click(screen.getByRole('button', { name: t.inbox.deleteItem }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('删除失败');
+    expect(screen.getByRole('dialog', { name: t.inbox.deleteItem })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.inbox.deleteItem })).not.toHaveAttribute('aria-busy');
   });
 
   it('previews a pasted URL then creates with originalUrl', async () => {

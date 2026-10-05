@@ -28,6 +28,13 @@ function focusableIn(root: HTMLElement): HTMLElement[] {
   );
 }
 
+/** Prefer an explicit `[data-initial-focus]` target; otherwise the first control. */
+function initialFocus(root: HTMLElement): HTMLElement | undefined {
+  const marked = root.querySelector<HTMLElement>('[data-initial-focus]');
+  if (marked && !marked.hasAttribute('disabled') && marked.tabIndex !== -1) return marked;
+  return focusableIn(root)[0];
+}
+
 export function Overlay({
   children,
   className = '',
@@ -61,8 +68,8 @@ export function Overlay({
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (lockFocus) {
       const root = rootRef.current;
-      const first = root ? focusableIn(root)[0] : undefined;
-      (first ?? root)?.focus();
+      const target = root ? initialFocus(root) : undefined;
+      (target ?? root)?.focus();
     }
     return () => {
       if (restoreFocus) previousFocus.current?.focus();
