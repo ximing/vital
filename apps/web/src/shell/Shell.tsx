@@ -8,6 +8,7 @@ import {
   Inbox,
   Keyboard,
   ListChecks,
+  LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
   Repeat,
@@ -16,9 +17,10 @@ import {
   Sun,
   Waypoints,
 } from 'lucide-react';
-import { bindServices, useService } from '@rabjs/react';
+import { bindServices, observer, useService } from '@rabjs/react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { Suspense, useEffect, useState, type FC } from 'react';
+import { flushSync } from 'react-dom';
 import { t } from '@/copy';
 import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
 import { ActivationChecklist } from '@/features/onboarding/ActivationChecklist';
@@ -47,6 +49,8 @@ import { ShortcutsDialog } from '@/shell/ShortcutsDialog';
 import { OPEN_SHORTCUTS_EVENT } from '@/shell/shortcuts';
 import { useAppShortcuts } from '@/shell/use-app-shortcuts';
 import { useTodayDataReady } from '@/shell/prefetch-today';
+import { RouteErrorBoundary } from '@/shell/route-error-boundary';
+import { RouteLoadService } from '@/shell/route-load.service';
 import { scheduleIdle, warmNeighbors, warmPath } from '@/shell/warm';
 import { ThemeSwitch } from '@/shell/ThemeToggle';
 import { VitalMark } from '@/shell/VitalMark';
@@ -69,24 +73,69 @@ const AI_NAV: { id: AppSection; to: string; icon: LucideIcon; label: string }[] 
   { id: 'memory', to: '/memory', icon: Brain, label: t.rail.memory },
 ];
 
-function railItemClass(active: boolean, collapsed: boolean): string {
+function railItemClass(active: boolean, collapsed: boolean, pending = false): string {
   return `relative mx-1 flex h-9 items-center rounded-md text-[length:var(--text-meta)] ${
     collapsed ? 'justify-center' : 'gap-2 px-3'
   } ${
     active
       ? "bg-accent-subtle text-accent before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-accent before:content-['']"
-      : 'text-muted hover:bg-surface-muted hover:text-fg'
+      : pending
+        ? 'text-accent'
+        : 'text-muted hover:bg-surface-muted hover:text-fg'
   }`;
 }
+
+type RailItem = { id: AppSection; to: string; icon: LucideIcon; label: string };
+
+/**
+ * Rail 导航项。点击时 flushSync 抢在 navigate 的 transition 启动前同步提交
+ * pending 态（图标换成旋转环）——否则 rabjs 的 store 更新会被悬挂的
+ * transition 纠缠，commit 时才出现。必须是 observer：pending 来自全局服务。
+ */
+const RailLink = observer(function RailLink({
+  item,
+  active,
+  collapsed,
+}: {
+  item: RailItem;
+  active: boolean;
+  collapsed: boolean;
+}) {
+  const routeLoad = useService(RouteLoadService);
+  const pending = routeLoad.pendingTo === item.to;
+  return (
+    <Tip label={collapsed ? item.label : undefined} side="right">
+      <NavLink
+        to={item.to}
+        aria-label={item.label}
+        className={railItemClass(active, collapsed, pending)}
+        onClick={() => {
+          // 已在当前栏目时不标 pending：不会触发导航，settle 不会执行
+          if (!active) flushSync(() => routeLoad.markClick(item.to));
+        }}
+        onMouseEnter={() => warmPath(item.to)}
+        onFocus={() => warmPath(item.to)}
+      >
+        <Icon
+          icon={pending ? LoaderCircle : item.icon}
+          className={pending ? 'shrink-0 animate-spin' : 'shrink-0'}
+        />
+        {collapsed ? null : <span className="truncate">{item.label}</span>}
+      </NavLink>
+    </Tip>
+  );
+});
 
 function ShellContent() {
   const todos = useService(TodosUiService);
   const chat = useService(AgentChatService);
+  const routeLoad = useService(RouteLoadService);
   const location = useLocation();
   useAppShortcuts();
   useEffect(() => {
     void chat.load();
   }, [chat]);
+  useEffect(() => routeLoad.settle(location.pathname), [location.pathname, routeLoad]);
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
   const todayDataReady = useTodayDataReady(section === 'today');
@@ -141,23 +190,14 @@ function ShellContent() {
         </div>
 
         <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pb-2">
-          {PRIMARY.map((item) => {
-            const active = section === item.id;
-            return (
-              <Tip key={item.id} label={collapsed ? item.label : undefined} side="right">
-                <NavLink
-                  to={item.to}
-                  aria-label={item.label}
-                  className={railItemClass(active, collapsed)}
-                  onMouseEnter={() => warmPath(item.to)}
-                  onFocus={() => warmPath(item.to)}
-                >
-                  <Icon icon={item.icon} className="shrink-0" />
-                  {collapsed ? null : <span className="truncate">{item.label}</span>}
-                </NavLink>
-              </Tip>
-            );
-          })}
+          {PRIMARY.map((item) => (
+            <RailLink
+              key={item.id}
+              item={item}
+              active={section === item.id}
+              collapsed={collapsed}
+            />
+          ))}
           {/* 全局快搜入口：打开命令面板（任务/线程/收集箱分组结果）。 */}
           <Tip label={collapsed ? t.nav.searchHint : undefined} side="right">
             <button
@@ -170,23 +210,14 @@ function ShellContent() {
               {collapsed ? null : <span className="truncate">{t.nav.search}</span>}
             </button>
           </Tip>
-          {AI_NAV.map((item) => {
-            const active = section === item.id;
-            return (
-              <Tip key={item.id} label={collapsed ? item.label : undefined} side="right">
-                <NavLink
-                  to={item.to}
-                  aria-label={item.label}
-                  className={railItemClass(active, collapsed)}
-                  onMouseEnter={() => warmPath(item.to)}
-                  onFocus={() => warmPath(item.to)}
-                >
-                  <Icon icon={item.icon} className="shrink-0" />
-                  {collapsed ? null : <span className="truncate">{item.label}</span>}
-                </NavLink>
-              </Tip>
-            );
-          })}
+          {AI_NAV.map((item) => (
+            <RailLink
+              key={item.id}
+              item={item}
+              active={section === item.id}
+              collapsed={collapsed}
+            />
+          ))}
         </nav>
 
         <div
@@ -204,27 +235,17 @@ function ShellContent() {
               {collapsed ? null : <span className="truncate">{t.rail.collapse}</span>}
             </button>
           </Tip>
-          <Tip label={collapsed ? t.rail.usage : undefined} side="right">
-            <NavLink
-              to="/usage"
-              aria-label={t.rail.usage}
-              className={railItemClass(section === 'usage', collapsed)}
-            >
-              <Icon icon={ChartColumn} className="shrink-0" />
-              {collapsed ? null : <span className="truncate">{t.rail.usage}</span>}
-            </NavLink>
-          </Tip>
+          <RailLink
+            item={{ id: 'usage', to: '/usage', icon: ChartColumn, label: t.rail.usage }}
+            active={section === 'usage'}
+            collapsed={collapsed}
+          />
           <ThemeSwitch variant="rail" expanded={!collapsed} />
-          <Tip label={collapsed ? t.nav.settings : undefined} side="right">
-            <NavLink
-              to="/settings"
-              aria-label={t.nav.settings}
-              className={railItemClass(section === 'settings', collapsed)}
-            >
-              <Icon icon={Settings} className="shrink-0" />
-              {collapsed ? null : <span className="truncate">{t.nav.settings}</span>}
-            </NavLink>
-          </Tip>
+          <RailLink
+            item={{ id: 'settings', to: '/settings', icon: Settings, label: t.nav.settings }}
+            active={section === 'settings'}
+            collapsed={collapsed}
+          />
           <Tip label={collapsed ? t.shortcuts.open : undefined} side="right">
             <button
               type="button"
@@ -252,9 +273,11 @@ function ShellContent() {
       ) : null}
 
       <div data-region="canvas" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <Suspense fallback={<RouteFallback />}>
-          <Outlet />
-        </Suspense>
+        <RouteErrorBoundary resetKey={location.pathname}>
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
+        </RouteErrorBoundary>
       </div>
       <AgentChatRail />
       {todos.similarOpen.length > 0 ? <SimilarOpenToast /> : null}

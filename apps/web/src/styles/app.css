@@ -172,6 +172,62 @@ html:has([data-region='notify-alert']) body {
   background-color: var(--bg-surface-muted);
 }
 
+/* ---------- 路由加载反馈 ---------- */
+/* 顶部 2px 不定态进度条：导航触发、延迟亮起、扫光式滑动。
+   挂在 Routes 之外，不受悬挂的导航 transition 影响。 */
+.route-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+
+.route-progress.is-on {
+  opacity: 1;
+}
+
+.route-progress::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 42%;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent-primary) 40%,
+    var(--accent-primary) 60%,
+    transparent
+  );
+  animation: route-progress-slide 1.15s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes route-progress-slide {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-progress::before {
+    animation: none;
+    left: 0;
+    right: 0;
+    width: auto;
+    opacity: 0.55;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pulse-mark,
   .skeleton-pulse {
@@ -279,8 +335,11 @@ html:has([data-region='notify-alert']) body {
 
 [data-vignette='mineral-garden'] {
   pointer-events: none;
-  background:
-    radial-gradient(120% 80% at 80% 120%, color-mix(in srgb, var(--accent-primary) 18%, transparent), transparent 62%);
+  background: radial-gradient(
+    120% 80% at 80% 120%,
+    color-mix(in srgb, var(--accent-primary) 18%, transparent),
+    transparent 62%
+  );
 }
 
 @media (prefers-reduced-motion: reduce) {
