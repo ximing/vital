@@ -6,6 +6,7 @@ import { BrowserNotifyService } from '@/features/notify/browser-notify.service';
 import { AuthService } from '@/services/auth.service';
 import { QueryService } from '@/services/query.service';
 import { ThemeService } from '@/services/theme.service';
+import { RouteLoadService } from '@/shell/route-load.service';
 
 /** App-lifetime services. Session UI services bind on Shell, not here. */
 export function registerVitalServices(): void {
@@ -13,6 +14,7 @@ export function registerVitalServices(): void {
   if (!has(AuthService)) register(AuthService);
   if (!has(QueryService)) register(QueryService);
   if (!has(BrowserNotifyService)) register(BrowserNotifyService);
+  if (!has(RouteLoadService)) register(RouteLoadService);
 }
 
 /**

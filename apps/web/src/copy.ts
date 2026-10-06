@@ -1254,6 +1254,11 @@ export const t = {
     unreachable: '暂时连不上服务器，会话还在。',
     retry: '重试',
   },
+  route: {
+    loadFailed: '网络不佳，页面加载失败',
+    loadFailedHint: '请检查网络后重试；若刚更新过版本，重新加载即可恢复。',
+    reload: '重新加载',
+  },
   landing: {
     enter: '进入今天',
     start: '开始使用',

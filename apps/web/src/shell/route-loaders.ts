@@ -1,5 +1,20 @@
 /** Shared dynamic imports for route lazy() and idle/hover warmup. One specifier, one network load. */
 
+import { resolve } from '@rabjs/react';
+import { RouteLoadService } from '@/shell/route-load.service';
+
+/**
+ * 导航触发的 chunk 加载：上报 RouteLoadService（驱动进度条/rail pending），
+ * 失败静默重试一次（弱网瞬断常见）；仍失败则抛给 RouteErrorBoundary。
+ * 预取（hover/idle）不经过这里，避免预热触发加载反馈。
+ */
+export function trackRoute<T>(load: () => Promise<T>): Promise<T> {
+  const end = resolve(RouteLoadService).track();
+  return load()
+    .catch(() => load())
+    .finally(end);
+}
+
 export function loadLanding() {
   return import('@/pages/landing');
 }
