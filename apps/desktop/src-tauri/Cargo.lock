@@ -4235,6 +4235,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-notification",
  "tauri-plugin-window-state",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

@@ -508,27 +508,57 @@ fn external_link_url(input: &str) -> Option<String> {
 }
 
 fn spawn_external(url: &str) -> Result<(), String> {
-    let mut command = external_open_command(url);
-    command
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map(|_| ())
-        .map_err(|err| err.to_string())
+    // cmd.exe /C start parses the URL again. ShellExecuteW takes one wide string.
+    #[cfg(target_os = "windows")]
+    {
+        return shell_execute_open(url);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut command = external_open_command(url);
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| ())
+            .map_err(|err| err.to_string())
+    }
 }
 
+#[cfg(target_os = "windows")]
+fn shell_execute_open(url: &str) -> Result<(), String> {
+    let verb = wide_null("open");
+    let file = wide_null(url);
+    let result = unsafe {
+        windows_sys::Win32::UI::Shell::ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
+        )
+    };
+    let code = result as isize;
+    if code > 32 {
+        Ok(())
+    } else {
+        Err(code.to_string())
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn wide_null(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(not(target_os = "windows"))]
 fn external_open_command(url: &str) -> std::process::Command {
     #[cfg(target_os = "macos")]
     {
         let mut command = std::process::Command::new("open");
         command.arg(url);
-        return command;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let mut command = std::process::Command::new("cmd");
-        command.args(["/C", "start", "", url]);
         return command;
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -940,6 +970,16 @@ mod tests {
         assert_eq!(external_link_url("https://example.com/a\nb"), None);
         assert_eq!(external_link_url("https://exa mple.com"), None);
         assert_eq!(external_link_url(""), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn external_open_command_passes_the_url_as_one_argument() {
+        let url = "https://example.com/a?b=1&c=2";
+        let command = external_open_command(url);
+        assert_eq!(command.get_program(), "open");
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, [std::ffi::OsStr::new(url)]);
     }
 
     #[test]
