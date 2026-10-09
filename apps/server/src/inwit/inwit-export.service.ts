@@ -1,5 +1,4 @@
 import { eq, inArray } from 'drizzle-orm';
-import { request } from 'undici';
 import {
   articleDocToHtml,
   attachmentIdOfUploadRef,
@@ -15,7 +14,7 @@ import { dtoOf, getOwnedInboxOr404, loadBodiesByItemIds } from '../inbox/inbox.s
 import { getStorage } from '../storage/factory.js';
 import type { StorageMetadata } from '../storage/base.adapter.js';
 import { logger } from '../utils/logger.js';
-import { requireInwitAccessKey } from './inwit.service.js';
+import { inwitRequest, requireInwitAccessKey } from './inwit.service.js';
 
 const OPEN_DOCUMENTS_PATH = '/api/open/documents';
 /** SigV4 ceiling — public buckets ignore the TTL and return a permanent URL. */
@@ -158,26 +157,23 @@ export async function exportInboxToInwit(
     ...(defaultTopicId ? { topicId: defaultTopicId } : {}),
   };
 
-  let res: { statusCode: number; body: { text(): Promise<string> } };
+  let res: { statusCode: number; text: string };
   try {
-    res = await request(new URL(OPEN_DOCUMENTS_PATH, baseUrl).toString(), {
+    res = await inwitRequest(new URL(OPEN_DOCUMENTS_PATH, baseUrl), {
       method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessKey}`,
-        'content-type': 'application/json',
-      },
+      accessKey,
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(20_000),
+      timeoutMs: 20_000,
     });
   } catch (err) {
     logger.warn('inwit.export_unreachable', {
       inboxItemId: id,
-      error: err instanceof Error ? err.message : String(err),
+      error: err instanceof AppError ? err.code : 'Error',
     });
     throw AppError.of(502, 'INWIT_UNREACHABLE');
   }
 
-  const text = await res.body.text();
+  const text = res.text;
   if (res.statusCode !== 201) {
     logger.warn('inwit.export_rejected', { inboxItemId: id, status: res.statusCode, text: text.slice(0, 500) });
     mapInwitStatus(res.statusCode);

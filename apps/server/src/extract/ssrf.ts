@@ -28,6 +28,8 @@ function isPrivateV4(ip: string): boolean {
   if (n >>> 16 === 0xc0a8) return true; // 192.168.0.0/16
   if (n >>> 16 === 0xa9fe) return true; // 169.254.0.0/16
   if (n >>> 22 === 0x191) return true; // 100.64.0.0/10
+  if (n >>> 28 === 0xe) return true; // 224.0.0.0/4 multicast
+  if (n >>> 28 === 0xf) return true; // 240.0.0.0/4 reserved, includes 255.255.255.255
   return false;
 }
 
@@ -73,6 +75,31 @@ function mappedV4(ip: string): string | null {
   return null;
 }
 
+/** 64:ff9b::/96 (well-known) and 64:ff9b:1::/48 (local-use). The whole prefix is blocked. */
+function isNat64(parts: number[]): boolean {
+  if ((parts[0] ?? 0) !== 0x64 || (parts[1] ?? 0) !== 0xff9b) return false;
+  const third = parts[2] ?? 0;
+  if (third === 1) return true;
+  return (
+    third === 0 &&
+    (parts[3] ?? 0) === 0 &&
+    (parts[4] ?? 0) === 0 &&
+    (parts[5] ?? 0) === 0
+  );
+}
+
+/** 6to4 embeds IPv4 in hextets 1 and 2. Reject only when that IPv4 is not public. */
+function embedded6to4(parts: number[]): string | null {
+  if ((parts[0] ?? 0) !== 0x2002) return null;
+  const hi = parts[1] ?? 0;
+  const lo = parts[2] ?? 0;
+  const a = (hi >> 8) & 0xff;
+  const b = hi & 0xff;
+  const c = (lo >> 8) & 0xff;
+  const d = lo & 0xff;
+  return `${String(a)}.${String(b)}.${String(c)}.${String(d)}`;
+}
+
 function isPrivateV6(ip: string): boolean {
   const lower = ip.toLowerCase();
   if (lower === '::1' || lower === '::') return true;
@@ -82,6 +109,10 @@ function isPrivateV6(ip: string): boolean {
   const first = parts[0] ?? 0;
   if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7
   if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10
+  if ((first & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  if (isNat64(parts)) return true;
+  const embedded = embedded6to4(parts);
+  if (embedded !== null) return isPrivateV4(embedded);
   return false;
 }
 

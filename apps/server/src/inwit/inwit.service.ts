@@ -10,6 +10,7 @@ import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { userInwitConfig } from '../db/schema.js';
 import { AppError } from '../errors.js';
+import { isRedirectStatus, pinHttpTarget, type PinnedTarget } from '../extract/pin.js';
 import { assertSafeUrl } from '../extract/ssrf.js';
 import { logger } from '../utils/logger.js';
 import { decryptSecret, encryptSecret } from '../llm/crypto.js';
@@ -110,22 +111,67 @@ export async function putInwitConfig(
   return getInwitConfig(userId);
 }
 
+function inwitFailureLog(err: unknown): string {
+  if (err instanceof AppError) return err.code;
+  if (err instanceof Error) return err.name;
+  return 'Error';
+}
+
+/**
+ * Pinned GET/POST. Redirects are not followed. Pin, DNS and network failures
+ * are INWIT_UNREACHABLE and do not include a resolved address.
+ */
+export async function inwitRequest(
+  url: URL,
+  init: {
+    method: 'GET' | 'POST';
+    accessKey: string;
+    body?: string;
+    timeoutMs: number;
+  },
+): Promise<{ statusCode: number; text: string }> {
+  const signal = AbortSignal.timeout(init.timeoutMs);
+  let pinned: PinnedTarget | undefined;
+  try {
+    pinned = await pinHttpTarget(url, { production: config.NODE_ENV === 'production', signal });
+    const res = await request(url.href, {
+      method: init.method,
+      dispatcher: pinned.dispatcher,
+      maxRedirections: 0,
+      signal,
+      headers: {
+        authorization: `Bearer ${init.accessKey}`,
+        ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      ...(init.body !== undefined ? { body: init.body } : {}),
+    });
+    const text = await res.body.text();
+    if (isRedirectStatus(res.statusCode)) throw AppError.of(502, 'INWIT_UNREACHABLE');
+    return { statusCode: res.statusCode, text };
+  } catch (err) {
+    if (err instanceof AppError && err.code === 'INWIT_UNREACHABLE') throw err;
+    logger.warn('inwit.request_failed', { error: inwitFailureLog(err) });
+    throw AppError.of(502, 'INWIT_UNREACHABLE');
+  } finally {
+    if (pinned) await pinned.dispatcher.close();
+  }
+}
+
 async function inwitGetJson(
   baseUrl: string,
   path: string,
   accessKey: string,
 ): Promise<{ status: number; body: unknown }> {
-  const res = await request(new URL(path, baseUrl).toString(), {
+  const { statusCode, text } = await inwitRequest(new URL(path, baseUrl), {
     method: 'GET',
-    headers: { authorization: `Bearer ${accessKey}` },
-    signal: AbortSignal.timeout(10_000),
+    accessKey,
+    timeoutMs: 10_000,
   });
-  const text = await res.body.text();
-  if (text === '') return { status: res.statusCode, body: null };
+  if (text === '') return { status: statusCode, body: null };
   try {
-    return { status: res.statusCode, body: JSON.parse(text) as unknown };
+    return { status: statusCode, body: JSON.parse(text) as unknown };
   } catch {
-    return { status: res.statusCode, body: null };
+    return { status: statusCode, body: null };
   }
 }
 
@@ -136,9 +182,7 @@ export async function testInwitConfig(userId: string): Promise<InwitTestResponse
   try {
     res = await inwitGetJson(baseUrl, '/api/topics', accessKey);
   } catch (err) {
-    logger.warn('inwit.test_unreachable', {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    logger.warn('inwit.test_unreachable', { error: inwitFailureLog(err) });
     throw AppError.of(502, 'INWIT_UNREACHABLE');
   }
   if (res.status === 401) throw AppError.of(401, 'INWIT_KEY_INVALID');

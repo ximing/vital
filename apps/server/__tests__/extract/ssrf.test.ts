@@ -99,6 +99,37 @@ describe('SSRF URL + IP guards', () => {
     });
   });
 
+  it('rejects NAT64, 6to4 with a private embedded IPv4, and multicast', () => {
+    expect(isPublicIp('64:ff9b::')).toBe(false);
+    expect(isPublicIp('64:ff9b::808:808')).toBe(false);
+    expect(isPublicIp('64:ff9b:1::')).toBe(false);
+    expect(isPublicIp('64:ff9b:1:2::3')).toBe(false);
+    expect(isPublicIp('2002:7f00:1::')).toBe(false);
+    expect(isPublicIp('2002:a9fe:a9fe::')).toBe(false);
+    expect(isPublicIp('2002:808:808::')).toBe(true);
+    expect(isPublicIp('224.0.0.1')).toBe(false);
+    expect(isPublicIp('239.255.255.255')).toBe(false);
+    expect(isPublicIp('240.0.0.1')).toBe(false);
+    expect(isPublicIp('255.255.255.255')).toBe(false);
+    expect(isPublicIp('ff00::1')).toBe(false);
+    expect(isPublicIp('ff02::1')).toBe(false);
+    expect(isPublicIp('::ffff:224.0.0.1')).toBe(false);
+    expectBlocked(() => {
+      assertSafeUrl(url('http://[64:ff9b::1]/'));
+    });
+    expectBlocked(() => {
+      assertSafeUrl(url('http://[2002:7f00:1::]/'));
+    });
+    expectBlocked(() => {
+      assertSafeUrl(url('http://224.0.0.1/'));
+    });
+    expectBlocked(() => {
+      assertSafeUrl(url('http://[ff02::1]/'));
+    });
+    expect(isPublicIp('1.1.1.1')).toBe(true);
+    assertSafeUrl(url('http://[2002:808:808::]/'));
+  });
+
   it('re-checks each redirect hop including file: after https', () => {
     const current = url('https://example.com/a');
     expectBlocked(() => {
