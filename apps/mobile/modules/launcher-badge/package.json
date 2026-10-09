@@ -1,0 +1,7 @@
+{
+  "name": "launcher-badge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Clear the Android launcher badge without dismissing notifications",
+  "main": "src/index.ts"
+}

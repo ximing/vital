@@ -11,6 +11,7 @@
     "allow-open-in-main",
     "allow-open-external",
     "allow-hide-main",
+    "allow-set-badge",
     "notification:default"
   ]
 }

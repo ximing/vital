@@ -90,6 +90,11 @@ try {
             var label = windowLabel();
             if (label && label !== "main") return;
             invoke("hide_main");
+          },
+          setBadge: function (count, overlayPng) {
+            var label = windowLabel();
+            if (label && label !== "main") return;
+            invoke("set_badge", { count: count, overlayPng: overlayPng });
           }
         };
       })()
@@ -143,6 +148,7 @@ pub fn run() {
             open_in_main,
             open_external,
             hide_main,
+            set_badge,
         ])
         .menu(build_menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -431,6 +437,37 @@ fn hide_main(window: tauri::WebviewWindow) -> Result<(), String> {
         return Err("hide_main is main-only".into());
     }
     window.hide().map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn set_badge(
+    window: tauri::WebviewWindow,
+    count: Option<i64>,
+    overlay_png: Option<String>,
+) -> Result<(), String> {
+    if window.label() != MAIN_LABEL {
+        return Err("set_badge is main-only".into());
+    }
+    let count = count.filter(|value| *value > 0);
+    #[cfg(target_os = "windows")]
+    {
+        let icon = match (count, overlay_png) {
+            (Some(_), Some(png)) => {
+                use base64::Engine;
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(png)
+                    .map_err(|err| err.to_string())?;
+                Some(tauri::image::Image::from_bytes(&bytes).map_err(|err| err.to_string())?)
+            }
+            _ => None,
+        };
+        window.set_overlay_icon(icon).map_err(|err| err.to_string())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = overlay_png;
+        window.set_badge_count(count).map_err(|err| err.to_string())
+    }
 }
 
 #[tauri::command]

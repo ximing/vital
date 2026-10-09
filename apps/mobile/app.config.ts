@@ -108,6 +108,7 @@ const config: ExpoConfig = {
         recordAudioAndroid: false,
       },
     ],
+    'expo-notifications',
     withEnvReleaseSigning as unknown as string,
     withHuaweiPush as unknown as string,
   ],

@@ -8,6 +8,7 @@ import { App } from '@/App';
 import { t } from '@/copy';
 import { applyTheme, subscribeSystemTheme } from '@/lib/theme';
 import { NotifyAlertPage } from '@/features/notify/NotifyAlertPage';
+import { badgeService } from '@/features/badge/badge.service';
 import { browserNotify } from '@/features/notify/browser-notify.service';
 import { isNotifyAlertRuntime } from '@/features/notify/sticky-alert';
 import { startSync, stopSync } from '@/features/sync/sync-engine';
@@ -60,14 +61,17 @@ const Root = observer(function Root() {
     if (status !== 'ready' || userId === null) {
       stopSync();
       browserNotify().stop();
+      badgeService().stop();
       return;
     }
     prefetchTodayHome(appQueryClient);
     startSync(appQueryClient);
     browserNotify().start();
+    badgeService().start();
     return () => {
       stopSync();
       browserNotify().stop();
+      badgeService().stop();
     };
   }, [status, userId]);
 

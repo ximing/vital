@@ -1,0 +1,19 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'plus.aimo.vital'
+version = '0.0.0'
+
+android {
+  namespace "expo.modules.launcherbadge"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.0"
+  }
+}
+
+dependencies {
+  implementation 'me.leolin:ShortcutBadger:1.1.22@aar'
+}

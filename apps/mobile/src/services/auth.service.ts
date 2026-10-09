@@ -5,6 +5,7 @@ import { ApiError } from '@vital/api-client';
 import { client } from '../lib/api';
 import { syncHuaweiPush } from '../lib/huawei-push';
 import { startMobileSync, stopMobileSync } from '../lib/sync';
+import { badgeService } from './badge.service';
 import { loadUser, onAuthCleared, saveUser, secureTokenStore } from '../lib/token-store';
 
 export class AuthService extends Service {
@@ -17,11 +18,15 @@ export class AuthService extends Service {
     this.started = true;
     onAuthCleared(() => {
       stopMobileSync();
+      badgeService().stop();
       this.user = null;
       this.ready = true;
     });
     AppState.addEventListener('change', (state) => {
-      if (state === 'active' && this.user) void syncHuaweiPush();
+      if (state === 'active' && this.user) {
+        void syncHuaweiPush();
+        void badgeService().start();
+      }
     });
     void this.boot();
   }
@@ -43,7 +48,10 @@ export class AuthService extends Service {
         this.user = null;
       }
     }
-    if (this.user) void syncHuaweiPush();
+    if (this.user) {
+      void syncHuaweiPush();
+      void badgeService().start();
+    }
   }
 
   async login(input: LoginInput): Promise<UserProfile> {
@@ -51,6 +59,7 @@ export class AuthService extends Service {
     await saveUser(res.user);
     this.user = res.user;
     startMobileSync();
+    void badgeService().start();
     void syncHuaweiPush();
     return res.user;
   }
@@ -60,12 +69,14 @@ export class AuthService extends Service {
     await saveUser(res.user);
     this.user = res.user;
     startMobileSync();
+    void badgeService().start();
     void syncHuaweiPush();
     return res.user;
   }
 
   async logout(): Promise<void> {
     stopMobileSync();
+    badgeService().stop();
     await client.logout().catch(() => undefined);
     await secureTokenStore.clear();
     this.user = null;

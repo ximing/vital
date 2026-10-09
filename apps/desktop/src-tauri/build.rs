@@ -7,6 +7,7 @@ fn main() {
             "open_in_main",
             "open_external",
             "hide_main",
+            "set_badge",
         ]),
     ))
     .expect("failed to run tauri-build");

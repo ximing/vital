@@ -15,6 +15,8 @@ export type VitalHost = {
   /** System browser. Missing on shells built before article-link opening. */
   openExternal?(url: string): void;
   hideMain(): void;
+  /** Dock/taskbar badge. Missing on shells built before badge support. */
+  setBadge?(count: number, overlayPngBase64?: string): void;
 };
 
 const HOST_METHODS = [

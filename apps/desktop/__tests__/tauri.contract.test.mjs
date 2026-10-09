@@ -114,6 +114,7 @@ describe('Tauri desktop contract', () => {
       'open_in_main',
       'open_external',
       'hide_main',
+      'set_badge',
     ]) {
       assert.match(build, new RegExp(command));
       assert.match(lib, new RegExp(`fn ${command}`));
@@ -131,6 +132,7 @@ describe('Tauri desktop contract', () => {
         'allow-hide-main',
         'allow-open-in-main',
         'allow-open-external',
+        'allow-set-badge',
         'allow-show-sticky-alert',
         'notification:default',
       ].sort(),

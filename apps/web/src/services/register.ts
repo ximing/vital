@@ -2,6 +2,7 @@ import { has, register } from '@rabjs/react';
 import { InboxUiService } from '@/features/inbox/inbox-ui.service';
 import { ReportUiService } from '@/features/reports/report-ui.service';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
+import { BadgeService } from '@/features/badge/badge.service';
 import { BrowserNotifyService } from '@/features/notify/browser-notify.service';
 import { AuthService } from '@/services/auth.service';
 import { QueryService } from '@/services/query.service';
@@ -14,6 +15,7 @@ export function registerVitalServices(): void {
   if (!has(AuthService)) register(AuthService);
   if (!has(QueryService)) register(QueryService);
   if (!has(BrowserNotifyService)) register(BrowserNotifyService);
+  if (!has(BadgeService)) register(BadgeService);
   if (!has(RouteLoadService)) register(RouteLoadService);
 }
 
