@@ -5,7 +5,6 @@ import {
   fauxAssistantMessage,
   fauxProvider,
   fauxToolCall,
-  type Context,
 } from '@earendil-works/pi-ai';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
@@ -44,8 +43,8 @@ it('cluster ignores foreign IDs and revalidates eligibility changed while the mo
     await getDb().update(tasks).set({ status: 'done' }).where(eq(tasks.id, own[0]!));
     await getDb().update(tasks).set({ deletedAt: new Date() }).where(eq(tasks.id, own[1]!));
     return fauxAssistantMessage(fauxToolCall('propose_threads', { threads: [
-      { name: 'stale proposal', headline: '', taskIds: [own[0], own[1]] },
-      { name: 'valid proposal', headline: '', taskIds: [own[2], own[3], foreign[0], foreign[1]] },
+      { name: 'stale proposal', headline: '', taskIds: [own[0]!, own[1]!] },
+      { name: 'valid proposal', headline: '', taskIds: [own[2]!, own[3]!, foreign[0]!, foreign[1]!] },
     ] }));
   }]);
   await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'outcome.cluster', dedupKey: `cluster:${alice.id}`, payload: { date: 'today' }, scheduledAt: new Date() });
@@ -356,7 +355,7 @@ describe('agent harness: outcome.refresh', () => {
       content: '用户偏好：headline 不要出现「冲刺」',
     });
 
-    let seenContext: Context | null = null;
+    let seenContext: { messages: { role: string; content: unknown }[] } | null = null;
     faux.setResponses([
       (context) => {
         seenContext = context;
@@ -370,12 +369,16 @@ describe('agent harness: outcome.refresh', () => {
     await processDueAgentJobs(new Date());
 
     expect(seenContext).not.toBeNull();
-    const ctx = seenContext as unknown as Context;
-    const userText = ctx.messages
-      .filter((m) => m.role === 'user')
-      .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
-      .join('\n');
-    expect(ctx.systemPrompt).toContain('<data>');
+    const ctx = seenContext!;
+    const messageText = (role: string) =>
+      ctx.messages
+        .filter((message) => message.role === role)
+        .map((message) =>
+          typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+        )
+        .join('\n');
+    const userText = messageText('user');
+    expect(messageText('system')).toContain('<data>');
     expect(userText).toContain('从用户纠偏中学到的偏好');
     expect(userText).toContain('用户偏好：headline 不要出现「冲刺」');
   });

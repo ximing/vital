@@ -190,7 +190,11 @@ export async function runChatTurn(input: {
           model: resolved.model,
           tools: listTools().map((tool) => toAgentTool(tool, ctx)),
         },
-        shouldStopAfterTurn: () => toolCalls >= MAX_TOOL_ROUNDS,
+        finishTurn: (turn) => {
+          if (turn.message.stopReason === 'error' || turn.message.stopReason === 'aborted') return;
+          if (toolCalls < MAX_TOOL_ROUNDS) return;
+          return { action: 'end' };
+        },
       });
       agent.subscribe(async (event) => {
         if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {

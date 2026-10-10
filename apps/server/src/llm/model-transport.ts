@@ -5,7 +5,7 @@ import { pinnedFetch } from '../extract/pin.js';
 import { applyModelPricing, modelIsPriced } from './pricing.js';
 import { beginModelCall } from './telemetry.js';
 
-/** pi-ai 0.85.1 throws if fetch is not the global fetch for these adapters. */
+/** Google adapters throw if fetch is not the global fetch. */
 const NO_CUSTOM_FETCH = new Set(['google-generative-ai', 'google-vertex']);
 
 const modelFetch: typeof globalThis.fetch = (input, init) =>

@@ -175,7 +175,11 @@ export async function runProposalPass<T>(input: {
       model: resolved.model,
       tools: [tool],
     },
-    shouldStopAfterTurn: () => box.value !== null,
+    finishTurn: (turn) => {
+      if (turn.message.stopReason === 'error' || turn.message.stopReason === 'aborted') return;
+      if (box.value === null) return;
+      return { action: 'end' };
+    },
   });
 
   const timeout = setTimeout(() => {
