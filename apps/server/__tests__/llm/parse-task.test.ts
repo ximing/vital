@@ -59,7 +59,7 @@ describe('buildCreateInputFromIntent', () => {
     const payload = buildCreateInputFromIntent(
       { text: '明天下午3点和设计组开会讨论Q3', timezone: 'Asia/Shanghai' },
       extracted,
-      ctx,
+      { ...ctx, now: new Date('2026-09-08T02:00:00.000Z') },
     );
     expect(payload.title).toBe('和设计组开会');
     expect(payload.notes).toBe('讨论 Q3');
@@ -229,7 +229,7 @@ describe('buildCreateInputFromIntent', () => {
         reminder: '15',
         isAllDay: false,
       }),
-      ctx,
+      { ...ctx, now: new Date('2026-09-08T02:00:00.000Z') },
     );
     expect(payload.reminderMode).toBe('offset');
     expect(payload.reminderOffsetMinutes).toBe(15);
@@ -287,5 +287,52 @@ describe('buildCreateInputFromIntent', () => {
     expect(payload.recurrence).toBeUndefined();
     const due = DateTime.fromISO(payload.dueAt ?? '', { zone: 'utc' }).setZone('Asia/Shanghai');
     expect(due.toFormat('yyyy-MM-dd HH:mm')).toBe('2026-09-08 00:00');
+  });
+
+  it('uses 明天 morning even when the model and the today view say today', () => {
+    const now = new Date('2026-10-12T02:00:00.000Z');
+    const payload = buildCreateInputFromIntent(
+      {
+        text: '明天上午九点提醒我打疫苗',
+        timezone: 'Asia/Shanghai',
+        smartListId: 'smart:today',
+      },
+      extractedOf({
+        title: '打疫苗',
+        dueDate: '2026-10-12',
+        dueTime: null,
+        isAllDay: true,
+        reminder: 'none',
+      }),
+      { ...ctx, now },
+    );
+    expect(payload.title).toBe('打疫苗');
+    expect(payload.isAllDay).toBe(false);
+    expect(payload.reminderMode).toBe('due');
+    const due = DateTime.fromISO(payload.dueAt ?? '', { zone: 'utc' }).setZone('Asia/Shanghai');
+    expect(due.toFormat('yyyy-MM-dd HH:mm')).toBe('2026-10-13 09:00');
+  });
+
+  it('keeps 后天 when the model omits the date on the today view', () => {
+    const now = new Date('2026-10-12T02:00:00.000Z');
+    const payload = buildCreateInputFromIntent(
+      { text: '后天打疫苗', timezone: 'Asia/Shanghai', smartListId: 'smart:today' },
+      extractedOf({ title: '打疫苗', dueDate: null }),
+      { ...ctx, now },
+    );
+    expect(payload.isAllDay).toBe(true);
+    const due = DateTime.fromISO(payload.dueAt ?? '', { zone: 'utc' }).setZone('Asia/Shanghai');
+    expect(due.toFormat('yyyy-MM-dd')).toBe('2026-10-14');
+  });
+
+  it('lets a named day beat the week column the user is composing on', () => {
+    const now = new Date('2026-10-14T02:00:00.000Z');
+    const payload = buildCreateInputFromIntent(
+      { text: '明天开会', timezone: 'Asia/Shanghai', dueYmd: '2026-10-20', smartListId: 'smart:upcoming' },
+      extractedOf({ title: '开会', dueDate: null }),
+      { ...ctx, now },
+    );
+    const due = DateTime.fromISO(payload.dueAt ?? '', { zone: 'utc' }).setZone('Asia/Shanghai');
+    expect(due.toFormat('yyyy-MM-dd')).toBe('2026-10-15');
   });
 });

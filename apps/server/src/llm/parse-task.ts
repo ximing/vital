@@ -17,6 +17,7 @@ import { AppError } from '../errors.js';
 import type { User } from '../db/schema.js';
 import { logger } from '../utils/logger.js';
 import { completeText } from './pi.js';
+import { spokenDueYmd } from './spoken-date.js';
 
 const OFFSETS = new Set<number>([5, 15, 30, 60, 1440]);
 
@@ -339,7 +340,8 @@ export function buildCreateInputFromIntent(
     if (input.text.trim().length > title.length + 8) notes = input.text.trim();
   }
 
-  let dueYmd = extracted?.dueDate ?? input.dueYmd ?? null;
+  // A date named in the sentence wins over the model and over the view's today fallback.
+  let dueYmd = spokenDueYmd(input.text, zone, now) ?? extracted?.dueDate ?? input.dueYmd ?? null;
   const dueHm = extracted?.dueTime ?? spokenHm(input.text);
   const startYmd = extracted?.startDate ?? null;
   const startHm = extracted?.startTime ?? null;
@@ -442,7 +444,9 @@ function buildPrompt(input: {
     'title：短标题，去掉日期时间等调度用语。',
     'notes：仅当用户补充了说明、上下文或摘要时填写，否则 null。',
     'priority：0 最高紧急，3 普通。没说紧急程度时用 3。',
-    '日期用 YYYY-MM-DD，时间用 HH:mm，按时区计算。没有日期也没有时刻则 dueDate 为 null。',
+    '日期用 YYYY-MM-DD，时间用 HH:mm，按「现在是」和时区计算。没有日期也没有时刻则 dueDate 为 null。',
+    '相对日期要换算：今天、明天、后天、大后天、昨天、前天、周几、这周几、下周几、下下周几、下周这天、周末、N天后、N周后、N个月后、几月几日、本月或下月几号。',
+    '当前视图不能覆盖用户说出的日期。每天、每周、每月、每隔是重复，不是单次日期。',
     '只有时刻、没有日期，而且任务会重复时，dueDate 填今天，dueTime 填该时刻，isAllDay 为 false。不要编造别的日期。',
     '有日期无时刻则 isAllDay true，dueTime null。有时刻则 isAllDay false。',
     'someday：没有日期且用户表达"某天/以后/不着急"时 true，否则 false。',
@@ -450,11 +454,11 @@ function buildPrompt(input: {
     'recurrenceKind：daily weekly monthly yearly weekdays weekends holidays legal_workdays，否则 null。',
     'recurrenceInterval：每隔或每间隔 N 个天、周、月、年时填整数 N（1 到 365）。每间隔两个月是 monthly 且 interval 为 2。没说间隔就省略。',
     'listName 必须是给定集合之一，否则 null。tagNames 必须是已有标签，否则 []。',
-    '不要编造用户没说的截止日期。',
+    '用户没说日期时 dueDate 为 null，不要用当前视图的日期填上。',
   ].join('');
   const user = [
     `现在是 ${weekdayZh(input.zone, input.now)}，时区 ${input.zone}。`,
-    input.smartListId ? `当前视图 ${input.smartListId}。` : '',
+    input.smartListId ? `当前视图 ${input.smartListId}。视图不是截止日期。` : '',
     lists !== '' ? `集合：${lists}。` : '集合：无。',
     tags !== '' ? `标签：${tags}。` : '标签：无。',
     `用户说：${input.text}`,
