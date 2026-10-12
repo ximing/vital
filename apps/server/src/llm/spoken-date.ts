@@ -140,7 +140,7 @@ function rollDayOfMonth(today: DateTime, day: number): DateTime | null {
 function push(text: string, hits: Hit[], re: RegExp, build: (match: RegExpMatchArray) => Hit['resolve'] | null): void {
   const flags = re.flags.includes('g') ? re.flags : `${re.flags}g`;
   for (const match of text.matchAll(new RegExp(re.source, flags))) {
-    if (match.index === undefined || isRepeat(text, match.index)) continue;
+    if (isRepeat(text, match.index)) continue;
     const resolve = build(match);
     if (resolve === null) continue;
     hits.push({ index: match.index, length: match[0].length, resolve });
