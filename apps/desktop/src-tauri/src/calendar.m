@@ -1,7 +1,16 @@
 #import <EventKit/EventKit.h>
 #import <Foundation/Foundation.h>
+#import <objc/message.h>
 #include <stdlib.h>
 #include <string.h>
+
+// EKAuthorizationStatusFullAccess and the deprecated Authorized alias are both 3.
+// Write-only is 4 and cannot read events. Naming the macOS 14 constant, or using
+// @available, makes clang emit ___isPlatformVersionAtLeast. Rust links with
+// -nodefaultlibs and does not resolve that compiler-rt symbol.
+static const NSInteger kVitalCalendarReadAccess = 3;
+
+typedef void (^VitalAccessCallback)(BOOL granted, NSError *error);
 
 static char *vital_dup(NSString *text) {
     const char *utf = text.UTF8String;
@@ -18,21 +27,20 @@ void vital_calendar_string_free(char *ptr) { free(ptr); }
 static BOOL vital_wait_access(EKEventStore *store) {
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     __block BOOL granted = NO;
-    if (@available(macOS 14.0, *)) {
-        [store requestFullAccessToEventsWithCompletion:^(BOOL ok, NSError *error) {
-            (void)error;
-            granted = ok;
-            dispatch_semaphore_signal(sem);
-        }];
+    VitalAccessCallback done = ^(BOOL ok, NSError *error) {
+        (void)error;
+        granted = ok;
+        dispatch_semaphore_signal(sem);
+    };
+    NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
+    SEL full = @selector(requestFullAccessToEventsWithCompletion:);
+    if (version.majorVersion >= 14 && [store respondsToSelector:full]) {
+        void (*send)(id, SEL, VitalAccessCallback) = (void (*)(id, SEL, VitalAccessCallback))objc_msgSend;
+        send(store, full, done);
     } else {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        [store requestAccessToEntityType:EKEntityTypeEvent
-                               completion:^(BOOL ok, NSError *error) {
-                                   (void)error;
-                                   granted = ok;
-                                   dispatch_semaphore_signal(sem);
-                               }];
+        [store requestAccessToEntityType:EKEntityTypeEvent completion:done];
 #pragma clang diagnostic pop
     }
     dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC));
@@ -44,10 +52,7 @@ char *vital_calendar_today_json(char **error_out) {
     @autoreleasepool {
         EKEventStore *store = [[EKEventStore alloc] init];
         EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        BOOL allowed = status == EKAuthorizationStatusFullAccess || status == EKAuthorizationStatusAuthorized;
-#pragma clang diagnostic pop
+        BOOL allowed = (NSInteger)status == kVitalCalendarReadAccess;
         if (status == EKAuthorizationStatusNotDetermined) {
             allowed = vital_wait_access(store);
         }
