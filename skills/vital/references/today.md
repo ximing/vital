@@ -48,6 +48,8 @@ export interface TodayDashboard {
   tasks: Task[];
   pulse: TodayPulse;
   now: TodayNow;
+  /** Agent composition. Null until a layout run has stored modules. */
+  layout: TodayLayout | null;
   generatedAt: string;
 }
 ```
@@ -61,3 +63,23 @@ Today's dashboard: open threads, tasks, pulse, and now-recommendations.
 - Auth: Bearer required
 - Client: `getToday`
 - Response: `TodayDashboard`
+
+#### `PUT /api/v1/today/layout-context`
+
+Put Today Layout Context
+
+- Auth: Bearer required
+- Client: `putTodayLayoutContext`
+- Response: `{ ok: true }`
+
+Request body (`todayLayoutContextSchema`):
+
+- `weather` (nullable):
+  - `status`: "ready" | "unavailable"
+  - `place`: string 0–80 (optional)
+  - `condition`: string 0–20 (optional)
+  - `temperatureC`: number (optional)
+  - `clothing`: string 0–40 (optional)
+- `meetings` (nullable):
+  - `status`: "mac-only" | "denied" | "failed" | "events"
+  - `events`: { title: string 0–120; start: string 0–40; allDay: boolean }[] (optional)

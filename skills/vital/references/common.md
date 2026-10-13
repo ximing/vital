@@ -129,6 +129,38 @@ export interface ErrorEnvelope {
 }
 ```
 
+```ts
+export interface TodayLayoutModule {
+  id: TodayModuleId;
+  /** The agent's own sentence. Only `note` keeps it. */
+  text?: string;
+}
+```
+
+```ts
+export interface TodayLayout {
+  modules: TodayLayoutModule[];
+  updatedAt: string;
+}
+```
+
+```ts
+export interface TodayLayoutFacts {
+  timezone: string;
+  localNow: string;
+  openTasks: { title: string; due: string | null; overdue: boolean }[];
+  upcoming: { title: string; when: string }[];
+  holidayName: string;
+  holidayDate: string;
+  weather: string;
+  meetings: string;
+  recommendations: string[];
+  quiet: boolean;
+  habits: string[];
+  memory: string[];
+}
+```
+
 ## Endpoints
 
 #### `GET /api/health`
