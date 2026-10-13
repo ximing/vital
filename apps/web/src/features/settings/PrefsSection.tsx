@@ -6,7 +6,7 @@ import {
 } from '@vital/dto';
 import { useState, type FC } from 'react';
 import { t } from '@/copy';
-import { canOpenCalendarSettings, openCalendarSettings } from '@/features/today/briefing';
+import { canOpenCalendarSettings, openCalendarSettings } from '@/features/today';
 import { getVitalHost } from '@/host';
 import { Banner } from '@/ui/banner';
 import { Field } from '@/ui/field';
