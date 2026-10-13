@@ -38,6 +38,7 @@ import {
 } from './prompts.js';
 import { loadAgentMemory, runProposalPass, runWithCritic } from './harness.js';
 import { enqueueOutcomeRefresh, UnknownAgentJobTypeError } from './jobs.js';
+import { processTodayLayout } from './today-layout.js';
 import { getRetrievalClients } from '../retrieval/registry.js';
 import {
   groupTasksBySimilarity,
@@ -1006,6 +1007,8 @@ async function processAgentJobInner(job: AgentJobRow, now: Date): Promise<AgentJ
       return processMemoryDistill(job, user, now);
     case 'index.sync':
       return processIndexSync(job, user, now);
+    case 'today.layout':
+      return processTodayLayout(user, now);
     case 'notify.scan': {
       const inserted = await enqueueProactiveInsights(user, now, async (item) => {
         const memory = await loadAgentMemory(user.id, 'notify', item.message);

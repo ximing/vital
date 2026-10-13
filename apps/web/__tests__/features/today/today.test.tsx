@@ -49,6 +49,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       reorderTasks: vi.fn(),
       createTag: vi.fn(),
       updateOnboarding: vi.fn(),
+      putTodayLayoutContext: vi.fn(() => Promise.resolve({ ok: true as const })),
     },
   };
 });
@@ -169,6 +170,7 @@ function makeDashboard(over: Partial<TodayDashboard> = {}): TodayDashboard {
       recommendations: [],
       reason: '今天没有待办，留一点时间给自己。',
     },
+    layout: null,
     generatedAt: '2026-09-09T00:00:00.000Z',
     ...over,
   };
@@ -807,5 +809,164 @@ describe('now card', () => {
     ).toBeInTheDocument();
     expect(within(card).getByText(t.today.now.next.replace('{m}', '120'))).toBeInTheDocument();
     expect(within(card).queryAllByRole('button', { name: /任务/ })).toEqual([]);
+  });
+});
+
+describe('today briefing', () => {
+  beforeEach(() => {
+    resetTodosUi();
+    setAuthForTest(mockUser);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T04:00:00.000Z'));
+    localStorage.clear();
+    delete window.__VITAL_HOST__;
+    vi.mocked(client.getToday).mockResolvedValue(makeDashboard());
+    vi.mocked(client.listHabits).mockResolvedValue([]);
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
+    vi.mocked(client.listOutcomes).mockResolvedValue([]);
+    vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });
+    vi.mocked(client.listTags).mockResolvedValue({ items: [] });
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.updateOnboarding).mockResolvedValue({
+      ...mockUser,
+      onboarding: { createdTask: true },
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    delete window.__VITAL_HOST__;
+    vi.clearAllMocks();
+    resetTodosUi();
+  });
+
+  it('leads with today work, weather, clothing, upcoming, the next holiday, and a Mac meeting', async () => {
+    const work = makeOutcome({ id: 'o-work', name: '换工作' });
+    const todayTask = makeTask({
+      id: 'task-today',
+      title: '完成项目整理',
+      dueAt: '2026-10-13T00:00:00+08:00',
+    });
+    const tomorrow = makeTask({
+      id: 'task-tomorrow',
+      title: '明天交报告',
+      dueAt: '2026-10-14T00:00:00+08:00',
+    });
+    vi.mocked(client.getToday).mockResolvedValue(
+      makeDashboard({ outcomes: [work], tasks: [todayTask] }),
+    );
+    vi.mocked(client.listTasks).mockImplementation(async (query) => {
+      if (query.listId === 'smart:upcoming') return { items: [todayTask, tomorrow], nextCursor: null };
+      return { items: [todayTask], nextCursor: null };
+    });
+    localStorage.setItem(
+      'vital.today.place',
+      JSON.stringify({ name: '上海', latitude: 31.23, longitude: 121.47 }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('api.open-meteo.com/v1/forecast')) {
+          return new Response(
+            JSON.stringify({ current: { temperature_2m: 33, weather_code: 0 } }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        }
+        return new Response('{}', { status: 404 });
+      }),
+    );
+    window.__VITAL_HOST__ = {
+      kind: 'desktop',
+      applyChrome() {},
+      showStickyAlert() {},
+      listenStickyAlerts: async () => () => {},
+      closeStickyAlert() {},
+      openInMain() {},
+      hideMain() {},
+      readTodayCalendar: async () => ({
+        status: 'ok',
+        events: [{ title: '周会', start: '2026-10-13T01:30:00.000Z', allDay: false }],
+      }),
+    };
+
+    renderToday();
+
+    expect(await screen.findByText('上海 · 晴 33°C')).toBeInTheDocument();
+    expect(screen.getByText(t.today.briefing.clothing.hotDry)).toBeInTheDocument();
+    expect(screen.getByText(/明天交报告/)).toBeInTheDocument();
+    expect(screen.getByText(/元旦/)).toBeInTheDocument();
+    expect(screen.getByText(/2027年1月1日/)).toBeInTheDocument();
+    expect(screen.getByText(/周会/)).toBeInTheDocument();
+    expect(screen.getByText(/09:30/)).toBeInTheDocument();
+
+    const tasksRegion = document.querySelector('[data-region="today-tasks"]');
+    const board = document.querySelector('[data-region="outcome-board"]');
+    expect(tasksRegion).not.toBeNull();
+    expect(board).not.toBeNull();
+    expect(
+      (tasksRegion as Node).compareDocumentPosition(board as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(tasksRegion as HTMLElement).getByText('完成项目整理')).toBeInTheDocument();
+    expect(document.querySelector('[data-region="now-card"]')?.innerHTML ?? '').not.toContain('text-[34px]');
+    expect(screen.getByText('今天要做：完成项目整理')).toBeInTheDocument();
+  });
+
+  it('shows an empty-today line and a weather-unavailable line without a clock', async () => {
+    Object.defineProperty(window.navigator, 'geolocation', {
+      configurable: true,
+      value: undefined,
+    });
+    renderToday();
+
+    expect(await screen.findByText(t.today.briefing.empty)).toBeInTheDocument();
+    expect(await screen.findByText(t.today.briefing.weatherUnavailable)).toBeInTheDocument();
+    expect(screen.getByLabelText(t.today.briefing.setPlace)).toBeInTheDocument();
+    expect(screen.getByText(t.today.briefing.meetingsMacOnly)).toBeInTheDocument();
+    expect(screen.getByText(/元旦|春节|清明节|劳动节|端午节|中秋节|国庆节/)).toBeInTheDocument();
+    expect(document.querySelector('[data-region="now-card"]')?.innerHTML ?? '').not.toContain('text-[34px]');
+    expect(document.querySelectorAll('[data-region="today-module"]').length).toBeGreaterThan(1);
+    const tasksRegion = document.querySelector('[data-region="today-tasks"]');
+    const board = document.querySelector('[data-region="empty-outcomes"], [data-region="outcome-board"]');
+    expect(tasksRegion).not.toBeNull();
+    expect(board).not.toBeNull();
+    expect(
+      (tasksRegion as Node).compareDocumentPosition(board as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('shows the modules an agent layout names, in that order, and hides the rest', async () => {
+    vi.mocked(client.getToday).mockResolvedValue(
+      makeDashboard({
+        layout: {
+          modules: [
+            { id: 'holiday' },
+            { id: 'lead' },
+            { id: 'note', text: '先把逾期的三件收掉' },
+          ],
+          updatedAt: '2026-10-13T00:00:00.000Z',
+        },
+      }),
+    );
+    renderToday();
+
+    expect(await screen.findByText('先把逾期的三件收掉')).toBeInTheDocument();
+    const order = [...document.querySelectorAll('[data-module]')].map((node) =>
+      node.getAttribute('data-module'),
+    );
+    expect(order).toEqual(['holiday', 'lead', 'note']);
+    expect(document.querySelector('[data-module="weather"]')).toBeNull();
+    expect(document.querySelector('[data-module="focus"]')).toBeNull();
+    const holiday = document.querySelector('[data-module="holiday"]');
+    const lead = document.querySelector('[data-module="lead"]');
+    expect(holiday).not.toBeNull();
+    expect(lead).not.toBeNull();
+    expect(
+      (holiday as Node).compareDocumentPosition(lead as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

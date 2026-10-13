@@ -46,6 +46,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       createTag: vi.fn(),
       listOutcomes: vi.fn(),
       getToday: vi.fn(),
+      putTodayLayoutContext: vi.fn(() => Promise.resolve({ ok: true as const })),
       listHabits: vi.fn(),
       listAgentActions: vi.fn(),
       listAgentExecutions: vi.fn(),
@@ -189,6 +190,7 @@ describe('todos workspace', () => {
         recommendations: [],
         reason: '今天没有待办，留一点时间给自己。',
       },
+      layout: null,
       generatedAt: '2026-09-06T00:00:00.000Z',
     });
     vi.mocked(client.listHabits).mockResolvedValue([]);

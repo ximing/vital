@@ -12,6 +12,7 @@
     "allow-open-external",
     "allow-hide-main",
     "allow-set-badge",
+    "allow-read-today-calendar",
     "notification:default"
   ]
 }

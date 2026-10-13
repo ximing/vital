@@ -177,6 +177,35 @@ export async function enqueueTaskDraft(
   });
 }
 
+const TODAY_LAYOUT_DELAY_MS = 15_000;
+
+/** Task completion re-arms one layout job. The periodic slot uses enqueue once. */
+export async function enqueueTodayLayout(
+  db: AgentDb,
+  userId: string,
+  now: Date,
+  reason: 'complete' | 'schedule',
+  slot = '',
+): Promise<void> {
+  if (reason === 'schedule') {
+    await enqueueAgentJobOnce(db, {
+      userId,
+      jobType: 'today.layout',
+      payload: { date: slot, trigger: 'schedule' },
+      dedupKey: `today.layout:${userId}:${slot}`,
+      scheduledAt: now,
+    });
+    return;
+  }
+  await enqueueAgentJob(db, {
+    userId,
+    jobType: 'today.layout',
+    payload: { date: now.toISOString().slice(0, 10), trigger: 'task.complete' },
+    dedupKey: `today.layout:complete:${userId}`,
+    scheduledAt: new Date(now.getTime() + TODAY_LAYOUT_DELAY_MS),
+  });
+}
+
 /** Manual trigger: write the daily report notes from today's facts. */
 export async function enqueueReportGenerate(
   db: AgentDb,

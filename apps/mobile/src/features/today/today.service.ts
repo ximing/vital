@@ -26,6 +26,7 @@ const EXEC_POLL_MS = 15_000;
 
 export class TodayService extends Service {
   dashboard: TodayDashboard | null = null;
+  upcomingTasks: Task[] = [];
   habits: Habit[] = [];
   lists: List[] = [];
   tags: Tag[] = [];
@@ -144,14 +145,16 @@ export class TodayService extends Service {
       if (refresh) this.refreshing = true;
       else if (!this.hasData) this.loading = true;
       try {
-        const [nextDashboard, nextHabits, listRes, tagRes, actions] = await Promise.all([
+        const [nextDashboard, nextHabits, listRes, tagRes, actions, upcoming] = await Promise.all([
           client.getToday(),
           client.listHabits(),
           client.listLists(),
           client.listTags(),
           client.listAgentActions({ days: 7 }),
+          client.listTasks({ listId: 'smart:upcoming', limit: 100 }).catch(() => null),
         ]);
         this.dashboard = nextDashboard;
+        if (upcoming) this.upcomingTasks = upcoming.items;
         this.habits = nextHabits;
         this.lists = listRes.items;
         this.tags = tagRes.items;

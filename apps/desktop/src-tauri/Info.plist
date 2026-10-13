@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSCalendarsUsageDescription</key>
+  <string>Vital 读取今天的日历日程，显示在今天页。不会修改日历。</string>
+  <key>NSCalendarsFullAccessUsageDescription</key>
+  <string>Vital 读取今天的日历日程，显示在今天页。不会修改日历。</string>
+</dict>
+</plist>

@@ -25,6 +25,7 @@ import {
   useTodoActions,
   useTodosKeyboard,
 } from '@/features/todos';
+import { buildTodayBriefing, usePublishTodayContext, useTodayMeetings, useTodayWeather } from './briefing';
 import { OutcomeBoard } from './OutcomeBoard';
 import { NowCard } from './NowCard';
 import { PulseStrip } from './PulseStrip';
@@ -35,6 +36,7 @@ import { TodayPageService } from './today-page.service';
 import { useHabitsQuery, usePendingDecomposeQuery, useTodayQuery } from './queries';
 
 const TODAY_LIST_ID = 'smart:today';
+const UPCOMING_LIST_ID = 'smart:upcoming';
 const DETAIL_COL =
   'flex h-full min-h-0 w-[clamp(24rem,40%,40rem)] shrink-0 border-l border-border/60';
 
@@ -68,7 +70,10 @@ function TodayWorkspaceContent() {
   const listsQuery = useListsQuery();
   const tagsQuery = useTagsQuery();
   const tasksQuery = useTasksQuery(TODAY_LIST_ID);
+  const upcomingQuery = useTasksQuery(UPCOMING_LIST_ID);
   const actions = useTodoActions();
+  const weather = useTodayWeather();
+  const meetings = useTodayMeetings(timeZone);
 
   const selectedId = todos.selectedId;
   const detailOpen = todos.detailOpen;
@@ -156,6 +161,15 @@ function TodayWorkspaceContent() {
     weekday: 'short',
     timeZone,
   }).format(new Date());
+  const briefing = buildTodayBriefing({
+    tasks,
+    upcomingTasks: upcomingQuery.data ?? [],
+    timeZone,
+    weather,
+    meetings,
+    layout: dashboard?.layout ?? null,
+  });
+  usePublishTodayContext(briefing.weather, briefing.meetings);
 
   return (
     <div className="flex h-full min-h-0 bg-canvas">
@@ -178,7 +192,7 @@ function TodayWorkspaceContent() {
           </header>
 
           {dashboard ? (
-            <NowCard now={dashboard.now} outcomes={outcomes} timeZone={timeZone} />
+            <NowCard now={dashboard.now} outcomes={outcomes} timeZone={timeZone} briefing={briefing} />
           ) : null}
           {!agentReady ? <LlmSetupBanner /> : null}
 
@@ -197,9 +211,7 @@ function TodayWorkspaceContent() {
             </div>
           ) : (
             <>
-              <OutcomeBoard outcomes={outcomes} now={now} />
-
-              <section aria-label={t.today.tasksSection}>
+              <section aria-label={t.today.tasksSection} data-region="today-tasks">
                 <TodaySectionHead title={t.today.tasksSection} count={openCount} />
 
                 {overdueTasks.length > 0 ? (
@@ -247,6 +259,8 @@ function TodayWorkspaceContent() {
                   />
                 </div>
               </section>
+
+              <OutcomeBoard outcomes={outcomes} now={now} />
 
               <AgentProposalsCard />
             </>

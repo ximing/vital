@@ -14,7 +14,7 @@ import {
   users,
 } from '../db/schema.js';
 import { spawnDailyHabits } from '../habits/habits.service.js';
-import { enqueueAgentJobOnce } from './jobs.js';
+import { enqueueAgentJobOnce, enqueueTodayLayout } from './jobs.js';
 import { dispatchAgentSchedule, markAgentSchedule, scheduleDeadline } from './scheduling.js';
 import { lockAgentUser } from './user-lock.js';
 
@@ -249,6 +249,14 @@ export async function runAgentScheduler(now = new Date()): Promise<number> {
           dedupKey: `index.sync:${userId}:${day}`,
           scheduledAt: now,
         });
+        const layoutHour = Math.floor(zoned.hour / 3) * 3;
+        await enqueueTodayLayout(
+          db,
+          userId,
+          now,
+          'schedule',
+          `${zoned.toFormat('yyyyLLdd')}${String(layoutHour).padStart(2, '0')}`,
+        );
         await spawnDailyHabits(userId, user.timezone, now);
         scheduled += 1;
       }

@@ -351,6 +351,13 @@
       "when": 1790870400000,
       "tag": "0049_qr_login",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1790956800000,
+      "tag": "0050_today_layout",
+      "breakpoints": true
     }
   ]
 }

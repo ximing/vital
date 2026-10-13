@@ -4,6 +4,7 @@ import {
   listOutcomesQuerySchema,
   outcomeIdParamsSchema,
   patchOutcomeInputSchema,
+  todayLayoutContextSchema,
 } from '@vital/dto';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
@@ -11,6 +12,7 @@ import { limitLlm } from '../plugins/rate-limit.js';
 import { getUserEntity } from '../auth/auth.service.js';
 import { getDb } from '../db/index.js';
 import { enqueueOutcomeRefresh } from '../agent/jobs.js';
+import { saveTodayLayoutContext } from '../agent/today-layout.js';
 import { getOwnedOutcomeOr404 } from './shared.js';
 import {
   closeOutcome,
@@ -29,6 +31,13 @@ export function registerOutcomeRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const entity = await getUserEntity(user.id);
     return getTodayDashboard(user.id, entity.timezone);
+  });
+
+  app.put('/api/v1/today/layout-context', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    await saveTodayLayoutContext(user.id, todayLayoutContextSchema.parse(req.body));
+    return { ok: true as const };
   });
 
   app.get('/api/v1/outcomes', { preHandler: [requireAuth] }, async (req) => {

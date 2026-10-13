@@ -44,6 +44,7 @@ import {
   taskCompletions,
   tasks,
   taskTags,
+  todayLayouts,
   userLlmProviders,
   userLlmRoutes,
   userInwitConfig,
@@ -124,6 +125,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(userLlmRoutes);
     await db.delete(userLlmProviders);
     await db.delete(userInwitConfig);
+    await db.delete(todayLayouts);
     await db.delete(users);
   });
 }

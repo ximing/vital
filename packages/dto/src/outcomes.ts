@@ -5,6 +5,7 @@ import type { Habit } from './habits.js';
 import type { InboxSource, InboxStatus } from './inbox.js';
 import { uuidSchema } from './lists.js';
 import type { Task } from './tasks.js';
+import type { TodayLayout } from './today-layout.js';
 
 export const outcomeStatusSchema = z.enum(['open', 'closed']);
 export type OutcomeStatus = z.infer<typeof outcomeStatusSchema>;
@@ -98,6 +99,8 @@ export interface TodayDashboard {
   tasks: Task[];
   pulse: TodayPulse;
   now: TodayNow;
+  /** Agent composition. Null until a layout run has stored modules. */
+  layout: TodayLayout | null;
   generatedAt: string;
 }
 

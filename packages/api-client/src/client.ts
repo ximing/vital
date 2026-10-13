@@ -108,6 +108,7 @@ import type {
   TaskCounts,
   TaskDraftTrigger,
   TodayDashboard,
+  TodayLayoutContext,
   UncompleteTaskInput,
   UpdateMeInput,
   UpdateOnboardingInput,
@@ -182,6 +183,7 @@ export interface VitalClient {
   testLlmProvider(id: string, model: string): Promise<{ ok: true }>;
   putLlmRouting(input: PutLlmRoutingInput): Promise<LlmSettingsPublic>;
   getToday(): Promise<TodayDashboard>;
+  putTodayLayoutContext(input: TodayLayoutContext): Promise<{ ok: true }>;
   listOutcomes(status?: 'open' | 'closed'): Promise<Outcome[]>;
   getOutcomeDetail(id: string): Promise<OutcomeDetail>;
   createOutcome(input: CreateOutcomeInput): Promise<Outcome>;
@@ -457,6 +459,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
       }),
     putLlmRouting: (input) => http.request('/api/v1/llm/routing', { method: 'PUT', body: input }),
     getToday: () => http.request('/api/v1/today'),
+    putTodayLayoutContext: (input) =>
+      http.request('/api/v1/today/layout-context', { method: 'PUT', body: input }),
     listOutcomes: (status) => http.request(`/api/v1/outcomes${status ? `?status=${status}` : ''}`),
     getOutcomeDetail: (id) => http.request(`/api/v1/outcomes/${id}/detail`),
     createOutcome: (input) => http.request('/api/v1/outcomes', { method: 'POST', body: input }),

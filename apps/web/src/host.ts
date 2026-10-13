@@ -5,6 +5,17 @@ export type StickyAlertInput = {
   url: string;
 };
 
+export type TodayCalendarEvent = {
+  title: string;
+  start: string;
+  allDay: boolean;
+};
+
+export type TodayCalendarRead = {
+  status: 'ok' | 'denied' | 'unsupported' | 'failed';
+  events: TodayCalendarEvent[];
+};
+
 export type VitalHost = {
   kind: 'desktop';
   applyChrome(input: { scheme: 'light' | 'dark'; background: string }): void;
@@ -17,6 +28,8 @@ export type VitalHost = {
   hideMain(): void;
   /** Dock/taskbar badge. Missing on shells built before badge support. */
   setBadge?(count: number, overlayPngBase64?: string): void;
+  /** Read-only today events from the Mac calendars. Missing outside the desktop shell. */
+  readTodayCalendar?(): Promise<TodayCalendarRead>;
 };
 
 const HOST_METHODS = [

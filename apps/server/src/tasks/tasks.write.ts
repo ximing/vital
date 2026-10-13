@@ -18,6 +18,7 @@ import { recordTaskEdit } from '../agent/edit-events.service.js';
 import { executionResult, skipExecution, withExecution } from '../agent/executions.service.js';
 import {
   enqueueOutcomeRefresh,
+  enqueueTodayLayout,
   enqueueTaskDecompose,
   enqueueTaskDraft,
   hasPendingDecomposeAction,
@@ -745,6 +746,7 @@ export async function completeTask(
         tx,
       );
       if (task.outcomeId) await enqueueOutcomeRefresh(tx, userId, task.outcomeId, now);
+      await enqueueTodayLayout(tx, userId, now, 'complete');
       if (task.habitId) {
         const [habit] = await tx
           .select({ outcomeId: habits.outcomeId })

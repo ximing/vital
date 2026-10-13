@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-read-today-calendar"
+description = "Enables the read_today_calendar command without any pre-configured scope."
+commands.allow = ["read_today_calendar"]
+
+[[permission]]
+identifier = "deny-read-today-calendar"
+description = "Denies the read_today_calendar command without any pre-configured scope."
+commands.deny = ["read_today_calendar"]

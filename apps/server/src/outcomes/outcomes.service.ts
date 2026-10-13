@@ -13,6 +13,7 @@ import type {
   TodayPulse,
 } from '@vital/dto';
 import { recordOutcomeRename } from '../agent/edit-events.service.js';
+import { readTodayLayout } from '../agent/today-layout.js';
 import { getDb } from '../db/index.js';
 import {
   agentActions,
@@ -731,13 +732,14 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
   });
 
   await expireStaleHabitInstances(userId, timezone, now);
-  const [todayTasks, pulse, habitWindowRows] = await Promise.all([
+  const [todayTasks, pulse, habitWindowRows, layout] = await Promise.all([
     listTasks(userId, { listId: 'smart:today', limit: 100 }).then((r) => r.items),
     todayPulse(userId, timezone),
     getDb()
       .select({ start: habits.windowStart, end: habits.windowEnd })
       .from(habits)
       .where(and(eq(habits.userId, userId), eq(habits.active, true))),
+    readTodayLayout(userId),
   ]);
 
   // "当下" card: rule layer only for now; the agent layer may later rewrite the reason.
@@ -770,6 +772,7 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
     tasks: todayTasks,
     pulse,
     now: nowCard,
+    layout,
     generatedAt: now.toISOString(),
   };
 }

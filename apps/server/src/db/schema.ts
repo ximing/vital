@@ -23,3 +23,4 @@ export * from './schema/agent-chat.js';
 export * from './schema/agent-scheduling.js';
 export * from './schema/agent-memory-history.js';
 export * from './schema/agent-edit-events.js';
+export * from './schema/today-layouts.js';

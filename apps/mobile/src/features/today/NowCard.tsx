@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { NowRecommendation, Outcome, TodayNow } from '@vital/dto';
+import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import type { NowRecommendation, Outcome, TodayModuleId, TodayNow } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Button } from '../../components/Button';
 import { copy } from '../../lib/copy';
@@ -8,25 +8,32 @@ import { formatDay, formatHm, localDateStamp } from '../../lib/format';
 import { useTheme } from '../../theme/use-theme';
 import { rnShadow } from '../../ui/card';
 import { useOpenTask } from '../../components/TaskSheetHost';
+import type { TodayBriefingModel } from './briefing';
+import { groupTodayModuleRows } from './briefing-core';
+
+/** The web sidebar is gone here, so short modules pair once the screen can hold two cards. */
+const MODULE_PAIR_MIN_WIDTH = 360;
 
 /**
- * spec §f.3 NowCard：白卡 + 左 4px accent 竖条；「当下」eyebrow accent；时间 34/40 tabular-nums；
- * 副行 13 secondary；「建议开始」eyebrow + 右侧 ghost sm「换一个」；双推荐并排 mini 卡
- * （bgSurfaceMuted 底 radius 10 padding 12，标题 14/20 600 两行 + meta 12：估时 · 日期语义色）。
- * 点击 mini 卡打开全局任务浮层；「换一个」本地轮转（offset 步进，两条窗口滑动）。
+ * 今天简报：当天要做什么、天气穿衣、会议、最近安排和最近节假日。
+ * 「建议开始」仍在卡内；「换一个」本地轮转。
  */
 export function NowCard({
   now,
   outcomes,
   timeZone,
+  briefing,
 }: {
   now: TodayNow;
   outcomes: Outcome[];
   timeZone: string;
+  briefing: TodayBriefingModel;
 }) {
   const t = useTheme();
   const openTask = useOpenTask();
+  const { width } = useWindowDimensions();
   const styles = useMemo(() => createStyles(t), [t]);
+  const moduleRows = groupTodayModuleRows(briefing.modules, width >= MODULE_PAIR_MIN_WIDTH ? 2 : 1);
   const [offset, setOffset] = useState(0);
   const recs = now.recommendations;
   // 双推荐并排：从 offset 起取连续两条（本地轮转，数据层不动）。
@@ -36,12 +43,8 @@ export function NowCard({
     if (rec) shown.push(rec);
   }
 
-  const timeLabel = new Intl.DateTimeFormat('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone,
-  }).format(new Date());
+  const [placeDraft, setPlaceDraft] = useState('');
+  const [editingPlace, setEditingPlace] = useState(false);
 
   function outcomeName(id: string | null): string | null {
     if (id === null) return null;
@@ -82,46 +85,38 @@ export function NowCard({
       <View style={styles.accent} />
       <View style={styles.body}>
         <Text style={styles.eyebrow}>{copy.today.now.title}</Text>
-        <Text style={styles.time}>{timeLabel}</Text>
-        <Text style={styles.meta}>{metaLine}</Text>
-
-        <View style={styles.suggestHead}>
-          <Text style={[styles.eyebrow, styles.suggestTitle]}>{copy.today.now.suggestTitle}</Text>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={recs.length < 2}
-            onPress={() => setOffset((value) => value + 1)}
-          >
-            {copy.today.now.swap}
-          </Button>
+        <View style={styles.modules}>
+          {moduleRows.map((row) => (
+            <View key={row.map((module) => module.id).join('-')} style={styles.moduleRow}>
+              {row.map((module) => (
+                <View key={module.id} testID={`today-module-${module.id}`} style={styles.module}>
+                  <ModuleBlock
+                    moduleId={module.id}
+                    note={module.text}
+                    briefing={briefing}
+                    shown={shown}
+                    recs={recs.length}
+                    placeDraft={placeDraft}
+                    editingPlace={editingPlace}
+                    onEditPlace={() => setEditingPlace(true)}
+                    onPlaceDraft={setPlaceDraft}
+                    onSubmitPlace={() => {
+                      briefing.submitPlace(placeDraft);
+                      setEditingPlace(false);
+                    }}
+                    onSwap={() => setOffset((value) => value + 1)}
+                    dueLabel={dueLabel}
+                    estimateLabel={estimateLabel}
+                    outcomeName={outcomeName}
+                    onOpen={openTask}
+                    styles={styles}
+                  />
+                </View>
+              ))}
+            </View>
+          ))}
         </View>
-
-        {shown.length > 0 ? (
-          <View style={styles.reco}>
-            {shown.map((rec) => {
-              const due = dueLabel(rec);
-              const thread = outcomeName(rec.outcomeId);
-              return (
-                <Pressable
-                  key={rec.taskId}
-                  accessibilityRole="button"
-                  onPress={() => openTask(rec.taskId)}
-                  style={({ pressed }) => [styles.mini, pressed && styles.miniPressed]}
-                >
-                  <Text style={styles.miniTitle} numberOfLines={2}>
-                    {rec.title}
-                  </Text>
-                  <Text style={styles.miniMeta} numberOfLines={1}>
-                    {thread ? <Text style={styles.miniMetaPart}>{thread} · </Text> : null}
-                    <Text style={styles.miniMetaPart}>{estimateLabel(rec)}</Text>
-                    {due ? <Text style={{ color: due.color }}> · {due.text}</Text> : null}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
+        <Text style={styles.meta}>{metaLine}</Text>
       </View>
     </View>
   );
@@ -153,30 +148,56 @@ const createStyles = (t: Theme) =>
       letterSpacing: 1,
       color: t.accentPrimary,
     },
-    time: {
-      fontSize: 34,
-      lineHeight: 40,
-      fontWeight: '700',
+    modules: { gap: t.space[2], marginTop: t.space[2] },
+    moduleRow: { flexDirection: 'row', gap: t.space[2] },
+    module: {
+      flex: 1,
+      minWidth: 0,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: t.borderSubtle,
+      backgroundColor: t.bgCanvas,
+      paddingHorizontal: t.space[3],
+      paddingVertical: t.space[3],
+      gap: 4,
+    },
+    moduleEyebrow: {
+      fontSize: 11,
+      lineHeight: 14,
+      fontWeight: '600',
+      color: t.textTertiary,
+    },
+    moduleLead: {
+      fontSize: 17,
+      lineHeight: 24,
+      fontWeight: '600',
       color: t.fgPrimary,
-      fontVariant: ['tabular-nums'],
+    },
+    moduleHead: { flexDirection: 'row', alignItems: 'center', gap: t.space[2] },
+    fact: {
+      fontSize: t.type.meta.fontSize,
+      lineHeight: t.type.meta.lineHeight,
+      color: t.fgPrimary,
+    },
+    placeRow: { flexDirection: 'row', alignItems: 'center', gap: t.space[2], marginTop: t.space[1] },
+    placeInput: {
+      flex: 1,
+      minWidth: 0,
+      height: 36,
+      borderRadius: t.radius.md,
+      paddingHorizontal: t.space[3],
+      backgroundColor: t.bgSurfaceMuted,
+      color: t.fgPrimary,
+      fontSize: t.type.meta.fontSize,
     },
     meta: {
       fontSize: t.type.meta.fontSize,
       lineHeight: t.type.meta.lineHeight,
       color: t.textSecondary,
     },
-    suggestHead: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: t.space[2],
-      marginTop: t.space[3],
-      marginBottom: t.space[2],
-    },
     suggestTitle: { flex: 1, color: t.textTertiary },
-    reco: { flexDirection: 'row', gap: 10 },
+    reco: { gap: t.space[2], marginTop: t.space[2] },
     mini: {
-      flex: 1,
-      minWidth: 0,
       borderRadius: 10,
       backgroundColor: t.bgSurfaceMuted,
       padding: t.space[3],
@@ -196,3 +217,141 @@ const createStyles = (t: Theme) =>
     },
     miniMetaPart: { fontVariant: ['tabular-nums'] },
   });
+
+function moduleLabel(id: TodayModuleId): string {
+  if (id === 'focus') return copy.today.now.suggestTitle;
+  return copy.today.briefing.module[id];
+}
+
+function ModuleBlock({
+  moduleId,
+  note,
+  briefing,
+  shown,
+  recs,
+  placeDraft,
+  editingPlace,
+  onEditPlace,
+  onPlaceDraft,
+  onSubmitPlace,
+  onSwap,
+  dueLabel,
+  estimateLabel,
+  outcomeName,
+  onOpen,
+  styles,
+}: {
+  moduleId: TodayModuleId;
+  note?: string;
+  briefing: TodayBriefingModel;
+  shown: NowRecommendation[];
+  recs: number;
+  placeDraft: string;
+  editingPlace: boolean;
+  onEditPlace: () => void;
+  onPlaceDraft: (value: string) => void;
+  onSubmitPlace: () => void;
+  onSwap: () => void;
+  dueLabel: (item: NowRecommendation) => { text: string; color: string } | null;
+  estimateLabel: (item: NowRecommendation) => string;
+  outcomeName: (id: string | null) => string | null;
+  onOpen: (taskId: string) => void;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const weather = briefing.weather;
+  const showPlaceForm = weather.status !== 'ready' || editingPlace;
+  return (
+    <View>
+      <View style={styles.moduleHead}>
+        <Text style={[styles.moduleEyebrow, styles.suggestTitle]}>{moduleLabel(moduleId)}</Text>
+        {moduleId === 'focus' ? (
+          <Button variant="ghost" size="sm" disabled={recs < 2} onPress={onSwap}>
+            {copy.today.now.swap}
+          </Button>
+        ) : null}
+      </View>
+      {moduleId === 'note' ? <Text style={styles.fact}>{note}</Text> : null}
+      {moduleId === 'lead' ? <Text style={styles.moduleLead}>{briefing.lead}</Text> : null}
+      {moduleId === 'weather' ? (
+        <View>
+          {weather.status === 'loading' ? (
+            <Text style={styles.fact}>{copy.today.briefing.weatherLoading}</Text>
+          ) : null}
+          {weather.status === 'unavailable' ? (
+            <Text style={styles.fact}>{copy.today.briefing.weatherUnavailable}</Text>
+          ) : null}
+          {weather.status === 'ready' ? (
+            <Text style={styles.fact}>
+              {weather.place} · {weather.condition} {weather.temperatureC}°C
+            </Text>
+          ) : null}
+          {weather.status === 'ready' ? <Text style={styles.fact}>{weather.clothing}</Text> : null}
+          {weather.status === 'ready' && !showPlaceForm ? (
+            <Button size="sm" variant="ghost" onPress={onEditPlace}>
+              {copy.today.briefing.setPlace}
+            </Button>
+          ) : null}
+          {showPlaceForm ? (
+            <View style={styles.placeRow}>
+              <TextInput
+                value={placeDraft}
+                onChangeText={onPlaceDraft}
+                placeholder={copy.today.briefing.placePlaceholder}
+                style={styles.placeInput}
+                accessibilityLabel={copy.today.briefing.setPlace}
+                onSubmitEditing={onSubmitPlace}
+              />
+              <Button size="sm" variant="ghost" disabled={briefing.placeBusy} onPress={onSubmitPlace}>
+                {copy.today.briefing.setPlace}
+              </Button>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {moduleId === 'meetings' ? <Text style={styles.fact}>{briefing.meetingsMacOnly}</Text> : null}
+      {moduleId === 'upcoming' ? (
+        <View>
+          {briefing.upcoming.length === 0 ? (
+            <Text style={styles.fact}>{copy.today.briefing.upcomingEmpty}</Text>
+          ) : (
+            briefing.upcoming.map((item) => (
+              <Text key={item.id} style={styles.fact}>
+                {item.title} · {item.when}
+              </Text>
+            ))
+          )}
+        </View>
+      ) : null}
+      {moduleId === 'holiday' ? (
+        <Text style={styles.fact}>
+          {briefing.holidayName} · {briefing.holidayDate}
+        </Text>
+      ) : null}
+      {moduleId === 'focus' && shown.length > 0 ? (
+        <View style={styles.reco}>
+          {shown.map((rec) => {
+            const due = dueLabel(rec);
+            const thread = outcomeName(rec.outcomeId);
+            return (
+              <Pressable
+                key={rec.taskId}
+                accessibilityRole="button"
+                onPress={() => onOpen(rec.taskId)}
+                style={({ pressed }) => [styles.mini, pressed && styles.miniPressed]}
+              >
+                <Text style={styles.miniTitle} numberOfLines={2}>
+                  {rec.title}
+                </Text>
+                <Text style={styles.miniMeta} numberOfLines={1}>
+                  {thread ? <Text style={styles.miniMetaPart}>{thread} · </Text> : null}
+                  <Text style={styles.miniMetaPart}>{estimateLabel(rec)}</Text>
+                  {due ? <Text style={{ color: due.color }}> · {due.text}</Text> : null}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+    </View>
+  );
+}

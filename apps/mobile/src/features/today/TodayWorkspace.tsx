@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { llmReady } from '@vital/dto';
@@ -22,6 +22,7 @@ import { NowCard } from './NowCard';
 import { OutcomeBoard } from './OutcomeBoard';
 import { OverdueBanner } from './OverdueBanner';
 import { PulseStrip } from './PulseStrip';
+import { buildTodayBriefing, usePublishTodayContext, useTodayWeather } from './briefing';
 import { TodayTaskList } from './TodayTaskList';
 import { TodayService } from './today.service';
 
@@ -53,6 +54,16 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
     weekday: 'short',
     timeZone: tz,
   }).format(new Date());
+  const weather = useTodayWeather();
+  const briefing = buildTodayBriefing({
+    tasks,
+    upcomingTasks: s.upcomingTasks,
+    timeZone: tz,
+    weather,
+    layout: dashboard?.layout ?? null,
+  });
+  usePublishTodayContext(briefing.weather);
+  const regularTasks = tasks.filter((task) => task.deletedAt === null && task.habitId === null);
 
   if (s.loading && dashboard === null) {
     return (
@@ -105,7 +116,9 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
           trailing={<SearchIconButton />}
         />
         {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
-        {dashboard ? <NowCard now={dashboard.now} outcomes={outcomes} timeZone={tz} /> : null}
+        {dashboard ? (
+          <NowCard now={dashboard.now} outcomes={outcomes} timeZone={tz} briefing={briefing} />
+        ) : null}
         {!agentReady ? <LlmSetupBanner /> : null}
         {s.offline || s.error ? (
           <View style={styles.bannerBlock}>
@@ -129,9 +142,21 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
           onEnableHabit={(input) => s.enableHabit(input)}
         />
 
-        <AgentProposalsCard />
-
         <View style={styles.block}>
+          <SectionHead title={copy.today.tasksSection} count={openCount} />
+          {regularTasks.length > 0 ? (
+            <View style={[styles.taskCard, rnShadow(t)]}>
+              <TodayTaskList
+                tasks={tasks}
+                tags={s.tags}
+                lists={s.lists}
+                onComplete={(task) => void s.completeTask(task)}
+              />
+            </View>
+          ) : (
+            <Text style={styles.emptyLine}>{copy.today.briefing.empty}</Text>
+          )}
+
           <OutcomeBoard
             outcomes={outcomes}
             now={now}
@@ -141,19 +166,9 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
             onUndo={(id) => void s.undoOutcome(id)}
             onRetry={(id) => void s.refreshOutcome(id)}
           />
-
-          <SectionHead title={copy.today.tasksSection} count={openCount} />
-          {tasks.some((task) => task.deletedAt === null && task.habitId === null) ? (
-            <View style={[styles.taskCard, rnShadow(t)]}>
-              <TodayTaskList
-                tasks={tasks}
-                tags={s.tags}
-                lists={s.lists}
-                onComplete={(task) => void s.completeTask(task)}
-              />
-            </View>
-          ) : null}
         </View>
+
+        <AgentProposalsCard />
       </ScrollView>
       {inboxId ? (
         <NewTaskBar
@@ -203,4 +218,10 @@ const createStyles = (t: Theme) =>
       gap: t.space[2],
     },
     skeletonTaskCard: { padding: t.space[4] },
+    emptyLine: {
+      marginBottom: t.space[4],
+      fontSize: t.type.body.fontSize,
+      lineHeight: t.type.body.lineHeight,
+      color: t.textSecondary,
+    },
   });

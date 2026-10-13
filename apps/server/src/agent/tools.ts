@@ -35,6 +35,33 @@ export function submitHeadlineTool(capture: (args: SubmitHeadlineArgs) => void):
   };
 }
 
+export const submitTodayLayoutSchema = Type.Object({
+  modules: Type.Array(
+    Type.Object({
+      id: Type.String({ minLength: 1, maxLength: 20 }),
+      text: Type.Optional(Type.String({ maxLength: 80 })),
+    }),
+    { minItems: 1, maxItems: 7 },
+  ),
+});
+export type SubmitTodayLayoutArgs = Static<typeof submitTodayLayoutSchema>;
+
+export function submitTodayLayoutTool(
+  capture: (args: SubmitTodayLayoutArgs) => void,
+): AgentTool<typeof submitTodayLayoutSchema> {
+  return {
+    name: 'submit_today_layout',
+    label: '提交今天页排布',
+    description:
+      '提交今天页要展示的模块及顺序。note 的 text 是你自己的一句话。不要编造任务、天气或会议。',
+    parameters: submitTodayLayoutSchema,
+    execute: (_id, params) => {
+      capture(params);
+      return Promise.resolve({ content: [{ type: 'text', text: 'ok' }], details: null, terminate: true });
+    },
+  };
+}
+
 export const submitNotificationSchema = Type.Object({ message: Type.String({ minLength: 1, maxLength: 200 }) });
 export type SubmitNotificationArgs = Static<typeof submitNotificationSchema>;
 export function submitNotificationTool(capture: (args: SubmitNotificationArgs) => void): AgentTool<typeof submitNotificationSchema> {

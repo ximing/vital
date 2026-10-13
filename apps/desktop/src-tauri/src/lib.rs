@@ -95,6 +95,30 @@ try {
             var label = windowLabel();
             if (label && label !== "main") return;
             invoke("set_badge", { count: count, overlayPng: overlayPng });
+          },
+          readTodayCalendar: function () {
+            var internals = window.__TAURI_INTERNALS__;
+            if (!internals || typeof internals.invoke !== "function") {
+              return Promise.resolve({ status: "unsupported", events: [] });
+            }
+            return internals.invoke("read_today_calendar").then(
+              function (events) {
+                return { status: "ok", events: Array.isArray(events) ? events : [] };
+              },
+              function (error) {
+                var message = "";
+                if (typeof error === "string") message = error;
+                else if (error && typeof error.message === "string") message = error.message;
+                else message = String(error || "");
+                if (message.indexOf("calendar-permission-denied") >= 0) {
+                  return { status: "denied", events: [] };
+                }
+                if (message.indexOf("calendar-unsupported") >= 0) {
+                  return { status: "unsupported", events: [] };
+                }
+                return { status: "failed", events: [] };
+              }
+            );
           }
         };
       })()
@@ -149,6 +173,7 @@ pub fn run() {
             open_external,
             hide_main,
             set_badge,
+            read_today_calendar,
         ])
         .menu(build_menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -437,6 +462,84 @@ fn hide_main(window: tauri::WebviewWindow) -> Result<(), String> {
         return Err("hide_main is main-only".into());
     }
     window.hide().map_err(|err| err.to_string())
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CalendarEventDto {
+    title: String,
+    start: String,
+    all_day: bool,
+}
+
+#[cfg(target_os = "macos")]
+mod mac_calendar {
+    use std::ffi::CStr;
+    use std::os::raw::c_char;
+
+    extern "C" {
+        fn vital_calendar_today_json(error_out: *mut *mut c_char) -> *mut c_char;
+        fn vital_calendar_string_free(ptr: *mut c_char);
+    }
+
+    #[derive(serde::Deserialize)]
+    struct RawEvent {
+        title: String,
+        start: String,
+        #[serde(default)]
+        all_day: bool,
+        #[serde(default, rename = "allDay")]
+        all_day_camel: bool,
+    }
+
+    pub fn read() -> Result<Vec<super::CalendarEventDto>, String> {
+        unsafe {
+            let mut err: *mut c_char = std::ptr::null_mut();
+            let json = vital_calendar_today_json(&mut err);
+            if !err.is_null() {
+                let message = CStr::from_ptr(err).to_string_lossy().into_owned();
+                vital_calendar_string_free(err);
+                if !json.is_null() {
+                    vital_calendar_string_free(json);
+                }
+                return Err(message);
+            }
+            if json.is_null() {
+                return Err("calendar-failed".into());
+            }
+            let text = CStr::from_ptr(json).to_string_lossy().into_owned();
+            vital_calendar_string_free(json);
+            let raw: Vec<RawEvent> = serde_json::from_str(&text).map_err(|err| err.to_string())?;
+            Ok(raw
+                .into_iter()
+                .map(|item| super::CalendarEventDto {
+                    title: item.title,
+                    start: item.start,
+                    all_day: item.all_day || item.all_day_camel,
+                })
+                .collect())
+        }
+    }
+}
+
+fn read_today_calendar_blocking() -> Result<Vec<CalendarEventDto>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        return mac_calendar::read();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("calendar-unsupported".into())
+    }
+}
+
+// Async plus a blocking thread: EventKit's permission dialog needs the main
+// run loop, and waiting on it from a sync command freezes that loop.
+#[tauri::command]
+async fn read_today_calendar() -> Result<Vec<CalendarEventDto>, String> {
+    tauri::async_runtime::spawn_blocking(read_today_calendar_blocking)
+        .await
+        .map_err(|err| err.to_string())?
 }
 
 #[tauri::command]

@@ -132,6 +132,7 @@ describe('Tauri desktop contract', () => {
         'allow-hide-main',
         'allow-open-in-main',
         'allow-open-external',
+        'allow-read-today-calendar',
         'allow-set-badge',
         'allow-show-sticky-alert',
         'notification:default',
@@ -182,6 +183,21 @@ describe('Tauri desktop contract', () => {
 
   it('ad-hoc signs macOS bundles so Apple Silicon is not marked damaged', () => {
     assert.equal(conf.bundle.macOS.signingIdentity, '-');
+  });
+
+  it('reads Mac calendars for today and declares the Calendar usage description', () => {
+    assert.match(lib, /fn read_today_calendar/);
+    assert.match(lib, /readTodayCalendar/);
+    assert.match(lib, /read_today_calendar/);
+    assert.match(build, /read_today_calendar/);
+    assert.match(read('src-tauri/permissions/read_today_calendar.toml'), /allow-read-today-calendar/);
+    assert.match(read('src-tauri/permissions/read_today_calendar.toml'), /read_today_calendar/);
+    assert.ok(caps.permissions.includes('allow-read-today-calendar'));
+    const plist = read('src-tauri/Info.plist');
+    assert.match(plist, /NSCalendarsUsageDescription/);
+    assert.match(conf.bundle.macOS.infoPlist, /Info\.plist/);
+    const host = readFileSync(path.resolve(root, '../web/src/host.ts'), 'utf8');
+    assert.match(host, /readTodayCalendar/);
   });
 
   it('bundles PR1 raster icons', () => {
