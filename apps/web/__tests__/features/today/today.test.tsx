@@ -914,6 +914,30 @@ describe('today briefing', () => {
     expect(within(tasksRegion as HTMLElement).getByText('完成项目整理')).toBeInTheDocument();
     expect(document.querySelector('[data-region="now-card"]')?.innerHTML ?? '').not.toContain('text-[34px]');
     expect(screen.getByText('今天要做：完成项目整理')).toBeInTheDocument();
+    expect(screen.getByText('日程')).toBeInTheDocument();
+  });
+
+  it('asks for calendar permission and opens the system pane when access is denied', async () => {
+    const user = userEvent.setup();
+    const openCalendarSettings = vi.fn(async () => undefined);
+    window.__VITAL_HOST__ = {
+      kind: 'desktop',
+      applyChrome() {},
+      showStickyAlert() {},
+      listenStickyAlerts: async () => () => {},
+      closeStickyAlert() {},
+      openInMain() {},
+      hideMain() {},
+      readTodayCalendar: async () => ({ status: 'denied', events: [] }),
+      openCalendarSettings,
+    };
+
+    renderToday();
+
+    expect(await screen.findByText(t.today.briefing.meetingsDenied)).toBeInTheDocument();
+    expect(screen.getByText(t.today.briefing.meetingsDeniedHint)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: t.today.briefing.meetingsOpenSettings }));
+    expect(openCalendarSettings).toHaveBeenCalledOnce();
   });
 
   it('shows an empty-today line and a weather-unavailable line without a clock', async () => {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { llmReady } from '@vital/dto';
+import { llmReady, todayModulesOrFallback } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Banner } from '../../components/Banner';
 import { PageHeader } from '../../components/PageHeader';
@@ -22,7 +22,7 @@ import { NowCard } from './NowCard';
 import { OutcomeBoard } from './OutcomeBoard';
 import { OverdueBanner } from './OverdueBanner';
 import { PulseStrip } from './PulseStrip';
-import { buildTodayBriefing, usePublishTodayContext, useTodayWeather } from './briefing';
+import { buildTodayBriefing, usePublishTodayContext, useTodayMeetings, useTodayWeather } from './briefing';
 import { TodayTaskList } from './TodayTaskList';
 import { TodayService } from './today.service';
 
@@ -55,14 +55,17 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
     timeZone: tz,
   }).format(new Date());
   const weather = useTodayWeather();
+  const showMeetings = todayModulesOrFallback(dashboard?.layout ?? null).some((module) => module.id === 'meetings');
+  const meetings = useTodayMeetings(tz, showMeetings && !(s.loading && dashboard === null));
   const briefing = buildTodayBriefing({
     tasks,
     upcomingTasks: s.upcomingTasks,
     timeZone: tz,
     weather,
+    meetings,
     layout: dashboard?.layout ?? null,
   });
-  usePublishTodayContext(briefing.weather);
+  usePublishTodayContext(briefing.weather, briefing.meetings);
   const regularTasks = tasks.filter((task) => task.deletedAt === null && task.habitId === null);
 
   if (s.loading && dashboard === null) {

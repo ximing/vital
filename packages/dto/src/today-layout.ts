@@ -102,7 +102,7 @@ export function describeTodayLayoutFacts(facts: TodayLayoutFacts): string {
     `今天之后七天内：${upcoming}`,
     `最近节假日：${facts.holidayName} ${facts.holidayDate}`,
     `天气：${facts.weather}`,
-    `会议：${facts.meetings}`,
+    `日程：${facts.meetings}`,
     `习惯：${habits}`,
     `建议开始的候选：${picks}`,
     `长期偏好：${memory}`,

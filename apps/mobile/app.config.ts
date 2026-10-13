@@ -86,6 +86,8 @@ const config: ExpoConfig = {
     package: 'plus.aimo.vital',
     versionCode,
     permissions: ['android.permission.REQUEST_INSTALL_PACKAGES'],
+    // expo-calendar also merges WRITE_CALENDAR. The app only reads.
+    blockedPermissions: ['android.permission.WRITE_CALENDAR'],
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#FFFFFF',
@@ -106,6 +108,13 @@ const config: ExpoConfig = {
         cameraPermission: '允许 Vital 扫描网页登录二维码。',
         microphonePermission: false,
         recordAudioAndroid: false,
+      },
+    ],
+    [
+      'expo-calendar',
+      {
+        calendarPermission: 'Vital 读取今天的日历日程，用来显示在今天页，不会修改日历。',
+        remindersPermission: false,
       },
     ],
     'expo-notifications',

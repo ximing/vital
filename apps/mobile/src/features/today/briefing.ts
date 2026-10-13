@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import {
   localTodayYmd,
@@ -11,6 +13,7 @@ import {
   todayModulesOrFallback,
   ymdInTimeZone,
   type BriefingTask,
+  type NormalizedCalendarEvent,
   type TodayLayout,
   type ClothingBand,
   type GeoPlace,
@@ -20,6 +23,7 @@ import {
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { clothingSuggestion, nearestStatutoryHoliday, upcomingExcludingToday } from './briefing-core';
+import { readPhoneCalendar, type PhoneCalendarRead } from './phone-calendar';
 
 export {
   clothingSuggestion,
@@ -58,7 +62,7 @@ export type TodayBriefingModel = {
   upcoming: { id: string; title: string; when: string }[];
   holidayName: string;
   holidayDate: string;
-  meetingsMacOnly: string;
+  meetings: { status: 'loading' } | PhoneCalendarRead;
   modules: ReturnType<typeof todayModulesOrFallback>;
 };
 
@@ -213,6 +217,39 @@ export function useTodayWeather(): {
   return { status, place, sample, busy, submitPlace };
 }
 
+export function useTodayMeetings(timeZone: string, ask: boolean): TodayBriefingModel['meetings'] {
+  const [meetings, setMeetings] = useState<TodayBriefingModel['meetings']>({ status: 'loading' });
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      let inflight = false;
+      let pending = false;
+      const load = () => {
+        if (inflight) {
+          pending = true;
+          return;
+        }
+        inflight = true;
+        pending = false;
+        void readPhoneCalendar(timeZone, ask).then((next) => {
+          inflight = false;
+          if (!cancelled) setMeetings(next);
+          if (pending && !cancelled) load();
+        });
+      };
+      load();
+      const subscription = AppState.addEventListener('change', (next) => {
+        if (next === 'active') load();
+      });
+      return () => {
+        cancelled = true;
+        subscription.remove();
+      };
+    }, [ask, timeZone]),
+  );
+  return meetings;
+}
+
 export function buildTodayBriefing(input: {
   tasks: readonly BriefingTask[];
   upcomingTasks: readonly BriefingTask[];
@@ -225,6 +262,7 @@ export function buildTodayBriefing(input: {
     busy: boolean;
     submitPlace: (name: string) => void;
   };
+  meetings: TodayBriefingModel['meetings'];
   layout?: TodayLayout | null;
 }): TodayBriefingModel {
   const today = localTodayYmd(input.timeZone, input.now ?? new Date());
@@ -256,13 +294,16 @@ export function buildTodayBriefing(input: {
     upcoming,
     holidayName: holiday.name,
     holidayDate: chineseYmd(holiday.date),
-    meetingsMacOnly: copy.today.briefing.meetingsMacOnly,
+    meetings: input.meetings,
     modules: todayModulesOrFallback(input.layout),
   };
 }
 
-export function usePublishTodayContext(weather: TodayBriefingModel['weather']): void {
-  const key = JSON.stringify(mobileContextBody(weather));
+export function usePublishTodayContext(
+  weather: TodayBriefingModel['weather'],
+  meetings: TodayBriefingModel['meetings'],
+): void {
+  const key = JSON.stringify(mobileContextBody(weather, meetings));
   useEffect(() => {
     if (key === 'null') return;
     void client
@@ -273,8 +314,9 @@ export function usePublishTodayContext(weather: TodayBriefingModel['weather']): 
 
 function mobileContextBody(
   weather: TodayBriefingModel['weather'],
+  meetings: TodayBriefingModel['meetings'],
 ): Parameters<typeof client.putTodayLayoutContext>[0] | null {
-  if (weather.status === 'loading') return null;
+  if (weather.status === 'loading' || meetings.status === 'loading') return null;
   return {
     weather:
       weather.status === 'ready'
@@ -286,6 +328,21 @@ function mobileContextBody(
             clothing: weather.clothing,
           }
         : { status: 'unavailable' },
-    meetings: { status: 'mac-only' },
+    meetings: publishedMeetings(meetings),
+  };
+}
+
+function publishedMeetings(
+  meetings: Exclude<TodayBriefingModel['meetings'], { status: 'loading' }>,
+): Parameters<typeof client.putTodayLayoutContext>[0]['meetings'] {
+  if (meetings.status === 'skipped') return null;
+  if (meetings.status !== 'events') return { status: meetings.status };
+  return {
+    status: 'events',
+    events: meetings.events.slice(0, 20).map((event: NormalizedCalendarEvent) => ({
+      title: event.title.slice(0, 120),
+      start: event.start.slice(0, 40),
+      allDay: event.allDay,
+    })),
   };
 }

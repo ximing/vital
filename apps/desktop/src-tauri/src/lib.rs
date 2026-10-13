@@ -119,6 +119,15 @@ try {
                 return { status: "failed", events: [] };
               }
             );
+          },
+          openCalendarSettings: function () {
+            var label = windowLabel();
+            if (label && label !== "main") return Promise.resolve();
+            var internals = window.__TAURI_INTERNALS__;
+            if (!internals || typeof internals.invoke !== "function") {
+              return Promise.resolve();
+            }
+            return internals.invoke("open_calendar_settings");
           }
         };
       })()
@@ -174,6 +183,7 @@ pub fn run() {
             hide_main,
             set_badge,
             read_today_calendar,
+            open_calendar_settings,
         ])
         .menu(build_menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -644,6 +654,45 @@ fn external_link_url(input: &str) -> Option<String> {
             Some(url.to_string())
         }
         _ => None,
+    }
+}
+
+/// System Settings → Privacy & Security → Calendars. The page cannot pass a URL.
+fn calendar_privacy_url(major: u32) -> &'static str {
+    if major >= 13 {
+        "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Calendars"
+    } else {
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars"
+    }
+}
+
+fn macos_product_major() -> u32 {
+    let Ok(output) = std::process::Command::new("sw_vers")
+        .arg("-productVersion")
+        .output()
+    else {
+        return 13;
+    };
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.trim()
+        .split('.')
+        .next()
+        .and_then(|part| part.parse().ok())
+        .unwrap_or(13)
+}
+
+#[tauri::command]
+fn open_calendar_settings(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != MAIN_LABEL {
+        return Err("open_calendar_settings is main-only".into());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return spawn_external(calendar_privacy_url(macos_product_major()));
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("calendar-unsupported".into())
     }
 }
 
@@ -1120,6 +1169,14 @@ mod tests {
         assert_eq!(command.get_program(), "open");
         let args: Vec<_> = command.get_args().collect();
         assert_eq!(args, [std::ffi::OsStr::new(url)]);
+    }
+
+    #[test]
+    fn calendar_settings_url_is_the_privacy_pane() {
+        assert!(calendar_privacy_url(14).contains("Privacy_Calendars"));
+        assert!(calendar_privacy_url(14).contains("PrivacySecurity"));
+        assert!(calendar_privacy_url(12).contains("preference.security"));
+        assert!(!calendar_privacy_url(11).contains("http"));
     }
 
     #[test]

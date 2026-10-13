@@ -5,7 +5,10 @@ import {
   nearestStatutoryHoliday,
   normalizeCalendarEvent,
   normalizeTodayLayout,
+  calendarQueryWindow,
+  eventOverlapsDay,
   groupTodayModuleRows,
+  localDayBounds,
   todayModulesOrFallback,
   upcomingExcludingToday,
 } from '../../../src/features/today/briefing-core';
@@ -53,6 +56,26 @@ describe('today briefing helpers', () => {
     ]);
   });
 
+  it('bounds the account-local day, including Shanghai and a daylight-saving change', () => {
+    const shanghai = localDayBounds(TZ, new Date('2026-10-13T04:00:00.000Z'));
+    expect(shanghai.start.toISOString()).toBe('2026-10-12T16:00:00.000Z');
+    expect(shanghai.end.toISOString()).toBe('2026-10-13T16:00:00.000Z');
+    const query = calendarQueryWindow(shanghai);
+    expect(query.start.toISOString()).toBe('2026-09-12T16:00:00.000Z');
+    expect(query.end.toISOString()).toBe('2026-10-14T16:00:00.000Z');
+    const fallBack = localDayBounds('America/New_York', new Date('2026-11-01T12:00:00.000Z'));
+    expect(fallBack.start.toISOString()).toBe('2026-11-01T04:00:00.000Z');
+    expect(fallBack.end.toISOString()).toBe('2026-11-02T05:00:00.000Z');
+  });
+
+  it('keeps an event that overlaps local today and drops one that starts at the next midnight', () => {
+    const start = new Date('2026-10-12T16:00:00.000Z');
+    const end = new Date('2026-10-13T16:00:00.000Z');
+    expect(eventOverlapsDay('2026-10-13T14:00:00.000Z', '2026-10-13T16:30:00.000Z', start, end)).toBe(true);
+    expect(eventOverlapsDay('2026-10-12T02:00:00.000Z', '2026-10-13T02:00:00.000Z', start, end)).toBe(true);
+    expect(eventOverlapsDay('2026-10-13T16:00:00.000Z', '2026-10-13T17:00:00.000Z', start, end)).toBe(false);
+  });
+
   it('keeps title, local start, and all-day from a calendar payload', () => {
     expect(
       normalizeCalendarEvent(
@@ -94,7 +117,7 @@ describe('today briefing helpers', () => {
       holidayName: '元旦',
       holidayDate: '2027-01-01',
       weather: '上海 晴 33°C 短袖即可，注意防晒',
-      meetings: '今天没有会议',
+      meetings: '今天没有日程',
       recommendations: [],
       quiet: false,
       habits: [],
@@ -104,6 +127,7 @@ describe('today briefing helpers', () => {
     expect(text).toContain('已逾期');
     expect(text).toContain('元旦');
     expect(text).toContain('上海 晴');
+    expect(text).toContain('日程：今天没有日程');
   });
 
   it('pairs the short modules and keeps the lead and focus on their own rows', () => {

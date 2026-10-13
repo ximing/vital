@@ -33,6 +33,7 @@ import { InwitSection } from './InwitSection';
 import { QrLoginScanner } from './QrLoginScanner';
 import { QrLoginScanService } from './qr-login.service';
 import { SettingsService } from './settings.service';
+import { openPhoneCalendarAccess } from '../today/phone-calendar';
 
 const ZONES = [
   'Asia/Shanghai',
@@ -382,6 +383,14 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
           />
           <View style={styles.hairline} />
           <View style={styles.limitPad}>
+            <Text style={styles.calendarLabel}>{copy.settings.calendarTitle}</Text>
+            <Text style={styles.hint}>{copy.settings.calendarHint}</Text>
+            <Button size="sm" variant="secondary" onPress={() => void openPhoneCalendarAccess()}>
+              {copy.today.briefing.meetingsOpenSettings}
+            </Button>
+          </View>
+          <View style={styles.hairline} />
+          <View style={styles.limitPad}>
             <Field
               label={copy.settings.dailyModelCallLimit}
               value={limitDraft}
@@ -562,6 +571,7 @@ const createStyles = (t: Theme) =>
     pressedSoft: { opacity: 0.7 },
     rowEnd: { flexDirection: 'row', justifyContent: 'flex-end' },
     hint: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
+    calendarLabel: { fontSize: 15, color: t.fgPrimary },
     limitPad: {
       gap: t.space[2],
       paddingHorizontal: t.space[4],

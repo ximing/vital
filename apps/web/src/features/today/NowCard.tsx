@@ -4,7 +4,7 @@ import { useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { TodosUiService } from '@/features/todos';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
-import type { TodayBriefingModel } from './briefing';
+import { canOpenCalendarSettings, openCalendarSettings, type TodayBriefingModel } from './briefing';
 
 /**
  * Today briefing plus the rule-based picks. The lead states what is open
@@ -218,7 +218,21 @@ function ModuleView({
           className="mt-1.5 space-y-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]"
         >
           {briefing.meetings.status === 'mac-only' ? <p>{t.today.briefing.meetingsMacOnly}</p> : null}
-          {briefing.meetings.status === 'denied' ? <p>{t.today.briefing.meetingsDenied}</p> : null}
+          {briefing.meetings.status === 'denied' ? (
+            <div className="space-y-1.5">
+              <p>{t.today.briefing.meetingsDenied}</p>
+              <p className="text-muted">{t.today.briefing.meetingsDeniedHint}</p>
+              {canOpenCalendarSettings() ? (
+                <button
+                  type="button"
+                  onClick={openCalendarSettings}
+                  className="inline-flex h-7 items-center rounded-full border border-border px-2.5 text-[11px] font-medium text-fg transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
+                >
+                  {t.today.briefing.meetingsOpenSettings}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {briefing.meetings.status === 'failed' ? <p>{t.today.briefing.meetingsFailed}</p> : null}
           {briefing.meetings.status === 'events' && briefing.meetings.events.length === 0 ? (
             <p>{t.today.briefing.meetingsEmpty}</p>

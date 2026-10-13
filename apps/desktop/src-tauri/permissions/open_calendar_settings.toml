@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-open-calendar-settings"
+description = "Opens the system Calendar privacy pane. The command takes no URL."
+commands.allow = ["open_calendar_settings"]
+
+[[permission]]
+identifier = "deny-open-calendar-settings"
+description = "Denies opening the system Calendar privacy pane."
+commands.deny = ["open_calendar_settings"]

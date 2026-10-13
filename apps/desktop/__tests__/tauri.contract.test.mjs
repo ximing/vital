@@ -131,6 +131,7 @@ describe('Tauri desktop contract', () => {
         'allow-close-sticky-alert',
         'allow-hide-main',
         'allow-open-in-main',
+        'allow-open-calendar-settings',
         'allow-open-external',
         'allow-read-today-calendar',
         'allow-set-badge',
@@ -198,6 +199,16 @@ describe('Tauri desktop contract', () => {
     assert.match(conf.bundle.macOS.infoPlist, /Info\.plist/);
     const host = readFileSync(path.resolve(root, '../web/src/host.ts'), 'utf8');
     assert.match(host, /readTodayCalendar/);
+    assert.match(lib, /fn open_calendar_settings/);
+    assert.match(lib, /openCalendarSettings/);
+    assert.match(lib, /Privacy_Calendars/);
+    assert.match(build, /open_calendar_settings/);
+    assert.match(
+      read('src-tauri/permissions/open_calendar_settings.toml'),
+      /allow-open-calendar-settings/,
+    );
+    assert.ok(caps.permissions.includes('allow-open-calendar-settings'));
+    assert.match(host, /openCalendarSettings/);
   });
 
   it('bundles PR1 raster icons', () => {

@@ -30,6 +30,8 @@ export type VitalHost = {
   setBadge?(count: number, overlayPngBase64?: string): void;
   /** Read-only today events from the Mac calendars. Missing outside the desktop shell. */
   readTodayCalendar?(): Promise<TodayCalendarRead>;
+  /** Opens System Settings → Privacy → Calendars. Missing on shells built before this command. */
+  openCalendarSettings?(): Promise<void>;
 };
 
 const HOST_METHODS = [

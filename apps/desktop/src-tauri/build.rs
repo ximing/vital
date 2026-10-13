@@ -9,6 +9,7 @@ fn main() {
             "hide_main",
             "set_badge",
             "read_today_calendar",
+            "open_calendar_settings",
         ]),
     ))
     .expect("failed to run tauri-build");

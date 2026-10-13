@@ -10,12 +10,13 @@ import { rnShadow } from '../../ui/card';
 import { useOpenTask } from '../../components/TaskSheetHost';
 import type { TodayBriefingModel } from './briefing';
 import { groupTodayModuleRows } from './briefing-core';
+import { openPhoneCalendarAccess } from './phone-calendar';
 
 /** The web sidebar is gone here, so short modules pair once the screen can hold two cards. */
 const MODULE_PAIR_MIN_WIDTH = 360;
 
 /**
- * 今天简报：当天要做什么、天气穿衣、会议、最近安排和最近节假日。
+ * 今天简报：当天要做什么、天气穿衣、本地日历日程、最近安排和最近节假日。
  * 「建议开始」仍在卡内；「换一个」本地轮转。
  */
 export function NowCard({
@@ -218,6 +219,44 @@ const createStyles = (t: Theme) =>
     miniMetaPart: { fontVariant: ['tabular-nums'] },
   });
 
+function MeetingsBlock({
+  meetings,
+  styles,
+}: {
+  meetings: TodayBriefingModel['meetings'];
+  styles: ReturnType<typeof createStyles>;
+}) {
+  if (meetings.status === 'loading' || meetings.status === 'skipped') {
+    return <Text style={styles.fact}>{copy.today.briefing.meetingsLoading}</Text>;
+  }
+  if (meetings.status === 'denied') {
+    return (
+      <View>
+        <Text style={styles.fact}>{copy.today.briefing.meetingsDenied}</Text>
+        <Text style={styles.meta}>{copy.today.briefing.meetingsDeniedHint}</Text>
+        <Button size="sm" variant="ghost" onPress={() => void openPhoneCalendarAccess()}>
+          {copy.today.briefing.meetingsOpenSettings}
+        </Button>
+      </View>
+    );
+  }
+  if (meetings.status === 'failed') {
+    return <Text style={styles.fact}>{copy.today.briefing.meetingsFailed}</Text>;
+  }
+  if (meetings.events.length === 0) {
+    return <Text style={styles.fact}>{copy.today.briefing.meetingsEmpty}</Text>;
+  }
+  return (
+    <View>
+      {meetings.events.map((event, index) => (
+        <Text key={`${event.start}-${event.title}-${index}`} style={styles.fact}>
+          {event.title} · {event.allDay ? copy.today.briefing.allDay : event.start}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 function moduleLabel(id: TodayModuleId): string {
   if (id === 'focus') return copy.today.now.suggestTitle;
   return copy.today.briefing.module[id];
@@ -308,7 +347,7 @@ function ModuleBlock({
           ) : null}
         </View>
       ) : null}
-      {moduleId === 'meetings' ? <Text style={styles.fact}>{briefing.meetingsMacOnly}</Text> : null}
+      {moduleId === 'meetings' ? <MeetingsBlock meetings={briefing.meetings} styles={styles} /> : null}
       {moduleId === 'upcoming' ? (
         <View>
           {briefing.upcoming.length === 0 ? (

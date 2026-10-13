@@ -244,15 +244,28 @@ export async function readTodayMeetings(timeZone: string): Promise<TodayBriefing
   return { status: 'events', events };
 }
 
+export function canOpenCalendarSettings(): boolean {
+  return typeof getVitalHost()?.openCalendarSettings === 'function';
+}
+
+export function openCalendarSettings(): void {
+  void getVitalHost()?.openCalendarSettings?.();
+}
+
 export function useTodayMeetings(timeZone: string): TodayBriefingModel['meetings'] {
   const [meetings, setMeetings] = useState<TodayBriefingModel['meetings']>({ status: 'mac-only' });
   useEffect(() => {
     let cancelled = false;
-    void readTodayMeetings(timeZone).then((next) => {
-      if (!cancelled) setMeetings(next);
-    });
+    const load = () => {
+      void readTodayMeetings(timeZone).then((next) => {
+        if (!cancelled) setMeetings(next);
+      });
+    };
+    load();
+    window.addEventListener('focus', load);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', load);
     };
   }, [timeZone]);
   return meetings;

@@ -6,6 +6,8 @@ import {
 } from '@vital/dto';
 import { useState, type FC } from 'react';
 import { t } from '@/copy';
+import { canOpenCalendarSettings, openCalendarSettings } from '@/features/today/briefing';
+import { getVitalHost } from '@/host';
 import { Banner } from '@/ui/banner';
 import { Field } from '@/ui/field';
 import { SelectField } from '@/ui/select-field';
@@ -61,8 +63,35 @@ function PrefsSectionContent() {
     void page.patch({ dailyModelCallLimit: next });
   }
 
+  const desktop = getVitalHost() !== null;
+  const canOpenCalendar = canOpenCalendarSettings();
+
   return (
     <div className="flex max-w-2xl flex-col gap-6">
+      <div>
+        <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          {t.settings.calendarTitle}
+        </p>
+        <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+          {desktop ? t.settings.calendarHint : t.today.briefing.meetingsMacOnly}
+        </p>
+        {desktop ? (
+          <div className="mt-2 flex flex-col items-start gap-2">
+            <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg">
+              {t.today.briefing.meetingsDeniedHint}
+            </p>
+            {canOpenCalendar ? (
+              <button
+                type="button"
+                onClick={openCalendarSettings}
+                className="inline-flex h-8 items-center rounded-full border border-border px-3 text-[length:var(--text-caption)] font-medium text-fg hover:bg-surface-muted"
+              >
+                {t.today.briefing.meetingsOpenSettings}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       <label className="flex flex-col gap-1">
         <span className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
           {t.settings.timezone}

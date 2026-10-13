@@ -13,6 +13,7 @@
     "allow-hide-main",
     "allow-set-badge",
     "allow-read-today-calendar",
+    "allow-open-calendar-settings",
     "notification:default"
   ]
 }
