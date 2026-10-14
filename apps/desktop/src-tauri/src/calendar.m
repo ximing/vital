@@ -1,6 +1,5 @@
 #import <EventKit/EventKit.h>
 #import <Foundation/Foundation.h>
-#import <objc/message.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -54,13 +53,17 @@ static int vital_request_on_main(void) {
                 result = ok ? 1 : 0;
                 dispatch_semaphore_signal(sem);
             };
+            // Calling this method through a function pointer returns granted=NO at
+            // once and never shows the dialog. The real message send makes clang
+            // emit the block-copy stub. Do not guard with an availability attribute;
+            // that pulls in ___isPlatformVersionAtLeast, which this Rust link cannot resolve.
             NSOperatingSystemVersion version = [[NSProcessInfo processInfo] operatingSystemVersion];
             SEL full = @selector(requestFullAccessToEventsWithCompletion:);
             if (version.majorVersion >= 14 && [store respondsToSelector:full]) {
-                VitalAccessCallback kept = [done copy];
-                void (*send)(id, SEL, VitalAccessCallback) =
-                    (void (*)(id, SEL, VitalAccessCallback))objc_msgSend;
-                send(store, full, kept);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunguarded-availability-new"
+                [store requestFullAccessToEventsWithCompletion:done];
+#pragma clang diagnostic pop
             } else {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"

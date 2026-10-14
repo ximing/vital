@@ -213,6 +213,13 @@ describe('Tauri desktop contract', () => {
     assert.match(calendar, /dispatch_get_main_queue/);
     assert.match(calendar, /vital_calendar_ensure_access/);
     assert.match(calendar, /kVitalCalendarReadAccess = 3/);
+    assert.match(calendar, /\[store requestFullAccessToEventsWithCompletion:done\]/);
+    assert.match(conf.bundle.macOS.entitlements, /entitlements\.plist/);
+    assert.match(
+      read('src-tauri/entitlements.plist'),
+      /com\.apple\.security\.personal-information\.calendars/,
+    );
+    assert.doesNotMatch(calendar, /objc_msgSend/);
     assert.doesNotMatch(calendar, /@available/);
     assert.doesNotMatch(calendar, /EKAuthorizationStatusFullAccess/);
     assert.match(lib, /vital_calendar_ensure_access/);
