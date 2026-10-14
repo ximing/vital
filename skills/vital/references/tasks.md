@@ -36,6 +36,8 @@ export interface Task {
   habitId: string | null;
   /** 1-based sequence within the habit's day (count habits). */
   habitSeq: number | null;
+  /** Set when this task mirrors a device calendar event. */
+  calendarKey?: string | null;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;
@@ -293,6 +295,21 @@ Task Counts
 - Auth: Bearer required
 - Client: `taskCounts`
 - Response: `TaskCounts`
+
+#### `POST /api/v1/tasks/device-calendar`
+
+Sync Device Calendar
+
+- Auth: Bearer required
+- Client: `syncDeviceCalendar`
+- Response: `DeviceCalendarSyncResult`
+
+Request body (`deviceCalendarSyncSchema`):
+
+- `source`: "mac" | "ios" | "android"
+- `windowStart`: string
+- `windowEnd`: string
+- `events`: { key: string 3–200; title: string 1–500; start: string; end: string (optional) | null; allDay: boolean }[]
 
 #### `POST /api/v1/tasks/from-text`
 

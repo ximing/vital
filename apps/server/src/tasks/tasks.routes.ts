@@ -1,5 +1,6 @@
 import {
   calendarQuerySchema,
+  deviceCalendarSyncSchema,
   createTaskFromTextInputSchema,
   createTaskInputSchema,
   listTasksQuerySchema,
@@ -26,6 +27,7 @@ import {
   patchTask,
   reorderTasks,
   requestTaskDraft,
+  syncDeviceCalendar,
   restoreTask,
   taskCounts,
   uncompleteTask,
@@ -64,6 +66,12 @@ export function registerTaskRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const created = await createTaskFromText(user.id, createTaskFromTextInputSchema.parse(req.body));
     return reply.code(201).send(await withSimilarOpenTasks(user.id, created));
+  });
+
+  app.post('/api/v1/tasks/device-calendar', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    return syncDeviceCalendar(user.id, deviceCalendarSyncSchema.parse(req.body));
   });
 
   app.post('/api/v1/tasks', { preHandler: [requireAuth] }, async (req, reply) => {

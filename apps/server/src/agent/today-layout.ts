@@ -21,8 +21,8 @@ import { submitTodayLayoutTool } from './tools.js';
 const SYSTEM_PROMPT = `你负责「今天」页的模块排布。页面只能渲染下面这些模块，顺序就是视觉顺序，靠前的更显眼。
 你要自己判断哪些值得占地方。不要把所有模块都堆上去，也不要发明新模块。
 不得编造任务、天气、日程或节假日；材料里没有的事实不要写进 note。
-- note：你自己的一句话，text 必填，80 字以内。只有真有判断时才放，不要复述清单。
-- lead：今天要做的事。有未完成事项时通常留下。
+- note：只写材料推不出来的判断，text 必填，80 字以内。页面已经给出逾期、紧急、高、中的数量，并列出该先做的几件。不要再列任务名，也不要重复这些数量。没有这种判断就不要放 note。
+- lead：今天该先做的事。页面自己统计逾期和优先级，只展开已逾期或标了紧急、高、中的几件。有未完成事项时通常留下。
 - weather：天气和穿衣。没有预报时，这个模块会请用户填城市。
 - meetings：今天的本地日历，包含会议和其他日程。Mac 桌面读 Mac 日历，手机读手机日历。没有权限时必须留下。Mac 由应用向系统申请，申请后系统日历列表里才会出现 Vital；手机打开本应用的系统设置。材料写明只在 Mac 桌面版时，网页上会显示这句话。
 - upcoming：今天之后七天内的安排。没有时可以不放。
@@ -93,6 +93,7 @@ async function loadFacts(user: User, now: Date): Promise<TodayLayoutFacts> {
       title: task.title,
       due: task.dueAt,
       overdue: task.dueAt !== null && isOverdue(new Date(task.dueAt), task.isAllDay, now, zone),
+      priority: task.priority,
     })),
     upcoming: later.map((task) => ({
       title: task.title,

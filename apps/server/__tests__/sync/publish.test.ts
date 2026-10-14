@@ -13,6 +13,7 @@ describe('isMutatingApi', () => {
     expect(isMutatingApi('PATCH', '/api/v1/auth/me')).toBe(false);
     expect(isMutatingApi('POST', '/api/v1/sync/changes')).toBe(false);
     expect(isMutatingApi('POST', '/api/v1/search')).toBe(false);
+    expect(isMutatingApi('POST', '/api/v1/tasks/device-calendar')).toBe(false);
     expect(isMutatingApi('POST', '/api/health')).toBe(false);
   });
 });

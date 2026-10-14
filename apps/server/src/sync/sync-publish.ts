@@ -13,6 +13,8 @@ export function isMutatingApi(method: string, url: string): boolean {
   if (path.startsWith('/api/v1/auth')) return false;
   if (path.startsWith('/api/v1/sync')) return false;
   if (path === '/api/v1/search' || path.startsWith('/api/v1/search/')) return false;
+  // The handler publishes only when a calendar row was actually created, updated, or removed.
+  if (path === '/api/v1/tasks/device-calendar') return false;
   if (path === '/api/v1/agent/chat' || path.startsWith('/api/v1/agent/chat/')) return false;
   return true;
 }

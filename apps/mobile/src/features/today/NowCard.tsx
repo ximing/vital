@@ -1,6 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import type { NowRecommendation, Outcome, TodayModuleId, TodayNow } from '@vital/dto';
+import {
+  noteRepeatsTasks,
+  planSignalCounts,
+  type NowRecommendation,
+  type Outcome,
+  type TodayModuleId,
+  type TodayNow,
+  type TodayPlan,
+  type TodayPlanMark,
+} from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Button } from '../../components/Button';
 import { copy } from '../../lib/copy';
@@ -16,7 +25,7 @@ import { openPhoneCalendarAccess } from './phone-calendar';
 const MODULE_PAIR_MIN_WIDTH = 360;
 
 /**
- * 今天简报：当天要做什么、天气穿衣、本地日历日程、最近安排和最近节假日。
+ * 今天简报：优先事项、天气穿衣、本地日历日程、最近安排和最近节假日。
  * 「建议开始」仍在卡内；「换一个」本地轮转。
  */
 export function NowCard({
@@ -34,7 +43,10 @@ export function NowCard({
   const openTask = useOpenTask();
   const { width } = useWindowDimensions();
   const styles = useMemo(() => createStyles(t), [t]);
-  const moduleRows = groupTodayModuleRows(briefing.modules, width >= MODULE_PAIR_MIN_WIDTH ? 2 : 1);
+  const modules = briefing.modules.filter(
+    (module) => module.id !== 'note' || !noteRepeatsTasks(module.text ?? '', briefing.lead.titles),
+  );
+  const moduleRows = groupTodayModuleRows(modules, width >= MODULE_PAIR_MIN_WIDTH ? 2 : 1);
   const [offset, setOffset] = useState(0);
   const recs = now.recommendations;
   // 双推荐并排：从 offset 起取连续两条（本地轮转，数据层不动）。
@@ -168,14 +180,26 @@ const createStyles = (t: Theme) =>
       fontWeight: '600',
       color: t.textTertiary,
     },
-    moduleLead: {
-      fontSize: 17,
-      lineHeight: 24,
-      fontWeight: '600',
-      color: t.fgPrimary,
-    },
     moduleHead: { flexDirection: 'row', alignItems: 'center', gap: t.space[2] },
     fact: {
+      fontSize: t.type.meta.fontSize,
+      lineHeight: t.type.meta.lineHeight,
+      color: t.fgPrimary,
+    },
+    factMuted: {
+      fontSize: t.type.meta.fontSize,
+      lineHeight: t.type.meta.lineHeight,
+      color: t.textTertiary,
+    },
+    planRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+    planMark: {
+      width: 32,
+      fontSize: 11,
+      lineHeight: t.type.meta.lineHeight,
+      fontWeight: '600',
+    },
+    planTitle: {
+      flex: 1,
       fontSize: t.type.meta.fontSize,
       lineHeight: t.type.meta.lineHeight,
       color: t.fgPrimary,
@@ -257,6 +281,63 @@ function MeetingsBlock({
   );
 }
 
+function markColor(mark: TodayPlanMark, theme: Theme): string {
+  if (mark === 'overdue' || mark === 'urgent') return theme.statusOverdue;
+  if (mark === 'high') return theme.statusDueSoon;
+  return theme.statusDoing;
+}
+
+function LeadBrief({
+  plan,
+  styles,
+}: {
+  plan: TodayPlan;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const theme = useTheme();
+  const open =
+    plan.counts.overdue + plan.counts.urgent + plan.counts.high + plan.counts.medium + plan.counts.plain;
+  if (open === 0) {
+    return (
+      <View testID="today-lead">
+        <Text style={styles.fact}>{copy.today.briefing.empty}</Text>
+      </View>
+    );
+  }
+  if (plan.items.length === 0) {
+    return (
+      <View testID="today-lead">
+        <Text style={styles.fact}>{copy.today.briefing.planPlain.replace('{n}', String(plan.counts.plain))}</Text>
+      </View>
+    );
+  }
+  const tally =
+    plan.items.length > 1 || plan.rest > 0
+      ? planSignalCounts(plan.counts)
+          .map((part) => copy.today.briefing.planCount[part.key].replace('{n}', String(part.n)))
+          .join(' · ')
+      : null;
+  return (
+    <View testID="today-lead">
+      {tally ? <Text style={styles.factMuted}>{tally}</Text> : null}
+      {plan.items.map((item) => (
+        <View key={item.id} style={styles.planRow}>
+          <Text style={[styles.planMark, { color: markColor(item.mark, theme) }]}>
+            {copy.today.briefing.planMark[item.mark]}
+          </Text>
+          <Text style={styles.planTitle}>
+            {item.title}
+            {item.when ? ` · ${item.when}` : ''}
+          </Text>
+        </View>
+      ))}
+      {plan.rest > 0 ? (
+        <Text style={styles.factMuted}>{copy.today.briefing.planRest.replace('{n}', String(plan.rest))}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 function moduleLabel(id: TodayModuleId): string {
   if (id === 'focus') return copy.today.now.suggestTitle;
   return copy.today.briefing.module[id];
@@ -310,7 +391,7 @@ function ModuleBlock({
         ) : null}
       </View>
       {moduleId === 'note' ? <Text style={styles.fact}>{note}</Text> : null}
-      {moduleId === 'lead' ? <Text style={styles.moduleLead}>{briefing.lead}</Text> : null}
+      {moduleId === 'lead' ? <LeadBrief plan={briefing.lead} styles={styles} /> : null}
       {moduleId === 'weather' ? (
         <View>
           {weather.status === 'loading' ? (

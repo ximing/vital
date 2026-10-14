@@ -17,6 +17,7 @@ export * from './agent-chat.js';
 export * from './habits.js';
 export * from './days.js';
 export * from './today-briefing.js';
+export * from './calendar-sync.js';
 export * from './today-layout.js';
 export * from './reportTemplates.js';
 export * from './reportNotes.js';

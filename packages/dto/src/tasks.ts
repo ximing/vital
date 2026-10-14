@@ -81,6 +81,8 @@ export interface Task {
   habitId: string | null;
   /** 1-based sequence within the habit's day (count habits). */
   habitSeq: number | null;
+  /** Set when this task mirrors a device calendar event. */
+  calendarKey?: string | null;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;

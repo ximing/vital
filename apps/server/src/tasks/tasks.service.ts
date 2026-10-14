@@ -7,6 +7,7 @@ export {
   taskCounts,
 } from './tasks.read.js';
 export type { TaskTx } from './tasks.write.js';
+export { syncDeviceCalendar } from './calendar-sync.js';
 export {
   completeTask,
   createTask,

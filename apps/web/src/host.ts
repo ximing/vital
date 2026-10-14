@@ -9,6 +9,9 @@ export type TodayCalendarEvent = {
   title: string;
   start: string;
   allDay: boolean;
+  /** Present when this desktop build can reconcile the event with a task. */
+  key?: string | null;
+  end?: string | null;
 };
 
 export type TodayCalendarRead = {
@@ -28,8 +31,10 @@ export type VitalHost = {
   hideMain(): void;
   /** Dock/taskbar badge. Missing on shells built before badge support. */
   setBadge?(count: number, overlayPngBase64?: string): void;
-  /** Read-only today events from the Mac calendars. Missing outside the desktop shell. */
+  /** Read-only events from the Mac calendars. Missing outside the desktop shell. */
   readTodayCalendar?(): Promise<TodayCalendarRead>;
+  /** This shell stamps a stable key on each event. Older shells omit it. */
+  calendarKeys?: boolean;
   /** Opens System Settings → Privacy → Calendars. Missing on shells built before this command. */
   openCalendarSettings?(): Promise<void>;
 };

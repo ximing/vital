@@ -53,7 +53,7 @@ export function submitTodayLayoutTool(
     name: 'submit_today_layout',
     label: '提交今天页排布',
     description:
-      '提交今天页要展示的模块及顺序。note 的 text 是你自己的一句话。不要编造任务、天气或日程。',
+      '提交今天页要展示的模块及顺序。note 的 text 只写材料推不出来的判断，不要复述任务和优先级。不要编造任务、天气或日程。',
     parameters: submitTodayLayoutSchema,
     execute: (_id, params) => {
       capture(params);

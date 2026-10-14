@@ -42,6 +42,12 @@ export const tasks = pgTable(
     habitSeq: integer('habit_seq'),
     /** `{habitId}:{yyyymmdd}:{seq}` — idempotent spawn key, in the user's timezone. */
     habitKey: varchar('habit_key', { length: 80 }),
+    /**
+     * Device calendar instance, `mac|ios|android:` plus the calendar id.
+     * Kept after the user deletes the task so the next sync does not recreate it.
+     * Cleared when the calendar event itself disappears.
+     */
+    calendarKey: varchar('calendar_key', { length: 200 }),
     title: varchar('title', { length: 500 }).notNull(),
     notesMd: text('notes_md').notNull().default(''),
     status: varchar('status', { length: 16 }).notNull().default('todo'),
@@ -90,6 +96,9 @@ export const tasks = pgTable(
     uniqueIndex('idx_tasks_habit_key')
       .on(t.habitKey)
       .where(sql`${t.habitKey} IS NOT NULL`),
+    uniqueIndex('idx_tasks_user_calendar_key')
+      .on(t.userId, t.calendarKey)
+      .where(sql`${t.calendarKey} IS NOT NULL`),
     index('idx_tasks_search_tsv').using('gin', t.searchTsv),
     index('idx_tasks_title_trgm').using('gin', sql`${t.title} gin_trgm_ops`),
     check('tasks_status_check', sql`${t.status} IN ('todo', 'doing', 'done', 'canceled')`),

@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
+  calendarEventOverlapsLocalDay,
+  calendarSyncPayloadReady,
   clothingSuggestion,
+  deviceCalendarWindow,
+  DEVICE_CALENDAR_SYNC_POLL_MS,
   localTodayYmd,
   nearestStatutoryHoliday,
   normalizeCalendarEvent,
   openMeteoForecastUrl,
   openMeteoGeocodeUrl,
-  openTodayTitles,
+  buildTodayPlan,
   parseOpenMeteoForecast,
   parseOpenMeteoPlace,
   todayModulesOrFallback,
@@ -14,6 +18,7 @@ import {
   weatherConditionKey,
   ymdInTimeZone,
   type TodayLayout,
+  type TodayPlan,
   type BriefingTask,
   type ClothingBand,
   type GeoPlace,
@@ -23,7 +28,7 @@ import {
 } from '@vital/dto';
 import { client } from '@/api/client';
 import { t } from '@/copy';
-import { getVitalHost, type TodayCalendarRead } from '@/host';
+import { getVitalHost, type TodayCalendarEvent, type TodayCalendarRead } from '@/host';
 
 export const TODAY_PLACE_KEY = 'vital.today.place';
 
@@ -45,7 +50,7 @@ const CONDITION: Record<WeatherConditionKey, string> = {
 };
 
 export type TodayBriefingModel = {
-  lead: string;
+  lead: TodayPlan;
   weather:
     | { status: 'loading' }
     | { status: 'unavailable' }
@@ -62,15 +67,6 @@ export type TodayBriefingModel = {
     | { status: 'events'; events: NormalizedCalendarEvent[] };
   modules: ReturnType<typeof todayModulesOrFallback>;
 };
-
-export function todayLead(titles: readonly string[]): string {
-  if (titles.length === 0) return t.today.briefing.empty;
-  const first = titles[0] ?? '';
-  if (titles.length === 1) return t.today.briefing.leadOne.replace('{title}', first);
-  return t.today.briefing.leadMany
-    .replace('{n}', String(titles.length))
-    .replace('{items}', titles.slice(0, 3).join('、'));
-}
 
 export function chineseYmd(ymd: string): string {
   const [year, month, day] = ymd.split('-');
@@ -238,10 +234,44 @@ export async function readTodayMeetings(timeZone: string): Promise<TodayBriefing
   if (result.status === 'denied') return { status: 'denied' };
   if (result.status === 'unsupported') return { status: 'mac-only' };
   if (result.status !== 'ok') return { status: 'failed' };
+  pushMacCalendar(timeZone, result.events, host.calendarKeys === true);
   const events = result.events
+    .filter((event) => calendarEventOverlapsLocalDay(event, timeZone))
     .map((event) => normalizeCalendarEvent(event, timeZone))
     .filter((event): event is NormalizedCalendarEvent => event !== null);
   return { status: 'events', events };
+}
+
+function pushMacCalendar(timeZone: string, events: TodayCalendarEvent[], keyed: boolean): void {
+  if (events.length >= 200) return;
+  if (!calendarSyncPayloadReady(events, 'mac', keyed)) return;
+  const span = deviceCalendarWindow(timeZone);
+  const payload = events.flatMap((event) => {
+    if (typeof event.key !== 'string') return [];
+    const title = event.title.trim();
+    if (title === '') return [];
+    return [
+      {
+        key: event.key,
+        title,
+        start: event.start,
+        end: typeof event.end === 'string' && event.end !== '' ? event.end : null,
+        allDay: event.allDay,
+      },
+    ];
+  });
+  try {
+    void Promise.resolve(
+      client.syncDeviceCalendar?.({
+        source: 'mac',
+        windowStart: span.windowStart,
+        windowEnd: span.windowEnd,
+        events: payload,
+      }),
+    ).catch(() => undefined);
+  } catch {
+    // A partial client, such as a test double, has no calendar sync method.
+  }
 }
 
 export function canOpenCalendarSettings(): boolean {
@@ -267,10 +297,12 @@ export function useTodayMeetings(timeZone: string): TodayBriefingModel['meetings
       });
     };
     load();
+    const timer = window.setInterval(load, DEVICE_CALENDAR_SYNC_POLL_MS);
     window.addEventListener('focus', load);
     window.addEventListener(CALENDAR_ACCESS_EVENT, load);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
       window.removeEventListener('focus', load);
       window.removeEventListener(CALENDAR_ACCESS_EVENT, load);
     };
@@ -316,7 +348,7 @@ export function buildTodayBriefing(input: {
     weatherView = { status: 'unavailable' };
   }
   return {
-    lead: todayLead(openTodayTitles(input.tasks)),
+    lead: buildTodayPlan(input.tasks, input.timeZone, input.now ?? new Date()),
     weather: weatherView,
     placeBusy: weather.busy,
     submitPlace: weather.submitPlace,

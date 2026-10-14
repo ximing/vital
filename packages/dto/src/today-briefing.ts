@@ -382,18 +382,132 @@ export type BriefingTask = {
   startAt: string | null;
   habitId?: string | null;
   deletedAt?: string | null;
+  /** 0 urgent, 1 high, 2 medium, 3 none. Missing means none. */
+  priority?: 0 | 1 | 2 | 3;
+  isAllDay?: boolean;
 };
 
+function isOpenBriefingTask(task: BriefingTask): boolean {
+  return (
+    (task.deletedAt === undefined || task.deletedAt === null) &&
+    (task.habitId === undefined || task.habitId === null) &&
+    task.status !== 'done' &&
+    task.status !== 'canceled'
+  );
+}
+
 export function openTodayTitles(tasks: readonly BriefingTask[]): string[] {
-  return tasks
-    .filter(
-      (task) =>
-        (task.deletedAt === undefined || task.deletedAt === null) &&
-        (task.habitId === undefined || task.habitId === null) &&
-        task.status !== 'done' &&
-        task.status !== 'canceled',
-    )
-    .map((task) => task.title);
+  return tasks.filter(isOpenBriefingTask).map((task) => task.title);
+}
+
+export type TodayPlanMark = 'overdue' | 'urgent' | 'high' | 'medium';
+
+export type TodayPlanItem = {
+  id: string;
+  title: string;
+  mark: TodayPlanMark;
+  /** Local HH:mm for a timed due. All-day and midnight stay blank. */
+  when: string | null;
+};
+
+export type TodayPlanCounts = {
+  overdue: number;
+  urgent: number;
+  high: number;
+  medium: number;
+  plain: number;
+};
+
+export type TodayPlan = {
+  /** Marked tasks only, at most five. The checklist below still holds every row. */
+  items: TodayPlanItem[];
+  /** Open tasks not listed in `items`. */
+  rest: number;
+  titles: string[];
+  counts: TodayPlanCounts;
+};
+
+const PLAN_LIMIT = 5;
+const PLAN_SIGNAL_KEYS = ['overdue', 'urgent', 'high', 'medium'] as const;
+
+/** Non-zero overdue / urgent / high / medium counts, in that order. */
+export function planSignalCounts(
+  counts: TodayPlanCounts,
+): Array<{ key: (typeof PLAN_SIGNAL_KEYS)[number]; n: number }> {
+  return PLAN_SIGNAL_KEYS.flatMap((key) => (counts[key] > 0 ? [{ key, n: counts[key] }] : []));
+}
+
+function planRank(task: BriefingTask, overdue: boolean): number {
+  if (overdue) return 0;
+  if (task.priority === 0) return 1;
+  if (task.priority === 1) return 2;
+  if (task.priority === 2) return 3;
+  return 4;
+}
+
+function planMark(task: BriefingTask, overdue: boolean): TodayPlanMark | null {
+  if (overdue) return 'overdue';
+  if (task.priority === 0) return 'urgent';
+  if (task.priority === 1) return 'high';
+  if (task.priority === 2) return 'medium';
+  return null;
+}
+
+function planWhen(task: BriefingTask, timeZone: string): string | null {
+  if (task.dueAt === null || task.isAllDay) return null;
+  const hm = localHm(task.dueAt, timeZone);
+  return hm === '00:00' ? null : hm;
+}
+
+/** What to do first. Unmarked titles stay in the checklist, so the brief does not repeat them. */
+export function buildTodayPlan(
+  tasks: readonly BriefingTask[],
+  timeZone: string,
+  now = new Date(),
+): TodayPlan {
+  const today = localTodayYmd(timeZone, now);
+  const open = tasks.filter(isOpenBriefingTask).map((task) => {
+    const overdue = task.dueAt !== null && ymdInTimeZone(task.dueAt, timeZone) < today;
+    return { task, overdue, mark: planMark(task, overdue) };
+  });
+  open.sort((a, b) => {
+    const byRank = planRank(a.task, a.overdue) - planRank(b.task, b.overdue);
+    if (byRank !== 0) return byRank;
+    const aDue = a.task.dueAt ?? '9999';
+    const bDue = b.task.dueAt ?? '9999';
+    if (aDue !== bDue) return aDue < bDue ? -1 : 1;
+    return a.task.title.localeCompare(b.task.title, 'zh');
+  });
+  const counts: TodayPlanCounts = { overdue: 0, urgent: 0, high: 0, medium: 0, plain: 0 };
+  for (const row of open) {
+    if (row.mark === null) counts.plain += 1;
+    else counts[row.mark] += 1;
+  }
+  const items = open
+    .filter((row): row is typeof row & { mark: TodayPlanMark } => row.mark !== null)
+    .slice(0, PLAN_LIMIT)
+    .map(({ task, mark }) => ({
+      id: task.id,
+      title: task.title,
+      mark,
+      when: planWhen(task, timeZone),
+    }));
+  return {
+    items,
+    rest: Math.max(0, open.length - items.length),
+    titles: open.map(({ task }) => task.title),
+    counts,
+  };
+}
+
+/** A note that only restates task titles adds nothing next to the plan. */
+export function noteRepeatsTasks(note: string, titles: readonly string[]): boolean {
+  const hits = titles.filter((title) => title.trim().length >= 2 && note.includes(title.trim()));
+  if (hits.length === 0) return false;
+  let rest = note;
+  for (const title of hits) rest = rest.split(title).join('');
+  const filler = rest.replace(/[今天要做有件待办：:，,。.\s先把和与、]/gu, '');
+  return filler.length < 8;
 }
 
 /** Upcoming window is today through seven days ahead. This drops today. */

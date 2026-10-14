@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Tag, Task } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
+import { copy } from '../lib/copy';
 import { isOverdue, localDateStamp } from '../lib/format';
 import { decodeEntities } from '../lib/html';
 import { dueMeta, recurrenceMeta, reminderMeta } from '../lib/schedule';
@@ -109,8 +110,9 @@ export function TaskRow({
             {note}
           </Text>
         ) : null}
-        {due || reminder || repeat || listName || namedTags.length > 0 ? (
+        {due || reminder || repeat || listName || task.calendarKey || namedTags.length > 0 ? (
           <View style={styles.meta}>
+            {task.calendarKey ? <Text style={styles.metaText}>{copy.todos.fromCalendar}</Text> : null}
             {due && dueTone ? <Text style={[styles.metaText, dueTone]}>{due}</Text> : null}
             {reminder ? <Text style={styles.metaText}>{reminder}</Text> : null}
             {repeat ? <Text style={styles.metaText}>{repeat}</Text> : null}

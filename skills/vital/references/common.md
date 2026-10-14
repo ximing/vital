@@ -148,7 +148,7 @@ export interface TodayLayout {
 export interface TodayLayoutFacts {
   timezone: string;
   localNow: string;
-  openTasks: { title: string; due: string | null; overdue: boolean }[];
+  openTasks: { title: string; due: string | null; overdue: boolean; priority?: 0 | 1 | 2 | 3 }[];
   upcoming: { title: string; when: string }[];
   holidayName: string;
   holidayDate: string;

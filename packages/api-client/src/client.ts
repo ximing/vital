@@ -19,6 +19,8 @@ import type {
   AuthResponse,
   CalendarQuery,
   CalendarResponse,
+  DeviceCalendarSyncInput,
+  DeviceCalendarSyncResult,
   ChangePasswordInput,
   CompleteTaskResponse,
   ConvertInboxInput,
@@ -184,6 +186,7 @@ export interface VitalClient {
   putLlmRouting(input: PutLlmRoutingInput): Promise<LlmSettingsPublic>;
   getToday(): Promise<TodayDashboard>;
   putTodayLayoutContext(input: TodayLayoutContext): Promise<{ ok: true }>;
+  syncDeviceCalendar(input: DeviceCalendarSyncInput): Promise<DeviceCalendarSyncResult>;
   listOutcomes(status?: 'open' | 'closed'): Promise<Outcome[]>;
   getOutcomeDetail(id: string): Promise<OutcomeDetail>;
   createOutcome(input: CreateOutcomeInput): Promise<Outcome>;
@@ -461,6 +464,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     getToday: () => http.request('/api/v1/today'),
     putTodayLayoutContext: (input) =>
       http.request('/api/v1/today/layout-context', { method: 'PUT', body: input }),
+    syncDeviceCalendar: (input) =>
+      http.request('/api/v1/tasks/device-calendar', { method: 'POST', body: input }),
     listOutcomes: (status) => http.request(`/api/v1/outcomes${status ? `?status=${status}` : ''}`),
     getOutcomeDetail: (id) => http.request(`/api/v1/outcomes/${id}/detail`),
     createOutcome: (input) => http.request('/api/v1/outcomes', { method: 'POST', body: input }),

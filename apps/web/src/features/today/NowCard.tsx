@@ -1,4 +1,13 @@
-import type { NowRecommendation, Outcome, TodayModuleId, TodayNow } from '@vital/dto';
+import {
+  noteRepeatsTasks,
+  planSignalCounts,
+  type NowRecommendation,
+  type Outcome,
+  type TodayModuleId,
+  type TodayNow,
+  type TodayPlan,
+  type TodayPlanMark,
+} from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
 import { useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
@@ -7,8 +16,8 @@ import { FIELD_CONTROL_CLASS } from '@/ui/field';
 import { canOpenCalendarSettings, openCalendarSettings, type TodayBriefingModel } from './briefing';
 
 /**
- * Today briefing plus the rule-based picks. The lead states what is open
- * today. 换一个 rotates the candidate list locally.
+ * Today briefing plus the rule-based picks. The lead counts overdue and
+ * priority, then names only those tasks. 换一个 rotates the candidate list locally.
  */
 export const NowCard: FC<{
   now: TodayNow;
@@ -67,7 +76,7 @@ export const NowCard: FC<{
         {t.today.now.title}
       </p>
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {briefing.modules.map((module) => {
+        {briefing.modules.filter((module) => module.id !== 'note' || !noteRepeatsTasks(module.text ?? '', briefing.lead.titles)).map((module) => {
           const wide = module.id === 'lead' || module.id === 'note' || module.id === 'focus';
           return (
             <article
@@ -108,6 +117,61 @@ export const NowCard: FC<{
 function moduleLabel(id: TodayModuleId): string {
   if (id === 'focus') return t.today.now.suggestTitle;
   return t.today.briefing.module[id];
+}
+
+const PLAN_MARK_CLASS: Record<TodayPlanMark, string> = {
+  overdue: 'text-overdue',
+  urgent: 'text-overdue',
+  high: 'text-due',
+  medium: 'text-doing',
+};
+
+function LeadBrief({ plan }: { plan: TodayPlan }) {
+  const open =
+    plan.counts.overdue + plan.counts.urgent + plan.counts.high + plan.counts.medium + plan.counts.plain;
+  if (open === 0) {
+    return (
+      <div data-region="today-lead" className="mt-1.5">
+        <p className="text-[length:var(--text-body)] leading-6 text-fg">{t.today.briefing.empty}</p>
+      </div>
+    );
+  }
+  if (plan.items.length === 0) {
+    return (
+      <div data-region="today-lead" className="mt-1.5">
+        <p className="text-[length:var(--text-body)] leading-6 text-fg">
+          {t.today.briefing.planPlain.replace('{n}', String(plan.counts.plain))}
+        </p>
+      </div>
+    );
+  }
+  const tally =
+    plan.items.length > 1 || plan.rest > 0
+      ? planSignalCounts(plan.counts)
+          .map((part) => t.today.briefing.planCount[part.key].replace('{n}', String(part.n)))
+          .join(' · ')
+      : null;
+  return (
+    <div data-region="today-lead" className="mt-1.5 space-y-1">
+      {tally ? (
+        <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">{tally}</p>
+      ) : null}
+      {plan.items.map((item) => (
+        <p key={item.id} className="flex items-baseline gap-2 text-[length:var(--text-body)] leading-6 text-fg">
+          <span className={`w-8 shrink-0 text-[11px] font-semibold ${PLAN_MARK_CLASS[item.mark]}`}>
+            {t.today.briefing.planMark[item.mark]}
+          </span>
+          <span className="min-w-0 font-medium">{item.title}</span>
+          {item.when ? <span className="shrink-0 text-muted">· {item.when}</span> : null}
+        </p>
+      ))}
+      {plan.rest > 0 ? (
+        <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          {t.today.briefing.planRest.replace('{n}', String(plan.rest))}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 function ModuleView({
@@ -161,14 +225,7 @@ function ModuleView({
       {moduleId === 'note' ? (
         <p className="mt-1.5 text-[length:var(--text-body)] font-medium leading-6 text-fg">{note}</p>
       ) : null}
-      {moduleId === 'lead' ? (
-        <p
-          data-region="today-lead"
-          className="mt-1.5 font-display text-[20px] font-semibold leading-7 text-fg"
-        >
-          {briefing.lead}
-        </p>
-      ) : null}
+      {moduleId === 'lead' ? <LeadBrief plan={briefing.lead} /> : null}
       {moduleId === 'weather' ? (
         <div className="mt-1.5 space-y-1.5 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]">
           <div data-region="today-weather">

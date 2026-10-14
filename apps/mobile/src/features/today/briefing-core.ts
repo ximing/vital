@@ -1,4 +1,4 @@
-import { addDaysYmd, localTodayYmd } from '@vital/dto';
+import { addDaysYmd, DEVICE_CALENDAR_SYNC_DAYS, localTodayYmd } from '@vital/dto';
 
 export {
   clothingSuggestion,
@@ -26,7 +26,7 @@ export function localDayBounds(timeZone: string, now = new Date()): { start: Dat
 export function calendarQueryWindow(day: { start: Date; end: Date }): { start: Date; end: Date } {
   return {
     start: new Date(day.start.getTime() - LOOKBACK_DAYS * DAY_MS),
-    end: new Date(day.end.getTime() + DAY_MS),
+    end: new Date(day.start.getTime() + DEVICE_CALENDAR_SYNC_DAYS * DAY_MS),
   };
 }
 

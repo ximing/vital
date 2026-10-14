@@ -259,8 +259,11 @@ describe('today workspace', () => {
     // Pulse strip
     expect(screen.getByText('条待处理收集')).toBeInTheDocument();
     expect(screen.getByText(t.today.pulseReportTodo)).toBeInTheDocument();
-    // Task list
-    expect(screen.getByText('完成项目整理')).toBeInTheDocument();
+    // Task list. The priority brief must not repeat an unmarked title.
+    const tasksRegion = document.querySelector('[data-region="today-tasks"]');
+    expect(tasksRegion).not.toBeNull();
+    expect(within(tasksRegion as HTMLElement).getByText('完成项目整理')).toBeInTheDocument();
+    expect(document.querySelector('[data-region="today-lead"]')?.textContent ?? '').not.toContain('完成项目整理');
     const compose = screen.getByLabelText(t.todos.quickAddPlaceholder);
     expect(compose.closest('[data-region="today-compose"]')).not.toBeNull();
     expect(compose).toHaveAttribute('placeholder', t.todos.quickAddPlaceholder);
@@ -851,17 +854,24 @@ describe('today briefing', () => {
       title: '完成项目整理',
       dueAt: '2026-10-13T00:00:00+08:00',
     });
+    const urgent = makeTask({
+      id: 'task-urgent',
+      title: '回客户',
+      priority: 0,
+      isAllDay: false,
+      dueAt: '2026-10-13T10:00:00.000Z',
+    });
     const tomorrow = makeTask({
       id: 'task-tomorrow',
       title: '明天交报告',
       dueAt: '2026-10-14T00:00:00+08:00',
     });
     vi.mocked(client.getToday).mockResolvedValue(
-      makeDashboard({ outcomes: [work], tasks: [todayTask] }),
+      makeDashboard({ outcomes: [work], tasks: [urgent, todayTask] }),
     );
     vi.mocked(client.listTasks).mockImplementation(async (query) => {
-      if (query.listId === 'smart:upcoming') return { items: [todayTask, tomorrow], nextCursor: null };
-      return { items: [todayTask], nextCursor: null };
+      if (query.listId === 'smart:upcoming') return { items: [urgent, todayTask, tomorrow], nextCursor: null };
+      return { items: [urgent, todayTask], nextCursor: null };
     });
     localStorage.setItem(
       'vital.today.place',
@@ -912,8 +922,16 @@ describe('today briefing', () => {
       (tasksRegion as Node).compareDocumentPosition(board as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(within(tasksRegion as HTMLElement).getByText('完成项目整理')).toBeInTheDocument();
+    expect(within(tasksRegion as HTMLElement).getByText('回客户')).toBeInTheDocument();
     expect(document.querySelector('[data-region="now-card"]')?.innerHTML ?? '').not.toContain('text-[34px]');
-    expect(screen.getByText('今天要做：完成项目整理')).toBeInTheDocument();
+    const lead = document.querySelector('[data-region="today-lead"]');
+    expect(lead?.textContent).toContain('紧急 1');
+    expect(lead?.textContent).toContain('回客户');
+    expect(lead?.textContent).toContain('18:00');
+    expect(lead?.textContent).toContain('还有 1 件在下面');
+    expect(lead?.textContent ?? '').not.toContain('完成项目整理');
+    expect(lead?.textContent ?? '').not.toContain('今天要做');
+    expect(screen.getByText('优先')).toBeInTheDocument();
     expect(screen.getByText('日程')).toBeInTheDocument();
   });
 

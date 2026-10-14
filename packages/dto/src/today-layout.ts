@@ -71,7 +71,7 @@ export function todayModulesOrFallback(layout: TodayLayout | null | undefined): 
 export interface TodayLayoutFacts {
   timezone: string;
   localNow: string;
-  openTasks: { title: string; due: string | null; overdue: boolean }[];
+  openTasks: { title: string; due: string | null; overdue: boolean; priority?: 0 | 1 | 2 | 3 }[];
   upcoming: { title: string; when: string }[];
   holidayName: string;
   holidayDate: string;
@@ -88,7 +88,10 @@ export function describeTodayLayoutFacts(facts: TodayLayoutFacts): string {
   const tasks = facts.openTasks.length === 0
     ? '无'
     : facts.openTasks
-        .map((task) => `${task.title}${task.overdue ? '（已逾期）' : ''}${task.due ? ` 截止 ${task.due}` : ''}`)
+        .map((task) => {
+          const rank = task.priority === 0 ? '紧急' : task.priority === 1 ? '高' : task.priority === 2 ? '中' : '';
+          return `${task.title}${rank ? `（${rank}）` : ''}${task.overdue ? '（已逾期）' : ''}${task.due ? ` 截止 ${task.due}` : ''}`;
+        })
         .join('；');
   const upcoming = facts.upcoming.length === 0
     ? '无'

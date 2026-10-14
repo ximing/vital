@@ -96,6 +96,7 @@ try {
             if (label && label !== "main") return;
             invoke("set_badge", { count: count, overlayPng: overlayPng });
           },
+          calendarKeys: true,
           readTodayCalendar: function () {
             var internals = window.__TAURI_INTERNALS__;
             if (!internals || typeof internals.invoke !== "function") {
@@ -479,6 +480,10 @@ fn hide_main(window: tauri::WebviewWindow) -> Result<(), String> {
 struct CalendarEventDto {
     title: String,
     start: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    end: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key: Option<String>,
     all_day: bool,
 }
 
@@ -498,6 +503,10 @@ mod mac_calendar {
     struct RawEvent {
         title: String,
         start: String,
+        #[serde(default)]
+        end: Option<String>,
+        #[serde(default)]
+        key: Option<String>,
         #[serde(default)]
         all_day: bool,
         #[serde(default, rename = "allDay")]
@@ -527,6 +536,8 @@ mod mac_calendar {
                 .map(|item| super::CalendarEventDto {
                     title: item.title,
                     start: item.start,
+                    end: item.end.filter(|value| !value.is_empty()),
+                    key: item.key.filter(|value| !value.is_empty()),
                     all_day: item.all_day || item.all_day_camel,
                 })
                 .collect())

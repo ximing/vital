@@ -3,10 +3,12 @@ import { AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import {
+  deviceCalendarWindow,
+  DEVICE_CALENDAR_SYNC_POLL_MS,
   localTodayYmd,
   openMeteoForecastUrl,
   openMeteoGeocodeUrl,
-  openTodayTitles,
+  buildTodayPlan,
   parseOpenMeteoForecast,
   parseOpenMeteoPlace,
   weatherConditionKey,
@@ -15,6 +17,7 @@ import {
   type BriefingTask,
   type NormalizedCalendarEvent,
   type TodayLayout,
+  type TodayPlan,
   type ClothingBand,
   type GeoPlace,
   type WeatherConditionKey,
@@ -52,7 +55,7 @@ const CONDITION: Record<WeatherConditionKey, string> = {
 };
 
 export type TodayBriefingModel = {
-  lead: string;
+  lead: TodayPlan;
   weather:
     | { status: 'loading' }
     | { status: 'unavailable' }
@@ -65,15 +68,6 @@ export type TodayBriefingModel = {
   meetings: { status: 'loading' } | PhoneCalendarRead;
   modules: ReturnType<typeof todayModulesOrFallback>;
 };
-
-export function todayLead(titles: readonly string[]): string {
-  if (titles.length === 0) return copy.today.briefing.empty;
-  const first = titles[0] ?? '';
-  if (titles.length === 1) return copy.today.briefing.leadOne.replace('{title}', first);
-  return copy.today.briefing.leadMany
-    .replace('{n}', String(titles.length))
-    .replace('{items}', titles.slice(0, 3).join('、'));
-}
 
 export function chineseYmd(ymd: string): string {
   const [year, month, day] = ymd.split('-');
@@ -224,25 +218,44 @@ export function useTodayMeetings(timeZone: string, ask: boolean): TodayBriefingM
       let cancelled = false;
       let inflight = false;
       let pending = false;
-      const load = () => {
+      let pendingAsk = ask;
+      const load = (shouldAsk: boolean) => {
         if (inflight) {
           pending = true;
+          pendingAsk = shouldAsk;
           return;
         }
         inflight = true;
         pending = false;
-        void readPhoneCalendar(timeZone, ask).then((next) => {
+        void readPhoneCalendar(timeZone, shouldAsk).then((next) => {
           inflight = false;
-          if (!cancelled) setMeetings(next);
-          if (pending && !cancelled) load();
+          if (!cancelled && next.status === 'events' && next.syncEvents != null) {
+            const span = deviceCalendarWindow(timeZone);
+            try {
+              void Promise.resolve(
+                client.syncDeviceCalendar?.({
+                  source: next.source,
+                  windowStart: span.windowStart,
+                  windowEnd: span.windowEnd,
+                  events: next.syncEvents,
+                }),
+              ).catch(() => undefined);
+            } catch {
+              // A partial client has no calendar sync method.
+            }
+          }
+          if (!cancelled && next.status !== 'skipped') setMeetings(next);
+          if (pending && !cancelled) load(pendingAsk);
         });
       };
-      load();
+      load(ask);
       const subscription = AppState.addEventListener('change', (next) => {
-        if (next === 'active') load();
+        if (next === 'active') load(ask);
       });
+      const timer = setInterval(() => load(false), DEVICE_CALENDAR_SYNC_POLL_MS);
       return () => {
         cancelled = true;
+        clearInterval(timer);
         subscription.remove();
       };
     }, [ask, timeZone]),
@@ -287,7 +300,7 @@ export function buildTodayBriefing(input: {
     weatherView = { status: 'unavailable' };
   }
   return {
-    lead: todayLead(openTodayTitles(input.tasks)),
+    lead: buildTodayPlan(input.tasks, input.timeZone, input.now ?? new Date()),
     weather: weatherView,
     placeBusy: weather.busy,
     submitPlace: weather.submitPlace,

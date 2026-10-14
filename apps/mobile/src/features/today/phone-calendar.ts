@@ -1,6 +1,6 @@
 import * as Calendar from 'expo-calendar';
-import { Linking } from 'react-native';
-import type { NormalizedCalendarEvent } from '@vital/dto';
+import { Linking, Platform } from 'react-native';
+import type { DeviceCalendarSource, NormalizedCalendarEvent } from '@vital/dto';
 import {
   calendarQueryWindow,
   eventOverlapsDay,
@@ -9,17 +9,56 @@ import {
   ymdInTimeZone,
 } from './briefing-core';
 
-const MAX_EVENTS = 40;
+const DISPLAY_CAP = 40;
+const SYNC_CAP = 200;
+
+export type PhoneCalendarSyncEvent = {
+  key: string;
+  title: string;
+  start: string;
+  end: string | null;
+  allDay: boolean;
+};
 
 export type PhoneCalendarRead =
   | { status: 'skipped' }
   | { status: 'denied' }
   | { status: 'failed' }
-  | { status: 'events'; events: NormalizedCalendarEvent[] };
+  | {
+      status: 'events';
+      events: NormalizedCalendarEvent[];
+      /**
+       * Events whose start falls in the sync window.
+       * Null when a row has no stable id, so the caller must not delete tasks.
+       */
+      syncEvents: PhoneCalendarSyncEvent[] | null;
+      source: DeviceCalendarSource;
+    };
 
 function instantIso(value: string | Date): string {
   if (value instanceof Date) return value.toISOString();
   return value;
+}
+
+function sourceOf(): DeviceCalendarSource {
+  return Platform.OS === 'android' ? 'android' : 'ios';
+}
+
+function eventKey(event: Calendar.Event, source: DeviceCalendarSource, timeZone: string): string | null {
+  const id = event.id;
+  if (typeof id !== 'string' || id.trim() === '') return null;
+  const recurring = (event as { recurrenceRule?: unknown }).recurrenceRule != null;
+  let suffix = '';
+  if (recurring) {
+    const start = new Date(instantIso(event.startDate));
+    if (Number.isNaN(start.getTime())) return null;
+    suffix = `:${ymdInTimeZone(start, timeZone)}`;
+  }
+  const head = `${source}:`;
+  const budget = 200 - head.length - suffix.length;
+  if (budget < 1) return null;
+  const stable = id.length > budget ? id.slice(0, budget) : id;
+  return `${head}${stable}${suffix}`;
 }
 
 function eventPayload(event: Calendar.Event, timeZone: string): { title: string; start: string; allDay: boolean } {
@@ -30,7 +69,7 @@ function eventPayload(event: Calendar.Event, timeZone: string): { title: string;
   return { title: event.title, start, allDay: true };
 }
 
-/** Read today's device events. `ask` shows the system dialog only when the user has not chosen yet. */
+/** Read device events. `ask` shows the system dialog only when the user has not chosen yet. */
 export async function readPhoneCalendar(timeZone: string, ask: boolean): Promise<PhoneCalendarRead> {
   try {
     if (!(await Calendar.isAvailableAsync())) return { status: 'failed' };
@@ -42,19 +81,49 @@ export async function readPhoneCalendar(timeZone: string, ask: boolean): Promise
     if (permission.status !== 'granted') return { status: 'denied' };
     const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
     const ids = calendars.map((calendar) => calendar.id).filter((id) => id !== '');
-    if (ids.length === 0) return { status: 'events', events: [] };
+    const source = sourceOf();
+    if (ids.length === 0) return { status: 'events', events: [], syncEvents: [], source };
     const day = localDayBounds(timeZone);
     const query = calendarQueryWindow(day);
     const rows = await Calendar.getEventsAsync(ids, query.start, query.end);
-    const events = rows
+    const sorted = [...rows].sort(
+      (a, b) => new Date(instantIso(a.startDate)).getTime() - new Date(instantIso(b.startDate)).getTime(),
+    );
+    const events = sorted
       .filter((event) => eventOverlapsDay(instantIso(event.startDate), instantIso(event.endDate), day.start, day.end))
-      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
       .flatMap((event) => {
         const normalized = normalizeCalendarEvent(eventPayload(event, timeZone), timeZone);
         return normalized ? [normalized] : [];
       })
-      .slice(0, MAX_EVENTS);
-    return { status: 'events', events };
+      .slice(0, DISPLAY_CAP);
+    const inWindow = sorted.filter((event) => {
+      const start = new Date(instantIso(event.startDate)).getTime();
+      return (
+        event.title.trim() !== '' &&
+        start >= day.start.getTime() &&
+        start < query.end.getTime()
+      );
+    });
+    if (inWindow.length >= SYNC_CAP) {
+      return { status: 'events', events, syncEvents: null, source };
+    }
+    const syncEvents: PhoneCalendarSyncEvent[] = [];
+    for (const event of inWindow) {
+      const key = eventKey(event, source, timeZone);
+      const start = new Date(instantIso(event.startDate));
+      if (!key || Number.isNaN(start.getTime())) {
+        return { status: 'events', events, syncEvents: null, source };
+      }
+      const end = new Date(instantIso(event.endDate));
+      syncEvents.push({
+        key,
+        title: event.title.trim(),
+        start: start.toISOString(),
+        end: Number.isNaN(end.getTime()) ? null : end.toISOString(),
+        allDay: event.allDay === true,
+      });
+    }
+    return { status: 'events', events, syncEvents, source };
   } catch {
     return { status: 'failed' };
   }

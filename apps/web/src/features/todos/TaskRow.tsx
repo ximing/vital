@@ -104,7 +104,8 @@ export function TaskRow({
   const extraTags = Math.max(0, task.tagIds.length - namedTags.length);
   const done = task.status === 'done';
   const note = task.notes.replaceAll(/\s+/g, ' ').trim();
-  const metaParts: { key: 'project' | 'reminder' | 'recurrence'; text: string }[] = [];
+  const metaParts: { key: 'calendar' | 'project' | 'reminder' | 'recurrence'; text: string }[] = [];
+  if (task.calendarKey) metaParts.push({ key: 'calendar', text: t.todos.fromCalendar });
   if (listName) metaParts.push({ key: 'project', text: listName });
   if (reminder) metaParts.push({ key: 'reminder', text: reminder });
   if (repeat) metaParts.push({ key: 'recurrence', text: repeat });

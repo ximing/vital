@@ -62,7 +62,7 @@ describe('today briefing helpers', () => {
     expect(shanghai.end.toISOString()).toBe('2026-10-13T16:00:00.000Z');
     const query = calendarQueryWindow(shanghai);
     expect(query.start.toISOString()).toBe('2026-09-12T16:00:00.000Z');
-    expect(query.end.toISOString()).toBe('2026-10-14T16:00:00.000Z');
+    expect(query.end.toISOString()).toBe('2026-10-20T16:00:00.000Z');
     const fallBack = localDayBounds('America/New_York', new Date('2026-11-01T12:00:00.000Z'));
     expect(fallBack.start.toISOString()).toBe('2026-11-01T04:00:00.000Z');
     expect(fallBack.end.toISOString()).toBe('2026-11-02T05:00:00.000Z');

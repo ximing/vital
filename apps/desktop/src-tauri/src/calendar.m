@@ -8,6 +8,8 @@
 // an availability attribute, makes clang emit ___isPlatformVersionAtLeast. Rust links
 // with -nodefaultlibs and does not resolve that compiler-rt symbol.
 static const NSInteger kVitalCalendarReadAccess = 3;
+static const NSInteger kVitalCalendarSyncDays = 8;
+static const NSUInteger kVitalCalendarEventCap = 200;
 
 typedef void (^VitalAccessCallback)(BOOL granted, NSError *error);
 
@@ -96,6 +98,27 @@ int vital_calendar_ensure_access(void) {
     return result;
 }
 
+static NSString *vital_calendar_key(EKEvent *event, NSCalendar *cal) {
+    NSString *stable = event.calendarItemExternalIdentifier;
+    if (stable.length == 0) stable = event.eventIdentifier;
+    if (stable.length == 0) return nil;
+    BOOL recurring = event.hasRecurrenceRules || event.isDetached;
+    NSString *suffix = @"";
+    if (recurring) {
+        NSDate *dayDate = event.occurrenceDate ?: event.startDate;
+        if (dayDate == nil) return nil;
+        NSDateComponents *parts = [cal components:(NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay)
+                                         fromDate:dayDate];
+        suffix = [NSString stringWithFormat:@":%04ld-%02ld-%02ld",
+                                            (long)parts.year, (long)parts.month, (long)parts.day];
+    }
+    NSString *head = @"mac:";
+    NSUInteger budget = 200 - head.length - suffix.length;
+    if (budget == 0) return nil;
+    if (stable.length > budget) stable = [stable substringToIndex:budget];
+    return [[head stringByAppendingString:stable] stringByAppendingString:suffix];
+}
+
 char *vital_calendar_today_json(char **error_out) {
     if (error_out) *error_out = NULL;
     if (vital_calendar_ensure_access() == 0) {
@@ -107,7 +130,7 @@ char *vital_calendar_today_json(char **error_out) {
 
         NSCalendar *cal = [NSCalendar currentCalendar];
         NSDate *start = [cal startOfDayForDate:[NSDate date]];
-        NSDate *end = [cal dateByAddingUnit:NSCalendarUnitDay value:1 toDate:start options:0];
+        NSDate *end = [cal dateByAddingUnit:NSCalendarUnitDay value:kVitalCalendarSyncDays toDate:start options:0];
         NSPredicate *predicate = [store predicateForEventsWithStartDate:start endDate:end calendars:nil];
         NSArray<EKEvent *> *events = [[store eventsMatchingPredicate:predicate]
             sortedArrayUsingComparator:^NSComparisonResult(EKEvent *a, EKEvent *b) {
@@ -120,16 +143,23 @@ char *vital_calendar_today_json(char **error_out) {
 
         NSMutableArray *rows = [NSMutableArray array];
         for (EKEvent *event in events) {
-            if (rows.count >= 40) break;
+            if (rows.count >= kVitalCalendarEventCap) break;
             NSString *title = event.title ?: @"";
             if (title.length == 0 || event.startDate == nil) continue;
             NSString *startIso = [fmt stringFromDate:event.startDate] ?: @"";
             if (startIso.length == 0) continue;
-            [rows addObject:@{
+            NSMutableDictionary *row = [NSMutableDictionary dictionaryWithDictionary:@{
                 @"title" : title,
                 @"start" : startIso,
                 @"allDay" : @(event.isAllDay),
             }];
+            NSString *key = vital_calendar_key(event, cal);
+            if (key.length > 0) row[@"key"] = key;
+            if (event.endDate != nil) {
+                NSString *endIso = [fmt stringFromDate:event.endDate] ?: @"";
+                if (endIso.length > 0) row[@"end"] = endIso;
+            }
+            [rows addObject:row];
         }
 
         NSData *data = [NSJSONSerialization dataWithJSONObject:rows options:0 error:nil];
