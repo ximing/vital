@@ -51,6 +51,7 @@ function makeTaskRow(overrides: Partial<TaskRow> = {}): TaskRow {
     completedAt: null,
     sortOrder: 1024,
     deletedAt: null,
+    calendarKey: null,
     searchTsv: '',
     createdAt: now,
     updatedAt: now,
