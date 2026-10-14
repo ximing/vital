@@ -41,7 +41,7 @@ describe('today plan', () => {
 
   it('caps the brief and hides all-day times', () => {
     const tasks = Array.from({ length: 6 }, (_, index) =>
-      task({ id: `t${index}`, title: `事项${index}`, priority: 0, isAllDay: true, dueAt: '2026-10-14T16:00:00.000Z' }),
+      task({ id: `t${String(index)}`, title: `事项${String(index)}`, priority: 0, isAllDay: true, dueAt: '2026-10-14T16:00:00.000Z' }),
     );
     const plan = buildTodayPlan(tasks, zone, now);
     expect(plan.items).toHaveLength(5);
