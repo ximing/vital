@@ -248,8 +248,13 @@ export function canOpenCalendarSettings(): boolean {
   return typeof getVitalHost()?.openCalendarSettings === 'function';
 }
 
+const CALENDAR_ACCESS_EVENT = 'vital-calendar-access';
+
 export function openCalendarSettings(): void {
-  void getVitalHost()?.openCalendarSettings?.();
+  const pending = getVitalHost()?.openCalendarSettings?.();
+  void Promise.resolve(pending).finally(() => {
+    window.dispatchEvent(new Event(CALENDAR_ACCESS_EVENT));
+  });
 }
 
 export function useTodayMeetings(timeZone: string): TodayBriefingModel['meetings'] {
@@ -263,9 +268,11 @@ export function useTodayMeetings(timeZone: string): TodayBriefingModel['meetings
     };
     load();
     window.addEventListener('focus', load);
+    window.addEventListener(CALENDAR_ACCESS_EVENT, load);
     return () => {
       cancelled = true;
       window.removeEventListener('focus', load);
+      window.removeEventListener(CALENDAR_ACCESS_EVENT, load);
     };
   }, [timeZone]);
   return meetings;

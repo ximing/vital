@@ -209,6 +209,14 @@ describe('Tauri desktop contract', () => {
     );
     assert.ok(caps.permissions.includes('allow-open-calendar-settings'));
     assert.match(host, /openCalendarSettings/);
+    const calendar = read('src-tauri/src/calendar.m');
+    assert.match(calendar, /dispatch_get_main_queue/);
+    assert.match(calendar, /vital_calendar_ensure_access/);
+    assert.match(calendar, /kVitalCalendarReadAccess = 3/);
+    assert.doesNotMatch(calendar, /@available/);
+    assert.doesNotMatch(calendar, /EKAuthorizationStatusFullAccess/);
+    assert.match(lib, /vital_calendar_ensure_access/);
+    assert.match(lib, /access == 1/);
   });
 
   it('bundles PR1 raster icons', () => {

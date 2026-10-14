@@ -185,8 +185,9 @@ export const t = {
       meetingsEmpty: '今天没有日程',
       meetingsMacOnly: '本地日历只在 Mac 桌面版',
       meetingsDenied: '需要日历权限才能读取今天的日程',
-      meetingsDeniedHint: '打开系统设置 → 隐私与安全性 → 日历，允许 Vital',
-      meetingsOpenSettings: '打开日历权限',
+      meetingsDeniedHint:
+        '系统设置不能手动加入应用。点下面的按钮，由 Vital 向系统申请。已经允许或拒绝过时，会打开日历权限页。',
+      meetingsOpenSettings: '申请日历权限',
       meetingsFailed: '日历暂时读不到',
       allDay: '全天',
       module: {

@@ -917,9 +917,10 @@ describe('today briefing', () => {
     expect(screen.getByText('日程')).toBeInTheDocument();
   });
 
-  it('asks for calendar permission and opens the system pane when access is denied', async () => {
+  it('asks for calendar permission and re-reads after the system dialog', async () => {
     const user = userEvent.setup();
     const openCalendarSettings = vi.fn(async () => undefined);
+    let reads = 0;
     window.__VITAL_HOST__ = {
       kind: 'desktop',
       applyChrome() {},
@@ -928,7 +929,14 @@ describe('today briefing', () => {
       closeStickyAlert() {},
       openInMain() {},
       hideMain() {},
-      readTodayCalendar: async () => ({ status: 'denied', events: [] }),
+      readTodayCalendar: async () => {
+        reads += 1;
+        if (reads === 1) return { status: 'denied', events: [] };
+        return {
+          status: 'ok',
+          events: [{ title: '周会', start: '2026-10-13T01:30:00.000Z', allDay: false }],
+        };
+      },
       openCalendarSettings,
     };
 
@@ -938,6 +946,7 @@ describe('today briefing', () => {
     expect(screen.getByText(t.today.briefing.meetingsDeniedHint)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: t.today.briefing.meetingsOpenSettings }));
     expect(openCalendarSettings).toHaveBeenCalledOnce();
+    expect(await screen.findByText(/周会/)).toBeInTheDocument();
   });
 
   it('shows an empty-today line and a weather-unavailable line without a clock', async () => {

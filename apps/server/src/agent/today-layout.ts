@@ -24,7 +24,7 @@ const SYSTEM_PROMPT = `你负责「今天」页的模块排布。页面只能渲
 - note：你自己的一句话，text 必填，80 字以内。只有真有判断时才放，不要复述清单。
 - lead：今天要做的事。有未完成事项时通常留下。
 - weather：天气和穿衣。没有预报时，这个模块会请用户填城市。
-- meetings：今天的本地日历，包含会议和其他日程。Mac 桌面读 Mac 日历，手机读手机日历。没有权限时必须留下，页面会带用户去系统设置。材料写明只在 Mac 桌面版时，网页上会显示这句话。
+- meetings：今天的本地日历，包含会议和其他日程。Mac 桌面读 Mac 日历，手机读手机日历。没有权限时必须留下。Mac 由应用向系统申请，申请后系统日历列表里才会出现 Vital；手机打开本应用的系统设置。材料写明只在 Mac 桌面版时，网页上会显示这句话。
 - upcoming：今天之后七天内的安排。没有时可以不放。
 - holiday：最近的法定节假日。离得很远、又帮不上今天的安排时可以不放。
 - focus：建议开始的候选。没有候选或现在是安静时段时可以不放。
@@ -48,7 +48,7 @@ function meetingsSentence(context: Record<string, unknown>): string {
   if (typeof meetings !== 'object' || meetings === null) return '还没有上报';
   const row = meetings as { status?: unknown; events?: unknown };
   if (row.status === 'mac-only') return '本地日历只在 Mac 桌面版';
-  if (row.status === 'denied') return '需要日历权限，页面会引导打开系统设置';
+  if (row.status === 'denied') return '需要日历权限，页面会由 Vital 向系统申请';
   if (row.status === 'failed') return '日历暂时读不到';
   if (row.status !== 'events' || !Array.isArray(row.events) || row.events.length === 0) return '今天没有日程';
   return row.events

@@ -490,6 +490,8 @@ mod mac_calendar {
     extern "C" {
         fn vital_calendar_today_json(error_out: *mut *mut c_char) -> *mut c_char;
         fn vital_calendar_string_free(ptr: *mut c_char);
+        /// 2 = already allowed, 1 = the dialog just allowed, 0 = still not allowed.
+        fn vital_calendar_ensure_access() -> i32;
     }
 
     #[derive(serde::Deserialize)]
@@ -530,6 +532,11 @@ mod mac_calendar {
                 .collect())
         }
     }
+
+    /// 2 = already allowed, 1 = the dialog just allowed, 0 = still not allowed.
+    pub fn ensure_access() -> i32 {
+        unsafe { vital_calendar_ensure_access() }
+    }
 }
 
 fn read_today_calendar_blocking() -> Result<Vec<CalendarEventDto>, String> {
@@ -543,8 +550,8 @@ fn read_today_calendar_blocking() -> Result<Vec<CalendarEventDto>, String> {
     }
 }
 
-// Async plus a blocking thread: EventKit's permission dialog needs the main
-// run loop, and waiting on it from a sync command freezes that loop.
+// Async plus a blocking thread. EventKit shows the dialog on the main queue;
+// the ObjC side hops there. Waiting on that queue from this command would freeze it.
 #[tauri::command]
 async fn read_today_calendar() -> Result<Vec<CalendarEventDto>, String> {
     tauri::async_runtime::spawn_blocking(read_today_calendar_blocking)
@@ -681,13 +688,23 @@ fn macos_product_major() -> u32 {
         .unwrap_or(13)
 }
 
+/// macOS will not add an app to Privacy & Security → Calendars until that app
+/// calls EventKit. Ask when access has never been decided. Open the pane when
+/// access was already decided, or when the user just declined, so the toggle
+/// can be changed. A dialog that just granted access stays on the today page.
 #[tauri::command]
-fn open_calendar_settings(window: tauri::WebviewWindow) -> Result<(), String> {
+async fn open_calendar_settings(window: tauri::WebviewWindow) -> Result<(), String> {
     if window.label() != MAIN_LABEL {
         return Err("open_calendar_settings is main-only".into());
     }
     #[cfg(target_os = "macos")]
     {
+        let access = tauri::async_runtime::spawn_blocking(mac_calendar::ensure_access)
+            .await
+            .map_err(|err| err.to_string())?;
+        if access == 1 {
+            return Ok(());
+        }
         return spawn_external(calendar_privacy_url(macos_product_major()));
     }
     #[cfg(not(target_os = "macos"))]
