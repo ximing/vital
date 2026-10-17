@@ -22,6 +22,7 @@ export function register<T>(tool: ChatTool<T>): void {
   if (tools.some((item) => item.name === tool.name)) {
     throw new Error(`duplicate chat tool ${tool.name}`);
   }
+  const fold = tool.fold;
   const stored: ChatTool<unknown> = {
     name: tool.name,
     label: tool.label,
@@ -30,8 +31,8 @@ export function register<T>(tool: ChatTool<T>): void {
     mode: tool.mode,
     input: tool.input,
     handler: (ctx, input) => tool.handler(ctx, input as T),
-    ...(tool.fold ? { fold: (ctx, input) => tool.fold!(ctx, input as T) } : {}),
   };
+  if (fold) stored.fold = (ctx, input) => fold(ctx, input as T);
   tools.push(stored);
 }
 

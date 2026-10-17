@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { present } from '../helpers/present.js';
 import { DateTime } from 'luxon';
 import { buildFastify } from '../../src/app.js';
 import { config } from '../../src/config.js';
@@ -40,7 +41,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await resetDb();
-  setMeetingPrepSimilar(async () => []);
+  setMeetingPrepSimilar(() => Promise.resolve([]));
 });
 
 afterEach(() => {
@@ -244,7 +245,7 @@ describe('meeting prep delivery', () => {
       OPEN: 1,
     };
     subscribe(userId, socket);
-    return { messages, stop: () => unsubscribe(userId, socket) };
+    return { messages, stop: () => { unsubscribe(userId, socket); } };
   }
 
   it('stores one row per task start and schedules the remainder of the lead', async () => {
@@ -319,7 +320,7 @@ describe('meeting prep delivery', () => {
     expect(sent?.payload.taskId).toBe(meetingId);
     expect(sent?.payload.deeplink).toBe(MEETING_PREP_PATH);
     expect(sent?.payload.prepRule).toBe(RULE);
-    expect(renderMeowMessage(sent!.payload)).toEqual({ title: MEETING_PREP_TITLE, msg: RULE });
+    expect(renderMeowMessage(present(sent).payload)).toEqual({ title: MEETING_PREP_TITLE, msg: RULE });
     expect(pushTargetOf({ eventType: 'meeting.prep', entityId: meetingId })).toEqual({ kind: 'today' });
     expect(await processDueNotifications(now)).toBe(0);
     expect(await enqueueMeetingPreps(now)).toBe(0);
@@ -365,7 +366,7 @@ describe('meeting prep delivery', () => {
     await meeting(alice.id, listId, at(10));
     const milkId = await plain(alice.id, listId, '买牛奶');
     const postJson = await channel(alice.id);
-    setMeetingPrepSimilar(async () => [{ id: milkId, title: '买牛奶' }]);
+    setMeetingPrepSimilar(() => Promise.resolve([{ id: milkId, title: '买牛奶' }]));
     expect(await enqueueMeetingPreps(now)).toBe(1);
     expect(await processDueNotifications(now)).toBe(1);
     const body = postJson.mock.calls[0]?.[1] as { msg?: string };

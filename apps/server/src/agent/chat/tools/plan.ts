@@ -239,7 +239,7 @@ function buildChange(
   }
   if (patch.status !== undefined && patch.status !== row.status) {
     stored.status = patch.status;
-    const before = STATUS_LABEL[row.status as keyof typeof STATUS_LABEL] ?? row.status;
+    const before = STATUS_LABEL[row.status as keyof typeof STATUS_LABEL];
     changes.push({ label: '状态', before, after: STATUS_LABEL[patch.status] });
   }
   if (patch.outcomeId !== undefined && patch.outcomeId !== row.outcomeId) {

@@ -106,7 +106,7 @@ async function chooseIds(userId: string, candidates: Candidate[]): Promise<strin
     systemPrompt:
       '你从给定待办里挑选适合作为里程碑的 id。只能使用列表中的 id，不得编造。必须调用 submit_milestones。没有合适的就传空数组。不要把已经完成的事说成还没做。',
     userPrompt: `待办：\n${listed}`,
-    makeTool: (capture) => milestoneTool((ids) => capture({ taskIds: ids })),
+    makeTool: (capture) => milestoneTool((ids) => { capture({ taskIds: ids }); }),
   });
   return result?.args.taskIds ?? [];
 }

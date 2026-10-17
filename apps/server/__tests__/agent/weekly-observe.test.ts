@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { present } from '../helpers/present.js';
 import { DateTime } from 'luxon';
 import { enqueueAgentJob, processDueAgentJobs } from '../../src/agent/jobs.js';
 import { reserveBackgroundModelCall } from '../../src/agent/model-budget.js';
@@ -126,7 +127,7 @@ async function runObserve(userId: string, when = sundayEvening, periodStart = PE
   });
   expect(id).toBeTruthy();
   expect(await processDueAgentJobs(when)).toBe(1);
-  const [job] = await getDb().select().from(agentJobs).where(eq(agentJobs.id, id!));
+  const [job] = await getDb().select().from(agentJobs).where(eq(agentJobs.id, present(id)));
   return job;
 }
 
@@ -344,7 +345,7 @@ describe('reflect.weekly job', () => {
     expect(report?.type).toBe('weekly');
     expect(report?.periodStart).toBe(PERIOD);
     expect(report?.bodyMd.indexOf('## 洞察')).toBeGreaterThan(-1);
-    expect(report?.bodyMd.indexOf('## 洞察')).toBeLessThan(report!.bodyMd.indexOf('## 复盘'));
+    expect(report?.bodyMd.indexOf('## 洞察')).toBeLessThan(present(report).bodyMd.indexOf('## 复盘'));
     expect(report?.bodyMd).toContain(LATE_NIGHT);
     expect(report?.bodyMd).not.toContain('深夜样本');
 
@@ -355,7 +356,7 @@ describe('reflect.weekly job', () => {
     expect(row?.payload.deeplink).toBe(`/reports/${report?.id}?type=weekly`);
     expect(row?.idempotencyKey).toBe(`agent.observe:${alice.id}:${PERIOD}`);
 
-    const [execution] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.jobId, job!.id));
+    const [execution] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.jobId, present(job).id));
     expect(execution?.inputSummary).toContain('深夜新建 7');
     expect(execution?.inputSummary).not.toContain('深夜样本');
   });
@@ -371,7 +372,7 @@ describe('reflect.weekly job', () => {
     expect(called).not.toHaveBeenCalled();
     expect(await getDb().select().from(notificationOutbox)).toEqual([]);
     expect(await getDb().select().from(reports)).toEqual([]);
-    const [execution] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.jobId, job!.id));
+    const [execution] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.jobId, present(job).id));
     expect(execution?.status).toBe('skipped');
     expect(execution?.reason).toBe('NO_PATTERN');
     expect(execution?.inputSummary).not.toContain('买牛奶');
@@ -565,10 +566,10 @@ describe('reflect.weekly job', () => {
       scheduledAt: sundayEvening,
     });
     expect(await processDueAgentJobs(sundayEvening)).toBe(1);
-    const [job] = await getDb().select().from(agentJobs).where(eq(agentJobs.id, id!));
+    const [job] = await getDb().select().from(agentJobs).where(eq(agentJobs.id, present(id)));
     expect(job?.status).toBe('done');
     expect(await getDb().select().from(notificationOutbox)).toEqual([]);
-    const [execution] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.jobId, id!));
+    const [execution] = await getDb().select().from(agentExecutions).where(eq(agentExecutions.jobId, present(id)));
     expect(execution?.reason).toBe('INVALID_PAYLOAD');
   });
 });

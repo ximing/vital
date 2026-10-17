@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { present } from '../helpers/present.js';
 import { DateTime } from 'luxon';
 import { buildTodayPlan } from '@vital/dto';
 import { buildFastify } from '../../src/app.js';
@@ -84,16 +85,16 @@ describe('morning brief rules', () => {
   it('waits for 07:30, catches up after, and moves through quiet hours', () => {
     const waiting = morningBriefWhen(early, TZ, '07:30', null, null);
     expect(waiting?.day).toBe('2026-09-24');
-    expect(DateTime.fromJSDate(waiting!.scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('07:30');
+    expect(DateTime.fromJSDate(present(waiting).scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('07:30');
 
     const late = morningBriefWhen(briefAt, TZ, '07:30', null, null);
     expect(late?.scheduledAt.toISOString()).toBe(briefAt.toISOString());
 
     const quiet = morningBriefWhen(early, TZ, '07:30', '07:00', '08:00');
-    expect(DateTime.fromJSDate(quiet!.scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('08:00');
+    expect(DateTime.fromJSDate(present(quiet).scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('08:00');
 
     const nextDay = morningBriefWhen(early, TZ, '07:30', '07:00', '06:00');
-    expect(DateTime.fromJSDate(nextDay!.scheduledAt, { zone: TZ }).toISODate()).toBe('2026-09-25');
+    expect(DateTime.fromJSDate(present(nextDay).scheduledAt, { zone: TZ }).toISODate()).toBe('2026-09-25');
 
     const ny = morningBriefWhen(
       DateTime.fromISO('2026-09-24T06:00:00', { zone: 'America/New_York' }).toJSDate(),
@@ -103,7 +104,7 @@ describe('morning brief rules', () => {
       null,
     );
     expect(ny?.day).toBe('2026-09-24');
-    expect(DateTime.fromJSDate(ny!.scheduledAt, { zone: 'America/New_York' }).toFormat('HH:mm')).toBe('07:30');
+    expect(DateTime.fromJSDate(present(ny).scheduledAt, { zone: 'America/New_York' }).toFormat('HH:mm')).toBe('07:30');
   });
 
   it('finds gaps of at least an hour and ignores all-day events', () => {
@@ -205,13 +206,13 @@ describe('morning brief delivery', () => {
     const [row] = await getDb().select().from(notificationOutbox);
     expect(row?.eventType).toBe('agent.briefing');
     expect(row?.idempotencyKey).toBe(`agent.briefing:${alice.id}:2026-09-24`);
-    expect(DateTime.fromJSDate(row!.scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('07:30');
+    expect(DateTime.fromJSDate(present(row).scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('07:30');
 
     await getDb().delete(notificationOutbox).where(eq(notificationOutbox.userId, alice.id));
     await getDb().update(users).set({ morningBriefTime: '06:45' }).where(eq(users.id, alice.id));
     expect(await enqueueMorningBriefs(early)).toBe(1);
     const [moved] = await getDb().select().from(notificationOutbox);
-    expect(DateTime.fromJSDate(moved!.scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('06:45');
+    expect(DateTime.fromJSDate(present(moved).scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('06:45');
   });
 
   it('does not schedule when the switch is off or quiet hours land tomorrow', async () => {
@@ -245,7 +246,7 @@ describe('morning brief delivery', () => {
     expect(sent?.status).toBe('sent');
     expect(sent?.payload.message).toBe(body.msg);
     expect(pushTargetOf({ eventType: 'agent.briefing', entityId: alice.id })).toEqual({ kind: 'today' });
-    expect(renderMeowMessage(sent!.payload)).toEqual({ title: '晨报', msg: body.msg });
+    expect(renderMeowMessage(present(sent).payload)).toEqual({ title: '晨报', msg: body.msg });
     expect(await enqueueMorningBriefs(briefAt)).toBe(0);
     expect(await processDueNotifications(briefAt)).toBe(0);
   });
@@ -403,7 +404,7 @@ describe('morning brief delivery', () => {
     expect(postJson).not.toHaveBeenCalled();
     const [delayed] = await getDb().select().from(notificationOutbox);
     expect(delayed?.status).toBe('pending');
-    expect(DateTime.fromJSDate(delayed!.scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('08:00');
+    expect(DateTime.fromJSDate(present(delayed).scheduledAt, { zone: TZ }).toFormat('HH:mm')).toBe('08:00');
 
     await getDb().delete(notificationOutbox);
     await getDb()

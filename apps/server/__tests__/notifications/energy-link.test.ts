@@ -8,6 +8,7 @@ import {
   type EnergyDayLink,
 } from '../../src/notifications/energy-link.js';
 import { acceptMorningBriefText, morningBriefTemplate } from '../../src/notifications/morning-brief.js';
+import { present } from '../helpers/present.js';
 
 function day(over: Partial<EnergyDayLink> & Pick<EnergyDayLink, 'day' | 'energy'>): EnergyDayLink {
   return { nextCompleted: 0, nextDueOpen: 0, ...over };
@@ -35,9 +36,9 @@ describe('energy completion link', () => {
       otherPercent: 88,
       dropPoints: 63,
     });
-    expect(energyLinkSentence(link!)).toContain('精力 ≤ 2');
-    expect(energyLinkSentence(link!)).toContain('25%');
-    expect(energyLinkSentence(link!)).toContain('63');
+    expect(energyLinkSentence(present(link))).toContain('精力 ≤ 2');
+    expect(energyLinkSentence(present(link))).toContain('25%');
+    expect(energyLinkSentence(present(link))).toContain('63');
   });
 
   it('does not conclude when a group has fewer than two days', () => {

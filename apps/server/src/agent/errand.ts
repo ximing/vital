@@ -131,8 +131,9 @@ export function threeLineSummary(raw: string): string | null {
   lines = lines
     .map((line) => line.replace(/^[#>*\-\d.、\s]+/, '').trim())
     .filter((line) => line !== '');
-  if (lines.length === 1) {
-    const parts = lines[0]!.split(/(?<=[。！？])/).map((part) => part.trim()).filter((part) => part !== '');
+  const onlyLine = lines.length === 1 ? lines[0] : undefined;
+  if (onlyLine !== undefined) {
+    const parts = onlyLine.split(/(?<=[。！？])/).map((part) => part.trim()).filter((part) => part !== '');
     if (parts.length > 1) lines = parts;
   }
   if (lines.length === 0) return null;
@@ -194,7 +195,8 @@ type ErrandPayload = AgentJobPayload & {
 export function isErrandPayload(payload: AgentJobPayload): payload is ErrandPayload {
   if (!('taskId' in payload) || typeof payload.taskId !== 'string') return false;
   if (!('kind' in payload)) return false;
-  return payload.kind === 'inbox.read_summarize' || payload.kind === 'inbox.organize';
+  const kind: string = payload.kind;
+  return kind === 'inbox.read_summarize' || kind === 'inbox.organize';
 }
 
 export interface ErrandStart {
@@ -251,7 +253,7 @@ async function enqueueRead(
   if (!item) throw AppError.of(404, 'NOT_FOUND');
   const list = await getInboxList(userId);
   const dedupKey = readDedupKey(userId, inboxItemId);
-  let created: TaskRow | null = null;
+  const indexed: { task: TaskRow | null } = { task: null };
   let taskId = '';
   let jobId: string | null = null;
   await getDb().transaction(async (tx) => {
@@ -268,12 +270,12 @@ async function enqueueRead(
       if (task && task.status !== 'canceled') taskId = task.id;
     }
     if (taskId === '') {
-      created = await createTaskInTx(tx, userId, {
+      indexed.task = await createTaskInTx(tx, userId, {
         title: `读：${item.title}`.slice(0, 500),
         listId: list.id,
         notes: errandSourceMarker(item.id),
       });
-      taskId = created.id;
+      taskId = indexed.task.id;
     }
     jobId = await enqueueAgentJob(tx, {
       userId,
@@ -288,7 +290,7 @@ async function enqueueRead(
       },
     });
   });
-  if (created) fireIndexTask(created);
+  if (indexed.task) fireIndexTask(indexed.task);
   return { taskId, jobId };
 }
 
@@ -297,7 +299,7 @@ async function enqueueOrganize(userId: string, ids: readonly string[], trigger: 
   if (live.length === 0) throw AppError.of(404, 'NOT_FOUND');
   const list = await getInboxList(userId);
   const dedupKey = organizeDedupKey(userId, live);
-  let created: TaskRow | null = null;
+  const indexed: { task: TaskRow | null } = { task: null };
   let taskId = '';
   let jobId: string | null = null;
   await getDb().transaction(async (tx) => {
@@ -314,12 +316,12 @@ async function enqueueOrganize(userId: string, ids: readonly string[], trigger: 
       if (task && task.status !== 'canceled') taskId = task.id;
     }
     if (taskId === '') {
-      created = await createTaskInTx(tx, userId, {
+      indexed.task = await createTaskInTx(tx, userId, {
         title: '整理收集箱',
         listId: list.id,
         notes: live.map((id) => errandSourceMarker(id)).join('\n'),
       });
-      taskId = created.id;
+      taskId = indexed.task.id;
     }
     jobId = await enqueueAgentJob(tx, {
       userId,
@@ -334,7 +336,7 @@ async function enqueueOrganize(userId: string, ids: readonly string[], trigger: 
       },
     });
   });
-  if (created) fireIndexTask(created);
+  if (indexed.task) fireIndexTask(indexed.task);
   return { taskId, jobId };
 }
 
@@ -396,7 +398,8 @@ export async function upgradeTaskErrand(
     return enqueueRead(userId, inboxItemId, 'task.draft', task.id);
   }
   const linked = await linkedInboxIds(userId, task);
-  if (linked.length === 1) return enqueueRead(userId, linked[0]!, 'task.draft', task.id);
+  const onlyId = linked[0];
+  if (linked.length === 1 && onlyId !== undefined) return enqueueRead(userId, onlyId, 'task.draft', task.id);
   if (linked.length > 1) return enqueueOrganize(userId, linked, 'task.draft', task.id);
   throw new AppError(400, 'VALIDATION_ERROR', '这个任务没有连着收集箱，还不能代办。');
 }

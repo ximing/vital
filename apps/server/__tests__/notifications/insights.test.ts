@@ -13,6 +13,7 @@ import { resetDb } from '../helpers/db.js';
 import { inboxId, registerUser } from '../helpers/session.js';
 import { injectJson } from '../helpers/http.js';
 import { eq } from 'drizzle-orm';
+import { present } from '../helpers/present.js';
 import type { FastifyInstance } from 'fastify';
 
 const now = new Date('2026-09-10T13:00:00.000Z');
@@ -101,9 +102,7 @@ describe('defer follow-up', () => {
     const alice = await registerUser(app);
     const task = await deferredTask(alice.id, alice.token);
     const user = await getUserEntity(alice.id);
-    const rewrite = vi.fn(async () => {
-      throw new Error('model down');
-    });
+    const rewrite = vi.fn(() => Promise.reject(new Error('model down')));
     await expect(enqueueProactiveInsights(user, now, rewrite)).resolves.toBe(1);
     const [row] = await getDb().select().from(notificationOutbox);
     expect(row?.status).toBe('pending');
@@ -121,7 +120,7 @@ describe('defer follow-up', () => {
     expect(await enqueueProactiveInsights(user, new Date(now.getTime() + 24 * 3600_000), rewrite)).toBe(0);
     expect(await getDb().select().from(notificationOutbox)).toHaveLength(1);
 
-    expect(await enqueueProactiveInsights(user, new Date(now.getTime() + 8 * 24 * 3600_000), async () => null)).toBe(1);
+    expect(await enqueueProactiveInsights(user, new Date(now.getTime() + 8 * 24 * 3600_000), () => Promise.resolve(null))).toBe(1);
     expect(await getDb().select().from(notificationOutbox)).toHaveLength(2);
     expect(rewrite).toHaveBeenCalledTimes(1);
   });
@@ -155,6 +154,6 @@ describe('defer follow-up', () => {
     expect(body.title).toBe('还做吗');
     expect(body.msg).toContain('是不要做了，还是卡在哪？');
     expect(body.url).toBe(`http://localhost:5180/chat?task=${task.id}`);
-    expect(renderMeowMessage((await getDb().select().from(notificationOutbox))[0]!.payload).title).toBe('还做吗');
+    expect(renderMeowMessage(present((await getDb().select().from(notificationOutbox))[0]).payload).title).toBe('还做吗');
   });
 });

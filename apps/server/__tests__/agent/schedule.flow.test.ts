@@ -12,6 +12,7 @@ import { getDb } from '../../src/db/index.js';
 import { tasks } from '../../src/db/schema.js';
 import { createTask, getTask } from '../../src/tasks/tasks.service.js';
 import { injectJson } from '../helpers/http.js';
+import { present } from '../helpers/present.js';
 import { inboxId, registerUser } from '../helpers/session.js';
 
 const NOW = new Date('2026-10-15T01:00:00.000Z');
@@ -134,7 +135,7 @@ describe('tasks.propose_schedule', () => {
     expect((await getTask(alice.id, mail.id)).agentScheduled).toBe(false);
     expect((await getTask(alice.id, long.id)).startAt).toBeNull();
 
-    const [calendarAfter] = await getDb().select().from(tasks).where(eq(tasks.id, calendarBefore!.id));
+    const [calendarAfter] = await getDb().select().from(tasks).where(eq(tasks.id, present(calendarBefore).id));
     expect(calendarAfter?.calendarKey).toBe('ios:p8-block');
     expect(calendarAfter?.title).toBe('整天会');
     expect(calendarAfter?.startAt?.toISOString()).toBe(START);
@@ -153,7 +154,7 @@ describe('tasks.propose_schedule', () => {
     expect(restored.startAt).toBeNull();
     expect(restored.dueAt).toBeNull();
     expect(restored.agentScheduled).toBe(false);
-    const [calendarStill] = await getDb().select().from(tasks).where(eq(tasks.id, calendarBefore!.id));
+    const [calendarStill] = await getDb().select().from(tasks).where(eq(tasks.id, present(calendarBefore).id));
     expect(calendarStill?.calendarEndAt?.toISOString()).toBe(END);
     expect(calendarStill?.updatedAt.toISOString()).toBe(calendarBefore?.updatedAt.toISOString());
   });

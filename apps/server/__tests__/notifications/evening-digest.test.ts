@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { present } from '../helpers/present.js';
 import { DateTime } from 'luxon';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
@@ -350,7 +351,7 @@ describe('evening digest', () => {
     expect(sent?.status).toBe('sent');
     expect(sent?.payload.message).toBe(body.msg);
     expect(sent?.payload.digestRule).toBe(body.msg);
-    expect(renderMeowMessage(sent!.payload)).toEqual({ title: '晚间提醒', msg: body.msg });
+    expect(renderMeowMessage(present(sent).payload)).toEqual({ title: '晚间提醒', msg: body.msg });
     expect(pushTargetOf({ eventType: 'task.digest', entityId: alice.id })).toEqual({ kind: 'today' });
 
     expect(await enqueueEveningDigests(evening)).toBe(0);

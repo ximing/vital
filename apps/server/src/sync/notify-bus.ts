@@ -1,4 +1,4 @@
-import pg from 'pg';
+import type pg from 'pg';
 import { pool } from '../db/index.js';
 import { logger } from '../utils/logger.js';
 
