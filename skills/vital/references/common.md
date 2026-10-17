@@ -143,6 +143,23 @@ export interface ChatToolCard {
 ```
 
 ```ts
+export interface EnergyLog {
+  id: string;
+  energy: number;
+  mood: string | null;
+  note: string | null;
+  loggedAt: string;
+  createdAt: string;
+}
+```
+
+```ts
+export interface EnergyLogList {
+  items: EnergyLog[];
+}
+```
+
+```ts
 export interface ErrorBody {
   code: string;
   message: string;

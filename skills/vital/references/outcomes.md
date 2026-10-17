@@ -29,6 +29,9 @@ export interface Outcome {
   openTaskCount: number;
   completedLast7d: number;
   materialCount: number;
+  /** Done/total milestone tasks. Absent on older payloads means none. */
+  milestoneDone?: number;
+  milestoneTotal?: number;
 }
 ```
 

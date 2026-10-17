@@ -40,6 +40,8 @@ export interface Task {
   calendarKey?: string | null;
   /** True after a confirmed schedule plan set the clock time. */
   agentScheduled?: boolean;
+  /** Milestone of its outcome. Absent on older payloads means false. */
+  isMilestone?: boolean;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;
@@ -201,6 +203,7 @@ Request body (`patchTaskInputSchema`):
 - `pinned`: boolean (optional)
 - `delegable`: boolean (optional)
 - `agentScheduled`: boolean (optional)
+- `isMilestone`: boolean (optional)
 - `estimateMinutes`: number int min 0 max 100000 (optional, nullable)
 - `dueAt`: string iso datetime (optional, nullable)
 - `startAt`: string iso datetime (optional, nullable)
