@@ -28,6 +28,8 @@ export const AGENT_MEMORY_SCOPES = [
   'distill',
   'notify',
   'report',
+  /** Rhythm portrait. Not an injection capability; consumers load it by scope. */
+  'profile',
 ] as const;
 export type AgentMemoryScope = (typeof AGENT_MEMORY_SCOPES)[number];
 
@@ -37,6 +39,12 @@ export type AgentJobPayload = (
   | { taskId: string }
   | { date: string }
   | { reportId: string }
+  | {
+      taskId: string;
+      kind: 'inbox.read_summarize' | 'inbox.organize';
+      inboxItemId?: string;
+      inboxItemIds?: string[];
+    }
 ) & {
   scheduleGeneration?: number; scheduleFeedbackThrough?: string;
   trigger?: string; manual?: boolean; mode?: 'incremental' | 'maintenance';
@@ -72,7 +80,7 @@ export const agentJobs = pgTable(
     index('idx_agent_jobs_user_type').on(t.userId, t.jobType),
     check(
       'agent_jobs_type_check',
-      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'memory.distill', 'habit.spawn', 'notify.scan', 'index.sync', 'report.generate', 'today.layout')`,
+      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'reflect.weekly', 'memory.distill', 'habit.spawn', 'notify.scan', 'index.sync', 'report.generate', 'today.layout', 'errand.run')`,
     ),
     check(
       'agent_jobs_status_check',
@@ -103,7 +111,7 @@ export const agentActions = pgTable(
     index('idx_agent_actions_target').on(t.targetType, t.targetId, t.feedback),
     check(
       'agent_actions_type_check',
-      sql`${t.actionType} IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'task.draft', 'habit.create', 'habit.adjust', 'habit.nudge', 'report.generate')`,
+      sql`${t.actionType} IN ('outcome.create', 'outcome.headline', 'outcome.suggestion', 'task.decompose', 'task.draft', 'habit.create', 'habit.adjust', 'habit.nudge', 'report.generate', 'task.followup', 'errand.summarize', 'errand.organize', 'errand.propose')`,
     ),
     check('agent_actions_target_type_check', sql`${t.targetType} IN ('outcome', 'task', 'habit', 'report')`),
     check(
@@ -139,7 +147,7 @@ export const agentMemory = pgTable(
     check('agent_memory_kind_check', sql`${t.kind} IN ('preference', 'pattern', 'correction')`),
     check(
       'agent_memory_scope_check',
-      sql`${t.scope} <> '{}' AND ${t.scope} <@ ARRAY['all', 'headline', 'cluster', 'decompose', 'draft', 'reflect', 'distill', 'notify', 'report']::text[]`,
+      sql`${t.scope} <> '{}' AND ${t.scope} <@ ARRAY['all', 'headline', 'cluster', 'decompose', 'draft', 'reflect', 'distill', 'notify', 'report', 'profile']::text[]`,
     ),
   ],
 );

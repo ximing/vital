@@ -212,6 +212,15 @@ export function proposalFullText(item: AgentActionLogItem): string {
     case 'outcome.create':
       body = str('name');
       break;
+    case 'errand.summarize':
+      body = str('summary');
+      break;
+    case 'errand.organize':
+      body = str('note');
+      break;
+    case 'errand.propose':
+      body = str('reason');
+      break;
     case 'task.decompose': {
       const subtasks = Array.isArray(payload['subtasks']) ? payload['subtasks'] : [];
       body = subtasks
@@ -441,8 +450,9 @@ export function AgentActivitySection() {
     );
   } else {
     const today = new Date().toLocaleDateString('en-CA');
-    const pending = query.data.filter((item) => item.feedback === 'pending');
-    const settled = query.data.filter((item) => item.feedback !== 'pending');
+    const visible = query.data.filter((item) => item.actionType !== 'task.followup');
+    const pending = visible.filter((item) => item.feedback === 'pending');
+    const settled = visible.filter((item) => item.feedback !== 'pending');
     pendingNode = (
       <PendingProposals
         items={pending}

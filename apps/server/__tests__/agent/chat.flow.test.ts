@@ -1,15 +1,16 @@
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { getUserEntity } from '../../src/auth/auth.service.js';
 import { buildFastify } from '../../src/app.js';
+import { deferFollowupIntent } from '../../src/agent/chat/defer-followup.js';
 import { getDb } from '../../src/db/index.js';
-import { agentChatBudgets, agentJobs, agentModelBudgets } from '../../src/db/schema.js';
+import { agentChatBudgets, agentJobs, agentModelBudgets, tasks } from '../../src/db/schema.js';
 import { releaseChat, tryAcquireChat } from '../../src/agent/chat/lock.js';
 import { screenOrganize } from '../../src/agent/chat/tools/organize.js';
 import type { ToolCtx } from '../../src/agent/chat/types.js';
 import { createHabit, ensureOpenTodayInstance } from '../../src/habits/habits.service.js';
-import { createTask } from '../../src/tasks/tasks.service.js';
+import { createTask, getTask } from '../../src/tasks/tasks.service.js';
 import { injectJson } from '../helpers/http.js';
 import { inboxId, registerUser } from '../helpers/session.js';
 
@@ -120,5 +121,96 @@ describe('agent chat', () => {
       [{ taskId: task.id, priority: 2 }],
     );
     expect(truncated).toMatchObject({ status: 'needs_input' });
+  });
+});
+
+describe('defer follow-up replies', () => {
+  it('maps the three phrases and ignores them without a task', () => {
+    expect(deferFollowupIntent('不做了')).toBe('cancel');
+    expect(deferFollowupIntent('不做了。')).toBe('cancel');
+    expect(deferFollowupIntent('下周再说')).toBe('defer');
+    expect(deferFollowupIntent('帮我拆')).toBe('decompose');
+    expect(deferFollowupIntent('帮我拆一下')).toBeNull();
+    expect(deferFollowupIntent('今天不做了')).toBeNull();
+  });
+
+  it('cancels, defers, and enqueues a manual decompose without a model', async () => {
+    const alice = await registerUser(app);
+    const entity = await getUserEntity(alice.id);
+    const list = await inboxId(app, alice.token);
+    const task = await createTask(alice.id, {
+      title: '写方案',
+      listId: list,
+      dueYmd: '2026-09-01',
+      timezone: entity.timezone,
+    });
+    await getDb().update(tasks).set({ deferCount: 3 }).where(eq(tasks.id, task.id));
+    const context = { ...page, taskId: task.id };
+
+    const missed = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/agent/chat/messages',
+      token: alice.token,
+      payload: { text: '不做了', context: page },
+    });
+    expect(String(missed.headers['content-type'])).toContain('text/event-stream');
+    expect(missed.body).toContain('LLM_NOT_CONFIGURED');
+    releaseChat(alice.id);
+
+    const canceled = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/agent/chat/messages',
+      token: alice.token,
+      payload: { text: '不做了。', context },
+    });
+    expect(canceled.statusCode).toBe(200);
+    expect(canceled.json().text).toBe('已取消「写方案」。');
+    expect((await getTask(alice.id, task.id)).status).toBe('canceled');
+    releaseChat(alice.id);
+
+    const again = await createTask(alice.id, {
+      title: '写方案',
+      listId: list,
+      dueYmd: '2026-09-01',
+      timezone: entity.timezone,
+    });
+    await getDb().update(tasks).set({ deferCount: 3 }).where(eq(tasks.id, again.id));
+    const before = new Date(again.dueAt ?? 0);
+    const deferred = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/agent/chat/messages',
+      token: alice.token,
+      payload: { text: '下周再说', context: { ...page, taskId: again.id } },
+    });
+    expect(deferred.json().text).toContain('写方案');
+    expect(deferred.json().text).toContain('改到');
+    const moved = await getTask(alice.id, again.id);
+    expect(moved.status).toBe('todo');
+    expect(new Date(moved.dueAt ?? 0).getTime()).toBeGreaterThan(before.getTime());
+    expect(moved.deferCount).toBeGreaterThanOrEqual(4);
+    releaseChat(alice.id);
+
+    const split = await createTask(alice.id, {
+      title: '写方案',
+      listId: list,
+      dueYmd: '2026-09-01',
+      timezone: entity.timezone,
+    });
+    await getDb().update(tasks).set({ deferCount: 3 }).where(eq(tasks.id, split.id));
+    const decomposed = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/agent/chat/messages',
+      token: alice.token,
+      payload: { text: '帮我拆', context: { ...page, taskId: split.id } },
+    });
+    expect(decomposed.json().text).toBe('正在拆「写方案」。');
+    const jobs = await getDb()
+      .select()
+      .from(agentJobs)
+      .where(and(eq(agentJobs.userId, alice.id), eq(agentJobs.jobType, 'task.decompose'), eq(agentJobs.dedupKey, `task.decompose:${split.id}`)));
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.payload).toMatchObject({ taskId: split.id, manual: true, trigger: 'manual' });
+    expect(jobs[0]?.status).toBe('pending');
+    releaseChat(alice.id);
   });
 });

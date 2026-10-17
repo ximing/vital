@@ -71,7 +71,14 @@ export function todayModulesOrFallback(layout: TodayLayout | null | undefined): 
 export interface TodayLayoutFacts {
   timezone: string;
   localNow: string;
-  openTasks: { title: string; due: string | null; overdue: boolean; priority?: 0 | 1 | 2 | 3 }[];
+  openTasks: {
+    title: string;
+    due: string | null;
+    overdue: boolean;
+    priority?: 0 | 1 | 2 | 3;
+    /** Confirmed agent time-box. Focus should show these first. */
+    timeboxed?: boolean;
+  }[];
   upcoming: { title: string; when: string }[];
   holidayName: string;
   holidayDate: string;
@@ -81,6 +88,8 @@ export interface TodayLayoutFacts {
   quiet: boolean;
   habits: string[];
   memory: string[];
+  /** Rhythm profile sentence. Omitted when the user has no profile. */
+  rhythm?: string;
 }
 
 /** Facts the layout agent is allowed to see. It must not be asked to invent the rest. */
@@ -99,9 +108,11 @@ export function describeTodayLayoutFacts(facts: TodayLayoutFacts): string {
   const habits = facts.habits.length === 0 ? '无' : facts.habits.join('；');
   const picks = facts.recommendations.length === 0 ? '无' : facts.recommendations.join('；');
   const memory = facts.memory.length === 0 ? '无' : facts.memory.join('；');
+  const timeboxed = facts.openTasks.filter((task) => task.timeboxed).map((task) => task.title);
   return [
     `时区 ${facts.timezone}，当地时间 ${facts.localNow}${facts.quiet ? '，现在是安静时段' : ''}`,
     `今天未完成：${tasks}`,
+    `已排时间盒：${timeboxed.length === 0 ? '无' : timeboxed.join('、')}`,
     `今天之后七天内：${upcoming}`,
     `最近节假日：${facts.holidayName} ${facts.holidayDate}`,
     `天气：${facts.weather}`,
@@ -109,6 +120,7 @@ export function describeTodayLayoutFacts(facts: TodayLayoutFacts): string {
     `习惯：${habits}`,
     `建议开始的候选：${picks}`,
     `长期偏好：${memory}`,
+    ...(facts.rhythm ? [`节奏画像：${facts.rhythm}`] : []),
   ].join('\n');
 }
 

@@ -53,11 +53,28 @@ function hhmmOrNull(value: string | null): string | null {
 
 function notificationsOf(user: User): NotificationPrefs {
   const allDay = hhmmSchema.safeParse(user.allDayNotifyTime);
+  const briefTime = hhmmSchema.safeParse(user.morningBriefTime);
   return {
     taskRemind: user.notifyTaskRemind,
     taskDue: user.notifyTaskDue,
     agentInsights: user.notifyAgentInsights,
     dayRemind: user.notifyDayRemind,
+    morningBrief: user.notifyMorningBrief,
+    morningBriefTime: briefTime.success ? briefTime.data : DEFAULT_NOTIFICATION_PREFS.morningBriefTime,
+    meetingPrep: user.notifyMeetingPrep,
+    weeklyObserve: user.notifyWeeklyObserve,
+    agentErrand: user.notifyAgentErrand,
+    scheduleSuggest: user.scheduleSuggest,
+    workHoursStart: hhmmSchema.safeParse(user.workHoursStart).success
+      ? user.workHoursStart
+      : DEFAULT_NOTIFICATION_PREFS.workHoursStart,
+    workHoursEnd: hhmmSchema.safeParse(user.workHoursEnd).success
+      ? user.workHoursEnd
+      : DEFAULT_NOTIFICATION_PREFS.workHoursEnd,
+    scheduleDayCapMinutes:
+      user.scheduleDayCapMinutes >= 30 && user.scheduleDayCapMinutes <= 1440
+        ? user.scheduleDayCapMinutes
+        : DEFAULT_NOTIFICATION_PREFS.scheduleDayCapMinutes,
     quietHoursStart: hhmmOrNull(user.quietHoursStart),
     quietHoursEnd: hhmmOrNull(user.quietHoursEnd),
     allDayNotifyTime: allDay.success ? allDay.data : DEFAULT_NOTIFICATION_PREFS.allDayNotifyTime,
@@ -163,9 +180,18 @@ export async function registerUser(
     notifyTaskDue: true,
     notifyAgentInsights: true,
     notifyDayRemind: true,
+    notifyMorningBrief: true,
+    notifyMeetingPrep: true,
+    notifyWeeklyObserve: true,
+    notifyAgentErrand: true,
+    scheduleSuggest: true,
+    workHoursStart: '09:00',
+    workHoursEnd: '18:00',
+    scheduleDayCapMinutes: 540,
     quietHoursStart: null,
     quietHoursEnd: null,
     allDayNotifyTime: '09:00',
+    morningBriefTime: '07:30',
     onboarding: {},
     passwordChangedAt: null,
     createdAt: now,
@@ -253,6 +279,27 @@ export async function updateMe(userId: string, input: UpdateMeInput): Promise<Us
       patch.notifyAgentInsights = input.notifications.agentInsights;
     if (input.notifications.dayRemind !== undefined)
       patch.notifyDayRemind = input.notifications.dayRemind;
+    if (input.notifications.morningBrief !== undefined)
+      patch.notifyMorningBrief = input.notifications.morningBrief;
+    if (input.notifications.meetingPrep !== undefined)
+      patch.notifyMeetingPrep = input.notifications.meetingPrep;
+    if (input.notifications.weeklyObserve !== undefined)
+      patch.notifyWeeklyObserve = input.notifications.weeklyObserve;
+    if (input.notifications.agentErrand !== undefined)
+      patch.notifyAgentErrand = input.notifications.agentErrand;
+    if (input.notifications.scheduleSuggest !== undefined)
+      patch.scheduleSuggest = input.notifications.scheduleSuggest;
+    if (input.notifications.workHoursStart !== undefined || input.notifications.workHoursEnd !== undefined) {
+      const start = input.notifications.workHoursStart ?? current.workHoursStart;
+      const end = input.notifications.workHoursEnd ?? current.workHoursEnd;
+      if (end <= start) throw AppError.of(400, 'VALIDATION_ERROR');
+      if (input.notifications.workHoursStart !== undefined) patch.workHoursStart = input.notifications.workHoursStart;
+      if (input.notifications.workHoursEnd !== undefined) patch.workHoursEnd = input.notifications.workHoursEnd;
+    }
+    if (input.notifications.scheduleDayCapMinutes !== undefined)
+      patch.scheduleDayCapMinutes = input.notifications.scheduleDayCapMinutes;
+    if (input.notifications.morningBriefTime !== undefined)
+      patch.morningBriefTime = input.notifications.morningBriefTime;
     if (input.notifications.quietHoursStart !== undefined) patch.quietHoursStart = nextStart;
     if (input.notifications.quietHoursEnd !== undefined) patch.quietHoursEnd = nextEnd;
     if (input.notifications.allDayNotifyTime !== undefined) {

@@ -107,21 +107,36 @@ function shouldFallbackToBody(parsedText: string | null | undefined, bodyText: s
  * Pick the densest common content root that has enough text. Null if none qualify.
  */
 export function extractSemanticRoot(doc: Document): Element | null {
-  let best: Element | null = null;
-  let bestScore = 0;
-  let bestLen = 0;
+  const candidates: Array<{ el: Element; textLen: number; score: number }> = [];
   for (const el of doc.querySelectorAll(SEMANTIC_ROOT_SELECTOR)) {
     const textLen = visibleTextLength(el);
     if (textLen < MIN_USEFUL_TEXT_CHARS) continue;
     if (linkDensity(el) > MAX_SEMANTIC_LINK_DENSITY) continue;
-    const score = contentScore(el);
-    if (best === null || score > bestScore || (score === bestScore && textLen > bestLen)) {
-      best = el;
-      bestScore = score;
-      bestLen = textLen;
+    candidates.push({ el, textLen, score: contentScore(el) });
+  }
+  // `<main>` contains `<article>` and would always win on length. Keep the inner
+  // root when it already holds most of the outer text, so the landmark chrome
+  // (category links, “view on GitHub”) is not stored as the article body.
+  const kept = candidates.filter(
+    (outer) =>
+      !candidates.some(
+        (inner) =>
+          inner.el !== outer.el &&
+          outer.el.contains(inner.el) &&
+          inner.textLen >= outer.textLen * 0.8,
+      ),
+  );
+  let best: (typeof candidates)[number] | null = null;
+  for (const item of kept) {
+    if (
+      best === null ||
+      item.score > best.score ||
+      (item.score === best.score && item.textLen > best.textLen)
+    ) {
+      best = item;
     }
   }
-  return best;
+  return best?.el ?? null;
 }
 
 function fromPacked(packed: SiteExtract, fallbackTitle: string): ParsedFields {

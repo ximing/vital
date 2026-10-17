@@ -12,6 +12,7 @@ import type {
   AgentUsageSummary,
   AgentExecution,
   AgentMetricsResponse,
+  ApplyPlanResult,
   ChatInvalidateTag,
   ChatSession,
   PostChatMessageInput,
@@ -26,6 +27,10 @@ import type {
   ConvertInboxInput,
   ConvertInboxResponse,
   CreateDayInput,
+  CreateEnergyLogInput,
+  EnergyLog,
+  EnergyLogList,
+  EnergyLogQuery,
   CreateHabitInput,
   Day,
   DayCalendarMeta,
@@ -201,6 +206,8 @@ export interface VitalClient {
   patchHabit(id: string, input: PatchHabitInput): Promise<Habit>;
   tickHabit(id: string): Promise<Habit>;
   deleteHabit(id: string): Promise<void>;
+  listEnergyLogs(query?: EnergyLogQuery): Promise<EnergyLogList>;
+  createEnergyLog(input: CreateEnergyLogInput): Promise<EnergyLog>;
   listDays(): Promise<DayCollection>;
   listDayCatalog(): Promise<DayCatalogResponse>;
   getDayCalendarMeta(year: number): Promise<DayCalendarMeta>;
@@ -215,6 +222,7 @@ export interface VitalClient {
   resetChat(): Promise<ChatSession>;
   postChatMessage(input: PostChatMessageInput, signal?: AbortSignal): Promise<Response>;
   applyChatPreview(id: string): Promise<{ summary: string; invalidate: ChatInvalidateTag[]; errors: string[] }>;
+  applyAgentPlan(id: string): Promise<ApplyPlanResult>;
   cancelChatPreview(id: string): Promise<{ ok: true }>;
   undoChat(hintId: string): Promise<{ ok: true; invalidate: ChatInvalidateTag[] }>;
   distillAgentMemory(): Promise<{ status: 'queued' | 'disabled'; jobId: string | null }>;
@@ -274,6 +282,8 @@ export interface VitalClient {
   patchInboxAssets(id: string, input: PatchInboxAssetsInput): Promise<InboxItem>;
   deleteInbox(id: string): Promise<void>;
   convertInbox(id: string, input?: ConvertInboxInput): Promise<ConvertInboxResponse>;
+  startInboxErrand(id: string): Promise<{ taskId: string; jobId: string | null }>;
+  startTaskErrand(id: string): Promise<{ taskId: string; jobId: string | null }>;
   exportInboxToInwit(id: string): Promise<InboxExportInwitResponse>;
   getInwitConfig(): Promise<InwitConfigPublic>;
   putInwitConfig(input: InwitConfigInput): Promise<InwitConfigPublic>;
@@ -489,6 +499,15 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     deleteHabit: async (id) => {
       await http.request(`/api/v1/habits/${id}`, { method: 'DELETE' });
     },
+    listEnergyLogs: (query) => {
+      const q: Record<string, string | number | boolean | undefined> = {};
+      if (query?.date !== undefined) q.date = query.date;
+      if (query?.from !== undefined) q.from = query.from;
+      if (query?.to !== undefined) q.to = query.to;
+      if (query?.since !== undefined) q.since = query.since;
+      return http.request('/api/v1/energy-logs', { query: q });
+    },
+    createEnergyLog: (input) => http.request('/api/v1/energy-logs', { method: 'POST', body: input }),
     listDays: () => http.request('/api/v1/days'),
     listDayCatalog: () => http.request('/api/v1/days/catalog'),
     getDayCalendarMeta: (year) => http.request('/api/v1/days/meta', { query: { year } }),
@@ -510,6 +529,7 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
         ...(signal ? { signal } : {}),
       }),
     applyChatPreview: (id) => http.request(`/api/v1/agent/chat/previews/${id}/apply`, { method: 'POST' }),
+    applyAgentPlan: (id) => http.request(`/api/v1/agent/plans/${id}/apply`, { method: 'POST' }),
     cancelChatPreview: (id) => http.request(`/api/v1/agent/chat/previews/${id}/cancel`, { method: 'POST' }),
     undoChat: (hintId) => http.request('/api/v1/agent/chat/undo', { method: 'POST', body: { hintId } }),
     distillAgentMemory: () => http.request('/api/v1/agent/memory/distill', { method: 'POST' }),
@@ -593,6 +613,10 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     deleteInbox: (id) => http.request(`/api/v1/inbox/${id}`, { method: 'DELETE' }),
     convertInbox: (id, input = {}) =>
       http.request(`/api/v1/inbox/${id}/convert`, { method: 'POST', body: input }),
+    startInboxErrand: (id) =>
+      http.request(`/api/v1/inbox/${id}/errand`, { method: 'POST', body: {} }),
+    startTaskErrand: (id) =>
+      http.request(`/api/v1/tasks/${id}/errand`, { method: 'POST', body: {} }),
     exportInboxToInwit: (id) =>
       http.request(`/api/v1/inbox/${id}/export-inwit`, { method: 'POST', body: {} }),
     getInwitConfig: () => http.request('/api/v1/integrations/inwit'),

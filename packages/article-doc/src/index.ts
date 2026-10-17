@@ -1,11 +1,5 @@
 export { decodeEntities, escapeXml } from './entities.js';
-export {
-  parseHtml,
-  isElement,
-  textContent,
-  type HtmlAttrs,
-  type HtmlNode,
-} from './html-ast.js';
+export { parseHtml, isElement, textContent, type HtmlAttrs, type HtmlNode } from './html-ast.js';
 export { imageSrcKeys } from './image-src.js';
 export {
   UPLOAD_RE,
@@ -23,6 +17,18 @@ export { pmJsonToArticleDoc } from './from-pm.js';
 export { rebindDocMedia } from './rebind.js';
 export { articleDocToHtml } from './serialize.js';
 export { articleDocToText, textToArticleDoc } from './text.js';
+export {
+  comparePath,
+  findInArticleDoc,
+  findKeywordMatches,
+  indexAfterArticleReplace,
+  pathKey,
+  replaceInArticleDoc,
+  type ArticleFindHit,
+  type ArticleFindOptions,
+  type ArticleReplaceOptions,
+  type KeywordMatch,
+} from './find.js';
 export { articleDocSchema, MAX_CONTENT_JSON_BYTES } from './schema.js';
 export {
   EMPTY_ARTICLE_DOC,

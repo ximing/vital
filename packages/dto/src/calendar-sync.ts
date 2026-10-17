@@ -55,6 +55,8 @@ export type CalendarSyncTask = {
   title: string;
   startAt: string | null;
   dueAt: string | null;
+  /** End of the block when the device sent one. Absent on older snapshots. */
+  calendarEndAt?: string | null;
   isAllDay: boolean;
   status: string;
   deletedAt: string | null;
@@ -157,6 +159,15 @@ function sameInstant(stored: string | null, iso: string): boolean {
   return new Date(stored).getTime() === new Date(iso).getTime();
 }
 
+/** Device end, when it is strictly after the start. Point events stay null. */
+function normalizedEnd(event: DeviceCalendarEvent): string | null {
+  if (!event.end) return null;
+  const startMs = new Date(event.start).getTime();
+  const endMs = new Date(event.end).getTime();
+  if (!Number.isFinite(endMs) || endMs <= startMs) return null;
+  return new Date(endMs).toISOString();
+}
+
 /**
  * Calendar is the source for linked tasks.
  * A task the user deleted keeps its key and is not recreated.
@@ -189,11 +200,17 @@ export function planDeviceCalendarSync(
     if (live) {
       claimed.add(live.id);
       const title = event.title.trim();
+      const nextEnd = normalizedEnd(event);
+      const storedEnd = live.calendarEndAt ?? null;
+      const endMoved =
+        (storedEnd === null) !== (nextEnd === null) ||
+        (storedEnd !== null && nextEnd !== null && !sameInstant(storedEnd, nextEnd));
       const moved =
         live.title !== title ||
         live.isAllDay !== event.allDay ||
         !sameInstant(live.startAt, event.start) ||
-        !sameInstant(live.dueAt, event.start);
+        !sameInstant(live.dueAt, event.start) ||
+        endMoved;
       if (moved) update.push({ id: live.id, event: { ...event, title } });
       continue;
     }

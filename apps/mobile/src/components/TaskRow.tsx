@@ -110,9 +110,12 @@ export function TaskRow({
             {note}
           </Text>
         ) : null}
-        {due || reminder || repeat || listName || task.calendarKey || namedTags.length > 0 ? (
+        {due || reminder || repeat || listName || task.calendarKey || task.agentScheduled || namedTags.length > 0 ? (
           <View style={styles.meta}>
             {task.calendarKey ? <Text style={styles.metaText}>{copy.todos.fromCalendar}</Text> : null}
+            {!task.calendarKey && task.agentScheduled ? (
+              <Text style={styles.metaText}>{copy.todos.agentScheduled}</Text>
+            ) : null}
             {due && dueTone ? <Text style={[styles.metaText, dueTone]}>{due}</Text> : null}
             {reminder ? <Text style={styles.metaText}>{reminder}</Text> : null}
             {repeat ? <Text style={styles.metaText}>{repeat}</Text> : null}

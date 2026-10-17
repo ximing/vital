@@ -20,6 +20,7 @@ import { Button } from '@/ui/button';
 import { ThreadAgentLog } from './ThreadAgentLog';
 import { ThreadHabits } from './ThreadHabits';
 import { ThreadHeader } from './ThreadHeader';
+import { ThreadMilestones } from './ThreadMilestones';
 import { ThreadMaterials } from './ThreadMaterials';
 import { ThreadNextStep } from './ThreadNextStep';
 import { ThreadTasks } from './ThreadTasks';
@@ -153,6 +154,7 @@ function ThreadWorkspaceContent() {
       <ThreadCanvas>
         {backLink}
         <ThreadHeader detail={detail} timeZone={timeZone} now={now} />
+        <ThreadMilestones detail={detail} />
         <ThreadNextStep
           detail={detail}
           timeZone={timeZone}

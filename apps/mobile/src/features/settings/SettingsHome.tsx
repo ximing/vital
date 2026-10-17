@@ -73,6 +73,13 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
   const [limitDraft, setLimitDraft] = useState(String(savedLimit));
   const [limitError, setLimitError] = useState('');
   const [syncedLimit, setSyncedLimit] = useState(savedLimit);
+  const capSaved = prefs?.scheduleDayCapMinutes ?? 540;
+  const [capDraft, setCapDraft] = useState(String(capSaved));
+  const [capSeen, setCapSeen] = useState(capSaved);
+  if (capSaved !== capSeen) {
+    setCapSeen(capSaved);
+    setCapDraft(String(capSaved));
+  }
   if (savedLimit !== syncedLimit) {
     setSyncedLimit(savedLimit);
     setLimitDraft(String(savedLimit));
@@ -298,7 +305,108 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
                 }
               />
             </View>
+            <View style={styles.hairline} />
+            <View style={styles.switchRow}>
+              <Text style={styles.rowLabel}>{copy.settings.notify.morningBrief}</Text>
+              <Switch
+                value={prefs.morningBrief}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
+                onValueChange={(v) =>
+                  void s.patchPrefs({ notifications: { ...prefs, morningBrief: v } })
+                }
+              />
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.switchRow}>
+              <Text style={styles.rowLabel}>{copy.settings.notify.meetingPrep}</Text>
+              <Switch
+                value={prefs.meetingPrep}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
+                onValueChange={(v) =>
+                  void s.patchPrefs({ notifications: { ...prefs, meetingPrep: v } })
+                }
+              />
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.switchRow}>
+              <Text style={styles.rowLabel}>{copy.settings.notify.weeklyObserve}</Text>
+              <Switch
+                value={prefs.weeklyObserve}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
+                onValueChange={(v) =>
+                  void s.patchPrefs({ notifications: { ...prefs, weeklyObserve: v } })
+                }
+              />
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.switchRow}>
+              <Text style={styles.rowLabel}>{copy.settings.notify.agentErrand}</Text>
+              <Switch
+                value={prefs.agentErrand}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
+                onValueChange={(v) =>
+                  void s.patchPrefs({ notifications: { ...prefs, agentErrand: v } })
+                }
+              />
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.switchRow}>
+              <Text style={styles.rowLabel}>{copy.settings.notify.scheduleSuggest}</Text>
+              <Switch
+                value={prefs.scheduleSuggest}
+                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+                ios_backgroundColor={t.bgSurfaceMuted}
+                onValueChange={(v) =>
+                  void s.patchPrefs({ notifications: { ...prefs, scheduleSuggest: v } })
+                }
+              />
+            </View>
           </View>
+          <Text style={styles.subHead}>{copy.settings.notify.scheduleSuggestHint}</Text>
+          <TimeField
+            label={copy.settings.notify.workHoursStart}
+            value={prefs.workHoursStart}
+            onChange={(value) => {
+              if (value === '' || value >= prefs.workHoursEnd) return;
+              void s.patchPrefs({ notifications: { ...prefs, workHoursStart: value } });
+            }}
+          />
+          <TimeField
+            label={copy.settings.notify.workHoursEnd}
+            value={prefs.workHoursEnd}
+            onChange={(value) => {
+              if (value === '' || value <= prefs.workHoursStart) return;
+              void s.patchPrefs({ notifications: { ...prefs, workHoursEnd: value } });
+            }}
+          />
+          <Field
+            label={copy.settings.notify.scheduleDayCap}
+            value={capDraft}
+            keyboardType="number-pad"
+            onChangeText={setCapDraft}
+            onBlur={() => {
+              const next = Number(capDraft.trim());
+              if (!Number.isInteger(next) || next < 30 || next > 1440) {
+                setCapDraft(String(prefs.scheduleDayCapMinutes));
+                return;
+              }
+              if (next === prefs.scheduleDayCapMinutes) return;
+              void s.patchPrefs({ notifications: { ...prefs, scheduleDayCapMinutes: next } });
+            }}
+          />
+          <TimeField
+            label={copy.settings.notify.morningBriefTime}
+            value={prefs.morningBriefTime}
+            disabled={!prefs.morningBrief}
+            onChange={(value) => {
+              if (value === '') return;
+              void s.patchPrefs({ notifications: { ...prefs, morningBriefTime: value } });
+            }}
+          />
           <TimeField
             label={copy.settings.notify.allDayTime}
             value={prefs.allDayNotifyTime}

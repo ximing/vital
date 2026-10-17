@@ -29,7 +29,16 @@ export async function applyUndo(userId: string, hint: ChatUndoHint): Promise<Cha
       const parsed = patchTaskInputSchema.safeParse(hint.previous);
       if (!parsed.success) throw AppError.of(400, 'VALIDATION_ERROR');
       await patchTask(userId, hint.taskId, parsed.data);
-      return ['tasks', 'today'];
+      const tags: ChatInvalidateTag[] = ['tasks', 'today'];
+      if (parsed.data.isMilestone !== undefined || parsed.data.outcomeId !== undefined) tags.push('outcomes');
+      return tags;
+    }
+    case 'plan': {
+      const tags = new Set<ChatInvalidateTag>();
+      for (const step of hint.steps) {
+        for (const tag of await applyUndo(userId, step)) tags.add(tag);
+      }
+      return [...tags];
     }
     default:
       throw AppError.of(400, 'VALIDATION_ERROR');

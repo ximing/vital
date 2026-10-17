@@ -9,7 +9,8 @@ import {
   type TodayPlanMark,
 } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
-import { useState, type FC, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FC, type FormEvent } from 'react';
+import { useLocation } from 'react-router';
 import { t } from '@/copy';
 import { TodosUiService } from '@/features/todos';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
@@ -35,6 +36,8 @@ export const NowCard: FC<{
   briefing: TodayBriefingModel;
 }) {
   const todos = useService(TodosUiService);
+  const location = useLocation();
+  const anchored = useRef('');
   const [offset, setOffset] = useState(0);
   const [placeDraft, setPlaceDraft] = useState('');
   const [editingPlace, setEditingPlace] = useState(false);
@@ -59,6 +62,16 @@ export const NowCard: FC<{
     return parts.join('　');
   }
 
+  useEffect(() => {
+    if (location.hash !== '#meetings') return;
+    const token = `${location.key}#meetings`;
+    if (anchored.current === token) return;
+    const node = document.getElementById('meetings');
+    if (!node) return;
+    node.scrollIntoView({ block: 'start' });
+    anchored.current = token;
+  }, [location.hash, location.key, briefing.modules]);
+
   function onPlace(event: FormEvent) {
     event.preventDefault();
     briefing.submitPlace(placeDraft);
@@ -81,6 +94,7 @@ export const NowCard: FC<{
           return (
             <article
               key={module.id}
+              id={module.id === 'meetings' ? 'meetings' : undefined}
               data-region="today-module"
               data-module={module.id}
               className={`min-w-0 rounded-xl border border-border bg-canvas/50 px-3.5 py-3 ${wide ? 'sm:col-span-2' : ''}`}

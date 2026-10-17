@@ -40,6 +40,7 @@ import {
   emptyDraft,
   type DayDraft,
 } from './DayEditor';
+import { useEnergyLogsQuery } from '@/features/energy/queries';
 import { DaysTimeline } from './DaysTimeline';
 import { useDaysKeyboard } from './keyboard';
 import {
@@ -401,6 +402,7 @@ function DaysWorkspaceContent() {
   const weekStartsOn = auth.user?.weekStartsOn === 0 ? 0 : 1;
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date());
   const list = useDaysQuery();
+  const energyLogs = useEnergyLogsQuery(today);
   const mutations = useDayMutations();
   const [search, setSearch] = useSearchParams();
   const [filter, setFilter] = useState<DayFilter>('all');
@@ -562,6 +564,8 @@ function DaysWorkspaceContent() {
             <DaysTimeline
               days={allDays}
               todayYmd={today}
+              timeZone={zone}
+              energyLogs={energyLogs.data?.items ?? []}
               selectedId={selectedDayId}
               onOpen={openDay}
             />

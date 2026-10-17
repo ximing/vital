@@ -12,7 +12,8 @@ export type AppSection =
   | 'activity'
   | 'memory'
   | 'usage'
-  | 'settings';
+  | 'settings'
+  | 'chat';
 
 export const RHYTHM_LIST_IDS = [
   'smart:today',
@@ -39,6 +40,7 @@ export function sectionOf(pathname: string, _search: string): AppSection {
   if (pathname.startsWith('/memory')) return 'memory';
   if (pathname.startsWith('/usage')) return 'usage';
   if (pathname.startsWith('/settings')) return 'settings';
+  if (pathname.startsWith('/chat')) return 'chat';
   if (pathname.startsWith('/todos')) return 'todos';
   return 'today';
 }

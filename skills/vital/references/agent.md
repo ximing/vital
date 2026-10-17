@@ -195,7 +195,7 @@ Query (`agentActionsQuerySchema`):
 
 - `targetType`: "outcome" | "task" | "habit" | "report" (optional)
 - `targetId`: uuid (optional)
-- `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "task.draft" | "habit.create" | "habit.adjust" | "habit.nudge" | "report.generate" (optional)
+- `actionType`: "outcome.create" | "outcome.headline" | "outcome.suggestion" | "task.decompose" | "task.draft" | "habit.create" | "habit.adjust" | "habit.nudge" | "report.generate" | "task.followup" | "errand.summarize" | "errand.organize" | "errand.propose" (optional)
 - `feedback`: "pending" | "accepted" | "edited" | "dismissed" | "undone" (optional)
 - `days`: number int min 1 (optional)
 
@@ -270,7 +270,7 @@ Request body (`createAgentMemorySchema`):
 
 - `kind`: "preference" | "pattern" | "correction"
 - `content`: string 1–300
-- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify" | "report"[]
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify" | "report" | "profile"[]
 
 #### `DELETE /api/v1/agent/memory/:id`
 
@@ -301,7 +301,7 @@ Request body (`patchAgentMemorySchema`):
 
 - `kind`: "preference" | "pattern" | "correction" (optional)
 - `content`: string 1–300 (optional)
-- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify" | "report"[] (optional)
+- `scope`: "all" | "headline" | "cluster" | "decompose" | "draft" | "reflect" | "distill" | "notify" | "report" | "profile"[] (optional)
 
 #### `POST /api/v1/agent/memory/distill`
 

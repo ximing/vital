@@ -1,7 +1,9 @@
 import {
+  pathKey,
   resolveDocMediaUrl,
   type ArticleBlockNode,
   type ArticleDoc,
+  type ArticleFindHit,
   type ArticleInlineNode,
   type ArticleMark,
 } from '@vital/article-doc';
@@ -16,40 +18,65 @@ import { openArticleLink } from './reader-link';
  * Article doc → React elements. Emits the same semantic tags the old purified
  * HTML did, so `.reader-article` CSS carries over unchanged.
  */
-export function renderDoc(doc: ArticleDoc, assets: InboxAsset[]): ReactNode {
-  return doc.content.map((block, index) => renderBlock(block, assets, index));
+export type ArticleFindView = {
+  hits: ArticleFindHit[];
+  current: number;
+};
+
+export function renderDoc(
+  doc: ArticleDoc,
+  assets: InboxAsset[],
+  find: ArticleFindView | null = null,
+): ReactNode {
+  return doc.content.map((block, index) => renderBlock(block, assets, [index], find));
 }
 
-function renderBlock(block: ArticleBlockNode, assets: InboxAsset[], key: number): ReactNode {
+function renderBlock(
+  block: ArticleBlockNode,
+  assets: InboxAsset[],
+  path: number[],
+  find: ArticleFindView | null,
+): ReactNode {
+  const key = path[path.length - 1] ?? 0;
   switch (block.type) {
     case 'paragraph':
-      return <p key={key}>{renderInline(block.content)}</p>;
+      return <p key={key}>{renderInline(block.content, path, find)}</p>;
     case 'heading': {
       const level = Math.min(6, Math.max(1, block.attrs.level));
       const Tag = `h${String(level)}` as 'h1';
-      return <Tag key={key}>{renderInline(block.content)}</Tag>;
+      return <Tag key={key}>{renderInline(block.content, path, find)}</Tag>;
     }
     case 'blockquote':
       return (
         <blockquote key={key}>
-          {block.content.map((child, i) => renderBlock(child, assets, i))}
+          {block.content.map((child, i) => renderBlock(child, assets, [...path, i], find))}
         </blockquote>
       );
     case 'codeBlock':
       return (
         <pre key={key}>
-          <code>{block.content.map((node) => node.text).join('')}</code>
+          <code>
+            {renderHighlighted(
+              block.content.map((node) => node.text).join(''),
+              [],
+              0,
+              hitsFor(path, find),
+              find?.current ?? -1,
+            )}
+          </code>
         </pre>
       );
     case 'bulletList':
       return (
-        <ul key={key}>{block.content.map((item, i) => renderListItem(item.content, assets, i))}</ul>
+        <ul key={key}>
+          {block.content.map((item, i) => renderListItem(item.content, assets, [...path, i], find))}
+        </ul>
       );
     case 'orderedList': {
       const start = block.attrs?.start;
       return (
         <ol key={key} {...(start !== undefined && start > 1 ? { start } : {})}>
-          {block.content.map((item, i) => renderListItem(item.content, assets, i))}
+          {block.content.map((item, i) => renderListItem(item.content, assets, [...path, i], find))}
         </ol>
       );
     }
@@ -65,7 +92,9 @@ function renderBlock(block: ArticleBlockNode, assets: InboxAsset[], key: number)
                   const Tag = cell.type === 'tableHeader' ? 'th' : 'td';
                   return (
                     <Tag key={j}>
-                      {cell.content.map((child, k) => renderBlock(child, assets, k))}
+                      {cell.content.map((child, k) =>
+                        renderBlock(child, assets, [...path, i, j, k], find),
+                      )}
                     </Tag>
                   );
                 })}
@@ -107,17 +136,90 @@ function renderBlock(block: ArticleBlockNode, assets: InboxAsset[], key: number)
   }
 }
 
-function renderListItem(content: ArticleBlockNode[], assets: InboxAsset[], key: number): ReactNode {
-  return <li key={key}>{content.map((child, i) => renderBlock(child, assets, i))}</li>;
+function renderListItem(
+  content: ArticleBlockNode[],
+  assets: InboxAsset[],
+  path: number[],
+  find: ArticleFindView | null,
+): ReactNode {
+  return (
+    <li key={path[path.length - 1] ?? 0}>
+      {content.map((child, i) => renderBlock(child, assets, [...path, i], find))}
+    </li>
+  );
 }
 
-function renderInline(nodes: ArticleInlineNode[]): ReactNode {
+function hitsFor(path: number[], find: ArticleFindView | null): ArticleFindHit[] {
+  if (!find) return [];
+  const key = pathKey(path);
+  return find.hits.filter((hit) => pathKey(hit.path) === key);
+}
+
+function renderInline(
+  nodes: ArticleInlineNode[],
+  path: number[],
+  find: ArticleFindView | null,
+): ReactNode {
+  const hits = hitsFor(path, find);
+  const current = find?.current ?? -1;
+  let offset = 0;
   return nodes.map((node, i) => {
-    if (node.type === 'hardBreak') return <br key={i} />;
-    const marks = node.marks ?? [];
-    if (marks.length === 0) return node.text;
-    return <Fragment key={i}>{applyMarks(node.text, marks)}</Fragment>;
+    if (node.type === 'hardBreak') {
+      offset += 1;
+      return <br key={i} />;
+    }
+    const start = offset;
+    offset += node.text.length;
+    return (
+      <Fragment key={i}>
+        {renderHighlighted(node.text, node.marks ?? [], start, hits, current)}
+      </Fragment>
+    );
   });
+}
+
+function renderHighlighted(
+  text: string,
+  marks: ArticleMark[],
+  nodeStart: number,
+  hits: ArticleFindHit[],
+  current: number,
+): ReactNode {
+  const local = hits
+    .map((hit) => ({
+      index: hit.index,
+      start: Math.max(hit.start, nodeStart) - nodeStart,
+      end: Math.min(hit.end, nodeStart + text.length) - nodeStart,
+    }))
+    .filter((hit) => hit.start < hit.end)
+    .sort((a, b) => a.start - b.start);
+  if (local.length === 0) return applyMarks(text, marks);
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const [i, hit] of local.entries()) {
+    if (hit.start > cursor) {
+      parts.push(
+        <Fragment key={`t${String(i)}`}>
+          {applyMarks(text.slice(cursor, hit.start), marks)}
+        </Fragment>,
+      );
+    }
+    const currentHit = hit.index === current;
+    parts.push(
+      <span
+        key={`h${String(i)}`}
+        className={currentHit ? 'doc-find-hit doc-find-hit-current' : 'doc-find-hit'}
+        data-find-current={currentHit ? 'true' : undefined}
+      >
+        {applyMarks(text.slice(hit.start, hit.end), marks)}
+      </span>,
+    );
+    cursor = hit.end;
+  }
+  if (cursor < text.length) {
+    parts.push(<Fragment key="tail">{applyMarks(text.slice(cursor), marks)}</Fragment>);
+  }
+  return <>{parts}</>;
 }
 
 function applyMarks(text: string, marks: ArticleMark[]): ReactNode {

@@ -26,6 +26,7 @@ async function insertEvent(
   entityType: 'task' | 'outcome',
   entityId: string,
   fields: AgentEditFieldChange[],
+  source: 'user' | 'agent' = 'user',
 ): Promise<void> {
   if (fields.length === 0) return;
   await db.insert(agentEditEvents).values({
@@ -34,7 +35,18 @@ async function insertEvent(
     entityType,
     entityId,
     fields,
+    source,
   });
+}
+
+/** Agent plan applies are an audit trail, not user corrections. Distill reads source=user only. */
+export async function recordAgentEdit(
+  db: EditDb,
+  userId: string,
+  taskId: string,
+  fields: AgentEditFieldChange[],
+): Promise<void> {
+  await insertEvent(db, userId, 'task', taskId, fields, 'agent');
 }
 
 /** Task fields with learning value for the distiller. notesMd is deliberately excluded. */
@@ -48,8 +60,8 @@ export interface TaskEditSnapshot {
 
 /**
  * Record what a user changed on a task, as one event with per-field before/after
- * summaries. Only called from the user-facing update path (patchTask) — agent
- * writes go straight to the tables and never produce events.
+ * summaries. Only called from the user-facing update path (patchTask).
+ * Plan apply records source=agent through recordAgentEdit and is not distilled.
  */
 export async function recordTaskEdit(
   db: EditDb,

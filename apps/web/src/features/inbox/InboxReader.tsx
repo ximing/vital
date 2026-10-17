@@ -3,16 +3,27 @@ import {
   ArchiveRestore,
   ArrowUpRight,
   BookMarked,
+  BookOpen,
   Check,
   ChevronLeft,
   Copy,
   FilePlus2,
   ListTodo,
   LoaderCircle,
+  Search,
   Star,
 } from 'lucide-react';
 import { observer, useService } from '@rabjs/react';
-import { useEffect, useLayoutEffect, useRef, useState, type FC, type UIEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FC,
+  type UIEvent,
+} from 'react';
 import { Link, useParams } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
@@ -38,7 +49,9 @@ import { InboxTagEditor } from './InboxTags';
 import { useOnline } from './online';
 import { InboxPageService } from './inbox-page.service';
 import { useInboxActions, useInboxItemQuery } from './queries';
+import { inboxKeys } from './query-keys';
 import { ReaderArticle } from './ReaderArticle';
+import { useArticleDocFind } from './use-article-doc-find';
 import { InboxUiService } from './inbox-ui.service';
 import { openArticleLink } from './reader-link';
 
@@ -101,15 +114,23 @@ function InboxReaderContent() {
   const tags = useTagsQuery().data ?? [];
   const outcomes = useOutcomesQuery().data ?? [];
   const actions = useInboxActions();
+  const qc = useQueryClient();
   const fontSize = inbox.fontSize;
   const [reportHint, setReportHint] = useState(false);
   const [convertNote, setConvertNote] = useState<string | null>(null);
+  const [errandBusy, setErrandBusy] = useState(false);
+  const [errandNote, setErrandNote] = useState<string | null>(null);
   const actionError = page.actionError;
 
   const item = query.data;
   const refetchItem = query.refetch;
   const markedRead = useRef<string | null>(null);
-  const scrollerRef = useRef<HTMLElement>(null);
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const [findRoot, setFindRoot] = useState<HTMLElement | null>(null);
+  const setMain = useCallback((node: HTMLElement | null) => {
+    scrollerRef.current = node;
+    setFindRoot(node);
+  }, []);
 
   useEffect(() => {
     if (!item || item.readAt !== null || markedRead.current === item.id) return;
@@ -132,6 +153,18 @@ function InboxReaderContent() {
   const [scrollProgress, setScrollProgress] = useState<{ id: string; value: number } | null>(null);
   const readProgress = scrollProgress?.id === id ? scrollProgress.value : 0;
   const [copied, setCopied] = useState(false);
+  const find = useArticleDocFind({
+    id,
+    doc: item?.contentJson ?? null,
+    root: findRoot,
+    canReplace: online && item != null,
+    onReplace: async (next) => {
+      if (!item) return;
+      const saved = await actions.patch.mutateAsync({ id: item.id, input: { contentJson: next } });
+      qc.setQueryData(inboxKeys.item(item.id), saved);
+    },
+    onError: (err) => page.setActionError(humanError(err)),
+  });
 
   // 只跟路由 id。标已读会 refetch 同一篇，不能把滚动打回顶部。
   useLayoutEffect(() => {
@@ -193,6 +226,21 @@ function InboxReaderContent() {
     }
   }
 
+  async function onAskAgent() {
+    if (!item || errandBusy) return;
+    page.setActionError(null);
+    setErrandBusy(true);
+    setErrandNote(null);
+    try {
+      await client.startInboxErrand(item.id);
+      setErrandNote(t.inbox.askAgentQueued);
+    } catch (err) {
+      page.setActionError(humanError(err));
+    } finally {
+      setErrandBusy(false);
+    }
+  }
+
   async function onExportInwit() {
     if (!item || exportedInwit || page.exportingId !== null) return;
     try {
@@ -205,9 +253,10 @@ function InboxReaderContent() {
 
   return (
     <main
-      ref={scrollerRef}
+      ref={setMain}
       id="main"
       data-region="reading-canvas"
+      data-doc-find="page"
       onScroll={onScroll}
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-canvas"
     >
@@ -272,6 +321,13 @@ function InboxReaderContent() {
               onClick={() => void onConvert()}
             />
             <ActionButton
+              label={errandBusy ? t.inbox.askAgentReading : t.inbox.askAgent}
+              icon={BookOpen}
+              loading={errandBusy}
+              disabled={!online || !item}
+              onClick={() => void onAskAgent()}
+            />
+            <ActionButton
               label={
                 exportedInwit
                   ? t.inbox.exportedInwit
@@ -290,6 +346,13 @@ function InboxReaderContent() {
               label={t.inbox.addToReport}
               icon={FilePlus2}
               onClick={() => setReportHint(true)}
+            />
+            <ActionButton
+              label={t.docFind.open}
+              icon={Search}
+              active={find.open}
+              activeClass="bg-accent-subtle text-fg"
+              onClick={find.toggle}
             />
             <span aria-hidden="true" className="mx-0.5 h-4 w-px shrink-0 bg-border" />
             <div role="group" aria-label={t.inbox.fontSize} className="flex items-center gap-0.5">
@@ -312,6 +375,7 @@ function InboxReaderContent() {
             </div>
           </div>
         </div>
+        {find.open ? <div className={`${CONTENT_WIDTH} pb-2`}>{find.bar}</div> : null}
       </header>
 
       {!online ? (
@@ -341,6 +405,15 @@ function InboxReaderContent() {
           className={`${CONTENT_WIDTH} pt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted`}
         >
           {t.inbox.addToReportStub}
+        </p>
+      ) : null}
+
+      {errandNote ? (
+        <p
+          role="status"
+          className={`${CONTENT_WIDTH} pt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted`}
+        >
+          {errandNote}
         </p>
       ) : null}
 
@@ -459,9 +532,25 @@ function InboxReaderContent() {
                 onCreate={(name) => actions.createTag.mutateAsync(name)}
               />
             </div>
-            {item.contentJson !== null || item.assets.length > 0 ? (
+            {item.excerpt ? (
+              <p
+                data-testid="inbox-summary"
+                className="mt-4 whitespace-pre-wrap text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-fg"
+              >
+                <span className="mb-1 block text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-tertiary">
+                  {t.inbox.summary}
+                </span>
+                {item.excerpt}
+              </p>
+            ) : null}
+            {find.doc !== null || item.assets.length > 0 ? (
               <div className="mt-7">
-                <ReaderArticle doc={item.contentJson} assets={item.assets} size={fontSize} />
+                <ReaderArticle
+                  doc={find.doc}
+                  assets={item.assets}
+                  size={fontSize}
+                  find={find.view}
+                />
               </div>
             ) : (
               <p className="mt-3 text-[length:var(--text-body)] leading-[var(--text-body-lh)] text-muted">

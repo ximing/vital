@@ -23,6 +23,7 @@ import {
   extensionAuthCodes,
   qrLoginTickets,
   days,
+  energyLogs,
   habits,
   holidayCalendar,
   inboxAssets,
@@ -109,6 +110,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(taskTags);
     await db.delete(taskCompletions);
     await db.delete(tasks);
+    await db.delete(energyLogs);
     await db.delete(days);
     await db.delete(habits);
     await db.delete(outcomes);

@@ -91,6 +91,10 @@ const ThreadDetailContent = observer(function ThreadDetailContent({ outcomeId }:
     outcome.agentState === 'pending'
       ? copy.threads.updating
       : (outcome.agentHeadline ?? outcome.ruleNextStep);
+  const milestones = detail.tasks.filter(
+    (task) => task.isMilestone === true && task.status !== 'canceled',
+  );
+  const milestonesDone = milestones.filter((task) => task.status === 'done').length;
 
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
@@ -150,7 +154,42 @@ const ThreadDetailContent = observer(function ThreadDetailContent({ outcomeId }:
           )}
         </View>
 
-        <SectionHead title={copy.threads.habitsSection} count={detail.habits.length} first />
+        {milestones.length > 0 ? (
+          <View>
+            <SectionHead
+              title={copy.threads.milestones}
+              right={
+                <Text style={styles.habitMeta}>
+                  {copy.threads.milestoneProgress
+                    .replace('{done}', String(milestonesDone))
+                    .replace('{total}', String(milestones.length))}
+                </Text>
+              }
+            />
+            {milestones.map((task) => (
+              <Pressable
+                key={task.id}
+                accessibilityRole="button"
+                onPress={() => openTask(task.id)}
+                style={styles.logRow}
+              >
+                <Text
+                  style={[styles.habitName, task.status === 'done' && styles.milestoneDone]}
+                  numberOfLines={1}
+                >
+                  {task.status === 'done' ? '✓ ' : ''}
+                  {task.title}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        <SectionHead
+          title={copy.threads.habitsSection}
+          count={detail.habits.length}
+          first={milestones.length === 0}
+        />
         {detail.habits.length === 0 ? (
           <Text style={styles.emptyLine}>{copy.threads.emptyHabits}</Text>
         ) : (
@@ -462,6 +501,7 @@ const createStyles = (t: Theme) =>
       paddingVertical: t.space[2],
     },
     habitName: { flex: 1, fontSize: 15, lineHeight: 22, fontWeight: '500', color: t.fgPrimary },
+    milestoneDone: { color: t.fgMuted, textDecorationLine: 'line-through' },
     habitMeta: { fontSize: 12, lineHeight: 16, color: t.textTertiary, fontVariant: ['tabular-nums'] },
     materialRow: {
       paddingHorizontal: t.space[4],

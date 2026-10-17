@@ -19,6 +19,7 @@ import { requireAuth } from '../plugins/auth.js';
 import { limitInbox, limitInwit } from '../plugins/rate-limit.js';
 import { exportInboxToInwit } from '../inwit/inwit-export.service.js';
 import { withSimilarOpenTasks } from '../retrieval/duplicates.js';
+import { startReadErrand } from '../agent/errand.js';
 import {
   convertInbox,
   createInbox,
@@ -135,6 +136,14 @@ export function registerInboxRoutes(app: FastifyInstance): void {
     const { id } = idParams.parse(req.params);
     await deleteInbox(user.id, id);
     return reply.code(204).send();
+  });
+
+  app.post('/api/v1/inbox/:id/errand', { preHandler: [requireAuth] }, async (req, reply) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    const started = await startReadErrand(user.id, id, 'inbox');
+    return reply.code(started.jobId ? 202 : 200).send(started);
   });
 
   app.post('/api/v1/inbox/:id/convert', { preHandler: [requireAuth] }, async (req, reply) => {

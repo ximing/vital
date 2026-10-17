@@ -84,5 +84,25 @@ describe('today plan', () => {
       memory: [],
     });
     expect(text).toContain('回客户（紧急）');
+    expect(text).not.toContain('节奏画像');
+  });
+
+  it('adds a rhythm line only when a profile is present', () => {
+    const text = describeTodayLayoutFacts({
+      timezone: zone,
+      localNow: '2026-10-14 12:00',
+      openTasks: [],
+      upcoming: [],
+      holidayName: '元旦',
+      holidayDate: '2027-01-01',
+      weather: '无',
+      meetings: '无',
+      recommendations: [],
+      quiet: false,
+      habits: [],
+      memory: [],
+      rhythm: '09:00–11:00 完成更集中',
+    });
+    expect(text).toContain('节奏画像：09:00–11:00 完成更集中');
   });
 });

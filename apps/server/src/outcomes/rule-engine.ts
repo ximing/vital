@@ -31,11 +31,17 @@ export interface OutcomeFacts {
   openCount: number;
   overdueCount: number;
   lastActivityAt: Date | null;
+  /**
+   * Open milestones whose own updatedAt is older than STALE_DAYS.
+   * Other task activity does not clear this. Omit when the outcome has no milestones.
+   */
+  milestoneStaleOpen?: number;
 }
 
 /** Deterministic momentum ladder: alert > up > flat. */
 export function computeSignal(facts: OutcomeFacts, now: Date): OutcomeSignal {
   if (facts.overdueCount > 0) return 'alert';
+  if ((facts.milestoneStaleOpen ?? 0) > 0) return 'alert';
   const last = facts.lastActivityAt;
   if (!last || now.getTime() - last.getTime() > STALE_DAYS * 24 * 3600 * 1000) {
     return facts.openCount > 0 ? 'alert' : 'flat';

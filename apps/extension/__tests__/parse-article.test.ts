@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { htmlToArticleDoc } from '@vital/article-doc';
 import { describe, expect, it } from 'vitest';
 import {
   emptyParsedArticle,
@@ -94,6 +95,35 @@ describe('semantic content root', () => {
     const parsed = parseArticle(html, 'https://news.example.com/story');
     expect(parsed.extractedText ?? '').toContain('Vital captures later-read pages');
     expect(parsed.extractedText ?? '').not.toBe('tiny');
+  });
+
+  it('prefers the inner article when main is only a shell around it', () => {
+    const html = `<!doctype html>
+      <html>
+        <head><title>Cookbook</title></head>
+        <body>
+          <main>
+            <header><a href="/cookbook/">CHROME_CATEGORY</a></header>
+            <article>
+              <h2>Inner title</h2>
+              <p>${'INNER_ARTICLE_TOKEN explains the notebook. '.repeat(12)}</p>
+              <div class="font-mono">
+                <div data-code-line="">def hi():</div>
+                <div data-code-line="">    return 1</div>
+              </div>
+            </article>
+          </main>
+        </body>
+      </html>`;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    expect(extractSemanticRoot(doc)?.tagName).toBe('ARTICLE');
+    const parsed = parseArticle(html, 'https://platform.claude.com/cookbook/example');
+    expect(parsed.extractedHtml).toContain('<h2>');
+    expect(parsed.extractedHtml).toContain('Inner title');
+    expect(parsed.extractedHtml).toContain('<pre>def hi():\n    return 1</pre>');
+    expect(parsed.extractedHtml).not.toContain('CHROME_CATEGORY');
+    const types = htmlToArticleDoc(parsed.extractedHtml ?? '').content.map((block) => block.type);
+    expect(types).toEqual(['heading', 'paragraph', 'codeBlock']);
   });
 
   it('does not treat a missing semantic root as a hit', () => {

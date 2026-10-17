@@ -24,11 +24,22 @@ import {
   Minus,
   Paperclip,
   Quote,
+  Search,
   Strikethrough,
   Table as TableIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FC, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FC,
+  type MouseEvent,
+} from 'react';
 import { t } from '@/copy';
+import { usePmDocFind } from '@/features/editor/use-pm-doc-find';
+import { createDocFindExtension, docFindPluginKey } from '@/lib/pm-find';
 import { Icon } from '@/ui/icon';
 import { Tip } from '@/ui/tip';
 import { PromptDialog } from '@/ui/prompt-dialog';
@@ -145,6 +156,7 @@ export const WysiwygEditor: FC<{
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
       }),
+      createDocFindExtension(),
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -266,8 +278,13 @@ export const WysiwygEditor: FC<{
       reportsUi.setSlash(slashFromEditor(instance));
       bump((n) => n + 1);
     },
-    onTransaction: () => bump((n) => n + 1),
+    onTransaction: ({ transaction }) => {
+      if (transaction.getMeta(docFindPluginKey)) return;
+      bump((n) => n + 1);
+    },
   });
+  const [findRoot, setFindRoot] = useState<HTMLElement | null>(null);
+  const docFind = usePmDocFind(editor, editable, findRoot);
 
   useEffect(() => {
     ingestRef.current = ingestFiles;
@@ -348,9 +365,11 @@ export const WysiwygEditor: FC<{
 
   return (
     <div
+      ref={setFindRoot}
       className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
       data-testid="report-wysiwyg"
       data-region="report-editor"
+      data-doc-find="page"
       onClick={onClick}
     >
       <div className="flex shrink-0 flex-wrap items-center gap-0.5 border-b border-border/80 px-3 py-1.5">
@@ -476,6 +495,15 @@ export const WysiwygEditor: FC<{
         >
           <Icon icon={Minus} size={14} />
         </ToolbarBtn>
+        <ToolbarSep />
+        <ToolbarBtn
+          label={t.docFind.open}
+          active={docFind.open}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={docFind.toggle}
+        >
+          <Icon icon={Search} size={14} />
+        </ToolbarBtn>
         <input
           ref={imageInputRef}
           type="file"
@@ -491,6 +519,9 @@ export const WysiwygEditor: FC<{
           onChange={onPickImage}
         />
       </div>
+      {docFind.bar ? (
+        <div className="shrink-0 border-b border-border/80 px-3 py-2">{docFind.bar}</div>
+      ) : null}
       {uploadError ? (
         <p
           className="mt-2 rounded-md bg-danger/10 px-3 py-1.5 text-[length:var(--text-caption)] text-danger"
@@ -529,12 +560,14 @@ function ToolbarBtn({
   label,
   disabled,
   onClick,
+  onMouseDown,
 }: {
   children: React.ReactNode;
   active: boolean;
   label: string;
   disabled?: boolean;
   onClick: () => void;
+  onMouseDown?: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <Tip label={label}>
@@ -543,6 +576,7 @@ function ToolbarBtn({
         aria-label={label}
         aria-pressed={active}
         disabled={disabled}
+        onMouseDown={onMouseDown}
         onClick={onClick}
         className={`inline-flex h-8 w-8 items-center justify-center rounded-md ${
           disabled

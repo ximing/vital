@@ -23,6 +23,7 @@ import { OutcomeBoard } from './OutcomeBoard';
 import { OverdueBanner } from './OverdueBanner';
 import { PulseStrip } from './PulseStrip';
 import { buildTodayBriefing, usePublishTodayContext, useTodayMeetings, useTodayWeather } from './briefing';
+import { EnergyLogPad } from '../energy/EnergyLogPad';
 import { TodayTaskList } from './TodayTaskList';
 import { TodayService } from './today.service';
 
@@ -118,6 +119,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
           meta={`${dateLabel} · ${weekdayLabel}`}
           trailing={<SearchIconButton />}
         />
+        <EnergyLogPad timeZone={tz} />
         {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
         {dashboard ? (
           <NowCard now={dashboard.now} outcomes={outcomes} timeZone={tz} briefing={briefing} />

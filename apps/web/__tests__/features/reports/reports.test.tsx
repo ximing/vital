@@ -18,6 +18,8 @@ import { t } from '@/copy';
 import { setAuthForTest } from '@/services/auth.service';
 import { ReportsWorkspace } from '../../../src/features/reports/ReportsWorkspace';
 import { resetReportUi } from '../../../src/features/reports/report-ui.service';
+import { extractWeeklyGoals } from '../../../src/features/reports/weekly-goals';
+import { extractWeeklyInsight } from '../../../src/features/reports/weekly-insight';
 import { RabRoot } from '../../helpers/rab-root';
 
 vi.mock('@/api/client', async (importOriginal) => {
@@ -599,6 +601,124 @@ describe('reports workspace', () => {
     renderAt('/reports/r-weekly');
     expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
     expect(screen.queryByTestId('report-generate')).not.toBeInTheDocument();
+  });
+
+  it('shows the weekly insight sentences above 复盘 and does not put them in the editor', async () => {
+    const sentence = '这周晚上 11 点后建了 6 个任务——是不是焦虑性记录？';
+    const second = '「写作」累计推迟了 4 次。';
+    const withInsight = makeReport({
+      ...weekly,
+      bodyMd: [
+        '# 周报',
+        '',
+        '## 本周完成',
+        '',
+        '## 未完成 / 结转',
+        '',
+        '## 稍后读',
+        '',
+        '## 洞察',
+        '',
+        sentence,
+        second,
+        '',
+        '## 复盘',
+        '',
+        '用户自己的复盘。',
+        '',
+      ].join('\n'),
+    });
+    vi.mocked(client.getReport).mockImplementation(async (id) =>
+      id === weekly.id ? withInsight : daily,
+    );
+    renderAt('/reports/r-weekly?type=weekly');
+    const insight = await screen.findByTestId('report-insight');
+    expect(insight).toHaveTextContent('洞察');
+    expect(insight).toHaveTextContent(sentence);
+    expect(insight).toHaveTextContent(second);
+    expect(screen.getByRole('heading', { name: '洞察' })).toBeInTheDocument();
+    const editor = await screen.findByTestId('report-wysiwyg');
+    expect(editor).toHaveTextContent('用户自己的复盘。');
+    expect(editor).not.toHaveTextContent(sentence);
+    expect(editor).not.toHaveTextContent('洞察');
+  });
+
+  it('does not render an insight block when the weekly section has no sentence', async () => {
+    const emptyInsight = makeReport({
+      ...weekly,
+      bodyMd: '# 周报\n\n## 本周完成\n\n## 未完成 / 结转\n\n## 稍后读\n\n## 洞察\n\n## 复盘\n',
+    });
+    expect(extractWeeklyInsight(emptyInsight.bodyMd)).toBe('');
+    vi.mocked(client.getReport).mockImplementation(async (id) =>
+      id === weekly.id ? emptyInsight : daily,
+    );
+    renderAt('/reports/r-weekly?type=weekly');
+    expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
+    expect(screen.queryByTestId('report-insight')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '洞察' })).not.toBeInTheDocument();
+  });
+
+  it('shows the weekly 按目标 section above 复盘 and does not put it in the editor', async () => {
+    const progress = '进展 1/3 里程碑。';
+    const advanced = '本周推进：P11验收交大纲。';
+    const stalled = '停滞：P11验收改二稿、P11验收找资料。';
+    const withGoals = makeReport({
+      ...weekly,
+      bodyMd: [
+        '# 周报',
+        '',
+        '## 本周完成',
+        '',
+        '## 未完成 / 结转',
+        '',
+        '## 稍后读',
+        '',
+        '## 洞察',
+        '',
+        '这周晚上 11 点后建了 6 个任务。',
+        '',
+        '## 按目标',
+        '',
+        'P11验收目标',
+        progress,
+        advanced,
+        stalled,
+        '',
+        '## 复盘',
+        '',
+        '用户自己的复盘。',
+        '',
+      ].join('\n'),
+    });
+    vi.mocked(client.getReport).mockImplementation(async (id) =>
+      id === weekly.id ? withGoals : daily,
+    );
+    renderAt('/reports/r-weekly?type=weekly');
+    const goals = await screen.findByTestId('report-goals');
+    expect(goals).toHaveTextContent('按目标');
+    expect(goals).toHaveTextContent('P11验收目标');
+    expect(goals).toHaveTextContent(progress);
+    expect(goals).toHaveTextContent(advanced);
+    expect(goals).toHaveTextContent(stalled);
+    const editor = await screen.findByTestId('report-wysiwyg');
+    expect(editor).toHaveTextContent('用户自己的复盘。');
+    expect(editor).not.toHaveTextContent(progress);
+    expect(editor).not.toHaveTextContent('按目标');
+  });
+
+  it('does not render 按目标 when that section is empty', async () => {
+    const emptyGoals = makeReport({
+      ...weekly,
+      bodyMd: '# 周报\n\n## 本周完成\n\n## 未完成 / 结转\n\n## 稍后读\n\n## 按目标\n\n## 复盘\n',
+    });
+    expect(extractWeeklyGoals(emptyGoals.bodyMd)).toBe('');
+    vi.mocked(client.getReport).mockImplementation(async (id) =>
+      id === weekly.id ? emptyGoals : daily,
+    );
+    renderAt('/reports/r-weekly?type=weekly');
+    expect(await screen.findByDisplayValue(weekly.title)).toBeInTheDocument();
+    expect(screen.queryByTestId('report-goals')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '按目标' })).not.toBeInTheDocument();
   });
 
   it('shows overview error when stats cannot load', async () => {

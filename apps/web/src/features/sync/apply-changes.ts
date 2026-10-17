@@ -6,6 +6,7 @@ import {
   mergeTasksIntoList,
 } from '@vital/api-client';
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
+import { energyKeys } from '@/features/energy/query-keys';
 import { inboxKeys } from '@/features/inbox/query-keys';
 import { reportKeys } from '@/features/reports/queries';
 import { todayKeys } from '@/features/today/query-keys';
@@ -17,6 +18,9 @@ function listIdOf(key: QueryKey): string | undefined {
 }
 
 export function applySyncChanges(qc: QueryClient, changes: SyncChanges): void {
+  // Energy logs are a light sync: any pull (including an invalidate with no task rows) refetches them.
+  void qc.invalidateQueries({ queryKey: energyKeys.all });
+
   if (changes.tasks.length > 0) {
     const lists = qc.getQueryData<List[]>(todoKeys.lists) ?? [];
     for (const [key, data] of qc.getQueriesData<Task[]>({ queryKey: todoKeys.all })) {

@@ -226,3 +226,34 @@ export function submitMemoriesTool(capture: (args: SubmitMemoriesArgs) => void):
     },
   };
 }
+
+const rhythmFacetSchema = Type.Union([
+  Type.Literal('peak_hours'),
+  Type.Literal('low_weekday'),
+  Type.Literal('task_grain'),
+  Type.Literal('defer_theme'),
+]);
+
+export const submitRhythmSchema = Type.Object({
+  entries: Type.Array(
+    Type.Object({
+      facet: rhythmFacetSchema,
+      text: Type.String({ minLength: 1, maxLength: 80 }),
+    }),
+    { maxItems: 4 },
+  ),
+});
+export type SubmitRhythmArgs = Static<typeof submitRhythmSchema>;
+
+export function submitRhythmTool(capture: (args: SubmitRhythmArgs) => void): AgentTool<typeof submitRhythmSchema> {
+  return {
+    name: 'submit_rhythm_profile',
+    label: '提交节奏画像',
+    description: '只提交材料允许的节奏画像句子。已删除的种类不要提交。没有依据的种类不要提交。',
+    parameters: submitRhythmSchema,
+    execute: (_toolCallId, params) => {
+      capture(params);
+      return Promise.resolve({ content: [{ type: 'text', text: 'ok' }], details: null, terminate: true });
+    },
+  };
+}

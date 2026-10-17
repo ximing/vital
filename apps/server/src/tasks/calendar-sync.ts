@@ -14,6 +14,14 @@ import { publishInvalidation } from '../sync/sync.hub.js';
 import { nextSortOrder } from './sort-order.js';
 import { fireIndexTask, fireRemoveTaskIndex } from './tasks.shared.js';
 
+function calendarEndDate(event: { start: string; end?: string | null | undefined }): Date | null {
+  if (!event.end) return null;
+  const startMs = new Date(event.start).getTime();
+  const endMs = new Date(event.end).getTime();
+  if (!Number.isFinite(endMs) || endMs <= startMs) return null;
+  return new Date(endMs);
+}
+
 function notifyOf(row: TaskRow, deletedAt: Date | null) {
   return {
     id: row.id,
@@ -63,6 +71,7 @@ export async function syncDeviceCalendar(
               title: row.title,
               startAt: row.startAt?.toISOString() ?? null,
               dueAt: row.dueAt?.toISOString() ?? null,
+              calendarEndAt: row.calendarEndAt?.toISOString() ?? null,
               isAllDay: row.isAllDay,
               status: row.status,
               deletedAt: row.deletedAt?.toISOString() ?? null,
@@ -97,6 +106,7 @@ export async function syncDeviceCalendar(
         reminderAt: null,
         isAllDay: event.allDay,
         timezone: user.timezone,
+        calendarEndAt: calendarEndDate(event),
         recurrenceRrule: null,
         recurrenceKind: null,
         recurrenceDtstart: null,
@@ -124,6 +134,7 @@ export async function syncDeviceCalendar(
           title: change.event.title,
           startAt: when,
           dueAt: when,
+          calendarEndAt: calendarEndDate(change.event),
           isAllDay: change.event.allDay,
           timezone: user.timezone,
           updatedAt: now,

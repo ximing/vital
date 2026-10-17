@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { completeTask, createTaskFromText, patchTask } from '../../../tasks/tasks.service.js';
 import { register } from '../registry.js';
 import { isToolResult, pageListId, resolveListId, resolveTagIds, resolveTask } from '../resolve.js';
+import { appendToOpenPlan, type PlanPatchInput } from './plan.js';
 import { needsInput, okResult, type ToolResult } from '../types.js';
 
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -82,6 +83,35 @@ register({
   }),
   input: patchInput,
   mode: 'mutate',
+  fold: async (ctx, input): Promise<ToolResult> => {
+    if (
+      input.notes !== undefined ||
+      input.listName !== undefined ||
+      input.tagNames !== undefined ||
+      input.estimateMinutes !== undefined ||
+      input.pinned !== undefined
+    ) {
+      return needsInput('方案里不能改备注、清单、标签、估时或置顶。');
+    }
+    const found = await resolveTask(
+      ctx,
+      {
+        ...(input.taskId !== undefined ? { taskId: input.taskId } : {}),
+        ...(input.matchTitle !== undefined ? { matchTitle: input.matchTitle } : {}),
+      },
+      { includeHabits: false },
+    );
+    if (isToolResult(found)) return found;
+    if (found.task.habitId) return needsInput('习惯打卡不能放进方案。');
+    const patch: PlanPatchInput = { taskId: found.task.id };
+    if (input.title !== undefined) patch.title = input.title;
+    if (input.priority !== undefined) patch.priority = input.priority;
+    if (input.dueYmd !== undefined) patch.dueYmd = input.dueYmd;
+    if (patch.title === undefined && patch.priority === undefined && patch.dueYmd === undefined) {
+      return needsInput('没有要改的内容。');
+    }
+    return appendToOpenPlan(ctx, patch);
+  },
   handler: async (ctx, input): Promise<ToolResult> => {
     const found = await resolveTask(
       ctx,
@@ -153,6 +183,19 @@ register({
   }),
   input: completeInput,
   mode: 'mutate',
+  fold: async (ctx, input): Promise<ToolResult> => {
+    const found = await resolveTask(
+      ctx,
+      {
+        ...(input.taskId !== undefined ? { taskId: input.taskId } : {}),
+        ...(input.matchTitle !== undefined ? { matchTitle: input.matchTitle } : {}),
+      },
+      { includeHabits: true },
+    );
+    if (isToolResult(found)) return found;
+    if (found.task.habitId) return needsInput(`「${found.task.title}」是习惯打卡，请用 habits.tick。`);
+    return appendToOpenPlan(ctx, { taskId: found.task.id, status: 'done' });
+  },
   handler: async (ctx, input): Promise<ToolResult> => {
     const found = await resolveTask(
       ctx,

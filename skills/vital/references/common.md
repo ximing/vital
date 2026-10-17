@@ -76,6 +76,32 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 ## Types
 
 ```ts
+export interface ChatPlanChange {
+  label: string;
+  before: string;
+  after: string;
+}
+```
+
+```ts
+export interface ChatPlanDiff {
+  taskId: string;
+  title: string;
+  changes: ChatPlanChange[];
+}
+```
+
+```ts
+export interface ApplyPlanResult {
+  summary: string;
+  invalidate: ChatInvalidateTag[];
+  applied: number;
+  skipped: { taskId: string; reason: string }[];
+  undoHintId: string | null;
+}
+```
+
+```ts
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'tool';
@@ -109,6 +135,7 @@ export interface ChatToolCard {
   status: 'ok' | 'preview' | 'needs_input' | 'error';
   summary: string;
   previewId?: string;
+  diffs?: ChatPlanDiff[];
   undo?: { hintId: string };
   invalidate?: ChatInvalidateTag[];
   question?: string;
@@ -126,6 +153,20 @@ export interface ErrorBody {
 ```ts
 export interface ErrorEnvelope {
   error: ErrorBody;
+}
+```
+
+```ts
+export interface RhythmMemoryBody {
+  facet: RhythmFacet;
+  text: string;
+  /** Minutes from local midnight. Present on peak_hours. End is exclusive. */
+  startMin?: number;
+  endMin?: number;
+  /** Luxon weekday, Monday = 1 … Sunday = 7. Present on low_weekday. */
+  weekday?: number;
+  /** Rounded average estimate. Present on task_grain. */
+  minutes?: number;
 }
 ```
 
@@ -148,7 +189,14 @@ export interface TodayLayout {
 export interface TodayLayoutFacts {
   timezone: string;
   localNow: string;
-  openTasks: { title: string; due: string | null; overdue: boolean; priority?: 0 | 1 | 2 | 3 }[];
+  openTasks: {
+    title: string;
+    due: string | null;
+    overdue: boolean;
+    priority?: 0 | 1 | 2 | 3;
+    /** Confirmed agent time-box. Focus should show these first. */
+    timeboxed?: boolean;
+  }[];
   upcoming: { title: string; when: string }[];
   holidayName: string;
   holidayDate: string;
@@ -158,6 +206,8 @@ export interface TodayLayoutFacts {
   quiet: boolean;
   habits: string[];
   memory: string[];
+  /** Rhythm profile sentence. Omitted when the user has no profile. */
+  rhythm?: string;
 }
 ```
 

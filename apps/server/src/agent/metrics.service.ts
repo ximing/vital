@@ -26,7 +26,7 @@ async function windowDaily(
   const filters: SQL[] = [
     eq(agentActions.userId, userId),
     gte(agentActions.createdAt, since),
-    sql`${agentActions.actionType} <> 'task.parse'`,
+    sql`${agentActions.actionType} not in ('task.parse', 'task.followup')`,
   ];
   if (until !== undefined) filters.push(lt(agentActions.createdAt, until));
 

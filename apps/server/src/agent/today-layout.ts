@@ -16,6 +16,8 @@ import { listTasks } from '../tasks/tasks.read.js';
 import { executionResult } from './executions.service.js';
 import { loadAgentMemory, runProposalPass } from './harness.js';
 import { enqueueTodayLayout } from './jobs.js';
+import { loadRhythmProfileSafe } from './rhythm-distill.js';
+import { orderModulesForRhythm, rhythmPromptLine } from './rhythm-profile.js';
 import { submitTodayLayoutTool } from './tools.js';
 
 const SYSTEM_PROMPT = `你负责「今天」页的模块排布。页面只能渲染下面这些模块，顺序就是视觉顺序，靠前的更显眼。
@@ -27,7 +29,7 @@ const SYSTEM_PROMPT = `你负责「今天」页的模块排布。页面只能渲
 - meetings：今天的本地日历，包含会议和其他日程。Mac 桌面读 Mac 日历，手机读手机日历。没有权限时必须留下。Mac 由应用向系统申请，申请后系统日历列表里才会出现 Vital；手机打开本应用的系统设置。材料写明只在 Mac 桌面版时，网页上会显示这句话。
 - upcoming：今天之后七天内的安排。没有时可以不放。
 - holiday：最近的法定节假日。离得很远、又帮不上今天的安排时可以不放。
-- focus：建议开始的候选。没有候选或现在是安静时段时可以不放。
+- focus：建议开始的候选。已排时间盒的任务优先。没有候选或现在是安静时段时可以不放。
 必须调用 submit_today_layout。`;
 
 function weatherSentence(context: Record<string, unknown>): string {
@@ -83,6 +85,8 @@ async function loadFacts(user: User, now: Date): Promise<TodayLayoutFacts> {
   const zone = user.timezone;
   const zoned = DateTime.fromJSDate(now).setZone(zone);
   const open = today.items.filter((task) => task.habitId === null && task.status !== 'done' && task.status !== 'canceled');
+  const timeboxedFirst = (task: { agentScheduled?: boolean; startAt: string | null; isAllDay: boolean }) =>
+    task.agentScheduled === true && task.startAt !== null && !task.isAllDay;
   const later = upcomingExcludingToday(upcoming.items, zoned.toISODate() ?? '', zone);
   const holiday = nearestStatutoryHoliday(zoned.toISODate() ?? '');
   const context = layoutRow[0]?.context ?? {};
@@ -94,6 +98,7 @@ async function loadFacts(user: User, now: Date): Promise<TodayLayoutFacts> {
       due: task.dueAt,
       overdue: task.dueAt !== null && isOverdue(new Date(task.dueAt), task.isAllDay, now, zone),
       priority: task.priority,
+      ...(timeboxedFirst(task) ? { timeboxed: true } : {}),
     })),
     upcoming: later.map((task) => ({
       title: task.title,
@@ -103,7 +108,10 @@ async function loadFacts(user: User, now: Date): Promise<TodayLayoutFacts> {
     holidayDate: holiday.date,
     weather: weatherSentence(context),
     meetings: meetingsSentence(context),
-    recommendations: open.slice(0, 4).map((task) => task.title),
+    recommendations: [...open]
+      .sort((a, b) => Number(timeboxedFirst(b)) - Number(timeboxedFirst(a)))
+      .slice(0, 4)
+      .map((task) => task.title),
     quiet: inQuiet(now, zone, user.quietHoursStart, user.quietHoursEnd),
     habits: habitRows.map((row) => row.name),
     memory: [],
@@ -119,12 +127,14 @@ export async function readTodayLayout(userId: string): Promise<TodayLayout | nul
 }
 
 export async function saveTodayLayoutContext(userId: string, context: TodayLayoutContext, now = new Date()): Promise<void> {
+  // Morning brief treats this stamp as "today page was open". Layout rewrites must not clear context.
+  const stored: Record<string, unknown> = { ...context, reportedAt: now.toISOString() };
   await getDb()
     .insert(todayLayouts)
-    .values({ userId, modules: [], context, updatedAt: now })
+    .values({ userId, modules: [], context: stored, updatedAt: now })
     .onConflictDoUpdate({
       target: todayLayouts.userId,
-      set: { context, updatedAt: now },
+      set: { context: stored, updatedAt: now },
     });
   // Opening Today is itself a reason to compose, even when no task changed this week.
   // The slot key makes repeats inside the same three hours a no-op.
@@ -147,23 +157,35 @@ export async function saveTodayLayoutContext(userId: string, context: TodayLayou
 
 export async function processTodayLayout(user: User, now: Date): Promise<'done'> {
   const facts = await loadFacts(user, now);
+  const profile = await loadRhythmProfileSafe(user.id);
+  const rhythm = rhythmPromptLine(profile);
   const memory = await loadAgentMemory(user.id, 'all', facts.openTasks.map((task) => task.title).join(' '));
   const result = await runProposalPass({
     user,
     capability: 'default',
-    systemPrompt: SYSTEM_PROMPT,
-    userPrompt: describeTodayLayoutFacts({ ...facts, memory: memory.map((item) => item.content) }),
+    systemPrompt: rhythm
+      ? `${SYSTEM_PROMPT}\n若材料有节奏画像：当前时刻落在高效时段时，把 focus 放在 lead 后面、其余模块前面；低效星期且不在高效时段时，不要把 focus 放在最前。不要把画像写成任务或写进 note。`
+      : SYSTEM_PROMPT,
+    userPrompt: describeTodayLayoutFacts({
+      ...facts,
+      memory: memory.map((item) => item.content),
+      ...(rhythm ? { rhythm } : {}),
+    }),
     makeTool: submitTodayLayoutTool,
   });
   if (!result) {
     executionResult({ resultSummary: '没有可用模型，沿用现有排布', inputSummary: '今天页模块' });
     return 'done';
   }
-  const modules = normalizeTodayLayout(result.args.modules);
-  if (modules.length === 0) {
+  const proposed = normalizeTodayLayout(result.args.modules);
+  if (proposed.length === 0) {
     executionResult({ resultSummary: '提案没有可展示的模块，沿用现有排布', inputSummary: '今天页模块' });
     return 'done';
   }
+  const zoned = DateTime.fromJSDate(now).setZone(user.timezone);
+  const modules = zoned.isValid
+    ? orderModulesForRhythm(proposed, { weekday: zoned.weekday, minutes: zoned.hour * 60 + zoned.minute }, profile)
+    : proposed;
   await getDb()
     .insert(todayLayouts)
     .values({ userId: user.id, modules, context: {}, updatedAt: now })

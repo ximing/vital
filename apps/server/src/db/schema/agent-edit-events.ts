@@ -32,7 +32,7 @@ export const agentEditEvents = pgTable(
     entityType: varchar('entity_type', { length: 16 }).notNull(),
     entityId: char('entity_id', { length: 36 }).notNull(),
     fields: jsonb('fields').$type<AgentEditFieldChange[]>().notNull(),
-    /** Reserved for future non-user origins; always 'user' for now. */
+    /** 'user' corrections feed memory.distill. 'agent' is the plan-apply audit and is not distilled. */
     source: varchar('source', { length: 16 }).notNull().default('user'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },

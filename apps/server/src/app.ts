@@ -13,6 +13,7 @@ import { registerInboxRoutes } from './inbox/inbox.routes.js';
 import { registerOutcomeRoutes } from './outcomes/outcomes.routes.js';
 import { registerHabitRoutes } from './habits/habits.routes.js';
 import { registerDayRoutes } from './days/days.routes.js';
+import { registerEnergyLogRoutes } from './energy/energy.routes.js';
 import { registerAgentRoutes } from './agent/agent.routes.js';
 import { registerLlmRoutes } from './llm/llm.routes.js';
 import { registerInwitRoutes } from './inwit/inwit.routes.js';
@@ -129,6 +130,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   registerOutcomeRoutes(app);
   registerHabitRoutes(app);
   registerDayRoutes(app);
+  registerEnergyLogRoutes(app);
   registerAgentRoutes(app);
   registerReportRoutes(app);
   registerSearchRoutes(app);

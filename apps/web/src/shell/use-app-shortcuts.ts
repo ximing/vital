@@ -6,8 +6,9 @@ import { InboxUiService } from '@/features/inbox';
 import { OPEN_PALETTE_EVENT, TOGGLE_PALETTE_EVENT } from '@/features/palette/model';
 import { QUICK_ADD_ID, focusById } from '@/features/todos/keyboard';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
-import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
 import { isDesktopHost } from '@/host';
+import { docFindRootFor, DOC_FIND_EVENT, isDocFindChord } from '@/lib/doc-find';
+import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
 import {
   CHORD_MS,
   isComposingEvent,
@@ -106,6 +107,20 @@ export function useAppShortcuts(): void {
     }
 
     function onKey(event: KeyboardEvent): void {
+      if (
+        !isComposingEvent(event) &&
+        !isDesktopHost() &&
+        !isShortcutLayerBlocked() &&
+        isDocFindChord(event)
+      ) {
+        const root = docFindRootFor(event.target);
+        if (root) {
+          event.preventDefault();
+          event.stopPropagation();
+          root.dispatchEvent(new CustomEvent(DOC_FIND_EVENT));
+          return;
+        }
+      }
       const pending = Date.now() < chordUntil.current;
       const plan = planGlobalKey({
         key: event.key,

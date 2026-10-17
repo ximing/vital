@@ -27,7 +27,9 @@ import {
   resetConversation,
   takePreview,
 } from './store.js';
+import { applyDeferFollowup, deferFollowupIntent } from './defer-followup.js';
 import { applyOrganize, organizeInputSchema } from './tools/organize.js';
+import { applyAgentPlan } from './tools/plan.js';
 import { applyUndo } from './undo.js';
 
 const previewParams = z.object({ id: z.string().uuid() });
@@ -95,6 +97,25 @@ export function registerChatRoutes(app: FastifyInstance): void {
         return { messageId, text: '已撤销', undone: true, invalidate: tags };
       }
 
+      const followup = deferFollowupIntent(body.text);
+      const followupTaskId = body.context.taskId;
+      if (followup && followupTaskId) {
+        const applied = await applyDeferFollowup({
+          userId: user.id,
+          taskId: followupTaskId,
+          intent: followup,
+          now: new Date(),
+        });
+        const messageId = await insertChatMessage({
+          userId: user.id,
+          conversationId: turn.conversationId,
+          role: 'assistant',
+          text: applied.text,
+        });
+        publish(user.id, applied.invalidate);
+        return { messageId, text: applied.text, invalidate: applied.invalidate };
+      }
+
       reply.hijack();
       headersSent = true;
       const raw = reply.raw;
@@ -157,7 +178,7 @@ export function registerChatRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     if (!config.AGENT_CHAT_ENABLED) throw AppError.of(404, 'NOT_FOUND');
     const { id } = previewParams.parse(req.params);
-    const row = await takePreview(user.id, id);
+    const row = await takePreview(user.id, id, new Date(), 'tasks.organize');
     if (!row || row.toolName !== 'tasks.organize') throw AppError.of(409, 'CHAT_PREVIEW_CLOSED');
     const parsed = organizeInputSchema.safeParse(row.args);
     if (!parsed.success) throw AppError.of(409, 'CHAT_PREVIEW_CLOSED');
@@ -183,6 +204,17 @@ export function registerChatRoutes(app: FastifyInstance): void {
     }
     publish(user.id, applied.invalidate);
     return { summary: applied.summary, invalidate: applied.invalidate, errors: applied.errors };
+  });
+
+  app.post('/api/v1/agent/plans/:id/apply', { preHandler: [requireAuth] }, async (req) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    if (!config.AGENT_CHAT_ENABLED) throw AppError.of(404, 'NOT_FOUND');
+    const { id } = previewParams.parse(req.params);
+    const applied = await applyAgentPlan(user.id, id);
+    if (!applied) throw AppError.of(409, 'CHAT_PREVIEW_CLOSED');
+    publish(user.id, applied.invalidate);
+    return applied;
   });
 
   app.post('/api/v1/agent/chat/previews/:id/cancel', { preHandler: [requireAuth] }, async (req) => {

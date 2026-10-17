@@ -428,6 +428,19 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
   if (input.outcomeId !== undefined) patch.outcomeId = input.outcomeId;
   if (input.estimateMinutes !== undefined) patch.estimateMinutes = input.estimateMinutes;
   if (input.delegable !== undefined) patch.delegable = input.delegable;
+  if (input.isMilestone === true) {
+    const outcomeId = input.outcomeId !== undefined ? input.outcomeId : task.outcomeId;
+    if (!outcomeId) throw AppError.of(400, 'VALIDATION_ERROR');
+  }
+  if (input.isMilestone !== undefined) patch.isMilestone = input.isMilestone;
+  if (input.agentScheduled !== undefined) {
+    patch.agentScheduled = input.agentScheduled;
+  } else if (
+    task.agentScheduled &&
+    (input.dueAt !== undefined || input.dueYmd !== undefined || input.startAt !== undefined || input.isAllDay !== undefined)
+  ) {
+    patch.agentScheduled = false;
+  }
 
   const user = await getUserEntity(userId);
   await getDb().transaction(async (tx) => {

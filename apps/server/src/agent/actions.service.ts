@@ -55,6 +55,8 @@ export function summarizePayload(actionType: string, payload: Record<string, unk
       return str(payload['headline']);
     case 'outcome.suggestion':
       return str(payload['suggestion']);
+    case 'task.followup':
+      return '已追问，7 天内不再问';
     case 'task.decompose': {
       const subtasks = Array.isArray(payload['subtasks']) ? payload['subtasks'] : [];
       return subtasks
@@ -81,6 +83,13 @@ export function summarizePayload(actionType: string, payload: Record<string, unk
     case 'report.generate': {
       const notes = str(payload['notes']);
       const firstLine = notes.split('\n')[0] ?? '';
+      return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
+    }
+    case 'errand.summarize':
+    case 'errand.organize':
+    case 'errand.propose': {
+      const text = str(payload['summary']) || str(payload['note']) || str(payload['reason']);
+      const firstLine = text.split('\n')[0] ?? '';
       return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine;
     }
     case 'habit.adjust': {

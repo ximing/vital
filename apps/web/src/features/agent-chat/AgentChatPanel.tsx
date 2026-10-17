@@ -2,6 +2,7 @@ import { observer, useService } from '@rabjs/react';
 import {
   DEFAULT_LLM_SETTINGS,
   type ChatMessage,
+  type ChatPlanDiff,
   type ChatToolCard,
   type ChatUndoHint,
 } from '@vital/dto';
@@ -10,6 +11,7 @@ import { useEffect, useRef, useState, type FC } from 'react';
 import { useLocation } from 'react-router';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { useTaskQuery } from '@/features/todos/queries';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { humanError } from '@/lib/errors';
 import { AuthService } from '@/services/auth.service';
@@ -18,7 +20,7 @@ import { Icon } from '@/ui/icon';
 import { Tip } from '@/ui/tip';
 import { usePopover } from '@/ui/use-popover';
 import { AgentChatService } from './agent-chat.service';
-import { chatPageContext } from './context';
+import { chatPageContext, contextTaskId } from './context';
 import { ChatMarkdown } from './markdown';
 import { chatModelChoices, routingWithChatModel, selectedChatModel } from './models';
 
@@ -33,19 +35,45 @@ function payloadCard(message: ChatMessage): ChatToolCard | null {
     summary?: string;
     question?: string;
     previewId?: string;
+    diffs?: unknown;
     undo?: ChatUndoHint;
     invalidate?: ChatToolCard['invalidate'];
   };
+  const diffs = planDiffs(body.diffs);
   return {
     tool: message.toolName ?? '',
     status: body.status,
     summary:
       body.status === 'needs_input' ? (body.question ?? body.summary ?? '') : (body.summary ?? ''),
     ...(body.previewId ? { previewId: body.previewId } : {}),
+    ...(diffs ? { diffs } : {}),
     ...(body.undo ? { undo: { hintId: message.id } } : {}),
     ...(body.question ? { question: body.question } : {}),
     ...(body.invalidate ? { invalidate: body.invalidate } : {}),
   };
+}
+
+function planDiffs(value: unknown): ChatPlanDiff[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const diffs: ChatPlanDiff[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') return undefined;
+    const row = item as { taskId?: unknown; title?: unknown; changes?: unknown };
+    if (typeof row.taskId !== 'string' || typeof row.title !== 'string' || !Array.isArray(row.changes)) {
+      return undefined;
+    }
+    const changes: ChatPlanDiff['changes'] = [];
+    for (const change of row.changes) {
+      if (!change || typeof change !== 'object') return undefined;
+      const field = change as { label?: unknown; before?: unknown; after?: unknown };
+      if (typeof field.label !== 'string' || typeof field.before !== 'string' || typeof field.after !== 'string') {
+        return undefined;
+      }
+      changes.push({ label: field.label, before: field.before, after: field.after });
+    }
+    diffs.push({ taskId: row.taskId, title: row.title, changes });
+  }
+  return diffs;
 }
 
 function ToolCard({ card }: { card: ChatToolCard }) {
@@ -53,12 +81,32 @@ function ToolCard({ card }: { card: ChatToolCard }) {
   return (
     <div className="rounded-md border border-border bg-surface-muted px-3 py-2 text-[length:var(--text-meta)]">
       <p className="whitespace-pre-wrap text-fg">{card.summary}</p>
+      {card.diffs && card.diffs.length > 0 ? (
+        <ul data-region="plan-card" className="mt-2 flex flex-col gap-2">
+          {card.diffs.map((diff) => (
+            <li key={diff.taskId}>
+              <p className="text-fg">{diff.title}</p>
+              <ul>
+                {diff.changes.map((change) => (
+                  <li key={`${diff.taskId}-${change.label}`} className="text-muted">
+                    {change.label}：{change.before} → {change.after}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {card.status === 'preview' && card.previewId ? (
         <div className="mt-2 flex gap-2">
           <button
             type="button"
             className="rounded-md bg-accent px-2.5 py-1 text-canvas"
-            onClick={() => void chat.applyPreview(card.previewId ?? '')}
+            onClick={() =>
+              void (card.tool === 'tasks.propose_plan' || card.tool === 'tasks.propose_schedule'
+                ? chat.applyPlan(card.previewId ?? '')
+                : chat.applyPreview(card.previewId ?? ''))
+            }
           >
             {t.agentChat.confirm}
           </button>
@@ -166,6 +214,9 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
   const [draft, setDraft] = useState('');
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  const followupTaskId = contextTaskId(location.search, null);
+  const followupTask = useTaskQuery(location.pathname === '/chat' ? followupTaskId : null);
+  const followupTitle = followupTask.data?.title;
 
   useEffect(() => {
     field.current?.focus();
@@ -180,7 +231,10 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
     const text = draft.trim();
     if (!text || chat.sending) return;
     setDraft('');
-    void chat.send(text, chatPageContext(location.pathname, location.search, todos.selectedId));
+    void chat.send(
+      text,
+      chatPageContext(location.pathname, location.search, todos.selectedId),
+    );
   }
 
   return (
@@ -212,7 +266,14 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
         </Tip>
       </header>
       <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-3">
-        {chat.messages.length === 0 && !chat.sending ? (
+        {location.pathname === '/chat' && followupTaskId ? (
+          <p data-region="defer-followup" className="text-[length:var(--text-meta)] text-fg">
+            {followupTitle
+              ? t.agentChat.followup.replace('{title}', followupTitle)
+              : t.agentChat.followupBare}
+          </p>
+        ) : null}
+        {chat.messages.length === 0 && !chat.sending && !(location.pathname === '/chat' && followupTaskId) ? (
           <p className="text-[length:var(--text-meta)] text-muted">{t.agentChat.empty}</p>
         ) : null}
         {chat.messages.map((message) => {
@@ -265,7 +326,11 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
           ref={field}
           value={draft}
           rows={3}
-          placeholder={t.agentChat.placeholder}
+          placeholder={
+            location.pathname === '/chat' && followupTaskId
+              ? t.agentChat.followupPlaceholder
+              : t.agentChat.placeholder
+          }
           aria-label={t.agentChat.placeholder}
           className="w-full resize-none rounded-md border border-border bg-canvas px-3 py-2 text-[length:var(--text-body)] outline-none focus:border-accent"
           onChange={(event) => setDraft(event.target.value)}
@@ -276,6 +341,22 @@ export const AgentChatPanel: FC = observer(function AgentChatPanel() {
             }
           }}
         />
+        {chat.planUndo ? (
+          <div
+            role="status"
+            data-region="plan-undo"
+            className="mb-2 flex items-center gap-3 rounded-md border border-border bg-surface-muted px-3 py-2 text-[length:var(--text-meta)]"
+          >
+            <span className="min-w-0 flex-1 text-fg">{t.agentChat.planApplied}</span>
+            <button
+              type="button"
+              className="text-accent"
+              onClick={() => void chat.undo(chat.planUndo?.hintId ?? '')}
+            >
+              {t.agentChat.planUndo}
+            </button>
+          </div>
+        ) : null}
         <div className="mt-2 flex items-center gap-2">
           <ChatModelPicker />
           <button

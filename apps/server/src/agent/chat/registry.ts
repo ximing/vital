@@ -12,6 +12,8 @@ export interface ChatTool<T> {
   input: ZodType<T>;
   mode: ToolMode;
   handler: (ctx: ToolCtx, input: T) => Promise<ToolResult>;
+  /** When a plan is open, fold this mutate into it instead of writing. */
+  fold?: (ctx: ToolCtx, input: T) => Promise<ToolResult>;
 }
 
 const tools: ChatTool<unknown>[] = [];
@@ -28,6 +30,7 @@ export function register<T>(tool: ChatTool<T>): void {
     mode: tool.mode,
     input: tool.input,
     handler: (ctx, input) => tool.handler(ctx, input as T),
+    ...(tool.fold ? { fold: (ctx, input) => tool.fold!(ctx, input as T) } : {}),
   };
   tools.push(stored);
 }
@@ -40,11 +43,20 @@ export function findTool(name: string): ChatTool<unknown> | undefined {
   return tools.find((tool) => tool.name === name);
 }
 
+function planTool(name: string): boolean {
+  return name === 'tasks.propose_plan' || name === 'tasks.propose_schedule';
+}
+
 function asText(result: ToolResult): string {
   if (result.status === 'needs_input') return JSON.stringify({ status: 'needs_input', question: result.question });
   if (result.status === 'error') return JSON.stringify({ status: 'error', code: result.code, summary: result.summary });
   if (result.status === 'preview') {
-    return JSON.stringify({ status: 'preview', summary: result.summary, previewId: result.previewId });
+    return JSON.stringify({
+      status: 'preview',
+      summary: result.summary,
+      previewId: result.previewId,
+      ...(result.diffs ? { diffs: result.diffs } : {}),
+    });
   }
   const data = result.data;
   let body: unknown = data;
@@ -66,7 +78,18 @@ export function toAgentTool(tool: ChatTool<unknown>, ctx: ToolCtx): AgentTool {
     execute: async (_toolCallId, params) => {
       let result: ToolResult;
       try {
-        if (tool.mode === 'mutate' && ctx.gate.mutated) {
+        const planning = ctx.gate.plan != null;
+        if (planning && tool.mode === 'mutate' && !planTool(tool.name)) {
+          if (!tool.fold) {
+            result = needsInput('方案里只改已有待办的标题、日期、优先级、状态和归属。');
+          } else {
+            const input = tool.input.parse(params ?? {});
+            result = await tool.fold(ctx, input);
+            if (result.status === 'preview') ctx.gate.plan = { previewId: result.previewId };
+          }
+        } else if (planTool(tool.name) && ctx.gate.mutated && !planning) {
+          result = needsInput('这一轮已经直接改过一条。要出方案请重新开口。');
+        } else if (tool.mode === 'mutate' && ctx.gate.mutated && !planTool(tool.name)) {
           result = needsInput('一次只能改一件。要改多条请用 tasks.organize。');
         } else {
           const input = tool.input.parse(params ?? {});
@@ -74,6 +97,10 @@ export function toAgentTool(tool: ChatTool<unknown>, ctx: ToolCtx): AgentTool {
           if (tool.mode === 'mutate' && result.status === 'ok') {
             ctx.gate.mutated = true;
             ctx.domainMutated.value = true;
+          }
+          if (planTool(tool.name) && result.status === 'preview') {
+            ctx.gate.plan = { previewId: result.previewId };
+            ctx.gate.mutated = true;
           }
         }
       } catch (err) {

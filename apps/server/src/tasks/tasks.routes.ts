@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { AppError } from '../errors.js';
 import { requireAuth } from '../plugins/auth.js';
 import { limitLlm } from '../plugins/rate-limit.js';
+import { upgradeTaskErrand } from '../agent/errand.js';
 import { withSimilarOpenTasks } from '../retrieval/duplicates.js';
 import {
   calendar,
@@ -109,6 +110,15 @@ export function registerTaskRoutes(app: FastifyInstance): void {
     if (!user) throw AppError.of(401, 'INVALID_TOKEN');
     const { id } = idParams.parse(req.params);
     return getTaskDraft(user.id, id);
+  });
+
+  /** Turn a delegable task that is linked to inbox items into an errand.run job. */
+  app.post('/api/v1/tasks/:id/errand', { preHandler: [requireAuth] }, async (req, reply) => {
+    const user = req.user;
+    if (!user) throw AppError.of(401, 'INVALID_TOKEN');
+    const { id } = idParams.parse(req.params);
+    const started = await upgradeTaskErrand(user.id, id);
+    return reply.code(started.jobId ? 202 : 200).send(started);
   });
 
   /** Ask the agent to draft an execution plan for a delegable task (idempotent). */

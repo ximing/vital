@@ -1,8 +1,11 @@
-import type {
-  AgentMemoryItem,
-  AgentMemoryKind,
-  AgentMemoryScopeValue,
-  PatchAgentMemoryInput,
+import {
+  isRhythmMemoryScope,
+  parseRhythmMemory,
+  type AgentMemoryItem,
+  type AgentMemoryKind,
+  type AgentMemoryScopeValue,
+  type PatchAgentMemoryInput,
+  type RhythmFacet,
 } from '@vital/dto';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -36,6 +39,92 @@ const KIND_DOT: Record<AgentMemoryKind, string> = {
 
 function kindLabel(kind: string): string {
   return (copy.kinds as Record<string, string>)[kind] ?? kind;
+}
+
+function rhythmFacetLabel(facet: RhythmFacet): string {
+  return copy.rhythm.facets[facet];
+}
+
+function clock(minutes: number): string {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function generatedAt(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString('zh-CN', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function RhythmProfileBlock({ items }: { items: AgentMemoryItem[] }) {
+  const qc = useQueryClient();
+  const remove = useMutation({
+    mutationFn: (id: string) => client.deleteAgentMemory(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: MEMORY_KEY });
+    },
+  });
+  return (
+    <section data-region="rhythm-profile" aria-label={copy.rhythm.title} className="flex flex-col gap-2.5">
+      <div className="px-1">
+        <h2 className="text-[length:var(--text-body)] font-semibold leading-[var(--text-body-lh)] text-fg">
+          {copy.rhythm.title}
+        </h2>
+        <p className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+          {copy.rhythm.hint}
+        </p>
+      </div>
+      {items.length === 0 ? (
+        <p data-rhythm-empty className="px-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+          {copy.rhythm.empty}
+        </p>
+      ) : (
+        <div className={ACTIVITY_CARD}>
+          <ul className="flex flex-col">
+            {items.map((item) => {
+              const parsed = parseRhythmMemory(item.content);
+              const facet = parsed?.facet;
+              const range = parsed?.startMin !== undefined && parsed.endMin !== undefined
+                ? `${clock(parsed.startMin)}–${clock(parsed.endMin)}`
+                : null;
+              return (
+                <li
+                  key={item.id}
+                  data-rhythm-row={item.id}
+                  data-rhythm-facet={facet ?? 'unknown'}
+                  className="flex flex-wrap items-start gap-x-3.5 gap-y-2 border-b border-border px-5 py-3.5 last:border-b-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[length:var(--text-caption)] font-semibold text-muted">
+                      {facet ? rhythmFacetLabel(facet) : copy.scopes.profile}
+                      {range ? ` ${range}` : ''}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-[length:var(--text-meta)] leading-[19px] text-fg">
+                      {parsed?.text ?? item.content}
+                    </p>
+                    <p className="mt-1 text-[length:var(--text-caption)] tabular-nums text-tertiary">
+                      {copy.rhythm.sample} {item.sourceCount}
+                      {' · '}
+                      {copy.rhythm.generated} {generatedAt(item.updatedAt)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={remove.isPending}
+                    onClick={() => remove.mutate(item.id)}
+                    className={`${BTN_GHOST_SM} hover:text-danger`}
+                  >
+                    {copy.del}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function scopeLabel(value: string): string {
@@ -299,11 +388,13 @@ export function MemorySection({
     );
   }
 
-  const items = query.data ?? [];
+  const items = (query.data ?? []).filter((item) => !isRhythmMemoryScope(item.scope));
+  const rhythm = (query.data ?? []).filter((item) => isRhythmMemoryScope(item.scope));
   const manualCount = items.filter((item) => item.manual).length;
 
   return (
     <div className="flex flex-col gap-7" data-region="agent-memory">
+      <RhythmProfileBlock items={rhythm} />
       <div className="grid gap-3 sm:grid-cols-3">
         <div className={`${ACTIVITY_CARD} px-5 py-4`}>
           <p className={STAT_NUM}>

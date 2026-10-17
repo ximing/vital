@@ -223,6 +223,14 @@ const InboxDetailContent = observer(function InboxDetailContent({ inboxId }: { i
             {outcome ? outcome.name : copy.inbox.attachOutcome}
           </Text>
         </Pressable>
+        <Button
+          variant="quiet"
+          loading={s.errandBusy}
+          onPress={() => void s.startErrand()}
+        >
+          {s.errandBusy ? copy.inbox.askAgentReading : copy.inbox.askAgent}
+        </Button>
+        {s.errandNote ? <Text style={styles.errandNote}>{s.errandNote}</Text> : null}
         <View style={styles.reader}>
           <InboxReader item={item} size={fontSize} />
         </View>
@@ -434,6 +442,7 @@ const createStyles = (t: Theme) =>
     outcomeLabel: { fontSize: t.type.meta.fontSize, color: t.textTertiary },
     outcomeLabelSet: { color: t.accentPrimary, fontWeight: '500' },
     reader: { marginTop: t.space[5] },
+    errandNote: { marginTop: t.space[2], fontSize: 13, lineHeight: 18, color: t.fgMuted },
     pressed: { opacity: 0.7 },
     option: {
       minHeight: t.space[12],

@@ -51,6 +51,8 @@ export class AgentChatService extends Service {
   liveCards: ChatToolCard[] = [];
   sending = false;
   error: string | null = null;
+  /** Set after a plan apply until that hint is undone or the thread resets. */
+  planUndo: { hintId: string } | null = null;
   private controller: AbortController | null = null;
 
   async load(): Promise<void> {
@@ -68,6 +70,12 @@ export class AgentChatService extends Service {
     if (!this.enabled) return;
     if (this.open) this.close();
     else this.rememberOpen(true);
+  }
+
+  /** Open the rail for /chat?task= without toggling it shut. */
+  openFromDeeplink(): void {
+    if (!this.enabled || this.open) return;
+    this.rememberOpen(true);
   }
 
   close(): void {
@@ -90,6 +98,7 @@ export class AgentChatService extends Service {
     this.streamingText = '';
     this.liveCards = [];
     this.sending = false;
+    this.planUndo = null;
     try {
       const session = await client.resetChat();
       this.messages = session.messages;
@@ -106,6 +115,7 @@ export class AgentChatService extends Service {
     this.controller = controller;
     this.sending = true;
     this.error = null;
+    this.planUndo = null;
     this.streamingText = '';
     this.liveCards = [];
     this.messages = [
@@ -155,6 +165,18 @@ export class AgentChatService extends Service {
     }
   }
 
+  async applyPlan(previewId: string): Promise<void> {
+    this.error = null;
+    try {
+      const result = await client.applyAgentPlan(previewId);
+      invalidateTags(result.invalidate);
+      this.planUndo = result.undoHintId ? { hintId: result.undoHintId } : null;
+      await this.load();
+    } catch (err) {
+      this.error = humanError(err);
+    }
+  }
+
   async cancelPreview(previewId: string): Promise<void> {
     try {
       await client.cancelChatPreview(previewId);
@@ -169,6 +191,7 @@ export class AgentChatService extends Service {
     try {
       const result = await client.undoChat(hintId);
       invalidateTags(result.invalidate);
+      if (this.planUndo?.hintId === hintId) this.planUndo = null;
       await this.load();
     } catch (err) {
       this.error = humanError(err);

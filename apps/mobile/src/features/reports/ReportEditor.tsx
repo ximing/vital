@@ -36,6 +36,7 @@ import { InsertPicker } from './InsertPicker';
 import { clockTime } from './period-label';
 import { ReportActionBar } from './ReportBar';
 import { ReportEditorService } from './report-editor.service';
+import { WeeklyReadouts } from './weekly-sections';
 
 const ReportEditorContent = observer(function ReportEditorContent({
   reportId,
@@ -128,6 +129,7 @@ const ReportEditorContent = observer(function ReportEditorContent({
       {s.saveError ? <Banner tone="error">{s.saveError}</Banner> : null}
       <View style={[styles.paper, rnShadow(t)]}>
         <View style={styles.paperBar} />
+        {report.type === 'weekly' ? <WeeklyReadouts bodyMd={s.draftMd} /> : null}
         <TextInput
           value={s.draftTitle}
           onChangeText={(next) => s.writeDraft({ title: next })}

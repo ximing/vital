@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DEFAULT_NOTIFICATION_PREFS, type NotificationPrefs } from '@vital/dto';
+import { DEFAULT_NOTIFICATION_PREFS, hhmmSchema, type NotificationPrefs } from '@vital/dto';
 import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 import { getDb, type Database } from '../db/index.js';
 import {
@@ -78,6 +78,24 @@ export function prefsFromUser(user: User): NotificationPrefs {
     taskDue: user.notifyTaskDue,
     agentInsights: user.notifyAgentInsights,
     dayRemind: user.notifyDayRemind,
+    morningBrief: user.notifyMorningBrief,
+    meetingPrep: user.notifyMeetingPrep,
+    weeklyObserve: user.notifyWeeklyObserve,
+    agentErrand: user.notifyAgentErrand,
+    scheduleSuggest: user.scheduleSuggest,
+    workHoursStart: hhmmSchema.safeParse(user.workHoursStart).success
+      ? user.workHoursStart
+      : DEFAULT_NOTIFICATION_PREFS.workHoursStart,
+    workHoursEnd: hhmmSchema.safeParse(user.workHoursEnd).success
+      ? user.workHoursEnd
+      : DEFAULT_NOTIFICATION_PREFS.workHoursEnd,
+    scheduleDayCapMinutes:
+      user.scheduleDayCapMinutes >= 30 && user.scheduleDayCapMinutes <= 1440
+        ? user.scheduleDayCapMinutes
+        : DEFAULT_NOTIFICATION_PREFS.scheduleDayCapMinutes,
+    morningBriefTime: hhmmSchema.safeParse(user.morningBriefTime).success
+      ? user.morningBriefTime
+      : DEFAULT_NOTIFICATION_PREFS.morningBriefTime,
     quietHoursStart: user.quietHoursStart,
     quietHoursEnd: user.quietHoursEnd,
     allDayNotifyTime: user.allDayNotifyTime || DEFAULT_NOTIFICATION_PREFS.allDayNotifyTime,

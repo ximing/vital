@@ -195,6 +195,8 @@ export class InboxDetailService extends Service {
   error: string | null = null;
   busy = false;
   exporting = false;
+  errandBusy = false;
+  errandNote: string | null = null;
   fontSize: ReaderFontSize = 'md';
   more = false;
   outcomePicker = false;
@@ -351,6 +353,20 @@ export class InboxDetailService extends Service {
     } catch (err) {
       toast(humanError(err));
       return false;
+    }
+  }
+
+  async startErrand(): Promise<void> {
+    if (this.item === null || this.errandBusy) return;
+    this.errandBusy = true;
+    this.errandNote = null;
+    try {
+      await client.startInboxErrand(this.item.id);
+      this.errandNote = copy.inbox.askAgentQueued;
+    } catch (err) {
+      toast(humanError(err));
+    } finally {
+      this.errandBusy = false;
     }
   }
 

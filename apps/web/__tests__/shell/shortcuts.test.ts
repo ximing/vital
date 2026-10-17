@@ -43,7 +43,10 @@ describe('shortcut chords', () => {
 
   it('starts a chord on g and follows it within the window', () => {
     expect(planGlobalKey(key())).toEqual({ type: 'start-chord' });
-    expect(planGlobalKey(key({ key: 'i', chordPending: true }))).toEqual({ type: 'go', to: '/inbox' });
+    expect(planGlobalKey(key({ key: 'i', chordPending: true }))).toEqual({
+      type: 'go',
+      to: '/inbox',
+    });
     expect(planGlobalKey(key({ key: 's', chordPending: true, listFilterPath: true }))).toEqual({
       type: 'go',
       to: '/settings',
@@ -53,7 +56,9 @@ describe('shortcut chords', () => {
   it('lets a non-chord second key through and ignores typing', () => {
     expect(planGlobalKey(key({ key: 'n', chordPending: true }))).toEqual({ type: 'none' });
     expect(planGlobalKey(key({ typing: true }))).toEqual({ type: 'none' });
-    expect(planGlobalKey(key({ key: 'i', chordPending: true, typing: true }))).toEqual({ type: 'none' });
+    expect(planGlobalKey(key({ key: 'i', chordPending: true, typing: true }))).toEqual({
+      type: 'none',
+    });
     expect(planGlobalKey(key({ blocked: true }))).toEqual({ type: 'none' });
     expect(planGlobalKey(key({ composing: true }))).toEqual({ type: 'none' });
   });
@@ -108,6 +113,8 @@ describe('shortcut chords', () => {
       t.shortcuts.other,
       t.shortcuts.desktop,
     ]);
+    const search = shortcutGroups('⌘').find((group) => group.id === 'search');
+    expect(search?.rows.map((row) => row.label)).toContain(t.shortcuts.docFind);
     const task = shortcutGroups('⌘').find((group) => group.id === 'task');
     expect(task?.rows.map((row) => row.keys[0])).toContain('s');
     expect(shortcutGroups('Ctrl').find((group) => group.id === 'desktop')?.rows[0]?.keys).toEqual([

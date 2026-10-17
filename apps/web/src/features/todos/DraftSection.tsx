@@ -63,6 +63,21 @@ export const DraftSection: FC<{
   const polled = todos.draftPolled[task.id] ?? null;
   const [busy, setBusy] = useState<'apply' | 'dismiss' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errandBusy, setErrandBusy] = useState(false);
+  const [errandNote, setErrandNote] = useState<string | null>(null);
+
+  async function startErrand(): Promise<void> {
+    setErrandBusy(true);
+    setErrandNote(null);
+    try {
+      await client.startTaskErrand(task.id);
+      setErrandNote(t.todos.errandQueued);
+    } catch (err) {
+      setErrandNote(humanError(err));
+    } finally {
+      setErrandBusy(false);
+    }
+  }
 
   const open = task.status === 'todo' || task.status === 'doing';
   // The parent's prop wins; `polled` is the copy GET fetched itself.
@@ -202,6 +217,26 @@ export const DraftSection: FC<{
         <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
           {t.todos.delegableHint}
         </p>
+      ) : null}
+
+      {task.delegable && open ? (
+        <div>
+          <Button
+            variant="quiet"
+            className="h-7 min-h-7 px-3 text-[length:var(--text-caption)]"
+            loading={errandBusy}
+            disabled={errandBusy}
+            onClick={() => void startErrand()}
+          >
+            <Icon icon={Bot} size={13} className="mr-1 text-accent" />
+            {errandBusy ? t.todos.errandUpgrading : t.todos.errandUpgrade}
+          </Button>
+          {errandNote ? (
+            <p role="status" className="mt-1 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              {errandNote}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {task.delegable && proposal === null && !failed ? (

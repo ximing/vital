@@ -4,7 +4,7 @@ import { agentMemoryFeedback, agentMemoryHistory, agentMemoryMaintenance } from 
 import { agentEditEvents, agentEditFeedback } from '../db/schema/agent-edit-events.js';
 import { recordAgentAction } from './action-ledger.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { extractNotes, replaceNotes } from '@vital/dto';
+import { extractNotes, isRhythmMemoryScope, replaceNotes } from '@vital/dto';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
@@ -24,6 +24,7 @@ import {
   type TaskRow,
   type User,
 } from '../db/schema.js';
+import { milestoneProgress, withMilestoneHeadline } from '../outcomes/milestones.js';
 import { isOverdue, needsDecomposition } from '../outcomes/rule-engine.js';
 import {
   buildClusterPrompt,
@@ -39,6 +40,8 @@ import {
 import { loadAgentMemory, runProposalPass, runWithCritic } from './harness.js';
 import { enqueueOutcomeRefresh, UnknownAgentJobTypeError } from './jobs.js';
 import { processTodayLayout } from './today-layout.js';
+import { runRhythmDistill } from './rhythm-distill.js';
+import { processErrand } from './errand.js';
 import { getRetrievalClients } from '../retrieval/registry.js';
 import {
   groupTasksBySimilarity,
@@ -64,6 +67,7 @@ import {
 import { executionResult, skipExecution, withExecution } from './executions.service.js';
 import { getReportReview } from '../reports/overview.service.js';
 import { enqueueProactiveInsights } from '../notifications/insights.js';
+import { processWeeklyObserve } from '../notifications/weekly-observe.js';
 import { indexMemory, removeMemoryIndex, trackIndexJob } from '../retrieval/pipeline.js';
 import { memorySimilarityPairs } from '../retrieval/dedup.js';
 import { syncUserIndexes } from '../retrieval/sync.js';
@@ -142,6 +146,19 @@ async function processOutcomeRefresh(
       ),
     );
 
+  const milestoneRows = await db
+    .select({ status: tasks.status, isMilestone: tasks.isMilestone })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, user.id),
+        eq(tasks.outcomeId, outcomeId),
+        eq(tasks.isMilestone, true),
+        isNull(tasks.deletedAt),
+        isNull(tasks.habitId),
+      ),
+    );
+  const milestone = milestoneProgress(milestoneRows);
   const habitFacts = await loadHabitHeadlineFacts(user.id, user.timezone, now);
   const linkedHabits = linkedHabitFacts(habitFacts, outcomeId);
   const unlinkedHabits = unlinkedHabitFacts(habitFacts);
@@ -169,6 +186,8 @@ async function processOutcomeRefresh(
       todayDone: habit.todayDone,
       todayTarget: habit.todayTarget,
     })),
+    milestoneDone: milestone.done,
+    milestoneTotal: milestone.total,
     unlinkedHabits: unlinkedHabits.map((habit) => ({
       id: habit.id,
       name: habit.name,
@@ -195,7 +214,7 @@ async function processOutcomeRefresh(
     return 'skipped:no-llm';
   }
 
-  const headline = result.args.headline.trim().slice(0, 500);
+  const headline = withMilestoneHeadline(result.args.headline, milestone.done, milestone.total);
   const suggestion = result.args.suggestion.trim().slice(0, 1000);
   const attachIds = [...new Set(result.args.attachHabitIds ?? [])];
   const attachable = new Set(unlinkedHabits.map((habit) => habit.id));
@@ -205,7 +224,7 @@ async function processOutcomeRefresh(
     await tx
       .update(outcomes)
       .set({
-        agentHeadline: headline,
+        agentHeadline: headline === '' ? null : headline,
         agentSuggestion: suggestion === '' ? null : suggestion,
         agentState: 'idle',
         agentUpdatedAt: now,
@@ -814,9 +833,12 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
   // event-id consumption markers suffice (no md5 version).
   const editCandidates = maintenance ? [] : await db.select().from(agentEditEvents).where(and(
     eq(agentEditEvents.userId, user.id),
+    eq(agentEditEvents.source, 'user'),
     sql`not exists (select 1 from ${agentEditFeedback} f where f.user_id = ${agentEditEvents.userId} and f.event_id = ${agentEditEvents.id})`,
   )).orderBy(asc(agentEditEvents.createdAt), asc(agentEditEvents.id)).limit(50);
-  if (!maintenance && candidates.length === 0 && editCandidates.length === 0) { skipExecution('UNCHANGED_INPUT'); await finishUnchangedSchedule(job, user.id, 'memory.distill', now); return 'done'; }
+  if (!maintenance && candidates.length === 0 && editCandidates.length === 0) {
+    return finishRhythmOnly(job, user.id, now);
+  }
   const recent = candidates;
   executionResult({ inputSummary: `仅当前用户：${String(recent.length)} 条新反馈，${String(editCandidates.length)} 条用户编辑，${String(existing.length)} 条记忆` });
   const facts: DistillActionFact[] = recent.map(a => ({ actionType: a.actionType, feedback: a.feedback, summary: JSON.stringify(a.payload).slice(0, 200), editedSummary: a.feedbackPayload ? JSON.stringify(a.feedbackPayload).slice(0, 200) : null }));
@@ -837,11 +859,12 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
     const fresh = similarPairs.filter(([a, b]) => existingIds.has(a) && existingIds.has(b));
     if (fresh.length > 0) similarPairsHint = fresh;
   }
-  const prompt = buildDistillPrompt({ actions: facts, existingMemory: existing, edits: editFacts, mode: maintenance ? 'maintenance' : 'incremental', ...(similarPairsHint ? { similarPairs: similarPairsHint } : {}) });
+  const governable = existing.filter((row) => !isRhythmMemoryScope(row.scope));
+  const prompt = buildDistillPrompt({ actions: facts, existingMemory: governable, edits: editFacts, mode: maintenance ? 'maintenance' : 'incremental', ...(similarPairsHint ? { similarPairs: similarPairsHint } : {}) });
   const result = await runProposalPass<SubmitMemoriesArgs>({ user, capability: 'agent.distill', systemPrompt: prompt.system, userPrompt: prompt.user, makeTool: submitMemoriesTool });
   if (!result) return 'skipped:no-llm';
   const updates = (result.args.update ?? []).map(u => ({ id: u.id, content: u.content.trim(), scope: sanitizeScope(u.scope) })).filter(u => u.content !== '');
-  const adds = (result.args.add ?? []).map(a => ({ kind: a.kind, content: a.content.trim(), scope: sanitizeScope(a.scope) })).filter(a => a.content !== '').slice(0, 5);
+  const adds = (result.args.add ?? []).map(a => ({ kind: a.kind, content: a.content.trim(), scope: sanitizeScope(a.scope) })).filter(a => a.content !== '' && !isRhythmMemoryScope(a.scope ?? [])).slice(0, 5);
   const drops = new Set(result.args.drop ?? []);
   // Rows whose derived index entries change in the distill transaction;
   // reindexed fire-and-forget after commit (never inside, never blocking).
@@ -875,13 +898,13 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
     };
     for (const u of updates) {
       const before = current.find(m => m.id === u.id && !m.manual);
-      if (!before || drops.has(u.id)) continue;
-      const scope = u.scope ?? before.scope;
+      if (!before || drops.has(u.id) || isRhythmMemoryScope(before.scope)) continue;
+      const scope = u.scope && !isRhythmMemoryScope(u.scope) ? u.scope : before.scope;
       if (before.content === u.content && JSON.stringify(before.scope) === JSON.stringify(scope)) continue;
       const [after] = await tx.update(agentMemory).set({ content: u.content, scope, version: before.version + 1, sourceCount: before.sourceCount + sources.length, updatedAt: now }).where(and(eq(agentMemory.userId, user.id), eq(agentMemory.id, u.id), eq(agentMemory.manual, false))).returning();
       if (after) { counts.updated++; await history('update', before, after); Object.assign(before, after); indexUpserts.push(after); }
     }
-    for (const before of current.filter(m => !m.manual && drops.has(m.id))) {
+    for (const before of current.filter(m => !m.manual && drops.has(m.id) && !isRhythmMemoryScope(m.scope))) {
       const removed = await tx.delete(agentMemory).where(and(eq(agentMemory.userId, user.id), eq(agentMemory.id, before.id), eq(agentMemory.manual, false))).returning();
       if (removed.length) { counts.deleted++; await history('drop', before, null); indexRemovals.push(before.id); }
     }
@@ -896,7 +919,7 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
     if (over > 0) {
       const graceBefore = new Date(now.getTime() - MEMORY_EVICT_GRACE_MS);
       const evictable = all
-        .filter((row) => !row.manual && row.createdAt < graceBefore)
+        .filter((row) => !row.manual && !isRhythmMemoryScope(row.scope) && row.createdAt < graceBefore)
         .sort((a, b) => {
           const aKey = (a.lastRetrievedAt ?? a.createdAt).getTime();
           const bKey = (b.lastRetrievedAt ?? b.createdAt).getTime();
@@ -944,9 +967,45 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
     evictedIds.length > 0
       ? `；按检索价值淘汰 ${String(evictedIds.length)} 条（${evictedIds.join('、')}）`
       : '';
-  executionResult({ resultSummary: `记忆整理：新增 ${String(counts.added)}，更新 ${String(counts.updated)}，删除 ${String(counts.deleted)}${evictionNote}` });
-  if (counts.added + counts.updated + counts.deleted === 0) skipExecution('NO_CHANGES');
+  const rhythm = await runRhythmDistill(user, job, now);
+  if (maintenance) await sealMaintenanceFingerprint(user.id, now);
+  const rhythmNote = rhythm === 'wrote' ? '；节奏画像已更新' : rhythm === 'failed' ? '；节奏画像未生成' : '';
+  executionResult({ resultSummary: `记忆整理：新增 ${String(counts.added)}，更新 ${String(counts.updated)}，删除 ${String(counts.deleted)}${evictionNote}${rhythmNote}` });
+  if (counts.added + counts.updated + counts.deleted === 0 && rhythm !== 'wrote') skipExecution('NO_CHANGES');
   return 'done';
+}
+
+/** No new feedback: still try profile.rhythm. A short sample or a missing model writes nothing. */
+async function finishRhythmOnly(job: AgentJobRow, userId: string, now: Date): Promise<AgentJobResult> {
+  const [user] = await getDb().select().from(users).where(eq(users.id, userId)).limit(1);
+  const rhythm = user ? await runRhythmDistill(user, job, now) : 'skipped';
+  await finishUnchangedSchedule(job, userId, 'memory.distill', now);
+  if (rhythm === 'no-model') {
+    skipExecution('NO_MODEL');
+    return 'skipped:no-llm';
+  }
+  if (rhythm === 'wrote') {
+    executionResult({ resultSummary: '节奏画像已更新', inputSummary: 'profile.rhythm' });
+    return 'done';
+  }
+  if (rhythm === 'failed') {
+    executionResult({ resultSummary: '节奏画像未生成', inputSummary: 'profile.rhythm' });
+    return 'done';
+  }
+  skipExecution('UNCHANGED_INPUT');
+  return 'done';
+}
+
+async function sealMaintenanceFingerprint(userId: string, now: Date): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('no key update');
+    const final = await tx.select().from(agentMemory).where(eq(agentMemory.userId, userId));
+    const fingerprint = memoryFingerprint(final);
+    await tx.insert(agentMemoryMaintenance).values({ userId, fingerprint, updatedAt: now }).onConflictDoUpdate({
+      target: agentMemoryMaintenance.userId,
+      set: { fingerprint, updatedAt: now },
+    });
+  });
 }
 
 export async function processAgentJob(job: AgentJobRow, now: Date): Promise<AgentJobResult> {
@@ -1003,12 +1062,16 @@ async function processAgentJobInner(job: AgentJobRow, now: Date): Promise<AgentJ
       return processReportGenerate(job, user, now);
     case 'reflect.daily':
       return processReflectDaily(job, user, now);
+    case 'reflect.weekly':
+      return processWeeklyObserve(job, user, now);
     case 'memory.distill':
       return processMemoryDistill(job, user, now);
     case 'index.sync':
       return processIndexSync(job, user, now);
     case 'today.layout':
       return processTodayLayout(user, now);
+    case 'errand.run':
+      return processErrand(job, user, now);
     case 'notify.scan': {
       const inserted = await enqueueProactiveInsights(user, now, async (item) => {
         const memory = await loadAgentMemory(user.id, 'notify', item.message);

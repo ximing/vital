@@ -5,6 +5,8 @@ const UNWRAP_TAGS = new Set([
   'section',
   'div',
   'font',
+  'article',
+  'main',
   'html',
   'body',
   'picture',

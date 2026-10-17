@@ -48,6 +48,15 @@ export const tasks = pgTable(
      * Cleared when the calendar event itself disappears.
      */
     calendarKey: varchar('calendar_key', { length: 200 }),
+    /**
+     * End of a device-calendar block. startAt and dueAt stay the start.
+     * Null when the mirror only has a point in time.
+     */
+    calendarEndAt: timestamp('calendar_end_at', { withTimezone: true, mode: 'date' }),
+    /** Set when a confirmed schedule plan wrote this task's clock time. */
+    agentScheduled: boolean('agent_scheduled').notNull().default(false),
+    /** Milestone of its outcome. Only meaningful when outcomeId is set. */
+    isMilestone: boolean('is_milestone').notNull().default(false),
     title: varchar('title', { length: 500 }).notNull(),
     notesMd: text('notes_md').notNull().default(''),
     status: varchar('status', { length: 16 }).notNull().default('todo'),

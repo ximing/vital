@@ -19,8 +19,11 @@ import { sendMeow } from './meow.js';
 import { deliverHuaweiForJob } from './push-devices.service.js';
 import { syncTaskNotifications } from './outbox.js';
 import { applyQuietHours } from './quiet-hours.js';
-import { countEveningDigestTasks, eveningDigestMessage } from './evening-digest.js';
-import { insightStillEligible } from './insights.js';
+import { prepareEveningDigest } from './evening-digest.js';
+import { MEETING_PREP_PATH, MEETING_PREP_TITLE, prepareMeetingPrep } from './meeting-prep.js';
+import { WEEKLY_OBSERVE_FALLBACK_PATH, WEEKLY_OBSERVE_TITLE } from './weekly-observe.js';
+import { prepareMorningBrief } from './morning-brief.js';
+import { DEFER_FOLLOWUP_TITLE, insightStillEligible } from './insights.js';
 
 const BACKOFF_MS = [30_000, 120_000, 300_000, 900_000, 3_600_000, 14_400_000, 43_200_000];
 const MAX_ATTEMPTS = 8;
@@ -31,20 +34,47 @@ function stillClaimed(id: string) {
 }
 const STUCK_MS = 5 * 60_000;
 
+function originPrefix(): string {
+  return config.WEB_ORIGIN.replace(/\/$/, '');
+}
+
 function iconUrl(): string {
-  return config.NOTIFY_ICON_URL ?? `${config.WEB_ORIGIN.replace(/\/$/, '')}/meow-icon.png`;
+  return config.NOTIFY_ICON_URL ?? `${originPrefix()}/meow-icon.png`;
 }
 
-function taskUrl(listId: string, taskId: string): string {
-  return `${config.WEB_ORIGIN.replace(/\/$/, '')}/todos/lists/${listId}?task=${taskId}`;
-}
-
-function todayUrl(): string {
-  return `${config.WEB_ORIGIN.replace(/\/$/, '')}/today`;
-}
-
-function dayUrl(dayId: string): string {
-  return `${config.WEB_ORIGIN.replace(/\/$/, '')}/days?id=${dayId}`;
+/**
+ * In-app clicks stay on the page origin (`/today` on 127.0.0.1 stays there).
+ * MeoW still gets an absolute WEB_ORIGIN URL.
+ */
+function notifyPath(job: {
+  eventType: string;
+  entityId: string;
+  payload: NotificationOutboxPayload;
+}): string {
+  if (job.eventType === 'agent.insight') {
+    if (job.payload.insightKind === 'task.decompose') {
+      const link = job.payload.deeplink;
+      if (link && link.startsWith('/') && !link.startsWith('//') && !link.includes('://')) return link;
+      return `/chat?task=${job.entityId}`;
+    }
+    return '/today';
+  }
+  if (job.eventType === 'task.digest' || job.eventType === 'agent.briefing') {
+    return '/today';
+  }
+  if (job.eventType === 'meeting.prep') return MEETING_PREP_PATH;
+  if (job.eventType === 'agent.observe') {
+    const link = job.payload.deeplink;
+    if (link && link.startsWith('/') && !link.startsWith('//') && !link.includes('://')) return link;
+    return WEEKLY_OBSERVE_FALLBACK_PATH;
+  }
+  if (job.eventType === 'agent.errand') {
+    const link = job.payload.deeplink;
+    if (link && link.startsWith('/') && !link.startsWith('//') && !link.includes('://')) return link;
+    return '/inbox';
+  }
+  if (job.eventType === 'day.remind') return `/days?id=${job.entityId}`;
+  return `/todos/lists/${job.payload.listId}?task=${job.entityId}`;
 }
 
 function notifyUrl(job: {
@@ -52,9 +82,7 @@ function notifyUrl(job: {
   entityId: string;
   payload: NotificationOutboxPayload;
 }): string {
-  if (job.eventType === 'agent.insight' || job.eventType === 'task.digest') return todayUrl();
-  if (job.eventType === 'day.remind') return dayUrl(job.entityId);
-  return taskUrl(job.payload.listId, job.entityId);
+  return `${originPrefix()}${notifyPath(job)}`;
 }
 
 function formatWhen(payload: NotificationOutboxPayload): string {
@@ -70,10 +98,25 @@ export function renderMeowMessage(payload: NotificationOutboxPayload): {
   title: string;
   msg: string;
 } {
+  if (payload.eventType === 'agent.insight' && payload.insightKind === 'task.decompose') {
+    return { title: payload.title || DEFER_FOLLOWUP_TITLE, msg: payload.message ?? '' };
+  }
   if (payload.eventType === 'agent.insight')
     return { title: '系统主动提醒', msg: payload.message ?? payload.title };
   if (payload.eventType === 'task.digest') {
     return { title: payload.title || '晚间提醒', msg: payload.message ?? '' };
+  }
+  if (payload.eventType === 'agent.briefing') {
+    return { title: payload.title || '晨报', msg: payload.message ?? '' };
+  }
+  if (payload.eventType === 'meeting.prep') {
+    return { title: payload.title || MEETING_PREP_TITLE, msg: payload.message ?? '' };
+  }
+  if (payload.eventType === 'agent.observe') {
+    return { title: payload.title || WEEKLY_OBSERVE_TITLE, msg: payload.message ?? '' };
+  }
+  if (payload.eventType === 'agent.errand') {
+    return { title: payload.title || '代办完成', msg: payload.message ?? '' };
   }
   if (payload.eventType === 'day.remind') {
     return { title: '日子提醒', msg: payload.message ?? `「${payload.title}」` };
@@ -200,67 +243,36 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
     }
   }
   if (job.eventType === 'task.digest') {
-    const zone = user.timezone || 'Asia/Shanghai';
-    if (!user.notifyTaskDue) {
-      await getDb()
-        .update(notificationOutbox)
-        .set({ status: 'cancelled', updatedAt: now, lastError: 'task due notifications off' })
-        .where(stillClaimed(job.id));
-      return;
-    }
-    const quietUntil = applyQuietHours(now, user.quietHoursStart, user.quietHoursEnd, zone);
-    if (quietUntil.getTime() > now.getTime() + 1_000) {
-      const sameDay =
-        DateTime.fromJSDate(quietUntil, { zone }).toISODate() ===
-        DateTime.fromJSDate(now, { zone }).toISODate();
-      if (!sameDay) {
-        await getDb()
-          .update(notificationOutbox)
-          .set({ status: 'cancelled', updatedAt: now, lastError: 'quiet hours crossed midnight' })
-          .where(stillClaimed(job.id));
-        return;
-      }
-      await getDb()
-        .update(notificationOutbox)
-        .set({ status: 'pending', scheduledAt: quietUntil, updatedAt: now })
-        .where(stillClaimed(job.id));
-      return;
-    }
-    const count = await countEveningDigestTasks(user.id, zone, now);
-    if (count === 0) {
-      await getDb()
-        .update(notificationOutbox)
-        .set({ status: 'cancelled', updatedAt: now, lastError: 'nothing open' })
-        .where(stillClaimed(job.id));
-      return;
-    }
-    job.payload = {
-      ...job.payload,
-      eventType: 'task.digest',
-      title: '晚间提醒',
-      message: eveningDigestMessage(count),
-    };
-    await getDb()
-      .update(notificationOutbox)
-      .set({ payload: job.payload, updatedAt: now })
-      .where(stillClaimed(job.id));
+    const outcome = await prepareEveningDigest(user, job, now);
+    if (outcome !== 'ready') return;
   }
-  const delayed = applyQuietHours(now, user.quietHoursStart, user.quietHoursEnd, user.timezone);
-  if (delayed.getTime() > now.getTime() + 1_000) {
-    await getDb()
-      .update(notificationOutbox)
-      .set({ status: 'pending', scheduledAt: delayed, updatedAt: now })
-      .where(stillClaimed(job.id));
-    return;
+  if (job.eventType === 'agent.briefing') {
+    const outcome = await prepareMorningBrief(user, job, now);
+    if (outcome !== 'ready') return;
+  }
+  if (job.eventType === 'meeting.prep') {
+    const outcome = await prepareMeetingPrep(user, job, now);
+    if (outcome !== 'ready') return;
+  }
+  // Meeting prep applies quiet hours itself and refuses a delay that misses the start.
+  if (job.eventType !== 'meeting.prep') {
+    const delayed = applyQuietHours(now, user.quietHoursStart, user.quietHoursEnd, user.timezone);
+    if (delayed.getTime() > now.getTime() + 1_000) {
+      await getDb()
+        .update(notificationOutbox)
+        .set({ status: 'pending', scheduledAt: delayed, updatedAt: now })
+        .where(stillClaimed(job.id));
+      return;
+    }
   }
 
   const copy = renderMeowMessage(job.payload);
-  publishNotification(job.userId, {
+  await publishNotification(job.userId, {
     type: 'notify',
     id: job.id,
     title: copy.title,
     body: copy.msg,
-    url: notifyUrl(job),
+    url: notifyPath(job),
   });
 
   const channels = await getDb()

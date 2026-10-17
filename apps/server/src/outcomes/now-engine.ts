@@ -22,6 +22,9 @@ export interface NowEngineTask {
   outcomeId: string | null;
   /** Signal of the owning thread; null when the task has no thread. */
   outcomeSignal: OutcomeSignal | null;
+  /** Confirmed agent time-box. These sort ahead of the usual ladder. */
+  agentScheduled?: boolean;
+  startAt?: Date | null;
 }
 
 /** Active habit window in local 'HH:mm'; may wrap midnight. */
@@ -106,7 +109,11 @@ function dueWeight(task: NowEngineTask, now: Date, tz: string): number {
   return localDayOf(task.dueAt, tz) === localDayOf(now, tz) ? 2 : 1;
 }
 
-/** Deterministic ladder: thread signal ≫ priority ≫ due urgency. */
+function isTimeboxed(task: NowEngineTask): boolean {
+  return task.agentScheduled === true && task.startAt != null && !task.isAllDay;
+}
+
+/** Time-box first, then thread signal ≫ priority ≫ due urgency. */
 function scoreTask(task: NowEngineTask, now: Date, tz: string): number {
   const signal =
     task.outcomeSignal === 'alert'
@@ -117,7 +124,7 @@ function scoreTask(task: NowEngineTask, now: Date, tz: string): number {
           ? 1
           : 0;
   const priority = 3 - Math.min(3, Math.max(0, task.priority));
-  return signal * 100 + priority * 10 + dueWeight(task, now, tz);
+  return (isTimeboxed(task) ? 1000 : 0) + signal * 100 + priority * 10 + dueWeight(task, now, tz);
 }
 
 function isDueSoon(task: NowEngineTask, now: Date, tz: string): boolean {
@@ -158,7 +165,7 @@ export function computeNow(input: NowEngineInput): TodayNow {
 
   // Per-item filter only: unestimated tasks stay eligible and render as 未估时.
   const ranked = open
-    .filter((t) => t.estimateMinutes === null || t.estimateMinutes <= minutes)
+    .filter((t) => isTimeboxed(t) || t.estimateMinutes === null || t.estimateMinutes <= minutes)
     .map((task) => ({ task, score: scoreTask(task, input.now, input.timezone) }))
     .sort(
       (a, b) =>

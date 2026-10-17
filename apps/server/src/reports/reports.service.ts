@@ -29,6 +29,7 @@ import {
   type TaskStatus,
 } from '@vital/dto';
 import { getUserEntity } from '../auth/auth.service.js';
+import { syncWeeklyGoals } from './weekly-goals.js';
 import { and, desc, eq, inArray, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 import { getDb, type Database } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
@@ -151,7 +152,8 @@ function toReport(row: ReportRow, embeds: ReportEmbeds): Report {
 }
 
 async function liveReport(row: ReportRow): Promise<Report> {
-  return toReport(row, await hydrateEmbeds(row.userId, row.bodyMd));
+  const fresh = await syncWeeklyGoals(row);
+  return toReport(fresh, await hydrateEmbeds(fresh.userId, fresh.bodyMd));
 }
 
 function snapshotReport(row: ReportRow, snap: ReportSnapshot): Report {

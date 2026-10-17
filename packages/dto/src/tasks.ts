@@ -83,6 +83,10 @@ export interface Task {
   habitSeq: number | null;
   /** Set when this task mirrors a device calendar event. */
   calendarKey?: string | null;
+  /** True after a confirmed schedule plan set the clock time. */
+  agentScheduled?: boolean;
+  /** Milestone of its outcome. Absent on older payloads means false. */
+  isMilestone?: boolean;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;
@@ -171,6 +175,8 @@ export const patchTaskInputSchema = z
     priority: taskPrioritySchema.optional(),
     pinned: z.boolean().optional(),
     delegable: z.boolean().optional(),
+    agentScheduled: z.boolean().optional(),
+    isMilestone: z.boolean().optional(),
     estimateMinutes: z.number().int().min(0).max(100000).nullable().optional(),
     dueAt: isoDateTimeSchema.nullable().optional(),
     startAt: isoDateTimeSchema.nullable().optional(),

@@ -46,6 +46,7 @@ import {
   computeSignal,
   isOverdue,
   selectRuleNextStep,
+  STALE_DAYS,
   type NextStepTask,
   type OutcomeFacts,
 } from './rule-engine.js';
@@ -65,11 +66,17 @@ interface OutcomeStats {
   openTaskCount: number;
   completedLast7d: number;
   materialCount: number;
+  milestoneDone: number;
+  milestoneTotal: number;
+}
+
+function emptyOutcomeStats(): OutcomeStats {
+  return { openTaskCount: 0, completedLast7d: 0, materialCount: 0, milestoneDone: 0, milestoneTotal: 0 };
 }
 
 export function toOutcomeDto(
   row: OutcomeRow,
-  stats: OutcomeStats = { openTaskCount: 0, completedLast7d: 0, materialCount: 0 },
+  stats: OutcomeStats = emptyOutcomeStats(),
 ): Outcome {
   return {
     id: row.id,
@@ -91,6 +98,8 @@ export function toOutcomeDto(
     openTaskCount: stats.openTaskCount,
     completedLast7d: stats.completedLast7d,
     materialCount: stats.materialCount,
+    milestoneDone: stats.milestoneDone,
+    milestoneTotal: stats.milestoneTotal,
   };
 }
 
@@ -125,9 +134,7 @@ async function statsForOutcomes(
   outcomeIds: string[],
 ): Promise<Map<string, OutcomeStats>> {
   const map = new Map<string, OutcomeStats>();
-  for (const id of outcomeIds) {
-    map.set(id, { openTaskCount: 0, completedLast7d: 0, materialCount: 0 });
-  }
+  for (const id of outcomeIds) map.set(id, emptyOutcomeStats());
   if (outcomeIds.length === 0) return map;
 
   const openRows = await getDb()
@@ -148,6 +155,26 @@ async function statsForOutcomes(
       const rec = map.get(row.outcomeId);
       if (rec) rec.openTaskCount = row.n;
     }
+  }
+
+  const milestoneRows = await getDb()
+    .select({ outcomeId: tasks.outcomeId, status: tasks.status })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        inArray(tasks.outcomeId, outcomeIds),
+        eq(tasks.isMilestone, true),
+        isNull(tasks.habitId),
+        isNull(tasks.deletedAt),
+      ),
+    );
+  for (const row of milestoneRows) {
+    if (!row.outcomeId || row.status === 'canceled') continue;
+    const rec = map.get(row.outcomeId);
+    if (!rec) continue;
+    rec.milestoneTotal += 1;
+    if (row.status === 'done') rec.milestoneDone += 1;
   }
 
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
@@ -448,10 +475,16 @@ interface OpenRuleTask extends NextStepTask {
   habitId: string | null;
 }
 
+interface MilestoneRuleTask {
+  status: string;
+  updatedAt: Date;
+}
+
 interface OutcomeRuleContext {
   openByOutcome: Map<string, OpenRuleTask[]>;
   completionsByOutcome: Map<string, Date[]>;
   lastTaskActivityByOutcome: Map<string, Date | null>;
+  milestonesByOutcome: Map<string, MilestoneRuleTask[]>;
 }
 
 interface OutcomeRuleFields {
@@ -479,13 +512,15 @@ async function loadOutcomeRuleContext(
   const openByOutcome = new Map<string, OpenRuleTask[]>();
   const completionsByOutcome = new Map<string, Date[]>();
   const lastTaskActivityByOutcome = new Map<string, Date | null>();
+  const milestonesByOutcome = new Map<string, MilestoneRuleTask[]>();
   for (const id of outcomeIds) {
     openByOutcome.set(id, []);
     completionsByOutcome.set(id, []);
     lastTaskActivityByOutcome.set(id, null);
+    milestonesByOutcome.set(id, []);
   }
   if (outcomeIds.length === 0) {
-    return { openByOutcome, completionsByOutcome, lastTaskActivityByOutcome };
+    return { openByOutcome, completionsByOutcome, lastTaskActivityByOutcome, milestonesByOutcome };
   }
 
   const openRows = await getDb()
@@ -557,7 +592,28 @@ async function loadOutcomeRuleContext(
     lastTaskActivityByOutcome.set(row.outcomeId, asInstant(row.last));
   }
 
-  return { openByOutcome, completionsByOutcome, lastTaskActivityByOutcome };
+  const milestoneRows = await getDb()
+    .select({
+      outcomeId: tasks.outcomeId,
+      status: tasks.status,
+      updatedAt: tasks.updatedAt,
+    })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        inArray(tasks.outcomeId, outcomeIds),
+        eq(tasks.isMilestone, true),
+        isNull(tasks.deletedAt),
+        isNull(tasks.habitId),
+      ),
+    );
+  for (const row of milestoneRows) {
+    if (!row.outcomeId) continue;
+    milestonesByOutcome.get(row.outcomeId)?.push({ status: row.status, updatedAt: row.updatedAt });
+  }
+
+  return { openByOutcome, completionsByOutcome, lastTaskActivityByOutcome, milestonesByOutcome };
 }
 
 function ruleFieldsForOutcome(
@@ -588,12 +644,19 @@ function ruleFieldsForOutcome(
   const lastActivityWithHabits = laterOf(lastActivityAt, habitLast);
   const incompleteHabit = linkedHabits.find((habit) => habit.todayDone < habit.todayTarget);
 
+  const milestones = ctx.milestonesByOutcome.get(outcomeId) ?? [];
+  const staleBefore = now.getTime() - STALE_DAYS * 24 * 3600 * 1000;
+  const milestoneStaleOpen = milestones.filter(
+    (task) =>
+      (task.status === 'todo' || task.status === 'doing') && task.updatedAt.getTime() < staleBefore,
+  ).length;
   const facts: OutcomeFacts = {
     completedLast7d: completedLast7d + habitDaysLast7d,
     completedPrev7d: completedPrev7d + habitDaysPrev7d,
     openCount: openTasks.length,
     overdueCount: openTasks.filter((t) => isOverdue(t.dueAt, t.isAllDay, now, timezone)).length,
     lastActivityAt: lastActivityWithHabits,
+    ...(milestones.some((task) => task.status !== 'canceled') ? { milestoneStaleOpen } : {}),
   };
 
   return {
@@ -620,10 +683,13 @@ function statsFromRuleContext(
       (sum, habit) => sum + habit.daysDoneLast7d,
       0,
     );
+    const milestones = (ctx.milestonesByOutcome.get(id) ?? []).filter((task) => task.status !== 'canceled');
     map.set(id, {
       openTaskCount: openCount,
       completedLast7d: completedLast7d + habitDays,
       materialCount: materialCounts.get(id) ?? 0,
+      milestoneDone: milestones.filter((task) => task.status === 'done').length,
+      milestoneTotal: milestones.length,
     });
   }
   return map;
@@ -757,6 +823,8 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
         estimateMinutes: task.estimateMinutes,
         dueAt: task.dueAt ? new Date(task.dueAt) : null,
         isAllDay: task.isAllDay,
+        agentScheduled: task.agentScheduled === true,
+        startAt: task.startAt ? new Date(task.startAt) : null,
         outcomeId: task.outcomeId,
         outcomeSignal: task.outcomeId ? (signalByOutcome.get(task.outcomeId) ?? null) : null,
       })),

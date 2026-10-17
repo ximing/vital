@@ -112,6 +112,7 @@ export function shortcutGroups(mod = modKey()): ShortcutGroup[] {
       title: t.shortcuts.search,
       rows: [
         { label: t.shortcuts.searchOpen, keys: [combo(mod, 'F'), combo(mod, 'K')] },
+        { label: t.shortcuts.docFind, keys: [combo(mod, 'F')] },
         { label: t.shortcuts.searchFocus, keys: ['/'] },
         { label: t.shortcuts.down, keys: ['j', '↓'] },
         { label: t.shortcuts.up, keys: ['k', '↑'] },

@@ -12,6 +12,10 @@ import type { AgentActionType } from '@vital/dto';
  * - decompose (agent.decompose, processTaskDecompose) emits task.decompose
  * - draft    (agent.draft, processTaskDraft)         emits task.draft
  * - report   (agent.report, processReportGenerate)   emits report.generate
+ * - briefing (agent.briefing) emits no proposal. Listed so the run cost still
+ *   shows in perCapability; adopted stays 0.
+ * - observe (agent.observe) emits no proposal. Same cost-only row as briefing.
+ * - errand (agent.errand) emits errand.summarize, errand.organize, and errand.propose.
  *
  * A run may emit several actions, so per-capability cost is an *amortized*
  * figure: the capability's total cost divided by its adopted proposals.
@@ -25,12 +29,15 @@ export const CAPABILITY_ACTION_MAP = {
   decompose: ['task.decompose'],
   draft: ['task.draft'],
   report: ['report.generate'],
+  briefing: [],
+  observe: [],
+  errand: ['errand.summarize', 'errand.organize', 'errand.propose'],
 } as const satisfies Record<string, readonly AgentActionType[]>;
 
 export type CostCapability = keyof typeof CAPABILITY_ACTION_MAP;
 
 /** Action types with no producing model run (rule-based processors) — cost can never be attributed to them. */
-export const KNOWN_UNMAPPED_ACTION_TYPES = ['habit.create', 'habit.adjust', 'habit.nudge'] as const satisfies readonly AgentActionType[];
+export const KNOWN_UNMAPPED_ACTION_TYPES = ['habit.create', 'habit.adjust', 'habit.nudge', 'task.followup'] as const satisfies readonly AgentActionType[];
 
 const ACTION_TYPE_TO_CAPABILITY = new Map<string, CostCapability>(
   (Object.entries(CAPABILITY_ACTION_MAP) as [CostCapability, readonly AgentActionType[]][]).flatMap(

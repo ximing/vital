@@ -38,6 +38,8 @@ export interface Task {
   habitSeq: number | null;
   /** Set when this task mirrors a device calendar event. */
   calendarKey?: string | null;
+  /** True after a confirmed schedule plan set the clock time. */
+  agentScheduled?: boolean;
   dueAt: string | null;
   startAt: string | null;
   reminderMode: ReminderMode | null;
@@ -198,6 +200,7 @@ Request body (`patchTaskInputSchema`):
 - `priority`: 0 | 1 | 2 | 3 (optional)
 - `pinned`: boolean (optional)
 - `delegable`: boolean (optional)
+- `agentScheduled`: boolean (optional)
 - `estimateMinutes`: number int min 0 max 100000 (optional, nullable)
 - `dueAt`: string iso datetime (optional, nullable)
 - `startAt`: string iso datetime (optional, nullable)
@@ -242,6 +245,18 @@ Ask the agent to draft an execution plan for a delegable task (idempotent).
 - Auth: Bearer required
 - Client: `draftTask`
 - Response: `TaskDraftTrigger`
+
+Path params:
+
+- `id`: uuid
+
+#### `POST /api/v1/tasks/:id/errand`
+
+Turn a delegable task that is linked to inbox items into an errand.run job.
+
+- Auth: Bearer required
+- Client: `startTaskErrand`
+- Response: `{ taskId: string; jobId: string | null }`
 
 Path params:
 

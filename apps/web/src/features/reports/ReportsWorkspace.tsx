@@ -29,6 +29,8 @@ import { ReportsCalendar } from './ReportsCalendar';
 import { ReportsPageService, sessionDirty } from './reports-page.service';
 import { ReviewLists } from './ReviewLists';
 import { StatsBlock } from './StatsBlock';
+import { WeeklyGoals } from './weekly-goals';
+import { WeeklyInsight } from './weekly-insight';
 
 const WysiwygEditor = lazy(() =>
   loadReportEditor().then((m) => ({ default: m.WysiwygEditor })),
@@ -454,6 +456,9 @@ function ReportsWorkspaceContent() {
                   <div className="skeleton-pulse h-24 rounded-2xl" aria-busy="true" />
                 )}
               </div>
+
+              {liveType === 'weekly' ? <WeeklyInsight bodyMd={session.draftMd} /> : null}
+              {liveType === 'weekly' ? <WeeklyGoals bodyMd={session.draftMd} /> : null}
 
               <p className="eyebrow eyebrow-rule mt-10 shrink-0 px-2">{t.reports.wrote}</p>
 

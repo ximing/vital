@@ -30,7 +30,23 @@ describe('meowNicknameSchema', () => {
 describe('patchNotificationPrefsSchema', () => {
   it('defaults proactive reminders on and accepts opting out', () => {
     expect(DEFAULT_NOTIFICATION_PREFS.agentInsights).toBe(true);
+    expect(DEFAULT_NOTIFICATION_PREFS.meetingPrep).toBe(true);
+    expect(DEFAULT_NOTIFICATION_PREFS.weeklyObserve).toBe(true);
+    expect(DEFAULT_NOTIFICATION_PREFS.agentErrand).toBe(true);
+    expect(DEFAULT_NOTIFICATION_PREFS.scheduleSuggest).toBe(true);
+    expect(DEFAULT_NOTIFICATION_PREFS.workHoursStart).toBe('09:00');
+    expect(DEFAULT_NOTIFICATION_PREFS.workHoursEnd).toBe('18:00');
+    expect(DEFAULT_NOTIFICATION_PREFS.scheduleDayCapMinutes).toBe(540);
+    expect(patchNotificationPrefsSchema.parse({ scheduleSuggest: false })).toEqual({ scheduleSuggest: false });
+    expect(patchNotificationPrefsSchema.parse({ meetingPrep: false })).toEqual({ meetingPrep: false });
+    expect(patchNotificationPrefsSchema.parse({ weeklyObserve: false })).toEqual({ weeklyObserve: false });
+    expect(patchNotificationPrefsSchema.parse({ agentErrand: false })).toEqual({ agentErrand: false });
     expect(patchNotificationPrefsSchema.parse({ agentInsights: false })).toEqual({ agentInsights: false });
+    expect(patchNotificationPrefsSchema.parse({ morningBrief: false, morningBriefTime: '07:30' })).toEqual({
+      morningBrief: false,
+      morningBriefTime: '07:30',
+    });
+    expect(() => patchNotificationPrefsSchema.parse({ morningBriefTime: '25:00' })).toThrow();
   });
 
   it('requires both quiet hours or both null', () => {

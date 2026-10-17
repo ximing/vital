@@ -1,6 +1,8 @@
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
+import { usePmDocFind } from '@/features/editor/use-pm-doc-find';
+import { createDocFindExtension, docFindPluginKey } from '@/lib/pm-find';
 import StarterKit from '@tiptap/starter-kit';
 import { parseMarkdownToPmJSON, serializePmJSONToMarkdown, type PmNode } from '@vital/markdown';
 import {
@@ -13,10 +15,11 @@ import {
   List,
   ListOrdered,
   Quote,
+  Search,
   SquareCode,
   Strikethrough,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
 import { Tip } from '@/ui/tip';
@@ -42,13 +45,18 @@ export function NotesEditor({
     onChangeRef.current = onChange;
   });
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({ heading: { levels: [2, 3] } }),
       Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
       Placeholder.configure({ placeholder: t.todos.notesPlaceholder }),
+      createDocFindExtension(),
     ],
+    [],
+  );
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions,
     content: asPm(value),
     editorProps: {
       attributes: {
@@ -64,8 +72,13 @@ export function NotesEditor({
       onChangeRef.current(serializePmJSONToMarkdown(instance.getJSON()));
     },
     onSelectionUpdate: () => bump((n) => n + 1),
-    onTransaction: () => bump((n) => n + 1),
+    onTransaction: ({ transaction }) => {
+      if (transaction.getMeta(docFindPluginKey)) return;
+      bump((n) => n + 1);
+    },
   });
+  const [findRoot, setFindRoot] = useState<HTMLElement | null>(null);
+  const docFind = usePmDocFind(editor, true, findRoot);
 
   useEffect(() => {
     if (!editor) return;
@@ -98,7 +111,8 @@ export function NotesEditor({
   }
 
   return (
-    <div className="group/notes min-h-[6rem]">
+    <div ref={setFindRoot} data-doc-find="notes" className="group/notes min-h-[6rem]">
+      {docFind.bar ? <div className="mb-1">{docFind.bar}</div> : null}
       <div className="mb-1 flex flex-wrap items-center gap-0.5 opacity-0 transition-opacity group-focus-within/notes:opacity-100 group-hover/notes:opacity-100">
         <ToolbarBtn
           label="小标题"
@@ -180,6 +194,15 @@ export function NotesEditor({
         >
           <Icon icon={LinkIcon} size={14} />
         </ToolbarBtn>
+        <ToolbarSep />
+        <ToolbarBtn
+          label={t.docFind.open}
+          active={docFind.open}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={docFind.toggle}
+        >
+          <Icon icon={Search} size={14} />
+        </ToolbarBtn>
       </div>
       <EditorContent editor={editor} />
       {linkDraft !== null ? (
@@ -201,11 +224,13 @@ function ToolbarBtn({
   active,
   label,
   onClick,
+  onMouseDown,
 }: {
   children: React.ReactNode;
   active: boolean;
   label: string;
   onClick: () => void;
+  onMouseDown?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
     <Tip label={label}>
@@ -213,6 +238,7 @@ function ToolbarBtn({
         type="button"
         aria-label={label}
         aria-pressed={active}
+        onMouseDown={onMouseDown}
         onClick={onClick}
         className={`inline-flex h-7 w-7 items-center justify-center rounded-md ${
           active ? 'bg-accent-subtle text-fg' : 'text-muted hover:bg-surface-muted hover:text-fg'

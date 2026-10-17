@@ -37,9 +37,20 @@ export const users = pgTable(
     notifyTaskDue: boolean('notify_task_due').notNull().default(true),
     notifyAgentInsights: boolean('notify_agent_insights').notNull().default(true),
     notifyDayRemind: boolean('notify_day_remind').notNull().default(true),
+    notifyMorningBrief: boolean('notify_morning_brief').notNull().default(true),
+    notifyMeetingPrep: boolean('notify_meeting_prep').notNull().default(true),
+    notifyWeeklyObserve: boolean('notify_weekly_observe').notNull().default(true),
+    notifyAgentErrand: boolean('notify_agent_errand').notNull().default(true),
+    /** Chat may propose a time-box plan. Off means no schedule card. */
+    scheduleSuggest: boolean('schedule_suggest').notNull().default(true),
+    workHoursStart: varchar('work_hours_start', { length: 5 }).notNull().default('09:00'),
+    workHoursEnd: varchar('work_hours_end', { length: 5 }).notNull().default('18:00'),
+    /** Minutes of agent time-boxes allowed on one local day. */
+    scheduleDayCapMinutes: integer('schedule_day_cap_minutes').notNull().default(540),
     quietHoursStart: varchar('quiet_hours_start', { length: 5 }),
     quietHoursEnd: varchar('quiet_hours_end', { length: 5 }),
     allDayNotifyTime: varchar('all_day_notify_time', { length: 5 }).notNull().default('09:00'),
+    morningBriefTime: varchar('morning_brief_time', { length: 5 }).notNull().default('07:30'),
     onboarding: jsonb('onboarding').$type<OnboardingState>().notNull().default({}),
     passwordChangedAt: timestamp('password_changed_at', { withTimezone: true, mode: 'date' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
@@ -56,6 +67,11 @@ export const users = pgTable(
       'users_quiet_hours_pair_check',
       sql`(${t.quietHoursStart} IS NULL AND ${t.quietHoursEnd} IS NULL) OR (${t.quietHoursStart} IS NOT NULL AND ${t.quietHoursEnd} IS NOT NULL)`,
     ),
+    check(
+      'users_work_hours_check',
+      sql`${t.workHoursStart} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' AND ${t.workHoursEnd} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$' AND ${t.workHoursEnd} > ${t.workHoursStart}`,
+    ),
+    check('users_schedule_day_cap_check', sql`${t.scheduleDayCapMinutes} BETWEEN 30 AND 1440`),
   ],
 );
 

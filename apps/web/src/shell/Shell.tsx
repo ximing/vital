@@ -23,6 +23,7 @@ import { Suspense, useEffect, useState, type FC } from 'react';
 import { flushSync } from 'react-dom';
 import { t } from '@/copy';
 import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
+import { InAppNotice } from '@/features/notify/InAppNotice';
 import { ActivationChecklist } from '@/features/onboarding/ActivationChecklist';
 import { CommandPalette } from '@/features/palette/CommandPalette';
 import { OPEN_PALETTE_EVENT } from '@/features/palette/model';
@@ -135,6 +136,10 @@ function ShellContent() {
   useEffect(() => {
     void chat.load();
   }, [chat]);
+  useEffect(() => {
+    if (location.pathname !== '/chat' || !chat.enabled) return;
+    chat.openFromDeeplink();
+  }, [location.pathname, chat, chat.enabled]);
   useEffect(() => routeLoad.settle(location.pathname), [location.pathname, routeLoad]);
   const section = sectionOf(location.pathname, location.search);
   const paneSection: PaneSection | null = showsPane(section) ? (section as PaneSection) : null;
@@ -285,6 +290,7 @@ function ShellContent() {
       <ShortcutsDialog />
       <TaskShortcutDialogs />
       <ActivationChecklist />
+      <InAppNotice />
     </div>
   );
 }

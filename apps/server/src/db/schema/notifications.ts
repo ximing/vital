@@ -44,9 +44,25 @@ export type NotificationOutboxPayload = {
   remindAt: string | null;
   isAllDay: boolean;
   timezone: string;
-  eventType: 'task.remind' | 'task.due' | 'agent.insight' | 'day.remind' | 'task.digest';
+  eventType: 'task.remind' | 'task.due' | 'agent.insight' | 'day.remind' | 'task.digest' | 'agent.briefing' | 'meeting.prep' | 'agent.observe' | 'agent.errand';
   insightKind?: 'outcome.stale' | 'task.decompose' | 'habit.window' | 'review.missing';
   message?: string;
+  /** Defer follow-up (task.decompose insight). In-app click target, not a WEB_ORIGIN URL. */
+  taskId?: string;
+  deeplink?: string;
+  /** Meeting prep. Open tasks and inbox notes named in the card. */
+  relatedTaskIds?: string[];
+  relatedInboxIds?: string[];
+  /**
+   * Meeting prep only. The rule sentence saved before rewrite.
+   * Once set, a recovered send uses `message` and does not call the model again.
+   */
+  prepRule?: string;
+  /**
+   * Evening digest only. The rule sentence saved before rewrite.
+   * Once set, a recovered send uses `message` and does not call the model again.
+   */
+  digestRule?: string;
 };
 
 export const notificationOutbox = pgTable(
@@ -79,7 +95,7 @@ export const notificationOutbox = pgTable(
     ),
     check(
       'notification_outbox_event_type_check',
-      sql`${t.eventType} IN ('task.remind', 'task.due', 'agent.insight', 'day.remind', 'task.digest')`,
+      sql`${t.eventType} IN ('task.remind', 'task.due', 'agent.insight', 'day.remind', 'task.digest', 'agent.briefing', 'meeting.prep', 'agent.observe', 'agent.errand')`,
     ),
     check(
       'notification_outbox_entity_type_check',

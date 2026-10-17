@@ -21,6 +21,7 @@ describe('app section', () => {
     expect(sectionOf('/memory', '')).toBe('memory');
     expect(sectionOf('/usage', '')).toBe('usage');
     expect(sectionOf('/settings', '')).toBe('settings');
+    expect(sectionOf('/chat', '')).toBe('chat');
   });
 
   it('keeps list/board/week when switching todo lists', () => {

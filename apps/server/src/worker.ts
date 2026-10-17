@@ -6,6 +6,8 @@ import { processQueuedExtractJobs } from './inbox/extract-jobs.js';
 import { backfillLinkOnlyInbox } from './inbox/link-extract.js';
 import { healTaskNotifications, processDueNotifications } from './notifications/dispatch.js';
 import { enqueueEveningDigests } from './notifications/evening-digest.js';
+import { enqueueMeetingPreps } from './notifications/meeting-prep.js';
+import { enqueueMorningBriefs } from './notifications/morning-brief.js';
 import { healDayNotifications } from './days/outbox.js';
 import { startSweeper } from './uploads/sweeper.js';
 import { logger } from './utils/logger.js';
@@ -33,6 +35,12 @@ async function extractJobs(): Promise<void> {
 
 async function tick(): Promise<void> {
   if (stopping) return;
+  try {
+    const n = await enqueueMeetingPreps();
+    if (n > 0) logger.info('worker.meeting-prep', { scheduled: n });
+  } catch (err) {
+    logger.error('worker.meeting-prep.failed', err);
+  }
   try {
     const n = await processDueNotifications();
     if (n > 0) logger.info('worker.tick', { claimed: n });
@@ -66,6 +74,12 @@ async function heal(): Promise<void> {
     if (n > 0) logger.info('worker.digest', { scheduled: n });
   } catch (err) {
     logger.error('worker.digest.failed', err);
+  }
+  try {
+    const n = await enqueueMorningBriefs();
+    if (n > 0) logger.info('worker.briefing', { scheduled: n });
+  } catch (err) {
+    logger.error('worker.briefing.failed', err);
   }
   try {
     const n = await recoverStuckAgentJobs();

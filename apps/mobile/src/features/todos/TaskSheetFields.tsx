@@ -188,6 +188,19 @@ export const TaskSheetExtras = observer(function TaskSheetExtras({ full }: { ful
           {outcomeName}
         </Text>
       </Pressable>
+      {task.outcomeId ? (
+        <View style={styles.switchRow}>
+          <Text style={styles.propValue}>{copy.todos.milestone}</Text>
+          <Switch
+            accessibilityLabel={copy.todos.milestone}
+            value={task.isMilestone === true}
+            trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
+            ios_backgroundColor={t.bgSurfaceMuted}
+            onValueChange={(value) => s.setMilestone(value)}
+          />
+        </View>
+      ) : null}
+      {task.outcomeId ? <Text style={styles.cardHint}>{copy.todos.milestoneHint}</Text> : null}
       <Pressable accessibilityRole="button" onPress={() => setEstimateOpen(true)} style={styles.prop}>
         <Text style={styles.propLabel}>{copy.todos.estimate}</Text>
         <Text style={styles.propValue} numberOfLines={1}>

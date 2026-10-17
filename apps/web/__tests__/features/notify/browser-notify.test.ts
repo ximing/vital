@@ -87,6 +87,8 @@ describe('appPathFromNotifyUrl', () => {
       '/todos/lists/l1?task=t1',
     );
     expect(appPathFromNotifyUrl('https://vital.aimo.plus/today')).toBe('/today');
+    expect(appPathFromNotifyUrl('http://localhost:5180/today')).toBe('/today');
+    expect(appPathFromNotifyUrl('//localhost/today')).toBe('/today');
     expect(appPathFromNotifyUrl('')).toBe('/today');
   });
 });
@@ -110,6 +112,35 @@ describe('BrowserNotifyService', () => {
     instances[0]?.onclick?.call(instances[0] as unknown as Notification, new Event('click'));
     expect(assign).toHaveBeenCalledWith('/todos/lists/l1?task=t1');
     expect(instances[0]?.close).toHaveBeenCalled();
+    expect(notify.inApp).toBeNull();
+  });
+
+  it('keeps an in-app notice on this origin when browser notifications are not allowed', () => {
+    installBrowserNotification('default');
+    const notify = browserNotify();
+    notify.showPush({
+      type: 'notify',
+      id: 'brief',
+      title: '晨报',
+      body: '有空档，建议挪一下',
+      url: 'http://localhost:5180/today',
+    });
+    expect(notify.inApp).toEqual({
+      id: 'brief',
+      title: '晨报',
+      body: '有空档，建议挪一下',
+      url: '/today',
+    });
+    notify.dismissInApp();
+    expect(notify.inApp).toBeNull();
+    notify.showPush({
+      type: 'notify',
+      id: 'brief',
+      title: '晨报',
+      body: '有空档，建议挪一下',
+      url: '/today',
+    });
+    expect(notify.inApp).toBeNull();
   });
 
   it('does not throw or drop the shown key when Tauri patches Notification to a void constructor', () => {

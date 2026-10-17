@@ -515,6 +515,10 @@ export class TaskSheetService extends Service {
     void this.patch({ delegable });
   }
 
+  setMilestone(isMilestone: boolean): void {
+    void this.patch({ isMilestone });
+  }
+
   async refreshDraft(): Promise<void> {
     const id = this.taskId;
     if (id === '') return;

@@ -136,9 +136,10 @@ export async function insertChatMessage(input: {
   text: string;
   toolName?: string | null;
   toolPayload?: unknown;
+  createdAt?: Date;
 }): Promise<string> {
   const id = randomUUID();
-  const now = new Date();
+  const now = input.createdAt ?? new Date();
   await getDb().insert(agentChatMessages).values({
     id,
     userId: input.userId,
@@ -172,10 +173,11 @@ export async function insertPreview(input: {
   toolName: string;
   args: unknown;
   summary: string;
+  ttlMs?: number;
 }): Promise<{ id: string; expiresAt: string }> {
   const id = randomUUID();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + PREVIEW_TTL_MS);
+  const expiresAt = new Date(now.getTime() + (input.ttlMs ?? PREVIEW_TTL_MS));
   await getDb().insert(agentChatPreviews).values({
     id,
     userId: input.userId,
@@ -190,13 +192,45 @@ export async function insertPreview(input: {
   return { id, expiresAt: expiresAt.toISOString() };
 }
 
-export async function takePreview(userId: string, id: string, now = new Date()) {
+export async function getOwnedPreview(userId: string, id: string) {
+  const [row] = await getDb()
+    .select()
+    .from(agentChatPreviews)
+    .where(and(eq(agentChatPreviews.id, id), eq(agentChatPreviews.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function updateOpenPreview(
+  userId: string,
+  id: string,
+  args: unknown,
+  summary: string,
+  now = new Date(),
+): Promise<boolean> {
+  const rows = await getDb()
+    .update(agentChatPreviews)
+    .set({ args, summary })
+    .where(
+      and(
+        eq(agentChatPreviews.id, id),
+        eq(agentChatPreviews.userId, userId),
+        eq(agentChatPreviews.status, 'open'),
+        sql`${agentChatPreviews.expiresAt} > ${now}`,
+      ),
+    )
+    .returning({ id: agentChatPreviews.id });
+  return rows.length > 0;
+}
+
+export async function takePreview(userId: string, id: string, now = new Date(), toolName?: string) {
   return getDb().transaction(async (tx) => {
     const [row] = await tx
       .select()
       .from(agentChatPreviews)
       .where(and(eq(agentChatPreviews.id, id), eq(agentChatPreviews.userId, userId)))
       .for('update');
+    if (row && toolName && row.toolName !== toolName) return null;
     if (!row || row.status !== 'open' || row.expiresAt <= now) {
       if (row && row.status === 'open' && row.expiresAt <= now) {
         await tx.update(agentChatPreviews).set({ status: 'expired' }).where(eq(agentChatPreviews.id, id));

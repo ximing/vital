@@ -18,6 +18,12 @@ describe('Chinese default templates', () => {
     expect(REPORT_TEMPLATES.weekly.doneHeading).toBe('本周完成');
     expect(REPORT_TEMPLATES.monthly.doneHeading).toBe('本月完成');
     expect(REPORT_TEMPLATES.yearly.doneHeading).toBe('本年完成');
-    expect(renderReportTemplate('weekly', '9月1日 – 9月7日').title).toBe('9月1日 – 9月7日 周报');
+    const weekly = renderReportTemplate('weekly', '9月1日 – 9月7日');
+    expect(weekly.title).toBe('9月1日 – 9月7日 周报');
+    const insightAt = weekly.bodyMd.indexOf('## 洞察');
+    const notesAt = weekly.bodyMd.indexOf('## 复盘');
+    expect(insightAt).toBeGreaterThan(-1);
+    expect(notesAt).toBeGreaterThan(insightAt);
+    expect(renderReportTemplate('daily', '2026年9月6日').bodyMd).not.toContain('## 洞察');
   });
 });

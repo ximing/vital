@@ -21,6 +21,68 @@ describe('htmlToArticleDoc — blocks', () => {
     ]);
   });
 
+  it('does not flatten an article or main wrapper into one paragraph', () => {
+    const html = [
+      '<main><header><a href="https://example.com/c">Tools</a></header><article>',
+      '<h1><button type="button">anchor</button>Title</h1>',
+      '<p>See <code>ANTHROPIC_API_KEY</code> and <strong>compaction</strong>.</p>',
+      '<pre>def hi():\n    return 1\n\nprint(hi())\n</pre>',
+      '<ul><li>one</li><li>two</li></ul>',
+      '<ol start="2"><li>second</li></ol>',
+      '<blockquote><p>note</p></blockquote>',
+      '<table><thead><tr><th>API</th><th>Id</th></tr></thead>',
+      '<tbody><tr><td>compaction</td><td>compact_20260112</td></tr></tbody></table>',
+      '<hr>',
+      '</article></main>',
+    ].join('');
+    const doc = blocks(html);
+    expect(doc.map((block) => block.type)).toEqual([
+      'paragraph',
+      'heading',
+      'paragraph',
+      'codeBlock',
+      'bulletList',
+      'orderedList',
+      'blockquote',
+      'table',
+      'horizontalRule',
+    ]);
+    expect(inline(doc[0]).map((node) => (node.type === 'text' ? node.text : '')).join('')).toBe(
+      'Tools',
+    );
+    expect(doc[1]).toEqual({
+      type: 'heading',
+      attrs: { level: 1 },
+      content: [{ type: 'text', text: 'Title' }],
+    });
+    expect(inline(doc[2])).toEqual([
+      { type: 'text', text: 'See ' },
+      { type: 'text', text: 'ANTHROPIC_API_KEY', marks: [{ type: 'code' }] },
+      { type: 'text', text: ' and ' },
+      { type: 'text', text: 'compaction', marks: [{ type: 'bold' }] },
+      { type: 'text', text: '.' },
+    ]);
+    expect(doc[3]).toEqual({
+      type: 'codeBlock',
+      content: [{ type: 'text', text: 'def hi():\n    return 1\n\nprint(hi())' }],
+    });
+    expect(doc[5]).toMatchObject({ type: 'orderedList', attrs: { start: 2 } });
+    const table = doc[7];
+    expect(table?.type).toBe('table');
+    if (table?.type !== 'table') return;
+    expect(table.content).toHaveLength(2);
+    expect(table.content[0]?.content.map((cell) => cell.type)).toEqual(['tableHeader', 'tableHeader']);
+  });
+
+  it('keeps indent and chrome words inside pre', () => {
+    const doc = blocks('<article><pre>  a\n\n\tb\n关注、分享</pre><p>正文</p></article>');
+    expect(doc[0]).toEqual({
+      type: 'codeBlock',
+      content: [{ type: 'text', text: '  a\n\n\tb\n关注、分享' }],
+    });
+    expect(doc[1]).toEqual({ type: 'paragraph', content: [{ type: 'text', text: '正文' }] });
+  });
+
   it('unwraps div/span wrappers and collapses whitespace', () => {
     const doc = blocks('<div><section><p><span>你好</span>   <span>世界</span></p></section></div>');
     expect(doc).toEqual([

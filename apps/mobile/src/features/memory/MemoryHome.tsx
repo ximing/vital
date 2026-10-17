@@ -15,7 +15,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { Stack, router } from 'expo-router';
 import { Brain, ChevronLeft, Ellipsis, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react-native';
-import type { AgentMemoryItem, AgentMemoryKind, AgentMemoryScopeValue } from '@vital/dto';
+import {
+  isRhythmMemoryScope,
+  parseRhythmMemory,
+  type AgentMemoryItem,
+  type AgentMemoryKind,
+  type AgentMemoryScopeValue,
+  type RhythmFacet,
+} from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Banner } from '../../components/Banner';
 import { BottomSheet } from '../../components/BottomSheet';
@@ -56,6 +63,61 @@ function kindColors(kind: AgentMemoryKind, t: Theme): { fg: string; bg: string }
 function scopeText(scope: string[]): string {
   const labels: Record<string, string> = copy.memory.scopes;
   return scope.map((value) => labels[value] ?? value).join(' · ');
+}
+
+function clock(minutes: number): string {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+function RhythmBlock({
+  items,
+  onDelete,
+}: {
+  items: AgentMemoryItem[];
+  onDelete: (item: AgentMemoryItem) => void;
+}) {
+  const t = useTheme();
+  const styles = useMemo(() => createStyles(t), [t]);
+  return (
+    <View style={styles.rhythm}>
+      <Text style={styles.rhythmTitle}>{copy.memory.rhythm.title}</Text>
+      <Text style={styles.rhythmHint}>{copy.memory.rhythm.hint}</Text>
+      {items.length === 0 ? (
+        <Text style={styles.rhythmEmpty}>{copy.memory.rhythm.empty}</Text>
+      ) : (
+        items.map((item) => {
+          const parsed = parseRhythmMemory(item.content);
+          const facet = parsed?.facet;
+          const label = facet ? copy.memory.rhythm.facets[facet as RhythmFacet] : copy.memory.scopes.profile;
+          const range =
+            parsed?.startMin !== undefined && parsed.endMin !== undefined
+              ? ` ${clock(parsed.startMin)}–${clock(parsed.endMin)}`
+              : '';
+          return (
+            <View key={item.id} style={[cardStyle(t), rnShadow(t), styles.card]}>
+              <Text style={styles.rhythmFacet}>
+                {label}
+                {range}
+              </Text>
+              <Text style={styles.cardContent}>{parsed?.text ?? item.content}</Text>
+              <View style={styles.cardHead}>
+                <Text style={styles.cardMeta}>
+                  {copy.memory.rhythm.sample} {item.sourceCount}
+                  {' · '}
+                  {copy.memory.rhythm.generated} {relativeTime(item.updatedAt)}
+                </Text>
+                <Pressable accessibilityRole="button" hitSlop={8} onPress={() => onDelete(item)}>
+                  <Text style={styles.rhythmDelete}>{copy.memory.delete}</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
 }
 
 const MemoryHomeContent = observer(function MemoryHomeContent() {
@@ -117,9 +179,13 @@ const MemoryHomeContent = observer(function MemoryHomeContent() {
           />
         }
       >
+        <RhythmBlock
+          items={items.filter((item) => isRhythmMemoryScope(item.scope))}
+          onDelete={(item) => void s.remove(item)}
+        />
         {s.error !== null && items.length === 0 ? (
           <Banner action={{ label: copy.actions.retry, onPress: () => void s.load(false) }}>{s.error}</Banner>
-        ) : items.length === 0 ? (
+        ) : sorted.filter((item) => !isRhythmMemoryScope(item.scope)).length === 0 ? (
           <EmptyState
             icon={Brain}
             title={copy.memory.empty}
@@ -127,7 +193,7 @@ const MemoryHomeContent = observer(function MemoryHomeContent() {
           />
         ) : (
           <View style={styles.cardList}>
-            {sorted.map((item) => {
+            {sorted.filter((item) => !isRhythmMemoryScope(item.scope)).map((item) => {
               const kind = kindColors(item.kind, t);
               return (
                 <Pressable
@@ -302,6 +368,12 @@ const createStyles = (t: Theme) =>
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
     kindChip: { height: 32, paddingHorizontal: 12, borderRadius: t.radius.pill, justifyContent: 'center' },
     content: { padding: t.space[4], paddingBottom: t.space[10] },
+    rhythm: { gap: t.space[2], marginBottom: t.space[5] },
+    rhythmTitle: { fontSize: 16, fontWeight: '700', color: t.fgPrimary },
+    rhythmHint: { fontSize: 13, lineHeight: 18, color: t.fgMuted },
+    rhythmEmpty: { fontSize: 13, lineHeight: 18, color: t.textTertiary },
+    rhythmFacet: { fontSize: 12, fontWeight: '600', color: t.textTertiary },
+    rhythmDelete: { fontSize: 13, color: t.statusDueSoon },
     pressed: { opacity: 0.7 },
     cardList: { gap: t.space[3] },
     card: { padding: t.space[4], gap: t.space[2] },

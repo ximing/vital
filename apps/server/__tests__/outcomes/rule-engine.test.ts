@@ -46,6 +46,14 @@ describe('computeSignal', () => {
     // No tasks at all and no activity: nothing to alert about.
     expect(computeSignal(facts({ openCount: 0, lastActivityAt: null }), NOW)).toBe('flat');
   });
+
+  it('alerts when an open milestone is older than the stale window', () => {
+    expect(computeSignal(facts({ lastActivityAt: NOW, milestoneStaleOpen: 1 }), NOW)).toBe('alert');
+    expect(
+      computeSignal(facts({ lastActivityAt: NOW, completedLast7d: 2, milestoneStaleOpen: 1 }), NOW),
+    ).toBe('alert');
+    expect(computeSignal(facts({ lastActivityAt: NOW, milestoneStaleOpen: 0 }), NOW)).toBe('flat');
+  });
 });
 
 describe('isOverdue', () => {

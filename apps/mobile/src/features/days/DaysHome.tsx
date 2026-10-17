@@ -30,6 +30,7 @@ import { useFocusReload } from '../../hooks/use-focus-reload';
 import { copy } from '../../lib/copy';
 import { useTheme } from '../../theme/use-theme';
 import { rnShadow } from '../../ui/card';
+import { EnergyLogPad } from '../energy/EnergyLogPad';
 import { DaysService } from './days.service';
 
 function headlineText(day: Day): string {
@@ -101,6 +102,7 @@ const DaysHomeContent = observer(function DaysHomeContent() {
           <RefreshControl refreshing={false} onRefresh={() => void s.load()} tintColor={t.accentPrimary} />
         }
       >
+        <EnergyLogPad timeZone={s.zone} readOnly />
         {s.items.length === 0 ? (
           <EmptyState title={copy.days.emptyTitle} hint={copy.days.emptyHint} />
         ) : (

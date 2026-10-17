@@ -1,5 +1,5 @@
 import { bindServices, useService } from '@rabjs/react';
-import { useEffect, type FC } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import { isDesktopHost } from '@/host';
 import { t } from '@/copy';
 import { BrowserNotifyService } from '@/features/notify/browser-notify.service';
@@ -21,6 +21,12 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
   const localUnsupported = desktop ? copy.desktopUnsupported : copy.browserUnsupported;
   const prefs = page.prefs;
   const meow = page.meow;
+  const [capDraft, setCapDraft] = useState(String(prefs.scheduleDayCapMinutes));
+  const [capSeen, setCapSeen] = useState(prefs.scheduleDayCapMinutes);
+  if (prefs.scheduleDayCapMinutes !== capSeen) {
+    setCapSeen(prefs.scheduleDayCapMinutes);
+    setCapDraft(String(prefs.scheduleDayCapMinutes));
+  }
   const saving = page.$model.saveChannel.loading;
   const testing = page.$model.sendTest.loading;
 
@@ -105,6 +111,93 @@ function NotificationsSectionContent({ heading = true }: { heading?: boolean }) 
         {copy.agentInsights}
       </label>
       <label className="flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+        <input
+          type="checkbox"
+          checked={prefs.morningBrief}
+          onChange={(e) => void page.savePrefs({ ...prefs, morningBrief: e.target.checked })}
+        />
+        {copy.morningBrief}
+      </label>
+      <TimeField
+        className="mt-2 max-w-xs"
+        label={copy.morningBriefTime}
+        value={prefs.morningBriefTime}
+        disabled={!prefs.morningBrief}
+        onChange={(value) => {
+          if (value === '') return;
+          void page.savePrefs({ ...prefs, morningBriefTime: value });
+        }}
+      />
+      <label className="mt-4 flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+        <input
+          type="checkbox"
+          checked={prefs.meetingPrep}
+          onChange={(e) => void page.savePrefs({ ...prefs, meetingPrep: e.target.checked })}
+        />
+        {copy.meetingPrep}
+      </label>
+      <label className="mt-4 flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+        <input
+          type="checkbox"
+          checked={prefs.weeklyObserve}
+          onChange={(e) => void page.savePrefs({ ...prefs, weeklyObserve: e.target.checked })}
+        />
+        {copy.weeklyObserve}
+      </label>
+      <label className="mt-4 flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+        <input
+          type="checkbox"
+          checked={prefs.agentErrand}
+          onChange={(e) => void page.savePrefs({ ...prefs, agentErrand: e.target.checked })}
+        />
+        {copy.agentErrand}
+      </label>
+      <label className="mt-4 flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
+        <input
+          type="checkbox"
+          checked={prefs.scheduleSuggest}
+          onChange={(e) => void page.savePrefs({ ...prefs, scheduleSuggest: e.target.checked })}
+        />
+        {copy.scheduleSuggest}
+      </label>
+      <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+        {copy.scheduleSuggestHint}
+      </p>
+      <div className="mt-3 grid max-w-lg grid-cols-2 gap-3">
+        <TimeField
+          label={copy.workHoursStart}
+          value={prefs.workHoursStart}
+          onChange={(value) => {
+            if (value === '' || value >= prefs.workHoursEnd) return;
+            void page.savePrefs({ ...prefs, workHoursStart: value });
+          }}
+        />
+        <TimeField
+          label={copy.workHoursEnd}
+          value={prefs.workHoursEnd}
+          onChange={(value) => {
+            if (value === '' || value <= prefs.workHoursStart) return;
+            void page.savePrefs({ ...prefs, workHoursEnd: value });
+          }}
+        />
+      </div>
+      <Field
+        className="mt-3 max-w-xs"
+        label={copy.scheduleDayCap}
+        inputMode="numeric"
+        value={capDraft}
+        onChange={(e) => setCapDraft(e.target.value)}
+        onBlur={() => {
+          const next = Number(capDraft.trim());
+          if (!Number.isInteger(next) || next < 30 || next > 1440) {
+            setCapDraft(String(prefs.scheduleDayCapMinutes));
+            return;
+          }
+          if (next === prefs.scheduleDayCapMinutes) return;
+          void page.savePrefs({ ...prefs, scheduleDayCapMinutes: next });
+        }}
+      />
+      <label className="mt-4 flex min-h-[var(--touch-min)] items-center gap-2 text-fg">
         <input
           type="checkbox"
           checked={prefs.dayRemind}

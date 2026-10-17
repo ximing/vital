@@ -62,6 +62,8 @@ export function toTaskDto(row: TaskRow, tagIds: string[], completionId: string |
     habitId: row.habitId,
     habitSeq: row.habitSeq,
     calendarKey: row.calendarKey,
+    agentScheduled: row.agentScheduled,
+    isMilestone: row.isMilestone,
     dueAt: iso(row.dueAt),
     startAt: iso(row.startAt),
     reminderMode: asReminderMode(row.reminderMode),

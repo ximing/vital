@@ -32,6 +32,7 @@ import { PulseStrip } from './PulseStrip';
 import { AgentProposalsCard } from './AgentProposalsCard';
 import { TodaySectionHead } from './SectionHead';
 import { TodayTaskList } from './TodayTaskList';
+import { EnergyLogBar } from '@/features/energy/EnergyLogBar';
 import { TodayPageService } from './today-page.service';
 import { useHabitsQuery, usePendingDecomposeQuery, useTodayQuery } from './queries';
 
@@ -152,6 +153,7 @@ function TodayWorkspaceContent() {
   const openCount = tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled')
     .length;
   const overdueTasks = tasks.filter((task) => isOverdue(task, timeZone));
+  const todayYmd = new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date());
   const dateLabel = new Intl.DateTimeFormat('zh-CN', {
     month: 'long',
     day: 'numeric',
@@ -190,6 +192,8 @@ function TodayWorkspaceContent() {
             </div>
             {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
           </header>
+
+          <EnergyLogBar timeZone={timeZone} todayYmd={todayYmd} />
 
           {dashboard ? (
             <NowCard now={dashboard.now} outcomes={outcomes} timeZone={timeZone} briefing={briefing} />

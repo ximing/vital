@@ -1,4 +1,4 @@
-const WRAPPER_TAGS = new Set(['SPAN', 'SECTION', 'DIV', 'FONT']);
+const WRAPPER_TAGS = new Set(['SPAN', 'SECTION', 'DIV', 'FONT', 'ARTICLE', 'MAIN']);
 const EMPTY_TAGS = new Set([
   'P',
   'H1',
@@ -221,12 +221,65 @@ function isBlockish(node: ChildNode | null): boolean {
   return BLOCK_TAGS.has((node as Element).tagName);
 }
 
+/**
+ * Notebook viewers (Claude cookbook) put each source line in `div[data-code-line]`,
+ * with indent in the text and a hanging `padding-left` only for wrap. Unwrapping
+ * those divs would glue the lines into one paragraph.
+ */
+function promoteCodeLineBlocks(root: Element): void {
+  const parents: Element[] = [];
+  const seen = new Set<Element>();
+  for (const line of root.querySelectorAll('[data-code-line]')) {
+    const parent = line.parentElement;
+    if (parent === null || seen.has(parent)) continue;
+    seen.add(parent);
+    parents.push(parent);
+  }
+  for (const parent of parents) {
+    const lines = [...parent.children].filter((child) => child.hasAttribute('data-code-line'));
+    if (lines.length === 0) continue;
+    const text = lines
+      .map((line) => line.textContent.replace(/\u00a0/g, ' '))
+      .join('\n')
+      .replace(/\n+$/, '');
+    const inCode =
+      parent.tagName === 'PRE' ||
+      parent.tagName === 'CODE' ||
+      parent.closest('pre, code') !== null;
+    if (inCode) {
+      const first = lines[0];
+      if (first === undefined) continue;
+      first.replaceWith(parent.ownerDocument.createTextNode(text));
+      for (const line of lines.slice(1)) line.remove();
+      continue;
+    }
+    const pre = parent.ownerDocument.createElement('pre');
+    pre.textContent = text;
+    const onlyLines = [...parent.childNodes].every(
+      (node) =>
+        (node.nodeType === Node.ELEMENT_NODE &&
+          (node as Element).hasAttribute('data-code-line')) ||
+        (node.nodeType === Node.TEXT_NODE && isBlankText(node.textContent ?? '')),
+    );
+    // Replacing <body> detaches the node `tidyArticleHtml` later serializes.
+    if (onlyLines && parent !== root && parent.tagName !== 'BODY') {
+      parent.replaceWith(pre);
+      continue;
+    }
+    const first = lines[0];
+    if (first === undefined) continue;
+    first.replaceWith(pre);
+    for (const line of lines.slice(1)) line.remove();
+  }
+}
+
 /** Drop WeChat-style nested empty sections/spans and consecutive blank lines. */
 export function tidyArticleHtml(html: string): string {
   if (html.trim() === '') return html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const root = doc.body;
-  for (const el of [...root.querySelectorAll('span, section, div, font')].reverse()) {
+  promoteCodeLineBlocks(root);
+  for (const el of [...root.querySelectorAll('span, section, div, font, article, main')].reverse()) {
     if (!WRAPPER_TAGS.has(el.tagName)) continue;
     if (el.closest('pre, code, figure, table') !== null) continue;
     unwrap(el);

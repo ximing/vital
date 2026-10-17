@@ -1,6 +1,8 @@
 import { getAuthGate } from '../auth/auth.service.js';
 import { verifyAccessToken } from '../auth/token.service.js';
 import { AppError } from '../errors.js';
+import { logger } from '../utils/logger.js';
+import { emitNotify } from './notify-bus.js';
 import { shouldPublish } from './sync-publish.js';
 
 /** `ws` socket surface used by @fastify/websocket — avoid depending on `ws` types. */
@@ -58,15 +60,24 @@ export function unsubscribe(userId: string, socket: SyncSocket): void {
   if (set.size === 0) rooms.delete(userId);
 }
 
-export function publishNotification(
-  userId: string,
-  payload: { type: 'notify'; id: string; title: string; body: string; url: string },
-): void {
+export type NotifyPayload = { type: 'notify'; id: string; title: string; body: string; url: string };
+
+/** Sockets in this process only. The API listener uses this for NOTIFY from the worker. */
+export function deliverLocalNotification(userId: string, payload: NotifyPayload): void {
   const set = rooms.get(userId);
   if (!set) return;
   const message = JSON.stringify(payload);
   for (const socket of set) {
     if (socket.readyState === socket.OPEN) socket.send(message);
+  }
+}
+
+export async function publishNotification(userId: string, payload: NotifyPayload): Promise<void> {
+  deliverLocalNotification(userId, payload);
+  try {
+    await emitNotify({ userId, ...payload });
+  } catch (err) {
+    logger.error('notify.bus.emit', err);
   }
 }
 

@@ -1,6 +1,7 @@
-import type { Day } from '@vital/dto';
+import type { Day, EnergyLog } from '@vital/dto';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t } from '@/copy';
+import { energyLogLabel } from '@/features/energy/EnergyLogBar';
 import {
   assignTimelineLanes,
   buildDaysTimeline,
@@ -15,14 +16,30 @@ const LABEL_LINE_PX = 14;
 /** Leader line stops this far above the dot center. */
 const LEADER_DOT_GAP_PX = 9;
 
+function logClock(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(iso));
+  const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
+  const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
+  return `${hour}:${minute}`;
+}
+
 export function DaysTimeline({
   days,
   todayYmd,
+  timeZone,
+  energyLogs = [],
   selectedId,
   onOpen,
 }: {
   days: readonly Day[];
   todayYmd: string;
+  timeZone: string;
+  energyLogs?: readonly EnergyLog[];
   selectedId?: string | null;
   onOpen: (day: Day) => void;
 }) {
@@ -107,7 +124,36 @@ export function DaysTimeline({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout, model.points, widthPx]);
 
-  if (model.points.length === 0) return null;
+  const energy = (
+    <div data-testid="days-energy" className="mt-3 border-t border-border/70 pt-3">
+      <h3 className="text-[12px] font-semibold text-muted">{t.days.energyTitle}</h3>
+      {energyLogs.length === 0 ? (
+        <p className="mt-1 text-[12px] text-tertiary">{t.days.energyEmpty}</p>
+      ) : (
+        <ul className="mt-1.5 space-y-1">
+          {energyLogs.map((log) => (
+            <li key={log.id} data-testid="days-energy-log" className="text-[13px] text-fg">
+              <span className="tabular-nums text-tertiary">{logClock(log.loggedAt, timeZone)}</span>{' '}
+              {energyLogLabel(log)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
+  if (model.points.length === 0) {
+    if (energyLogs.length === 0) return null;
+    return (
+      <section
+        data-testid="days-timeline"
+        className="mt-7 rounded-lg border border-border bg-surface px-6 pb-4 pt-[18px]"
+      >
+        <h2 className="text-[13px] font-semibold">{t.days.timelineTitle}</h2>
+        {energy}
+      </section>
+    );
+  }
 
   return (
     <section
@@ -192,6 +238,7 @@ export function DaysTimeline({
           );
         })}
       </div>
+      {energy}
     </section>
   );
 }

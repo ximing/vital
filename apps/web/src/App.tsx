@@ -4,6 +4,7 @@ import { TODOS_HOME_PATH } from '@/routes';
 import { isDesktopHost } from '@/host';
 import {
   loadActivity,
+  loadChat,
   loadDays,
   loadExtensionAuth,
   loadExtractJobs,
@@ -47,6 +48,7 @@ const Shell = lazy(() => trackRoute(loadShell).then((m) => ({ default: m.Shell }
 const TodayWorkspace = lazy(() =>
   trackRoute(loadToday).then((m) => ({ default: m.TodayWorkspace })),
 );
+const ChatRoute = lazy(() => trackRoute(loadChat).then((m) => ({ default: m.ChatRoute })));
 const ThreadWorkspace = lazy(() =>
   trackRoute(loadThread).then((m) => ({ default: m.ThreadWorkspace })),
 );
@@ -131,6 +133,7 @@ export function App() {
               }
             >
               <Route path="/today" element={<TodayWorkspace />} />
+              <Route path="/chat" element={<ChatRoute />} />
               <Route path="/today/threads/:id" element={<ThreadWorkspace />} />
               <Route path="/todos" element={<Navigate to={TODOS_HOME_PATH} replace />} />
               <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />

@@ -240,6 +240,18 @@ Request body (`convertInboxInputSchema`):
 - `listId`: uuid (optional)
 - `title`: string 1–500 (optional)
 
+#### `POST /api/v1/inbox/:id/errand`
+
+Start Inbox Errand
+
+- Auth: Bearer required
+- Client: `startInboxErrand`
+- Response: `{ taskId: string; jobId: string | null }`
+
+Path params:
+
+- `id`: uuid
+
 #### `POST /api/v1/inbox/:id/export-inwit`
 
 Export Inbox To Inwit

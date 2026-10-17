@@ -33,6 +33,8 @@ vi.mock('@/api/client', async (importOriginal) => {
       createDay: vi.fn(),
       patchDay: vi.fn(),
       deleteDay: vi.fn(),
+      listEnergyLogs: vi.fn(() => Promise.resolve({ items: [] })),
+      createEnergyLog: vi.fn(),
     },
   };
 });

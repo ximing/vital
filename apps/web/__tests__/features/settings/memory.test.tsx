@@ -217,6 +217,34 @@ describe('memory page', () => {
     });
   });
 
+  it('lists a rhythm profile apart from ordinary memory and deletes it', async () => {
+    vi.mocked(client.listAgentMemory).mockResolvedValue([
+      ...items,
+      mem({
+        id: 'r1',
+        kind: 'pattern',
+        scope: ['profile'],
+        sourceCount: 21,
+        content: '[rhythm:peak_hours start=540 end=660] 09:00–11:00 完成更集中',
+        updatedAt: '2026-10-15T01:00:00.000Z',
+      }),
+    ]);
+    renderAt('/memory');
+    await waitFor(() => {
+      expect(document.querySelector('[data-rhythm-facet="peak_hours"]')).not.toBeNull();
+    });
+    expect(screen.getByRole('heading', { name: t.settings.memory.rhythm.title })).toBeInTheDocument();
+    const row = document.querySelector('[data-rhythm-row="r1"]')!;
+    expect(row.textContent).toContain('09:00–11:00 完成更集中');
+    expect(row.textContent).toContain(`${t.settings.memory.rhythm.sample} 21`);
+    expect(document.querySelectorAll('[data-memory-row]')).toHaveLength(4);
+    const button = [...row.querySelectorAll('button')].find((item) => item.textContent === t.settings.memory.del);
+    fireEvent.click(button!);
+    await waitFor(() => {
+      expect(client.deleteAgentMemory).toHaveBeenCalledWith('r1');
+    });
+  });
+
   it('shows a friendly empty state', async () => {
     vi.mocked(client.listAgentMemory).mockResolvedValue([]);
     renderAt('/memory');
@@ -224,6 +252,7 @@ describe('memory page', () => {
       expect(screen.getByText(t.settings.memory.empty)).toBeInTheDocument();
     });
     expect(document.querySelector('[data-memory-group]')).toBeNull();
+    expect(screen.getByText(t.settings.memory.rhythm.empty)).toBeInTheDocument();
     // The hand-write entry point stays available even when empty.
     expect(screen.getByText(`+ ${t.settings.memory.add}`)).toBeInTheDocument();
   });

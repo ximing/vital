@@ -2,8 +2,21 @@ import { DateTime } from 'luxon';
 import { randomUUID } from 'node:crypto';
 import { and, eq, gte, inArray, isNull, like, sql } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
-import { agentJobs, habits, notificationOutbox, outcomes, reports, taskCompletions, tasks, type User } from '../db/schema.js';
+import { recordAgentAction } from '../agent/action-ledger.js';
+import { agentActions, agentJobs, habits, notificationOutbox, outcomes, reports, taskCompletions, tasks, type User } from '../db/schema.js';
 import { currentAgentJob, LostAgentJobLeaseError, ownsAgentJob } from '../agent/job-runtime.js';
+
+const FOLLOWUP_WINDOW_MS = 7 * 24 * 3600_000;
+
+export const DEFER_FOLLOWUP_TITLE = '还做吗';
+
+export function deferFollowupMessage(title: string, deferCount: number): string {
+  return `「${title}」已经推迟 ${String(deferCount)} 次了。是不要做了，还是卡在哪？点这里告诉它。`;
+}
+
+export function deferFollowupDeeplink(taskId: string): string {
+  return `/chat?task=${taskId}`;
+}
 
 export type InsightKind = 'outcome.stale' | 'task.decompose' | 'habit.window' | 'review.missing';
 export interface InsightCandidate { kind: InsightKind; targetType: 'outcome' | 'task' | 'habit'; targetId: string; title: string; message: string }
@@ -23,7 +36,7 @@ export function selectInsightCandidates(facts: InsightFacts): InsightCandidate[]
     if (row.ruleSignal === 'alert' && (row.lastActivityAt?.getTime() ?? 0) <= staleBefore) out.push({ kind: 'outcome.stale', targetType: 'outcome', targetId: row.id, title: row.name, message: `「${row.name}」已经两天没推进了，今天要不要动一小步？` });
   }
   for (const row of facts.tasks) {
-    if (row.deferCount >= 3) out.push({ kind: 'task.decompose', targetType: 'task', targetId: row.id, title: row.title, message: `「${row.title}」已经推迟 ${String(row.deferCount)} 次了，要不要拆小一点？` });
+    if (row.deferCount >= 3) out.push({ kind: 'task.decompose', targetType: 'task', targetId: row.id, title: row.title, message: deferFollowupMessage(row.title, row.deferCount) });
   }
   for (const row of facts.habits) {
     if (row.kind !== 'count' || !row.targetCount || !row.windowEnd || row.done >= row.targetCount) continue;
@@ -35,25 +48,30 @@ export function selectInsightCandidates(facts: InsightFacts): InsightCandidate[]
   return out;
 }
 
-async function factsFor(user: User, now: Date): Promise<InsightFacts> {
+async function factsFor(user: User, now: Date, opts?: { keepTaskId?: string }): Promise<InsightFacts> {
   const local = DateTime.fromJSDate(now).setZone(user.timezone);
   const day = local.toISODate() ?? now.toISOString().slice(0, 10);
   const start = local.startOf('day').toUTC().toJSDate();
   const end = local.plus({ days: 1 }).startOf('day').toUTC().toJSDate();
+  const followupSince = new Date(now.getTime() - FOLLOWUP_WINDOW_MS);
   const db = getDb();
-  const [outcomeRows, taskRows, habitRows, reportRows, completionRows] = await Promise.all([
+  const [outcomeRows, taskRows, habitRows, reportRows, completionRows, followups] = await Promise.all([
     db.select({ id: outcomes.id, name: outcomes.name, ruleSignal: outcomes.ruleSignal, lastActivityAt: outcomes.lastActivityAt }).from(outcomes).where(and(eq(outcomes.userId, user.id), eq(outcomes.status, 'open'))),
     db.select({ id: tasks.id, title: tasks.title, deferCount: tasks.deferCount, outcomeId: tasks.outcomeId }).from(tasks).where(and(eq(tasks.userId, user.id), isNull(tasks.deletedAt), inArray(tasks.status, ['todo', 'doing']))),
     db.select().from(habits).where(and(eq(habits.userId, user.id), eq(habits.active, true))),
     db.select({ bodyMd: reports.bodyMd }).from(reports).where(and(eq(reports.userId, user.id), eq(reports.type, 'daily'), eq(reports.periodStart, day))).limit(1),
     db.select({ n: sql<number>`count(*)::int` }).from(taskCompletions).innerJoin(tasks, eq(tasks.id, taskCompletions.taskId)).where(and(eq(tasks.userId, user.id), gte(taskCompletions.completedAt, start), sql`${taskCompletions.completedAt} < ${end}`)),
+    db.select({ targetId: agentActions.targetId }).from(agentActions).where(and(eq(agentActions.userId, user.id), eq(agentActions.actionType, 'task.followup'), eq(agentActions.targetType, 'task'), gte(agentActions.createdAt, followupSince))),
   ]);
+  const asked = new Set(followups.map((row) => row.targetId));
+  if (opts?.keepTaskId) asked.delete(opts.keepTaskId);
+  const openTasks = taskRows.filter((row) => !asked.has(row.id));
   const habitFacts = [];
   for (const habit of habitRows) {
     const [progress] = await db.select({ done: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int` }).from(tasks).where(and(eq(tasks.userId, user.id), eq(tasks.habitId, habit.id), like(tasks.habitKey, `${habit.id}:${day}:%`)));
     habitFacts.push({ id: habit.id, name: habit.name, kind: habit.kind, targetCount: habit.targetCount, windowEnd: habit.windowEnd, done: progress?.done ?? 0 });
   }
-  return { now, timezone: user.timezone, outcomes: outcomeRows, tasks: taskRows, habits: habitFacts, dailyReportWritten: Boolean(reportRows[0]?.bodyMd.trim()), completedToday: completionRows[0]?.n ?? 0 };
+  return { now, timezone: user.timezone, outcomes: outcomeRows, tasks: openTasks, habits: habitFacts, dailyReportWritten: Boolean(reportRows[0]?.bodyMd.trim()), completedToday: completionRows[0]?.n ?? 0 };
 }
 
 export async function enqueueProactiveInsights(user: User, now = new Date(), rewrite?: (item: InsightCandidate) => Promise<string | null>): Promise<number> {
@@ -65,7 +83,21 @@ export async function enqueueProactiveInsights(user: User, now = new Date(), rew
     // Reserve before model work. The persisted rule message is also the crash
     // fallback: the dispatcher recovers abandoned preparation without another
     // paid rewrite or relying on the candidate still appearing in a later scan.
-    const payload = { title: item.title, listId: '', listName: '', dueAt: null, remindAt: null, isAllDay: false, timezone: user.timezone, eventType: 'agent.insight' as const, insightKind: item.kind, message: item.message };
+    const payload = {
+      title: item.kind === 'task.decompose' ? DEFER_FOLLOWUP_TITLE : item.title,
+      listId: '',
+      listName: '',
+      dueAt: null,
+      remindAt: null,
+      isAllDay: false,
+      timezone: user.timezone,
+      eventType: 'agent.insight' as const,
+      insightKind: item.kind,
+      message: item.message,
+      ...(item.kind === 'task.decompose'
+        ? { taskId: item.targetId, deeplink: deferFollowupDeeplink(item.targetId) }
+        : {}),
+    };
     const job = currentAgentJob();
     if (job && job.userId !== user.id) throw new Error('notification job user mismatch');
     const rows = await getDb().transaction(async (tx) => {
@@ -73,11 +105,32 @@ export async function enqueueProactiveInsights(user: User, now = new Date(), rew
         const [owned] = await tx.select({ id: agentJobs.id }).from(agentJobs).where(ownsAgentJob(job)).for('share');
         if (!owned) throw new LostAgentJobLeaseError();
       }
-      return tx.insert(notificationOutbox).values({ id: randomUUID(), userId: user.id, eventType: 'agent.insight', entityType: item.targetType, entityId: item.targetId, occurrenceAt: now, idempotencyKey: `insight:${user.id}:${item.kind}:${item.targetId}:${day}`, scheduledAt: now, status: 'preparing', payload, createdAt: now, updatedAt: new Date() }).onConflictDoNothing().returning({ id: notificationOutbox.id });
+      const created = await tx.insert(notificationOutbox).values({ id: randomUUID(), userId: user.id, eventType: 'agent.insight', entityType: item.targetType, entityId: item.targetId, occurrenceAt: now, idempotencyKey: `insight:${user.id}:${item.kind}:${item.targetId}:${day}`, scheduledAt: now, status: 'preparing', payload, createdAt: now, updatedAt: new Date() }).onConflictDoNothing().returning({ id: notificationOutbox.id });
+      if (created[0] && item.kind === 'task.decompose') {
+        await recordAgentAction(tx, {
+          id: randomUUID(),
+          userId: user.id,
+          jobId: job?.id ?? null,
+          actionType: 'task.followup',
+          targetType: 'task',
+          targetId: item.targetId,
+          payload: { kind: 'defer.followup', taskId: item.targetId },
+          feedback: 'dismissed',
+          feedbackAt: now,
+          createdAt: now,
+        });
+      }
+      return created;
     });
     if (!rows[0]) continue;
     try {
-      payload.message = (await rewrite?.(item))?.trim().slice(0, 500) || item.message;
+      // A model failure must not fail the scan or replace the rule question.
+      const rewritten = (await rewrite?.(item))?.trim().slice(0, 500) ?? '';
+      if (rewritten && (item.kind !== 'task.decompose' || rewritten.includes(item.title))) {
+        payload.message = rewritten;
+      }
+    } catch {
+      payload.message = item.message;
     } finally {
       await getDb().update(notificationOutbox).set({ payload, status: 'pending', updatedAt: new Date() })
         .where(and(eq(notificationOutbox.id, rows[0].id), eq(notificationOutbox.userId, user.id), eq(notificationOutbox.status, 'preparing'),
@@ -90,5 +143,8 @@ export async function enqueueProactiveInsights(user: User, now = new Date(), rew
 
 export async function insightStillEligible(user: User, targetId: string, kind: InsightKind, now: Date): Promise<boolean> {
   if (!user.notifyAgentInsights) return false;
-  return selectInsightCandidates(await factsFor(user, now)).some((row) => row.kind === kind && row.targetId === targetId);
+  // The follow-up row is written at enqueue. Keep this task visible so dispatch
+  // does not cancel the insight it just recorded.
+  const facts = await factsFor(user, now, kind === 'task.decompose' ? { keepTaskId: targetId } : undefined);
+  return selectInsightCandidates(facts).some((row) => row.kind === kind && row.targetId === targetId);
 }

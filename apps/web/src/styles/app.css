@@ -688,6 +688,25 @@ html:has([data-region='notify-alert']) body {
   color: inherit;
 }
 
+.doc-find-hit {
+  border-radius: 2px;
+  background: #f3e2a4;
+  color: inherit;
+}
+
+.doc-find-hit-current {
+  background: #f0b429;
+}
+
+:root[data-theme='dark'] .doc-find-hit {
+  background: #6a5420;
+}
+
+:root[data-theme='dark'] .doc-find-hit-current {
+  background: #a07d1c;
+  color: #fff8e8;
+}
+
 .reader-article kbd {
   font-family: var(--font-mono);
   font-size: 0.85em;

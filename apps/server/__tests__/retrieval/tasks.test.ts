@@ -56,6 +56,9 @@ function makeTaskRow(overrides: Partial<TaskRow> = {}): TaskRow {
     createdAt: now,
     updatedAt: now,
     ...overrides,
+    agentScheduled: overrides.agentScheduled ?? false,
+    calendarEndAt: overrides.calendarEndAt ?? null,
+    isMilestone: overrides.isMilestone ?? false,
   };
 }
 
@@ -281,6 +284,24 @@ describe('searchSimilarTasks', () => {
     // No status filter → must only carries userId, no must_not without excludeId.
     const [, , filter] = vi.mocked(qdrant.queryPoints).mock.calls[0]!;
     expect(filter).toEqual({ must: [{ key: 'userId', match: { value: 'u1' } }] });
+  });
+
+  it('drops rerank hits under minScore', async () => {
+    const embedding = fakeEmbedding([[1, 0]]);
+    const qdrant = fakeQdrant({
+      queryPoints: vi.fn<QdrantClient['queryPoints']>().mockResolvedValue([
+        { id: 'a', score: 0.9, payload: { title: '任务A' } },
+        { id: 'b', score: 0.8, payload: { title: '任务B' } },
+      ]),
+    });
+    const rerank = fakeRerank([
+      { index: 0, score: 0.2 },
+      { index: 1, score: 0.9 },
+    ]);
+    setRetrievalClientsForTest({ embedding, qdrant, meili: null, rerank });
+
+    const hits = await searchSimilarTasks({ userId: 'u1', query: '任务', limit: 5, minScore: 0.4 });
+    expect(hits).toEqual([{ id: 'b', title: '任务B' }]);
   });
 
   it('filters open statuses with match.any / Meili IN', async () => {

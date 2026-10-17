@@ -1,6 +1,8 @@
 import { buildFastify } from './app.js';
 import { config } from './config.js';
 import { pool } from './db/index.js';
+import { startNotifyBus, stopNotifyBus } from './sync/notify-bus.js';
+import { deliverLocalNotification } from './sync/sync.hub.js';
 import { startApiTokenAccessSweeper } from './tokens/tokens.service.js';
 import { startSweeper } from './uploads/sweeper.js';
 import { logger } from './utils/logger.js';
@@ -13,6 +15,17 @@ logger.info(`server listening on :${String(config.PORT)}`, { env: config.NODE_EN
 if (config.NODE_ENV !== 'test') {
   startSweeper();
   startApiTokenAccessSweeper();
+  void startNotifyBus((message) => {
+    deliverLocalNotification(message.userId, {
+      type: 'notify',
+      id: message.id,
+      title: message.title,
+      body: message.body,
+      url: message.url,
+    });
+  }).catch((err: unknown) => {
+    logger.error('notify.bus.start', err);
+  });
 }
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
@@ -21,6 +34,7 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
     void app
       .close()
       .then(async () => {
+        await stopNotifyBus();
         await pool.end();
         process.exit(0);
       })

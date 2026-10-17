@@ -2,17 +2,19 @@ import type { ArticleDoc } from '@vital/article-doc';
 import type { InboxAsset } from '@vital/dto';
 import { t } from '@/copy';
 import { type ReaderSize } from './model';
-import { renderDoc } from './ReaderDoc';
+import { renderDoc, type ArticleFindView } from './ReaderDoc';
 import { isFileAsset, ReaderFileAsset } from './ReaderFileAsset';
 
 function ReaderArticleBody({
   doc,
   assets,
   size,
+  find,
 }: {
   doc: ArticleDoc | null;
   assets: InboxAsset[];
   size: ReaderSize;
+  find: ArticleFindView | null;
 }) {
   if (doc === null || doc.content.length === 0) {
     return (
@@ -24,7 +26,7 @@ function ReaderArticleBody({
 
   return (
     <article className="reader-article" data-size={size}>
-      {renderDoc(doc, assets)}
+      {renderDoc(doc, assets, find)}
     </article>
   );
 }
@@ -33,6 +35,7 @@ export function ReaderArticle(props: {
   doc: ArticleDoc | null;
   assets: InboxAsset[];
   size: ReaderSize;
+  find?: ArticleFindView | null;
 }) {
   const fileAssets = props.assets.filter(isFileAsset);
   return (
@@ -44,7 +47,12 @@ export function ReaderArticle(props: {
           ))}
         </div>
       ) : null}
-      <ReaderArticleBody doc={props.doc} assets={props.assets} size={props.size} />
+      <ReaderArticleBody
+        doc={props.doc}
+        assets={props.assets}
+        size={props.size}
+        find={props.find ?? null}
+      />
     </>
   );
 }

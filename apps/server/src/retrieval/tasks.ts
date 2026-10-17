@@ -157,6 +157,8 @@ export async function searchSimilarTasks(input: {
   excludeId?: string;
   status?: string | readonly string[];
   limit: number;
+  /** Drop rerank hits under this score. Omit to keep the previous unthresholded order. */
+  minScore?: number;
 }): Promise<SimilarTaskHit[] | null> {
   const { embedding, qdrant, rerank, meili } = getRetrievalClients();
   if (!embedding || !qdrant || !rerank) return null;
@@ -222,6 +224,7 @@ export async function searchSimilarTasks(input: {
     const candidate = candidates[result.index];
     if (!candidate) continue;
     if (input.excludeId !== undefined && candidate.id === input.excludeId) continue;
+    if (input.minScore !== undefined && result.score < input.minScore) continue;
     hits.push({ id: candidate.id, title: candidate.title });
     if (hits.length >= input.limit) break;
   }

@@ -50,6 +50,8 @@ vi.mock('@/api/client', async (importOriginal) => {
       createTag: vi.fn(),
       updateOnboarding: vi.fn(),
       putTodayLayoutContext: vi.fn(() => Promise.resolve({ ok: true as const })),
+      listEnergyLogs: vi.fn(() => Promise.resolve({ items: [] })),
+      createEnergyLog: vi.fn(),
     },
   };
 });

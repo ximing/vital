@@ -284,6 +284,25 @@ describe('TaskDetail delegable + agent draft', () => {
     vi.clearAllMocks();
   });
 
+  it('hides the milestone switch when the task has no outcome', () => {
+    renderDetail(makeTask(), null);
+    expect(screen.queryByTestId('task-milestone')).not.toBeInTheDocument();
+  });
+
+  it('marks an outcome task as a milestone through onPatch', async () => {
+    const user = userEvent.setup();
+    const onPatch = renderDetail(
+      makeTask({ outcomeId: 'outcome-1', isMilestone: false }),
+      null,
+      vi.fn().mockResolvedValue(undefined),
+    );
+    const toggle = screen.getByTestId('task-milestone');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByText(t.todos.milestoneHint)).toBeInTheDocument();
+    await user.click(toggle);
+    expect(onPatch).toHaveBeenCalledWith({ isMilestone: true });
+  });
+
   it('shows the delegable switch on open tasks and persists toggles via onPatch', async () => {
     const user = userEvent.setup();
     const onPatch = renderDetail(makeTask(), null, vi.fn().mockResolvedValue(undefined));

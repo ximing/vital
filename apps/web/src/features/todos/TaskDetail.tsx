@@ -385,6 +385,34 @@ export const TaskDetail: FC<{
           </form>
         </div>
 
+        {task.outcomeId ? (
+          <div className="mt-4 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={task.isMilestone === true}
+                aria-label={t.todos.milestone}
+                data-testid="task-milestone"
+                className={`relative h-5 w-9 shrink-0 rounded-full transition-colors duration-[var(--ease-out)] ${
+                  task.isMilestone === true ? 'bg-accent' : 'bg-surface-muted'
+                }`}
+                onClick={() => runPatch({ isMilestone: task.isMilestone !== true })}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-elevated shadow transition-[left] duration-[var(--ease-out)] ${
+                    task.isMilestone === true ? 'left-[18px]' : 'left-0.5'
+                  }`}
+                />
+              </button>
+              <span className="text-[length:var(--text-meta)] text-fg">{t.todos.milestone}</span>
+            </div>
+            <p className="text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted">
+              {t.todos.milestoneHint}
+            </p>
+          </div>
+        ) : null}
+
         {task.parentId === null && decomposeAction ? (
           <div className="mt-4">
             <DecomposeBanner task={task} action={decomposeAction} />

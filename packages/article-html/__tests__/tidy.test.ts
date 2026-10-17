@@ -42,6 +42,28 @@ describe('tidyArticleHtml', () => {
     expect(tidyArticleHtml('<p>hello<br>world</p>')).toBe('<p>hello<br>world</p>');
   });
 
+  it('keeps notebook code lines as a pre block, including indent and blank lines', () => {
+    const html = [
+      '<p>Create a <code>.env</code> file:</p>',
+      '<div class="group">',
+      '<button type="button" aria-label="Copy code"><span>copy</span></button>',
+      '<div class="code-scroll-region"><div class="font-mono">',
+      '<div data-code-line="">def hi():</div>',
+      '<div data-code-line="" style="padding-left:4ch;text-indent:-4ch">    return 1</div>',
+      '<div data-code-line=""></div>',
+      '<div data-code-line="">print(hi())</div>',
+      '</div></div></div>',
+      '<p>Next.</p>',
+    ].join('');
+    const out = tidyArticleHtml(html);
+    const pre = parseBody(out).querySelector('pre');
+    expect(pre?.textContent).toBe('def hi():\n    return 1\n\nprint(hi())');
+    expect(pre?.textContent).not.toContain('copy');
+    expect(out).toContain('<code>.env</code>');
+    expect(out).toContain('<p>Next.</p>');
+    expect(out).not.toContain('data-code-line');
+  });
+
   it('keeps separator punctuation between inline code', () => {
     const html =
       '<p>同时维护 Session 运行所依赖的 <code>cwd</code>、<code>settingsManager</code>、<code>modelRuntime</code>、<code>resourceLoader</code> 等 Services。</p>';
@@ -75,6 +97,116 @@ describe('tidyArticleHtml', () => {
       expect(html).toContain('正文第一段');
     }
     expectEngineTagSets(sanitizeOut, purifyOut);
+  });
+});
+
+describe('notebook code lines', () => {
+  function preTexts(html: string): string[] {
+    return [...parseBody(tidyArticleHtml(html)).querySelectorAll('pre')].map(
+      (el) => el.textContent,
+    );
+  }
+
+  it('keeps a single line and blank lines between lines, and drops a trailing blank line', () => {
+    expect(preTexts('<div data-code-line="">only</div>')).toEqual(['only']);
+    // A blank first line is a leading newline in <pre>, which HTML parsing discards.
+    expect(
+      preTexts(
+        '<div><div data-code-line=""></div><div data-code-line="">a</div><div data-code-line=""></div><div data-code-line=""></div><div data-code-line="">b</div><div data-code-line=""></div></div>',
+      ),
+    ).toEqual(['a\n\n\nb']);
+  });
+
+  it('turns nbsp into spaces and concatenates highlight spans without losing the gap', () => {
+    const html =
+      '<div data-code-line="">&nbsp;&nbsp;<span class="k">def</span> <span class="n">hi</span>():</div>';
+    expect(preTexts(html)).toEqual(['  def hi():']);
+  });
+
+  it('keeps comparison operators as text', () => {
+    expect(preTexts('<div data-code-line="">a &lt; b &amp;&amp; c</div>')).toEqual(['a < b && c']);
+  });
+
+  it('keeps separate cells in order, with the prose between them', () => {
+    const html = [
+      '<p>before</p>',
+      '<div><div data-code-line="">first</div></div>',
+      '<p>between</p>',
+      '<div><div data-code-line="">second</div><div data-code-line="">  tail</div></div>',
+      '<pre>already\n  indented</pre>',
+    ].join('');
+    const out = tidyArticleHtml(html);
+    expect(preTexts(html)).toEqual(['first', 'second\n  tail', 'already\n  indented']);
+    expect(out).toContain('<p>before</p>');
+    expect(out).toContain('<p>between</p>');
+  });
+
+  it('leaves a non-line sibling outside the pre', () => {
+    const out = tidyArticleHtml(
+      '<div class="card"><button type="button">copy</button><div data-code-line="">one</div><div data-code-line="">two</div></div>',
+    );
+    const doc = parseBody(out);
+    expect(doc.querySelector('pre')?.textContent).toBe('one\ntwo');
+    expect(doc.querySelector('pre')?.textContent).not.toContain('copy');
+    expect(doc.querySelector('button')?.textContent).toBe('copy');
+  });
+
+  it('joins lines that already sit in pre or code, without nesting another pre', () => {
+    const pre = tidyArticleHtml(
+      '<pre><div data-code-line="">alpha</div><div data-code-line="">  beta</div></pre>',
+    );
+    expect(parseBody(pre).querySelectorAll('pre')).toHaveLength(1);
+    expect(parseBody(pre).querySelector('pre')?.textContent).toBe('alpha\n  beta');
+
+    const code = tidyArticleHtml(
+      '<code><span data-code-line="">a</span><span data-code-line=""> b</span></code>',
+    );
+    const codeEl = parseBody(code).querySelector('code');
+    expect(codeEl?.textContent).toBe('a\n b');
+    expect(parseBody(code).querySelector('pre')).toBeNull();
+  });
+
+  it('does not scrub chrome words once they are inside a code block', () => {
+    const out = tidyArticleHtml(
+      '<div data-code-line="">关注、分享</div><p>关注、分享、赞</p><p>正文保留。</p>',
+    );
+    expect(parseBody(out).querySelector('pre')?.textContent).toBe('关注、分享');
+    expect(out).not.toMatch(/<p>[^<]*关注/);
+    expect(out).toContain('正文保留。');
+  });
+});
+
+describe('article and main wrappers', () => {
+  it('unwraps nested main and article without flattening the body', () => {
+    const html = [
+      '<main><article>',
+      '<h2><div><button type="button">x</button></div>Title</h2>',
+      '<p>See <code>cwd</code>、<code>x</code>.</p>',
+      '<ul><li>one</li></ul>',
+      '<blockquote><p>quote</p></blockquote>',
+      '<table><tr><td>关注</td><td>cell</td></tr></table>',
+      '<div class="font-mono"><div data-code-line="">def hi():</div><div data-code-line="">    return 1</div></div>',
+      '<pre>output</pre>',
+      '</article></main>',
+    ].join('');
+    const out = tidyArticleHtml(html);
+    const doc = parseBody(out);
+    expect(doc.querySelector('article, main')).toBeNull();
+    expect(doc.querySelector('h2')?.textContent).toContain('Title');
+    expect(out).toContain('<code>cwd</code>、<code>x</code>');
+    expect(doc.querySelector('ul li')?.textContent).toBe('one');
+    expect(doc.querySelector('blockquote')?.textContent).toBe('quote');
+    expect(doc.querySelector('td')?.textContent).toBe('关注');
+    expect([...doc.querySelectorAll('pre')].map((el) => el.textContent)).toEqual([
+      'def hi():\n    return 1',
+      'output',
+    ]);
+  });
+
+  it('still unwraps a section that is not a landmark', () => {
+    const out = tidyArticleHtml('<section><p>正文第一段</p></section>');
+    expect(parseBody(out).querySelector('section')).toBeNull();
+    expect(out).toContain('<p>正文第一段</p>');
   });
 });
 

@@ -15,10 +15,15 @@ import {
 } from '../db/schema.js';
 import { spawnDailyHabits } from '../habits/habits.service.js';
 import { enqueueAgentJobOnce, enqueueTodayLayout } from './jobs.js';
+import { weeklyObserveDedupKey, weeklyObserveWhen } from '../notifications/weekly-observe.js';
+import { ERRAND_JOB_TYPE } from './errand.js';
 import { dispatchAgentSchedule, markAgentSchedule, scheduleDeadline } from './scheduling.js';
 import { lockAgentUser } from './user-lock.js';
 
 const ACTIVE_WINDOW_MS = 7 * 24 * 3600 * 1000;
+
+/** Demand-driven. Chat, the inbox button, and draft upgrade enqueue these. This scan does not. */
+export const DEMAND_ONLY_JOB_TYPES = [ERRAND_JOB_TYPE] as const;
 
 interface UserSignals {
   activityLatest: Date | null;
@@ -105,7 +110,13 @@ async function loadSignals(
           agentEditFeedback,
           sql`${agentEditFeedback.userId} = ${agentEditEvents.userId} AND ${agentEditFeedback.eventId} = ${agentEditEvents.id}`,
         )
-        .where(and(inArray(agentEditEvents.userId, userIds), isNull(agentEditFeedback.userId)))
+        .where(
+          and(
+            inArray(agentEditEvents.userId, userIds),
+            eq(agentEditEvents.source, 'user'),
+            isNull(agentEditFeedback.userId),
+          ),
+        )
         .groupBy(agentEditEvents.userId),
       db.select().from(agentMemoryMaintenance).where(inArray(agentMemoryMaintenance.userId, userIds)),
       db
@@ -259,6 +270,17 @@ export async function runAgentScheduler(now = new Date()): Promise<number> {
         );
         await spawnDailyHabits(userId, user.timezone, now);
         scheduled += 1;
+      }
+      const weekStartsOn = user.weekStartsOn === 0 ? 0 : 1;
+      const observe = weeklyObserveWhen(now, user.timezone, weekStartsOn);
+      if (observe) {
+        await enqueueAgentJobOnce(db, {
+          userId,
+          jobType: 'reflect.weekly',
+          payload: { date: observe.periodStart, trigger: 'schedule' },
+          dedupKey: weeklyObserveDedupKey(userId, observe.periodStart),
+          scheduledAt: observe.scheduledAt,
+        });
       }
     }
     cursor = page[page.length - 1]?.id;

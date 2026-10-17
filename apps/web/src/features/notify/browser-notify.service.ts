@@ -23,6 +23,14 @@ const PERMISSION_PROBE_MS = 400;
 
 export type BrowserNotifyPermission = NotificationPermission | 'unsupported';
 
+export type InAppNotice = {
+  id: string;
+  title: string;
+  body: string;
+  /** App path on the current origin. Never an absolute host. */
+  url: string;
+};
+
 type PushPayload = {
   type?: unknown;
   id?: unknown;
@@ -91,6 +99,8 @@ function taskUrl(task: Task): string {
 export class BrowserNotifyService extends Service {
   permission: BrowserNotifyPermission = 'unsupported';
   stickyEnabled = readStickyAlertPref();
+  /** Set when the OS notification cannot be shown. Cleared on dismiss. */
+  inApp: InAppNotice | null = null;
   private shown = new Set<string>(loadShown());
   private timer: ReturnType<typeof setInterval> | null = null;
   private probe: ReturnType<typeof setTimeout> | null = null;
@@ -191,12 +201,23 @@ export class BrowserNotifyService extends Service {
     return [...byId.values()];
   }
 
+  dismissInApp(): void {
+    const current = this.inApp;
+    if (!current) return;
+    this.shown.add(current.id);
+    saveShown([...this.shown]);
+    this.inApp = null;
+  }
+
   private display(key: string, title: string, body: string, url: string): void {
     if (this.shown.has(key)) return;
     const Ctor = notificationCtor();
     const native = Boolean(Ctor && Ctor.permission === 'granted');
     const sticky = this.stickyActive();
-    if (!native && !sticky) return;
+    if (!native && !sticky) {
+      this.inApp = { id: key, title, body, url: appPathFromNotifyUrl(url) };
+      return;
+    }
     this.shown.add(key);
     saveShown([...this.shown]);
     if (sticky) void showStickyAlert({ id: key, title, body, url });
@@ -221,6 +242,7 @@ export class BrowserNotifyService extends Service {
   resetForTest(): void {
     this.stop();
     this.permission = 'unsupported';
+    this.inApp = null;
     this.shown.clear();
     saveShown([]);
     resetStickyAlertForTest();

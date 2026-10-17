@@ -13,6 +13,7 @@ import {
   agentMemory,
   agentUsage,
   days,
+  energyLogs,
   inboxExtractJobs,
   inboxIdempotencyResponses,
   inboxItems,
@@ -82,6 +83,7 @@ export async function buildSnapshot(opts: { tamper?: boolean } = {}): Promise<Ag
         ),
       );
   }
+  await db.delete(energyLogs).where(eq(energyLogs.userId, FIXTURE_USER_ID));
   await db.delete(days).where(eq(days.userId, FIXTURE_USER_ID));
   await db.delete(userInwitConfig).where(eq(userInwitConfig.userId, FIXTURE_USER_ID));
   await db.delete(inboxExtractJobs).where(eq(inboxExtractJobs.userId, FIXTURE_USER_ID));

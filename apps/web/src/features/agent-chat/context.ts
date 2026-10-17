@@ -5,8 +5,16 @@ import { listIdFrom, sectionOf } from '@/shell/section';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** `?task=` from a defer-follow-up deeplink wins over the pane selection. */
+export function contextTaskId(search: string, selectedId: string | null): string | null {
+  const fromSearch = new URLSearchParams(search).get('task');
+  if (fromSearch && UUID.test(fromSearch)) return fromSearch;
+  return selectedId;
+}
+
 export function chatPageContext(pathname: string, search: string, taskId: string | null): ChatContext {
   const section = sectionOf(pathname, search);
+  const resolvedTaskId = contextTaskId(search, taskId);
   let listId: string | null = null;
   if (section === 'today') listId = 'smart:today';
   else if (section === 'capture') listId = 'smart:inbox';
@@ -23,7 +31,7 @@ export function chatPageContext(pathname: string, search: string, taskId: string
   return {
     section,
     listId,
-    taskId,
+    taskId: resolvedTaskId,
     habitId: null,
     inboxId,
     outcomeId,

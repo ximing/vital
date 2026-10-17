@@ -92,6 +92,16 @@ export function OutcomeCard({
 
       <div className="mt-2.5 flex items-center gap-2 border-t border-border pt-2.5 font-mono text-[11px] text-tertiary">
         <span>{t.today.openTasks.replace('{n}', String(outcome.openTaskCount))}</span>
+        {(outcome.milestoneTotal ?? 0) > 0 ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>
+              {t.thread.milestoneProgress
+                .replace('{done}', String(outcome.milestoneDone ?? 0))
+                .replace('{total}', String(outcome.milestoneTotal ?? 0))}
+            </span>
+          </>
+        ) : null}
         {outcome.materialCount > 0 ? (
           <>
             <span aria-hidden="true">·</span>

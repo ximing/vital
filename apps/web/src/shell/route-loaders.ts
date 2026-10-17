@@ -43,6 +43,10 @@ export function loadToday() {
   return import('@/features/today/TodayWorkspace');
 }
 
+export function loadChat() {
+  return import('@/features/agent-chat/ChatRoute');
+}
+
 export function loadThread() {
   return import('@/features/today/ThreadWorkspace');
 }
