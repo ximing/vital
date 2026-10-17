@@ -1,17 +1,18 @@
 import app from '@vital/eslint-config/app';
 import globals from 'globals';
 
-/** Cross-feature deep imports are banned; `query-keys` / `model` are cycle-break leaf modules. */
+/** Cross-feature deep imports are banned; these leaves stay importable so the shell does not pull the barrel. */
 function featureBarrel(name) {
   return {
     group: [
       `@/features/${name}/*`,
       `@/features/${name}/**`,
       `!@/features/${name}/query-keys`,
+      `!@/features/${name}/queries`,
       `!@/features/${name}/model`,
       `!@/features/${name}/*-ui.service`,
     ],
-    message: `Import public ${name} API from @/features/${name}. query-keys, model, and *-ui.service are cycle-break exceptions.`,
+    message: `Import public ${name} API from @/features/${name}. query-keys, queries, model, and *-ui.service are cycle-break exceptions.`,
   };
 }
 
