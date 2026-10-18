@@ -31,6 +31,7 @@ export function EnergyLogPad({
   const [mood, setMood] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [detail, setDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
@@ -65,87 +66,119 @@ export function EnergyLogPad({
     }
   }
 
+  const ordered = [...items].sort((a, b) => a.loggedAt.localeCompare(b.loggedAt));
+  const latest = ordered[ordered.length - 1];
+  const earlier = ordered.slice(0, -1);
+  const latestQuiet = latest
+    ? [formatHm(latest.loggedAt, zone), latest.mood, latest.note].filter((part) => part !== null && part !== '').join(' · ')
+    : '';
+
+  if (readOnly) {
+    return (
+      <View style={styles.wrap} accessibilityLabel={copy.days.energyTitle}>
+        <Text style={styles.title}>{copy.days.energyTitle}</Text>
+        {ordered.length === 0 ? (
+          <Text style={styles.empty}>{copy.days.energyEmpty}</Text>
+        ) : (
+          ordered.map((log) => (
+            <Text key={log.id} style={styles.item}>
+              {formatHm(log.loggedAt, zone)} {labelOf(log)}
+            </Text>
+          ))
+        )}
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.wrap} accessibilityLabel={readOnly ? copy.days.energyTitle : copy.today.energyTitle}>
-      <Text style={styles.title}>{readOnly ? copy.days.energyTitle : copy.today.energyTitle}</Text>
-      {readOnly ? null : <Text style={styles.hint}>{copy.today.energyHint}</Text>}
-      {readOnly ? null : (
+    <View style={styles.wrap} accessibilityLabel={copy.today.energyTitle}>
+      <View style={styles.row}>
+        <Text style={styles.markLabel}>{copy.today.energyMark}</Text>
         <View style={styles.levels} accessibilityRole="radiogroup">
-          {LEVELS.map((level) => (
-            <Pressable
-              key={level}
-              accessibilityRole="button"
-              accessibilityLabel={copy.today.energyLevel.replace('{n}', String(level))}
-              disabled={busy}
-              onPress={() => void save(level)}
-              style={[styles.level, level <= 2 ? styles.levelLow : styles.levelOk, busy ? styles.dim : null]}
-            >
-              <Text style={styles.levelText}>{level}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      {readOnly ? null : (
-        <View style={styles.moods}>
-          {copy.today.energyMoods.map((word) => {
-            const on = mood === word;
+          {LEVELS.map((level) => {
+            const on = latest?.energy === level;
             return (
               <Pressable
-                key={word}
+                key={level}
                 accessibilityRole="button"
+                accessibilityLabel={copy.today.energyLevel.replace('{n}', String(level))}
                 accessibilityState={{ selected: on }}
                 disabled={busy}
-                onPress={() => setMood(on ? null : word)}
-                style={[styles.mood, on ? styles.moodOn : null]}
+                onPress={() => void save(level)}
+                style={[styles.level, on ? styles.levelOn : styles.levelIdle, busy ? styles.dim : null]}
               >
-                <Text style={[styles.moodText, on ? styles.moodTextOn : null]}>{word}</Text>
+                <Text style={[styles.levelText, on ? styles.levelTextOn : null]}>{level}</Text>
               </Pressable>
             );
           })}
         </View>
-      )}
-      {readOnly ? null : (
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          maxLength={200}
-          placeholder={copy.today.energyNote}
-          placeholderTextColor={theme.textTertiary}
-          accessibilityLabel={copy.today.energyNote}
-          style={styles.note}
-        />
-      )}
+        {latestQuiet !== '' ? <Text style={styles.latest}>{latestQuiet}</Text> : null}
+        <Pressable accessibilityRole="button" onPress={() => setDetail((open) => !open)}>
+          <Text style={styles.detailToggle}>{detail ? copy.today.energyDetailClose : copy.today.energyDetail}</Text>
+        </Pressable>
+      </View>
+      {detail ? (
+        <View>
+          <Text style={styles.hint}>{copy.today.energyHint}</Text>
+          <View style={styles.moods}>
+            {copy.today.energyMoods.map((word) => {
+              const on = mood === word;
+              return (
+                <Pressable
+                  key={word}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  disabled={busy}
+                  onPress={() => setMood(on ? null : word)}
+                  style={[styles.mood, on ? styles.moodOn : null]}
+                >
+                  <Text style={[styles.moodText, on ? styles.moodTextOn : null]}>{word}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            maxLength={200}
+            placeholder={copy.today.energyNote}
+            placeholderTextColor={theme.textTertiary}
+            accessibilityLabel={copy.today.energyNote}
+            style={styles.note}
+          />
+        </View>
+      ) : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      {items.length === 0 ? (
-        <Text style={styles.empty}>{copy.days.energyEmpty}</Text>
-      ) : (
-        items.map((log) => (
-          <Text key={log.id} style={styles.item}>
-            {formatHm(log.loggedAt, zone)} {labelOf(log)}
-          </Text>
-        ))
-      )}
+      {earlier.map((log) => (
+        <Text key={log.id} style={styles.item}>
+          {formatHm(log.loggedAt, zone)} {labelOf(log)}
+        </Text>
+      ))}
     </View>
   );
 }
 
 function createStyles(t: Theme) {
   return StyleSheet.create({
-    wrap: { paddingHorizontal: 16, paddingBottom: 8 },
+    wrap: { paddingHorizontal: 16, paddingBottom: 4 },
     title: { color: t.fgPrimary, fontSize: 15, fontWeight: '600' },
-    hint: { color: t.textTertiary, fontSize: 12, marginTop: 2 },
-    levels: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+    markLabel: { color: t.textTertiary, fontSize: 13 },
+    latest: { color: t.fgMuted, fontSize: 13 },
+    detailToggle: { color: t.textTertiary, fontSize: 13 },
+    hint: { color: t.textTertiary, fontSize: 12, marginTop: 8 },
+    levels: { flexDirection: 'row', gap: 6 },
     level: {
-      minWidth: 36,
-      height: 36,
-      borderRadius: 8,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 8,
     },
-    levelLow: { backgroundColor: t.bgSurfaceMuted },
-    levelOk: { backgroundColor: t.bgAccentSubtle },
-    levelText: { color: t.fgPrimary, fontSize: 15, fontWeight: '600' },
+    levelIdle: { borderWidth: StyleSheet.hairlineWidth, borderColor: t.borderSubtle },
+    levelOn: { backgroundColor: t.accentPrimary },
+    levelText: { color: t.fgPrimary, fontSize: 14, fontWeight: '600' },
+    levelTextOn: { color: t.fgOnAccent },
     dim: { opacity: 0.5 },
     moods: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
     mood: {

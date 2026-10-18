@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildTodayPlan, noteRepeatsTasks, type BriefingTask } from '../src/today-briefing.js';
+import {
+  agendaItemsFromTasks,
+  buildTodayPlan,
+  foldAgendaDays,
+  groupTodayModuleRows,
+  noteRepeatsTasks,
+  type BriefingTask,
+} from '../src/today-briefing.js';
 import { describeTodayLayoutFacts } from '../src/today-layout.js';
 
 const zone = 'Asia/Shanghai';
@@ -104,5 +111,65 @@ describe('today plan', () => {
       rhythm: '09:00–11:00 完成更集中',
     });
     expect(text).toContain('节奏画像：09:00–11:00 完成更集中');
+  });
+});
+
+describe('today agenda', () => {
+  it('drops today, keeps the clock, and collapses the same slot', () => {
+    const items = agendaItemsFromTasks(
+      [
+        task({ id: 'today', title: '今天的会', dueAt: '2026-10-14T02:00:00.000Z' }),
+        task({ id: 'a', title: '席铭的会议', dueAt: '2026-10-15T02:00:00.000Z' }),
+        task({ id: 'b', title: '席铭的会议', dueAt: '2026-10-15T02:00:00.000Z' }),
+        task({ id: 'c', title: '席铭的会议', dueAt: '2026-10-15T06:00:00.000Z' }),
+        task({ id: 'd', title: '重阳节', dueAt: '2026-10-18T00:00:00.000Z', isAllDay: true }),
+        task({ id: 'e', title: '重阳节', startAt: '2026-10-18T00:00:00.000Z', isAllDay: true }),
+      ],
+      '2026-10-14',
+      zone,
+    );
+    expect(items.map((item) => item.title)).toEqual(['席铭的会议', '席铭的会议', '席铭的会议', '重阳节', '重阳节']);
+    const days = foldAgendaDays(items, 4);
+    expect(days[0]).toMatchObject({
+      ymd: '2026-10-15',
+      hidden: 0,
+      lines: [
+        { title: '席铭的会议', clock: '10:00', count: 2 },
+        { title: '席铭的会议', clock: '14:00', count: 1 },
+      ],
+    });
+    expect(days[1]).toMatchObject({
+      ymd: '2026-10-18',
+      lines: [{ title: '重阳节', clock: null, count: 2 }],
+    });
+  });
+
+  it('hides slots past the day limit and keeps the agenda on its own row', () => {
+    const items = Array.from({ length: 5 }, (_, index) => ({
+      id: `m${String(index)}`,
+      title: `会${String(index)}`,
+      ymd: '2026-10-19',
+      clock: `1${String(index)}:00`,
+    }));
+    expect(foldAgendaDays(items)[0]?.hidden).toBe(1);
+    expect(foldAgendaDays(items)[0]?.lines).toHaveLength(4);
+    expect(
+      groupTodayModuleRows(
+        [
+          { id: 'lead' },
+          { id: 'weather' },
+          { id: 'meetings' },
+          { id: 'upcoming' },
+          { id: 'holiday' },
+          { id: 'focus' },
+        ],
+        2,
+      ).map((row) => row.map((module) => module.id)),
+    ).toEqual([['lead'], ['weather'], ['meetings', 'upcoming'], ['holiday'], ['focus']]);
+    expect(
+      groupTodayModuleRows([{ id: 'holiday' }, { id: 'lead' }, { id: 'note', text: '先收逾期' }], 2).map((row) =>
+        row.map((module) => module.id),
+      ),
+    ).toEqual([['holiday'], ['lead'], ['note']]);
   });
 });

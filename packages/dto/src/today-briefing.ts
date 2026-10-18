@@ -535,6 +535,137 @@ export function upcomingExcludingToday<T extends BriefingTask>(
   return kept;
 }
 
+export type AgendaItem = {
+  id: string;
+  title: string;
+  /** Local YYYY-MM-DD of the task anchor. */
+  ymd: string;
+  /** Local HH:mm. Null for an all-day task or a midnight placeholder. */
+  clock: string | null;
+};
+
+export type AgendaLine = {
+  key: string;
+  title: string;
+  clock: string | null;
+  count: number;
+};
+
+export type AgendaDay = {
+  ymd: string;
+  lines: AgendaLine[];
+  /** Further distinct slots on this day, after `lines`. */
+  hidden: number;
+};
+
+/** How many distinct slots a day shows before the rest fold into a count. */
+export const AGENDA_DAY_LIMIT = 4;
+
+/** Upcoming tasks as agenda rows. Today is omitted; the calendar module owns that day. */
+export function agendaItemsFromTasks(
+  tasks: readonly BriefingTask[],
+  todayYmd: string,
+  timeZone: string,
+): AgendaItem[] {
+  return upcomingExcludingToday(tasks, todayYmd, timeZone).map((task) => {
+    const anchor = task.dueAt ?? task.startAt ?? '';
+    const ymd = ymdInTimeZone(anchor, timeZone);
+    let clock: string | null = null;
+    if (task.isAllDay !== true && anchor !== '') {
+      const hm = localHm(anchor, timeZone);
+      clock = hm === '00:00' ? null : hm;
+    }
+    return { id: task.id, title: task.title, ymd, clock };
+  });
+}
+
+/**
+ * Group later days, collapse the same title at the same clock, and keep each
+ * day to a short list. An empty today must not sit beside this list.
+ */
+export function foldAgendaDays(items: readonly AgendaItem[], perDay = AGENDA_DAY_LIMIT): AgendaDay[] {
+  const byDay = new Map<string, AgendaItem[]>();
+  for (const item of items) {
+    const list = byDay.get(item.ymd);
+    if (list) list.push(item);
+    else byDay.set(item.ymd, [item]);
+  }
+  const cap = Math.max(0, perDay);
+  const days: AgendaDay[] = [];
+  for (const ymd of [...byDay.keys()].sort()) {
+    const bucket = [...(byDay.get(ymd) ?? [])].sort((a, b) => {
+      const ac = a.clock ?? '';
+      const bc = b.clock ?? '';
+      if (ac !== bc) return ac < bc ? -1 : 1;
+      const byTitle = a.title.localeCompare(b.title, 'zh');
+      if (byTitle !== 0) return byTitle;
+      return a.id.localeCompare(b.id);
+    });
+    const lines: AgendaLine[] = [];
+    for (const item of bucket) {
+      const key = `${item.title}\u0000${item.clock ?? ''}`;
+      const last = lines[lines.length - 1];
+      if (last && last.key === key) {
+        last.count += 1;
+        continue;
+      }
+      lines.push({ key, title: item.title, clock: item.clock, count: 1 });
+    }
+    days.push({ ymd, lines: lines.slice(0, cap), hidden: Math.max(0, lines.length - cap) });
+  }
+  return days;
+}
+
+const WIDE_TODAY_MODULES = new Set(['lead', 'note', 'focus']);
+const AGENDA_TODAY_MODULES = new Set(['meetings', 'upcoming']);
+
+/**
+ * lead, note, and focus take a row. meetings and upcoming share one agenda row,
+ * including on a single column, so an empty today does not stretch beside later days.
+ * Weather and holiday pair only with each other when two columns are open.
+ */
+export function groupTodayModuleRows<T extends { id: string }>(
+  modules: readonly T[],
+  columns: 1 | 2,
+): T[][] {
+  const rows: T[][] = [];
+  let pending: T | null = null;
+  const flush = () => {
+    if (!pending) return;
+    rows.push([pending]);
+    pending = null;
+  };
+  for (const module of modules) {
+    if (AGENDA_TODAY_MODULES.has(module.id)) {
+      flush();
+      const last = rows[rows.length - 1];
+      if (
+        last &&
+        last.every((item) => AGENDA_TODAY_MODULES.has(item.id)) &&
+        !last.some((item) => item.id === module.id)
+      ) {
+        last.push(module);
+      } else {
+        rows.push([module]);
+      }
+      continue;
+    }
+    if (columns === 1 || WIDE_TODAY_MODULES.has(module.id)) {
+      flush();
+      rows.push([module]);
+      continue;
+    }
+    if (pending) {
+      rows.push([pending, module]);
+      pending = null;
+    } else {
+      pending = module;
+    }
+  }
+  flush();
+  return rows;
+}
+
 export type NormalizedCalendarEvent = {
   title: string;
   /** Local HH:mm, or YYYY-MM-DD when all-day. */

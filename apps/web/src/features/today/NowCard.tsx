@@ -1,6 +1,9 @@
 import {
+  foldAgendaDays,
+  groupTodayModuleRows,
   noteRepeatsTasks,
   planSignalCounts,
+  type AgendaLine,
   type NowRecommendation,
   type Outcome,
   type TodayModuleId,
@@ -14,7 +17,7 @@ import { useLocation } from 'react-router';
 import { t } from '@/copy';
 import { TodosUiService } from '@/features/todos';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
-import { canOpenCalendarSettings, openCalendarSettings, type TodayBriefingModel } from './briefing';
+import { canOpenCalendarSettings, monthDay, openCalendarSettings, type TodayBriefingModel } from './briefing';
 
 /**
  * Today briefing plus the rule-based picks. The lead counts overdue and
@@ -79,6 +82,11 @@ export const NowCard: FC<{
     setEditingPlace(false);
   }
 
+  const modules = briefing.modules.filter(
+    (module) => module.id !== 'note' || !noteRepeatsTasks(module.text ?? '', briefing.lead.titles),
+  );
+  const rows = groupTodayModuleRows(modules, 2);
+
   return (
     <section
       data-region="now-card"
@@ -88,34 +96,49 @@ export const NowCard: FC<{
       <p className="text-[11px] font-semibold uppercase tracking-wider text-tertiary">
         {t.today.now.title}
       </p>
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {briefing.modules.filter((module) => module.id !== 'note' || !noteRepeatsTasks(module.text ?? '', briefing.lead.titles)).map((module) => {
-          const wide = module.id === 'lead' || module.id === 'note' || module.id === 'focus';
-          return (
-            <article
-              key={module.id}
-              id={module.id === 'meetings' ? 'meetings' : undefined}
-              data-region="today-module"
-              data-module={module.id}
-              className={`min-w-0 rounded-xl border border-border bg-canvas/50 px-3.5 py-3 ${wide ? 'sm:col-span-2' : ''}`}
-            >
-              <ModuleView
-                moduleId={module.id}
-                note={module.text}
-                briefing={briefing}
-                shown={shown}
-                meta={meta}
-                onOpen={(taskId) => todos.openDetail(taskId)}
-                onSwap={() => setOffset((value) => value + 1)}
-                recs={recs.length}
-                placeDraft={placeDraft}
-                editingPlace={editingPlace}
-                onEditPlace={() => setEditingPlace(true)}
-                onPlaceDraft={setPlaceDraft}
-                onPlace={onPlace}
-              />
-            </article>
-          );
+      <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
+        {rows.map((row) => {
+          const key = row.map((module) => module.id).join('-');
+          if (isAgendaRow(row)) {
+            return (
+              <article
+                key={key}
+                id={row.some((module) => module.id === 'meetings') ? 'meetings' : undefined}
+                data-region="today-module"
+                data-module={row[0]?.id}
+                className="min-w-0 self-start rounded-xl border border-border bg-canvas/50 px-3.5 py-3 sm:col-span-2"
+              >
+                <AgendaBlock ids={row.map((module) => module.id)} briefing={briefing} />
+              </article>
+            );
+          }
+          return row.map((module) => {
+            const wide = row.length === 1 || module.id === 'lead' || module.id === 'note' || module.id === 'focus';
+            return (
+              <article
+                key={module.id}
+                data-region="today-module"
+                data-module={module.id}
+                className={`min-w-0 self-start rounded-xl border border-border bg-canvas/50 px-3.5 py-3 ${wide ? 'sm:col-span-2' : ''}`}
+              >
+                <ModuleView
+                  moduleId={module.id}
+                  note={module.text}
+                  briefing={briefing}
+                  shown={shown}
+                  meta={meta}
+                  onOpen={(taskId) => todos.openDetail(taskId)}
+                  onSwap={() => setOffset((value) => value + 1)}
+                  recs={recs.length}
+                  placeDraft={placeDraft}
+                  editingPlace={editingPlace}
+                  onEditPlace={() => setEditingPlace(true)}
+                  onPlaceDraft={setPlaceDraft}
+                  onPlace={onPlace}
+                />
+              </article>
+            );
+          });
         })}
       </div>
       <p className="mt-3 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
@@ -185,6 +208,99 @@ function LeadBrief({ plan }: { plan: TodayPlan }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+function isAgendaRow(row: readonly { id: string }[]): boolean {
+  return row.length > 0 && row.every((module) => module.id === 'meetings' || module.id === 'upcoming');
+}
+
+function agendaLineLabel(line: AgendaLine): string {
+  const count = line.count > 1 ? t.today.briefing.agendaCount.replace('{n}', String(line.count)) : null;
+  return [line.title, line.clock, count].filter((part): part is string => part !== null && part !== '').join(' · ');
+}
+
+function MeetingsBody({ meetings }: { meetings: TodayBriefingModel['meetings'] }) {
+  return (
+    <div
+      data-region="today-meetings"
+      className="space-y-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]"
+    >
+      {meetings.status === 'mac-only' ? <p>{t.today.briefing.meetingsMacOnly}</p> : null}
+      {meetings.status === 'denied' ? (
+        <div className="space-y-1.5">
+          <p>{t.today.briefing.meetingsDenied}</p>
+          <p className="text-muted">{t.today.briefing.meetingsDeniedHint}</p>
+          {canOpenCalendarSettings() ? (
+            <button
+              type="button"
+              onClick={openCalendarSettings}
+              className="inline-flex h-7 items-center rounded-full border border-border px-2.5 text-[11px] font-medium text-fg transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
+            >
+              {t.today.briefing.meetingsOpenSettings}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {meetings.status === 'failed' ? <p>{t.today.briefing.meetingsFailed}</p> : null}
+      {meetings.status === 'events' && meetings.events.length === 0 ? (
+        <p>{t.today.briefing.meetingsEmpty}</p>
+      ) : null}
+      {meetings.status === 'events' && meetings.events.length > 0 ? (
+        <div className="space-y-0.5">
+          <p className="text-[11px] font-semibold text-tertiary">{t.lists.today}</p>
+          {meetings.events.map((event) => (
+            <p key={`${event.title}-${event.start}`}>
+              {event.title} · {event.allDay ? t.today.briefing.allDay : event.start}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AgendaBlock({ ids, briefing }: { ids: readonly string[]; briefing: TodayBriefingModel }) {
+  const showMeetings = ids.includes('meetings');
+  const showUpcoming = ids.includes('upcoming');
+  const days = showUpcoming ? foldAgendaDays(briefing.upcoming) : [];
+  const label = showMeetings ? t.today.briefing.module.meetings : t.today.briefing.module.upcoming;
+  return (
+    <>
+      <p className="text-[11px] font-semibold tracking-wide text-tertiary">{label}</p>
+      <div className="mt-1.5 space-y-3">
+        {showMeetings ? <MeetingsBody meetings={briefing.meetings} /> : null}
+        {showUpcoming && days.length === 0 ? (
+          <p
+            data-region="today-upcoming"
+            className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]"
+          >
+            {t.today.briefing.upcomingEmpty}
+          </p>
+        ) : null}
+        {showUpcoming && days.length > 0 ? (
+          <div data-region="today-upcoming" className="space-y-3">
+            {days.map((day) => (
+              <div key={day.ymd}>
+                <p className="text-[11px] font-semibold text-tertiary">{monthDay(day.ymd)}</p>
+                <div className="mt-0.5 space-y-0.5">
+                  {day.lines.map((line) => (
+                    <p key={line.key} className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-fg">
+                      {agendaLineLabel(line)}
+                    </p>
+                  ))}
+                  {day.hidden > 0 ? (
+                    <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+                      {t.today.briefing.dayMore.replace('{n}', String(day.hidden))}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }
 
@@ -281,53 +397,6 @@ function ModuleView({
             ) : null}
           </div>
           {weather.status === 'ready' ? <p data-region="today-clothing">{weather.clothing}</p> : null}
-        </div>
-      ) : null}
-      {moduleId === 'meetings' ? (
-        <div
-          data-region="today-meetings"
-          className="mt-1.5 space-y-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]"
-        >
-          {briefing.meetings.status === 'mac-only' ? <p>{t.today.briefing.meetingsMacOnly}</p> : null}
-          {briefing.meetings.status === 'denied' ? (
-            <div className="space-y-1.5">
-              <p>{t.today.briefing.meetingsDenied}</p>
-              <p className="text-muted">{t.today.briefing.meetingsDeniedHint}</p>
-              {canOpenCalendarSettings() ? (
-                <button
-                  type="button"
-                  onClick={openCalendarSettings}
-                  className="inline-flex h-7 items-center rounded-full border border-border px-2.5 text-[11px] font-medium text-fg transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
-                >
-                  {t.today.briefing.meetingsOpenSettings}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {briefing.meetings.status === 'failed' ? <p>{t.today.briefing.meetingsFailed}</p> : null}
-          {briefing.meetings.status === 'events' && briefing.meetings.events.length === 0 ? (
-            <p>{t.today.briefing.meetingsEmpty}</p>
-          ) : null}
-          {briefing.meetings.status === 'events'
-            ? briefing.meetings.events.map((event) => (
-                <p key={`${event.title}-${event.start}`}>
-                  {event.title} · {event.allDay ? t.today.briefing.allDay : event.start}
-                </p>
-              ))
-            : null}
-        </div>
-      ) : null}
-      {moduleId === 'upcoming' ? (
-        <div
-          data-region="today-upcoming"
-          className="mt-1.5 space-y-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]"
-        >
-          {briefing.upcoming.length === 0 ? <p>{t.today.briefing.upcomingEmpty}</p> : null}
-          {briefing.upcoming.map((item) => (
-            <p key={item.id}>
-              {item.title} · {item.when}
-            </p>
-          ))}
         </div>
       ) : null}
       {moduleId === 'holiday' ? (

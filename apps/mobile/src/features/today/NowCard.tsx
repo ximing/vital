@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import {
+  foldAgendaDays,
   noteRepeatsTasks,
   planSignalCounts,
+  type AgendaLine,
   type NowRecommendation,
   type Outcome,
   type TodayModuleId,
@@ -99,35 +101,45 @@ export function NowCard({
       <View style={styles.body}>
         <Text style={styles.eyebrow}>{copy.today.now.title}</Text>
         <View style={styles.modules}>
-          {moduleRows.map((row) => (
-            <View key={row.map((module) => module.id).join('-')} style={styles.moduleRow}>
-              {row.map((module) => (
-                <View key={module.id} testID={`today-module-${module.id}`} style={styles.module}>
-                  <ModuleBlock
-                    moduleId={module.id}
-                    note={module.text}
-                    briefing={briefing}
-                    shown={shown}
-                    recs={recs.length}
-                    placeDraft={placeDraft}
-                    editingPlace={editingPlace}
-                    onEditPlace={() => setEditingPlace(true)}
-                    onPlaceDraft={setPlaceDraft}
-                    onSubmitPlace={() => {
-                      briefing.submitPlace(placeDraft);
-                      setEditingPlace(false);
-                    }}
-                    onSwap={() => setOffset((value) => value + 1)}
-                    dueLabel={dueLabel}
-                    estimateLabel={estimateLabel}
-                    outcomeName={outcomeName}
-                    onOpen={openTask}
-                    styles={styles}
-                  />
+          {moduleRows.map((row) => {
+            const key = row.map((module) => module.id).join('-');
+            if (isAgendaRow(row)) {
+              return (
+                <View key={key} testID={`today-module-${row[0]?.id ?? 'agenda'}`} style={styles.module}>
+                  <AgendaBlock ids={row.map((module) => module.id)} briefing={briefing} styles={styles} />
                 </View>
-              ))}
-            </View>
-          ))}
+              );
+            }
+            return (
+              <View key={key} style={styles.moduleRow}>
+                {row.map((module) => (
+                  <View key={module.id} testID={`today-module-${module.id}`} style={styles.module}>
+                    <ModuleBlock
+                      moduleId={module.id}
+                      note={module.text}
+                      briefing={briefing}
+                      shown={shown}
+                      recs={recs.length}
+                      placeDraft={placeDraft}
+                      editingPlace={editingPlace}
+                      onEditPlace={() => setEditingPlace(true)}
+                      onPlaceDraft={setPlaceDraft}
+                      onSubmitPlace={() => {
+                        briefing.submitPlace(placeDraft);
+                        setEditingPlace(false);
+                      }}
+                      onSwap={() => setOffset((value) => value + 1)}
+                      dueLabel={dueLabel}
+                      estimateLabel={estimateLabel}
+                      outcomeName={outcomeName}
+                      onOpen={openTask}
+                      styles={styles}
+                    />
+                  </View>
+                ))}
+              </View>
+            );
+          })}
         </View>
         <Text style={styles.meta}>{metaLine}</Text>
       </View>
@@ -243,6 +255,61 @@ const createStyles = (t: Theme) =>
     miniMetaPart: { fontVariant: ['tabular-nums'] },
   });
 
+function isAgendaRow(row: readonly { id: string }[]): boolean {
+  return row.length > 0 && row.every((module) => module.id === 'meetings' || module.id === 'upcoming');
+}
+
+function monthDay(ymd: string): string {
+  const [, month, day] = ymd.split('-');
+  return `${Number(month)}月${Number(day)}日`;
+}
+
+function agendaLineLabel(line: AgendaLine): string {
+  const count = line.count > 1 ? copy.today.briefing.agendaCount.replace('{n}', String(line.count)) : null;
+  return [line.title, line.clock, count].filter((part): part is string => part !== null && part !== '').join(' · ');
+}
+
+function AgendaBlock({
+  ids,
+  briefing,
+  styles,
+}: {
+  ids: readonly string[];
+  briefing: TodayBriefingModel;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const showMeetings = ids.includes('meetings');
+  const showUpcoming = ids.includes('upcoming');
+  const days = showUpcoming ? foldAgendaDays(briefing.upcoming) : [];
+  const label = showMeetings ? copy.today.briefing.module.meetings : copy.today.briefing.module.upcoming;
+  return (
+    <View>
+      <Text style={styles.moduleEyebrow}>{label}</Text>
+      {showMeetings ? <MeetingsBlock meetings={briefing.meetings} styles={styles} /> : null}
+      {showUpcoming && days.length === 0 ? (
+        <Text style={styles.fact}>{copy.today.briefing.upcomingEmpty}</Text>
+      ) : null}
+      {showUpcoming
+        ? days.map((day) => (
+            <View key={day.ymd}>
+              <Text style={styles.moduleEyebrow}>{monthDay(day.ymd)}</Text>
+              {day.lines.map((line) => (
+                <Text key={line.key} style={styles.fact}>
+                  {agendaLineLabel(line)}
+                </Text>
+              ))}
+              {day.hidden > 0 ? (
+                <Text style={styles.factMuted}>
+                  {copy.today.briefing.dayMore.replace('{n}', String(day.hidden))}
+                </Text>
+              ) : null}
+            </View>
+          ))
+        : null}
+    </View>
+  );
+}
+
 function MeetingsBlock({
   meetings,
   styles,
@@ -272,6 +339,7 @@ function MeetingsBlock({
   }
   return (
     <View>
+      <Text style={styles.moduleEyebrow}>{copy.lists.today}</Text>
       {meetings.events.map((event, index) => (
         <Text key={`${event.start}-${event.title}-${index}`} style={styles.fact}>
           {event.title} · {event.allDay ? copy.today.briefing.allDay : event.start}
@@ -426,20 +494,6 @@ function ModuleBlock({
               </Button>
             </View>
           ) : null}
-        </View>
-      ) : null}
-      {moduleId === 'meetings' ? <MeetingsBlock meetings={briefing.meetings} styles={styles} /> : null}
-      {moduleId === 'upcoming' ? (
-        <View>
-          {briefing.upcoming.length === 0 ? (
-            <Text style={styles.fact}>{copy.today.briefing.upcomingEmpty}</Text>
-          ) : (
-            briefing.upcoming.map((item) => (
-              <Text key={item.id} style={styles.fact}>
-                {item.title} · {item.when}
-              </Text>
-            ))
-          )}
         </View>
       ) : null}
       {moduleId === 'holiday' ? (

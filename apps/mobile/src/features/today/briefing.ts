@@ -12,8 +12,9 @@ import {
   parseOpenMeteoForecast,
   parseOpenMeteoPlace,
   weatherConditionKey,
+  agendaItemsFromTasks,
   todayModulesOrFallback,
-  ymdInTimeZone,
+  type AgendaItem,
   type BriefingTask,
   type NormalizedCalendarEvent,
   type TodayLayout,
@@ -25,7 +26,7 @@ import {
 } from '@vital/dto';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
-import { clothingSuggestion, nearestStatutoryHoliday, upcomingExcludingToday } from './briefing-core';
+import { clothingSuggestion, nearestStatutoryHoliday } from './briefing-core';
 import { readPhoneCalendar, type PhoneCalendarRead } from './phone-calendar';
 
 export {
@@ -62,7 +63,7 @@ export type TodayBriefingModel = {
     | { status: 'ready'; place: string; condition: string; temperatureC: number; clothing: string };
   placeBusy: boolean;
   submitPlace: (name: string) => void;
-  upcoming: { id: string; title: string; when: string }[];
+  upcoming: AgendaItem[];
   holidayName: string;
   holidayDate: string;
   meetings: { status: 'loading' } | PhoneCalendarRead;
@@ -72,11 +73,6 @@ export type TodayBriefingModel = {
 export function chineseYmd(ymd: string): string {
   const [year, month, day] = ymd.split('-');
   return `${year}年${Number(month)}月${Number(day)}日`;
-}
-
-function monthDay(ymd: string): string {
-  const [, month, day] = ymd.split('-');
-  return `${Number(month)}月${Number(day)}日`;
 }
 
 async function readSavedPlace(): Promise<GeoPlace | null> {
@@ -280,10 +276,7 @@ export function buildTodayBriefing(input: {
 }): TodayBriefingModel {
   const today = localTodayYmd(input.timeZone, input.now ?? new Date());
   const holiday = nearestStatutoryHoliday(today);
-  const upcoming = upcomingExcludingToday(input.upcomingTasks, today, input.timeZone).map((task) => {
-    const anchor = task.dueAt ?? task.startAt ?? '';
-    return { id: task.id, title: task.title, when: monthDay(ymdInTimeZone(anchor, input.timeZone)) };
-  });
+  const upcoming = agendaItemsFromTasks(input.upcomingTasks, today, input.timeZone);
   const weather = input.weather;
   let weatherView: TodayBriefingModel['weather'];
   if (weather.status === 'ready' && weather.sample && weather.place) {

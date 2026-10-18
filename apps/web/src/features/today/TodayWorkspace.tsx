@@ -181,19 +181,20 @@ function TodayWorkspaceContent() {
         className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
       >
         <div className="mx-auto w-full max-w-[880px] px-6 pb-16 md:px-8">
-          <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 px-1 pb-2 pt-6">
-            <div className="flex items-baseline gap-3">
-              <h1 className="font-display text-[30px] font-bold leading-[38px]">
-                {t.today.title}
-              </h1>
-              <span className="text-[length:var(--text-meta)] tabular-nums text-tertiary">
-                {dateLabel} · {weekdayLabel}
-              </span>
+          <header className="flex flex-col gap-3 px-1 pb-1 pt-6">
+            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+              <div className="flex items-baseline gap-3">
+                <h1 className="font-display text-[30px] font-bold leading-[38px]">
+                  {t.today.title}
+                </h1>
+                <span className="text-[length:var(--text-meta)] tabular-nums text-tertiary">
+                  {dateLabel} · {weekdayLabel}
+                </span>
+              </div>
+              {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
             </div>
-            {dashboard ? <PulseStrip pulse={dashboard.pulse} /> : null}
+            <EnergyLogBar timeZone={timeZone} todayYmd={todayYmd} />
           </header>
-
-          <EnergyLogBar timeZone={timeZone} todayYmd={todayYmd} />
 
           {dashboard ? (
             <NowCard now={dashboard.now} outcomes={outcomes} timeZone={timeZone} briefing={briefing} />

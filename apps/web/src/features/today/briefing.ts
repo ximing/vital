@@ -10,13 +10,13 @@ import {
   normalizeCalendarEvent,
   openMeteoForecastUrl,
   openMeteoGeocodeUrl,
+  agendaItemsFromTasks,
   buildTodayPlan,
   parseOpenMeteoForecast,
   parseOpenMeteoPlace,
   todayModulesOrFallback,
-  upcomingExcludingToday,
   weatherConditionKey,
-  ymdInTimeZone,
+  type AgendaItem,
   type TodayLayout,
   type TodayPlan,
   type BriefingTask,
@@ -57,7 +57,7 @@ export type TodayBriefingModel = {
     | { status: 'ready'; place: string; condition: string; temperatureC: number; clothing: string };
   placeBusy: boolean;
   submitPlace: (name: string) => void;
-  upcoming: { id: string; title: string; when: string }[];
+  upcoming: AgendaItem[];
   holidayName: string;
   holidayDate: string;
   meetings:
@@ -327,10 +327,7 @@ export function buildTodayBriefing(input: {
 }): TodayBriefingModel {
   const today = localTodayYmd(input.timeZone, input.now ?? new Date());
   const holiday = nearestStatutoryHoliday(today);
-  const upcoming = upcomingExcludingToday(input.upcomingTasks, today, input.timeZone).map((task) => {
-    const anchor = task.dueAt ?? task.startAt ?? '';
-    return { id: task.id, title: task.title, when: monthDay(ymdInTimeZone(anchor, input.timeZone)) };
-  });
+  const upcoming = agendaItemsFromTasks(input.upcomingTasks, today, input.timeZone);
   const weather = input.weather;
   let weatherView: TodayBriefingModel['weather'];
   if (weather.status === 'ready' && weather.sample && weather.place) {

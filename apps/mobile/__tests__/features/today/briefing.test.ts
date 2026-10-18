@@ -130,7 +130,7 @@ describe('today briefing helpers', () => {
     expect(text).toContain('日程：今天没有日程');
   });
 
-  it('pairs the short modules and keeps the lead and focus on their own rows', () => {
+  it('keeps the agenda together and the lead and focus on their own rows', () => {
     const modules = [
       { id: 'lead' },
       { id: 'weather' },
@@ -141,8 +141,9 @@ describe('today briefing helpers', () => {
     ];
     expect(groupTodayModuleRows(modules, 2).map((row) => row.map((module) => module.id))).toEqual([
       ['lead'],
-      ['weather', 'meetings'],
-      ['upcoming', 'holiday'],
+      ['weather'],
+      ['meetings', 'upcoming'],
+      ['holiday'],
       ['focus'],
     ]);
     expect(groupTodayModuleRows([{ id: 'holiday' }, { id: 'lead' }, { id: 'note', text: '先收逾期' }], 2)).toEqual([
@@ -150,6 +151,12 @@ describe('today briefing helpers', () => {
       [{ id: 'lead' }],
       [{ id: 'note', text: '先收逾期' }],
     ]);
-    expect(groupTodayModuleRows(modules, 1)).toHaveLength(modules.length);
+    expect(groupTodayModuleRows(modules, 1).map((row) => row.map((module) => module.id))).toEqual([
+      ['lead'],
+      ['weather'],
+      ['meetings', 'upcoming'],
+      ['holiday'],
+      ['focus'],
+    ]);
   });
 });
