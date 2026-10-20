@@ -4,6 +4,7 @@ import { agentMemoryFeedback, agentMemoryHistory, agentMemoryMaintenance } from 
 import { agentEditEvents, agentEditFeedback } from '../db/schema/agent-edit-events.js';
 import { recordAgentAction, retireOlderPending } from './action-ledger.js';
 import { resolveClusterTarget } from './cluster.js';
+import { asTime, isStaleWording, planWordingUpdate, shouldRefreshWording } from './wording.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { extractNotes, isRhythmMemoryScope, replaceNotes } from '@vital/dto';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
@@ -104,6 +105,78 @@ function iso(d: Date | null): string | null {
   return d ? d.toISOString() : null;
 }
 
+/** No model call. Clears a stale count or filler sentence and keeps the rule line. */
+async function settleQuietRefresh(
+  job: AgentJobRow,
+  userId: string,
+  outcomeId: string,
+  now: Date,
+  milestoneTotal: number,
+): Promise<void> {
+  await withAgentJobEffects(job, async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(outcomes)
+      .where(and(eq(outcomes.id, outcomeId), eq(outcomes.userId, userId), eq(outcomes.status, 'open')))
+      .limit(1)
+      .for('update');
+    if (!current) return;
+    const clearHeadline =
+      current.agentHeadline !== null && isStaleWording(current.agentHeadline, milestoneTotal);
+    const clearSuggestion =
+      current.agentSuggestion !== null && isStaleWording(current.agentSuggestion, 0);
+    await tx
+      .update(outcomes)
+      .set({
+        agentState: 'idle',
+        agentUpdatedAt: now,
+        updatedAt: now,
+        ...(clearHeadline ? { agentHeadline: null } : {}),
+        ...(clearSuggestion ? { agentSuggestion: null } : {}),
+      })
+      .where(and(eq(outcomes.id, outcomeId), eq(outcomes.userId, userId)));
+  });
+}
+
+/** Real task edits only. Habit check-ins and calendar rows do not reopen a proposal. */
+async function realTaskChangedSinceWording(
+  userId: string,
+  outcomeId: string,
+  agentUpdatedAt: Date | null,
+): Promise<boolean> {
+  const db = getDb();
+  const [factRow] = await db
+    .select({ latest: sql<string | null>`max(${tasks.updatedAt})` })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        eq(tasks.outcomeId, outcomeId),
+        isNull(tasks.deletedAt),
+        isNull(tasks.calendarKey),
+        isNull(tasks.habitId),
+      ),
+    );
+  const [feedbackRow] = await db
+    .select({ latest: sql<string | null>`max(${agentActions.feedbackAt})` })
+    .from(agentActions)
+    .where(
+      and(
+        eq(agentActions.userId, userId),
+        eq(agentActions.targetType, 'outcome'),
+        eq(agentActions.targetId, outcomeId),
+        inArray(agentActions.actionType, ['outcome.headline', 'outcome.suggestion']),
+        inArray(agentActions.feedback, ['accepted', 'dismissed', 'edited']),
+        sql`coalesce(${agentActions.feedbackPayload}->>'superseded', '') <> 'true'`,
+      ),
+    );
+  return shouldRefreshWording({
+    agentUpdatedAt,
+    lastFeedbackAt: asTime(feedbackRow?.latest),
+    latestFactAt: asTime(factRow?.latest),
+  });
+}
+
 async function processOutcomeRefresh(
   job: AgentJobRow,
   user: User,
@@ -128,6 +201,8 @@ async function processOutcomeRefresh(
         eq(tasks.userId, user.id),
         eq(tasks.outcomeId, outcomeId),
         isNull(tasks.deletedAt),
+        isNull(tasks.calendarKey),
+        isNull(tasks.habitId),
         inArray(tasks.status, ['todo', 'doing']),
       ),
     )
@@ -143,6 +218,8 @@ async function processOutcomeRefresh(
       and(
         eq(tasks.userId, user.id),
         eq(tasks.outcomeId, outcomeId),
+        isNull(tasks.calendarKey),
+        isNull(tasks.habitId),
         gte(taskCompletions.completedAt, weekAgo),
       ),
     );
@@ -163,6 +240,16 @@ async function processOutcomeRefresh(
   const habitFacts = await loadHabitHeadlineFacts(user.id, user.timezone, now);
   const linkedHabits = linkedHabitFacts(habitFacts, outcomeId);
   const unlinkedHabits = unlinkedHabitFacts(habitFacts);
+  if (openTasks.length === 0 && linkedHabits.length === 0 && unlinkedHabits.length === 0) {
+    await settleQuietRefresh(job, user.id, outcomeId, now, milestone.total);
+    skipExecution('NO_CHANGES');
+    return 'done';
+  }
+  if (!(await realTaskChangedSinceWording(user.id, outcomeId, outcome.agentUpdatedAt))) {
+    await settleQuietRefresh(job, user.id, outcomeId, now, milestone.total);
+    skipExecution('UNCHANGED_INPUT');
+    return 'done';
+  }
   const memory = await loadAgentMemory(user.id, 'headline', outcome.name);
   executionResult({
     inputSummary: `仅当前用户：线程内 ${String(openTasks.length)} 项未完成任务，${String(linkedHabits.length)} 个已挂载习惯，${String(memory.length)} 条记忆`,
@@ -189,6 +276,8 @@ async function processOutcomeRefresh(
     })),
     milestoneDone: milestone.done,
     milestoneTotal: milestone.total,
+    currentHeadline: outcome.agentHeadline,
+    currentSuggestion: outcome.agentSuggestion,
     unlinkedHabits: unlinkedHabits.map((habit) => ({
       id: habit.id,
       name: habit.name,
@@ -222,29 +311,40 @@ async function processOutcomeRefresh(
   await withAgentJobEffects(job, async (tx) => {
     const [current] = await tx.select().from(outcomes).where(and(eq(outcomes.userId, user.id), eq(outcomes.id, outcomeId), eq(outcomes.status, 'open'))).for('update');
     if (!current) { skipExecution('OUTCOME_CHANGED'); return; }
+    const plan = planWordingUpdate({
+      threadName: current.name,
+      currentHeadline: current.agentHeadline,
+      currentSuggestion: current.agentSuggestion,
+      ruleNextStep: current.ruleNextStep,
+      nextHeadline: headline,
+      nextSuggestion: suggestion,
+      milestoneTotal: milestone.total,
+    });
     await tx
       .update(outcomes)
       .set({
-        agentHeadline: headline === '' ? null : headline,
-        agentSuggestion: suggestion === '' ? null : suggestion,
+        ...(plan.headline !== null ? { agentHeadline: plan.headline === '' ? null : plan.headline } : {}),
+        ...(plan.suggestion !== null ? { agentSuggestion: plan.suggestion === '' ? null : plan.suggestion } : {}),
         agentState: 'idle',
         agentUpdatedAt: now,
         updatedAt: now,
       })
       .where(and(eq(outcomes.id, outcomeId), eq(outcomes.userId, user.id)));
-    const headlineId = randomUUID();
-    await recordAgentAction(tx, {
-      id: headlineId,
-      userId: user.id,
-      jobId: job.id,
-      actionType: 'outcome.headline',
-      targetType: 'outcome',
-      targetId: outcomeId,
-      payload: { headline, previousHeadline: current.agentHeadline },
-      feedback: 'pending',
-    });
-    await retireOlderPending(tx, user.id, outcomeId, 'outcome.headline', headlineId, now);
-    if (suggestion !== '') {
+    if (plan.proposeHeadline && plan.headline) {
+      const headlineId = randomUUID();
+      await recordAgentAction(tx, {
+        id: headlineId,
+        userId: user.id,
+        jobId: job.id,
+        actionType: 'outcome.headline',
+        targetType: 'outcome',
+        targetId: outcomeId,
+        payload: { headline: plan.headline, previousHeadline: current.agentHeadline },
+        feedback: 'pending',
+      });
+      await retireOlderPending(tx, user.id, outcomeId, 'outcome.headline', headlineId, now);
+    }
+    if (plan.proposeSuggestion && plan.suggestion) {
       const suggestionId = randomUUID();
       await recordAgentAction(tx, {
         id: suggestionId,
@@ -253,11 +353,12 @@ async function processOutcomeRefresh(
         actionType: 'outcome.suggestion',
         targetType: 'outcome',
         targetId: outcomeId,
-        payload: { suggestion, previousSuggestion: current.agentSuggestion },
+        payload: { suggestion: plan.suggestion, previousSuggestion: current.agentSuggestion },
         feedback: 'pending',
       });
       await retireOlderPending(tx, user.id, outcomeId, 'outcome.suggestion', suggestionId, now);
     }
+    let attached = 0;
     for (const habitId of attachIds) {
       if (!attachable.has(habitId)) continue;
       const [habit] = await tx
@@ -271,6 +372,7 @@ async function processOutcomeRefresh(
         .update(habits)
         .set({ outcomeId, updatedAt: now })
         .where(and(eq(habits.id, habit.id), eq(habits.userId, user.id), isNull(habits.outcomeId)));
+      attached += 1;
       await recordAgentAction(tx, {
         id: randomUUID(),
         userId: user.id,
@@ -282,6 +384,7 @@ async function processOutcomeRefresh(
         feedback: 'pending',
       });
     }
+    if (!plan.proposeHeadline && !plan.proposeSuggestion && attached === 0) skipExecution('NO_CHANGES');
   });
   return 'done';
 }

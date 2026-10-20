@@ -51,6 +51,8 @@ export function buildHeadlinePrompt(input: {
   unlinkedHabits?: HeadlineHabitFact[];
   milestoneDone?: number;
   milestoneTotal?: number;
+  currentHeadline?: string | null;
+  currentSuggestion?: string | null;
 }): PromptPair {
   const linked = input.linkedHabits ?? [];
   const unlinked = input.unlinkedHabits ?? [];
@@ -58,6 +60,8 @@ export function buildHeadlinePrompt(input: {
     '你是个人目标看板的状态撰写者。根据给定线程的事实，用中文写一句话状态（headline，≤60 字，客观、不鸡汤）和一条具体可执行的下一步建议（suggestion，≤120 字；没有合适建议就留空字符串）。',
     '已挂载习惯的近 7 天打卡算作本线程进展；任务列表为空但习惯有打卡时，不要写「无任务完成」。',
     '若里程碑总数大于 0，headline 必须包含「完成数/总数 里程碑」，数字只能用给出的那一对。没有里程碑时不要写里程碑，也不要写死未完成件数或「今日 a/b」。界面会另算件数。已经完成的事不要再说未处理。',
+    '不要在句子里重复线程名。没有新进展时，headline 照抄当前状态，suggestion 留空。',
+    '不要写「待定义」「仍未启动」「均未完成」「均未处理」「均未解决」。不要建议订会议室、同步议程或核对参会人。会议、节气和重复邀请不是目标进展。',
     '尚未挂载的习惯仅在日常行为明确服务于本线程目标时通过 attachHabitIds 关联（例如锻炼、喝水、吃饭、睡眠属于身体健康类线程）；不确定就留空，宁可漏挂也不要错挂。若决定挂上，headline 也要计入它们的进展。',
     '必须调用 submit_headline 工具提交结果，不要输出其他文字。',
     DATA_RULE,
@@ -75,6 +79,8 @@ export function buildHeadlinePrompt(input: {
           .join('\n');
   const user = [
     `线程名：<data>${input.outcomeName}</data>`,
+    `当前状态：<data>${input.currentHeadline?.trim() || '（无）'}</data>`,
+    `当前建议：<data>${input.currentSuggestion?.trim() || '（无）'}</data>`,
     `规则信号：${input.ruleSignal ?? '无'}；规则下一步：<data>${input.ruleNextStep ?? '无'}</data>`,
     `近 7 天完成任务 ${String(input.completedLast7d)} 项；已挂载习惯近 7 天打卡天数合计 ${String(linked.reduce((sum, habit) => sum + habit.daysDoneLast7d, 0))}。`,
     (input.milestoneTotal ?? 0) > 0
@@ -111,6 +117,7 @@ export function buildClusterPrompt(input: {
     '你是个人目标看板的线程组织者。把未挂载的任务按「同一件事/同一个目标」聚成 1-5 个线程，为每个线程起短名（≤20 字）并写一句话状态。',
     'taskIds 只能来自给定任务列表，不得编造 id；一个任务只能出现在一个线程；宁可少建线程也不要硬凑。',
     '如果这些任务属于已有线程，outcomeId 填那个线程的 id，name 用原名，不要新建一条相似的。只有确是一件新的事才省略 outcomeId。',
+    '会议、节气、节假日和重复邀请不要收成线程。',
     '必须调用 propose_threads 工具提交结果，不要输出其他文字。',
     DATA_RULE,
   ].join('');

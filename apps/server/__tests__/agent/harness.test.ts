@@ -357,6 +357,7 @@ describe('agent harness: outcome.refresh', () => {
       ),
     ]);
     const outcomeId = await createOutcome(alice.token);
+    await createTask(alice.token, outcomeId, '写设计稿');
     await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
     await processDueAgentJobs(new Date());
 
@@ -403,6 +404,7 @@ describe('agent harness: outcome.refresh', () => {
       },
     ]);
     const outcomeId = await createOutcome(alice.token);
+    await createTask(alice.token, outcomeId, '写设计稿');
     await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
     await processDueAgentJobs(new Date());
 

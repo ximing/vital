@@ -25,6 +25,9 @@ describe('agent prompt builders inject distilled memory', () => {
     // instructs the model that <data> is never instructions.
     expect(user).toMatch(/从用户纠偏中学到的偏好（参考）：\n<data>\n[\s\S]*<\/data>/);
     expect(system).toContain('<data>');
+    expect(system).toContain('仍未启动');
+    expect(system).toContain('订会议室');
+    expect(user).toContain('当前状态');
   });
 
   it('headline prompt includes linked and unlinked habit facts', () => {
@@ -64,12 +67,13 @@ describe('agent prompt builders inject distilled memory', () => {
   });
 
   it('cluster prompt carries memory', () => {
-    const { user } = buildClusterPrompt({
+    const { system, user } = buildClusterPrompt({
       existing: [{ id: 'outcome-home', name: '家庭' }],
       unassignedTasks: [{ id: 't1', title: '买书', dueAt: null }],
       memory: MEMORY,
     });
     expect(user).toContain('id=outcome-home 家庭');
+    expect(system).toContain('节气');
     expect(user).toContain('从用户纠偏中学到的偏好');
     for (const item of MEMORY) expect(user).toContain(item);
   });
