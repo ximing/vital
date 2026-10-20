@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
 
@@ -40,6 +40,7 @@ import { AddSubtaskRow, SubtaskRow } from './subtasks';
 import { NotesField } from './NotesField';
 import { QuickSchedule, TagCreateRow, TaskSheetExtras } from './TaskSheetFields';
 import { TaskSheetService } from './task-sheet.service';
+import { TASK_TITLE_LAYOUT_LINES, TASK_TITLE_LINE_HEIGHT, taskTitleBoxHeight } from './title-field';
 
 const PRIORITIES: TaskPriority[] = [0, 1, 2, 3];
 
@@ -107,6 +108,7 @@ const TaskSheetContent = observer(function TaskSheetContent({
 }) {
   const expand = useSheetExpand();
   const sheetScroll = useSheetScroll(full);
+  const [titleHeight, setTitleHeight] = useState(TASK_TITLE_LINE_HEIGHT);
   const t = useTheme();
   const styles = useMemo(() => createStyles(t), [t]);
   const s = useService(TaskSheetService);
@@ -228,7 +230,9 @@ const TaskSheetContent = observer(function TaskSheetContent({
           onPress={() => s.retrySave()}
           style={styles.saveRow}
         >
-          <Text style={[styles.saveLabel, s.saveState === 'error' && styles.saveError]}>{s.saveLabel}</Text>
+          <Text style={[styles.saveLabel, s.saveState === 'error' && styles.saveError]}>
+            {s.saveLabel}
+          </Text>
         </Pressable>
       ) : null}
       {task.parentId !== null ? (
@@ -285,9 +289,15 @@ const TaskSheetContent = observer(function TaskSheetContent({
             s.setTitle(event.nativeEvent.text);
             void s.flushText();
           }}
+          onContentSizeChange={(event) => {
+            const next = taskTitleBoxHeight(event.nativeEvent.contentSize.height);
+            setTitleHeight((current) => (current === next ? current : next));
+          }}
           multiline
-          scrollEnabled={full}
-          style={[styles.title, done && styles.titleDone]}
+          numberOfLines={TASK_TITLE_LAYOUT_LINES}
+          scrollEnabled
+          textAlignVertical="top"
+          style={[styles.title, done && styles.titleDone, { height: titleHeight }]}
           placeholder={copy.fields.title}
           placeholderTextColor={t.textTertiary}
         />
@@ -478,7 +488,12 @@ const createStyles = (t: Theme) =>
     },
     pressed: { opacity: 0.5 },
     saveRow: { paddingHorizontal: 20, paddingBottom: 2 },
-    saveLabel: { fontSize: 12, lineHeight: 16, color: t.textTertiary, fontVariant: ['tabular-nums'] },
+    saveLabel: {
+      fontSize: 12,
+      lineHeight: 16,
+      color: t.textTertiary,
+      fontVariant: ['tabular-nums'],
+    },
     saveError: { color: t.danger },
     parentLink: {
       flexDirection: 'row',
@@ -500,7 +515,13 @@ const createStyles = (t: Theme) =>
       backgroundColor: t.bgSurfaceMuted,
     },
     listChipLabel: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: t.fgPrimary },
-    headerRight: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+    headerRight: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      gap: 2,
+    },
     prio: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -518,7 +539,13 @@ const createStyles = (t: Theme) =>
       opacity: 0.4,
     },
     prioOn: { opacity: 1, backgroundColor: t.bgElevated, ...rnShadow(t) },
-    dueRow: { flexDirection: 'row', alignItems: 'center', gap: t.space[3], minHeight: 40, marginTop: 2 },
+    dueRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: t.space[3],
+      minHeight: 40,
+      marginTop: 2,
+    },
     due: { fontSize: 14, lineHeight: 20, fontWeight: '600', fontVariant: ['tabular-nums'] },
     title: {
       fontSize: 22,

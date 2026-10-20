@@ -1,7 +1,16 @@
 import type { AgentAction, List, Outcome, PatchTaskInput, Tag, Task } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
 import { ChevronLeft, Ellipsis, Folder, Pin, Plus, Timer, X } from 'lucide-react';
-import { lazy, Suspense, useEffect, useRef, useState, type FC, type FormEvent } from 'react';
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FC,
+  type FormEvent,
+} from 'react';
 import { t } from '@/copy';
 import { loadNotesEditor } from '@/shell/route-loaders';
 import { AuthService } from '@/services/auth.service';
@@ -17,6 +26,7 @@ import { useParentTask } from './queries';
 import { draftFromTask, draftToPatch, scheduleDayPatch } from './schedule-draft';
 import { SchedulePopover } from './SchedulePopover';
 import { TaskCheckbox } from './TaskRow';
+import { fitTextareaLines, TASK_TITLE_MAX_LINES } from './title-field';
 import { TodosUiService } from './todos-ui.service';
 
 const NotesEditor = lazy(() => loadNotesEditor().then((m) => ({ default: m.NotesEditor })));
@@ -77,6 +87,7 @@ export const TaskDetail: FC<{
   const parentTask = useParentTask(task.parentId);
   const weekStartsOn = auth.user?.weekStartsOn === 0 ? 0 : 1;
   const [title, setTitle] = useState(task.title);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
   const [notes, setNotes] = useState(task.notes);
   const [subTitle, setSubTitle] = useState('');
   const [tagDraft, setTagDraft] = useState('');
@@ -127,6 +138,22 @@ export const TaskDetail: FC<{
       if (notesTimer.current) clearTimeout(notesTimer.current);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    const node = titleRef.current;
+    if (!node) return;
+    const fit = () => fitTextareaLines(node, TASK_TITLE_MAX_LINES);
+    fit();
+    let width = node.clientWidth;
+    const observer = new ResizeObserver(() => {
+      const next = node.clientWidth;
+      if (next === width) return;
+      width = next;
+      fit();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [title]);
 
   const inbox = inboxList(lists);
   const movable = task.parentId === null;
@@ -336,6 +363,7 @@ export const TaskDetail: FC<{
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-4">
         <textarea
+          ref={titleRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(event) => {
@@ -347,7 +375,7 @@ export const TaskDetail: FC<{
           }}
           onBlur={saveTitle}
           rows={1}
-          className="font-display w-full resize-none bg-transparent text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] text-fg outline-none"
+          className="font-display max-h-[calc(var(--text-title-lh)*3)] w-full resize-none overflow-y-auto break-words bg-transparent text-[length:var(--text-title)] font-bold leading-[var(--text-title-lh)] text-fg outline-none"
           aria-label={t.todos.title}
         />
 
