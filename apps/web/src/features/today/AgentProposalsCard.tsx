@@ -30,6 +30,7 @@ export function AgentProposalsCard() {
       client.sendAgentActionFeedback(id, { feedback }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: todayKeys.agentPending });
+      void qc.invalidateQueries({ queryKey: todayKeys.all });
       void qc.invalidateQueries({ queryKey: settingsKeys.agentActivityRoot });
       void qc.invalidateQueries({ queryKey: settingsKeys.agentMetricsRoot });
     },

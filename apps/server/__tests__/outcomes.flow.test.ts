@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
 import { db } from '../src/db/index.js';
-import { outcomes } from '../src/db/schema.js';
+import { outcomes, tasks } from '../src/db/schema.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -331,6 +333,52 @@ describe('GET /api/v1/today', () => {
     expect(now.quiet).toBe(true);
     expect(now.recommendations).toEqual([]);
     expect(now.reason).toContain('静默');
+  });
+
+  it('leaves calendar-only and empty agent threads off 正在推进', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const realId = await createOutcome(alice.token, '换工作');
+    await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '改简历', listId: inbox, outcomeId: realId },
+    });
+
+    const calendarId = randomUUID();
+    await db.insert(outcomes).values({
+      id: calendarId,
+      userId: alice.id,
+      name: '席铭10.27会议',
+      createdBy: 'agent',
+    });
+    const meeting = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '席铭的会议【From: 席铭(Simon)】', listId: inbox, outcomeId: calendarId },
+    });
+    expect(meeting.statusCode).toBe(201);
+    await db.update(tasks).set({ calendarKey: 'mac:simon' }).where(eq(tasks.id, meeting.json().id as string));
+
+    const emptyId = randomUUID();
+    await db.insert(outcomes).values({
+      id: emptyId,
+      userId: alice.id,
+      name: '已经做完的',
+      createdBy: 'agent',
+    });
+
+    const today = await injectJson(app, { method: 'GET', url: '/api/v1/today', token: alice.token });
+    expect(today.statusCode).toBe(200);
+    expect(today.json().outcomes.map((row: { name: string }) => row.name)).toEqual(['换工作']);
+
+    const list = await injectJson(app, { method: 'GET', url: '/api/v1/outcomes', token: alice.token });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().map((row: { name: string }) => row.name).sort()).toEqual(
+      ['已经做完的', '席铭10.27会议', '换工作'].sort(),
+    );
   });
 
   it('requires auth', async () => {

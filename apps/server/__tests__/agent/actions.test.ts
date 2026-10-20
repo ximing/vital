@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../../src/app.js';
 import { getDb } from '../../src/db/index.js';
-import { agentActions, habits, outcomes } from '../../src/db/schema.js';
+import { agentActions, habits, outcomes, tasks } from '../../src/db/schema.js';
 import { resetDb } from '../helpers/db.js';
 import { injectJson } from '../helpers/http.js';
 import { inboxId, registerUser } from '../helpers/session.js';
@@ -326,5 +326,149 @@ describe('GET /api/v1/agent/actions?days (activity log)', () => {
     const payload = res.json()[0].feedbackPayload;
     expect(Array.isArray(payload.materialized.taskIds)).toBe(true);
     expect(payload.materialized.taskIds).toHaveLength(1);
+  });
+
+  it('accepting a new thread keeps it and clears the undo window', async () => {
+    const alice = await registerUser(app, 'alice');
+    const outcomeId = randomUUID();
+    await getDb().insert(outcomes).values({
+      id: outcomeId,
+      userId: alice.id,
+      name: '换工作',
+      createdBy: 'agent',
+      undoUntil: new Date(Date.now() + 3600 * 1000),
+    });
+    const actionId = await seedAction({
+      userId: alice.id,
+      targetId: outcomeId,
+      actionType: 'outcome.create',
+      targetType: 'outcome',
+      payload: { name: '换工作', taskIds: [], headline: '' },
+    });
+
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/agent/actions/${actionId}/feedback`,
+      token: alice.token,
+      payload: { feedback: 'accepted' },
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await getDb().select().from(outcomes).where(eq(outcomes.id, outcomeId));
+    expect(row?.undoUntil).toBeNull();
+  });
+
+  it('ignoring a new thread removes it even after the undo window', async () => {
+    const alice = await registerUser(app, 'alice');
+    const outcomeId = randomUUID();
+    await getDb().insert(outcomes).values({
+      id: outcomeId,
+      userId: alice.id,
+      name: '席铭10.26会议',
+      createdBy: 'agent',
+      undoUntil: new Date(Date.now() - 1000),
+    });
+    const taskId = await createTask(alice.token, '席铭的会议');
+    const patched = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${taskId}`,
+      token: alice.token,
+      payload: { outcomeId },
+    });
+    expect(patched.statusCode).toBe(200);
+    const actionId = await seedAction({
+      userId: alice.id,
+      targetId: outcomeId,
+      actionType: 'outcome.create',
+      targetType: 'outcome',
+      payload: { name: '席铭10.26会议', taskIds: [taskId], headline: '' },
+    });
+    const headlineId = await seedAction({
+      userId: alice.id,
+      targetId: outcomeId,
+      actionType: 'outcome.headline',
+      targetType: 'outcome',
+      payload: { headline: '还有两场会' },
+    });
+
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/agent/actions/${actionId}/feedback`,
+      token: alice.token,
+      payload: { feedback: 'dismissed' },
+    });
+    expect(res.statusCode).toBe(200);
+    const left = await getDb().select().from(outcomes).where(eq(outcomes.id, outcomeId));
+    expect(left).toHaveLength(0);
+    const [task] = await getDb().select().from(tasks).where(eq(tasks.id, taskId));
+    expect(task?.outcomeId).toBeNull();
+    const [headline] = await getDb().select().from(agentActions).where(eq(agentActions.id, headlineId));
+    expect(headline?.feedback).toBe('dismissed');
+    expect(headline?.feedbackPayload).toMatchObject({ superseded: true });
+  });
+
+  it('ignoring a headline restores the previous sentence', async () => {
+    const alice = await registerUser(app, 'alice');
+    const outcomeId = randomUUID();
+    await getDb().insert(outcomes).values({
+      id: outcomeId,
+      userId: alice.id,
+      name: '换工作',
+      agentHeadline: '新句子',
+    });
+    const actionId = await seedAction({
+      userId: alice.id,
+      targetId: outcomeId,
+      actionType: 'outcome.headline',
+      targetType: 'outcome',
+      payload: { headline: '新句子', previousHeadline: '旧句子' },
+    });
+
+    const res = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/agent/actions/${actionId}/feedback`,
+      token: alice.token,
+      payload: { feedback: 'dismissed' },
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await getDb().select().from(outcomes).where(eq(outcomes.id, outcomeId));
+    expect(row?.agentHeadline).toBe('旧句子');
+  });
+
+  it('listing proposals keeps only the newest pending wording for a thread', async () => {
+    const alice = await registerUser(app, 'alice');
+    const outcomeId = randomUUID();
+    await getDb().insert(outcomes).values({ id: outcomeId, userId: alice.id, name: '换工作' });
+    const older = await seedAction({
+      userId: alice.id,
+      targetId: outcomeId,
+      actionType: 'outcome.headline',
+      targetType: 'outcome',
+      payload: { headline: '旧' },
+      createdAt: new Date(Date.now() - 60_000),
+    });
+    const newer = await seedAction({
+      userId: alice.id,
+      targetId: outcomeId,
+      actionType: 'outcome.headline',
+      targetType: 'outcome',
+      payload: { headline: '新' },
+      createdAt: new Date(),
+    });
+
+    const res = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/agent/actions?targetType=outcome',
+      token: alice.token,
+    });
+    expect(res.statusCode).toBe(200);
+    const items = res.json() as Array<{
+      id: string;
+      feedback: string;
+      feedbackPayload: { superseded?: boolean } | null;
+    }>;
+    const byId = new Map(items.map((item) => [item.id, item] as const));
+    expect(byId.get(newer)?.feedback).toBe('pending');
+    expect(byId.get(older)?.feedback).toBe('dismissed');
+    expect(byId.get(older)?.feedbackPayload).toMatchObject({ superseded: true });
   });
 });

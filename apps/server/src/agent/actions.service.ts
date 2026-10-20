@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, inArray } from 'drizzle-orm';
+import { retireSupersededWording } from './action-ledger.js';
 import type {
   ActionFeedbackInput,
   AgentAction,
@@ -24,6 +25,9 @@ import { syncTaskNotifications } from '../notifications/outbox.js';
 import { indexTask, removeTaskIndex, trackTaskIndexJob } from '../retrieval/tasks.js';
 import { nextSortOrder } from '../tasks/sort-order.js';
 import { AppError } from '../errors.js';
+import { trackIndexJob } from '../retrieval/pipeline.js';
+import { removeOutcomeIndex } from '../retrieval/search.js';
+import { removeAgentOutcome } from '../outcomes/remove-agent-outcome.js';
 
 /** Hard cap for the actions listing — the ledger is append-only and chatty. */
 const LIST_ACTIONS_LIMIT = 50;
@@ -166,6 +170,7 @@ export async function listAgentActions(
   userId: string,
   query: AgentActionsQuery,
 ): Promise<AgentActionLogItem[]> {
+  await retireSupersededWording(userId);
   const rows = await getDb()
     .select()
     .from(agentActions)
@@ -275,6 +280,39 @@ async function materializeProposedSubtasks(
   return createdRows;
 }
 
+/** Put the previous sentence back when the user dismisses the one on screen. */
+async function restoreOutcomeCopy(
+  tx: AgentDb,
+  userId: string,
+  outcomeId: string,
+  field: 'agentHeadline' | 'agentSuggestion',
+  written: unknown,
+  previous: unknown,
+  now: Date,
+): Promise<void> {
+  const [current] = await tx
+    .select({
+      agentHeadline: outcomes.agentHeadline,
+      agentSuggestion: outcomes.agentSuggestion,
+    })
+    .from(outcomes)
+    .where(and(eq(outcomes.id, outcomeId), eq(outcomes.userId, userId)))
+    .limit(1)
+    .for('update');
+  if (!current) return;
+  const live = field === 'agentHeadline' ? current.agentHeadline : current.agentSuggestion;
+  if (typeof written === 'string' && live !== written) return;
+  const next = typeof previous === 'string' && previous.trim() !== '' ? previous : null;
+  await tx
+    .update(outcomes)
+    .set({
+      ...(field === 'agentHeadline' ? { agentHeadline: next } : { agentSuggestion: next }),
+      agentUpdatedAt: now,
+      updatedAt: now,
+    })
+    .where(and(eq(outcomes.id, outcomeId), eq(outcomes.userId, userId)));
+}
+
 /**
  * Record user feedback on a proposal. 'edited' additionally applies the edited
  * payload in the same transaction (rename outcome / override headline etc.).
@@ -299,8 +337,27 @@ export async function applyActionFeedback(
 
   const now = new Date();
   const materialized: TaskRow[] = [];
+  const removedOutcomeIds: string[] = [];
   const next = await db.transaction(async (tx) => {
     await lockAgentUser(tx, userId);
+    if (input.feedback === 'accepted' && row.actionType === 'outcome.create') {
+      await tx
+        .update(outcomes)
+        .set({ undoUntil: null, updatedAt: now })
+        .where(
+          and(eq(outcomes.id, row.targetId), eq(outcomes.userId, userId), eq(outcomes.createdBy, 'agent')),
+        );
+    }
+    if (input.feedback === 'dismissed' && row.actionType === 'outcome.create') {
+      const removed = await removeAgentOutcome(tx, userId, row.targetId, now, row.id);
+      if (removed) removedOutcomeIds.push(row.targetId);
+    }
+    if (input.feedback === 'dismissed' && row.actionType === 'outcome.headline') {
+      await restoreOutcomeCopy(tx, userId, row.targetId, 'agentHeadline', row.payload['headline'], row.payload['previousHeadline'], now);
+    }
+    if (input.feedback === 'dismissed' && row.actionType === 'outcome.suggestion') {
+      await restoreOutcomeCopy(tx, userId, row.targetId, 'agentSuggestion', row.payload['suggestion'], row.payload['previousSuggestion'], now);
+    }
     if (input.feedback === 'accepted' && row.actionType === 'task.decompose') {
       const subtasks = parseDecomposeSubtasks(row.payload);
       if (subtasks.length > 0) {
@@ -377,6 +434,9 @@ export async function applyActionFeedback(
     await markAgentSchedule(tx, userId, 'memory.distill', { now, urgent: input.feedback !== 'accepted' });
     return updated;
   });
+  for (const outcomeId of removedOutcomeIds) {
+    trackIndexJob(removeOutcomeIndex(outcomeId), 'removeOutcomeIndex');
+  }
   // Fire-and-forget retrieval indexing, mirroring createTask.
   if (materialized.length > 0) {
     trackTaskIndexJob(

@@ -57,7 +57,7 @@ export function buildHeadlinePrompt(input: {
   const system = [
     '你是个人目标看板的状态撰写者。根据给定线程的事实，用中文写一句话状态（headline，≤60 字，客观、不鸡汤）和一条具体可执行的下一步建议（suggestion，≤120 字；没有合适建议就留空字符串）。',
     '已挂载习惯的近 7 天打卡算作本线程进展；任务列表为空但习惯有打卡时，不要写「无任务完成」。',
-    '若里程碑总数大于 0，headline 必须包含「完成数/总数 里程碑」，数字只能用给出的那一对。没有里程碑时不要写里程碑。',
+    '若里程碑总数大于 0，headline 必须包含「完成数/总数 里程碑」，数字只能用给出的那一对。没有里程碑时不要写里程碑，也不要写死未完成件数或「今日 a/b」。界面会另算件数。已经完成的事不要再说未处理。',
     '尚未挂载的习惯仅在日常行为明确服务于本线程目标时通过 attachHabitIds 关联（例如锻炼、喝水、吃饭、睡眠属于身体健康类线程）；不确定就留空，宁可漏挂也不要错挂。若决定挂上，headline 也要计入它们的进展。',
     '必须调用 submit_headline 工具提交结果，不要输出其他文字。',
     DATA_RULE,
@@ -101,7 +101,7 @@ export interface ClusterTaskFact {
 }
 
 export function buildClusterPrompt(input: {
-  existingNames: string[];
+  existing: { id: string; name: string }[];
   unassignedTasks: ClusterTaskFact[];
   memory: string[];
   /** Vector pre-grouping hint: groups of task titles that are semantically close. */
@@ -110,15 +110,19 @@ export function buildClusterPrompt(input: {
   const system = [
     '你是个人目标看板的线程组织者。把未挂载的任务按「同一件事/同一个目标」聚成 1-5 个线程，为每个线程起短名（≤20 字）并写一句话状态。',
     'taskIds 只能来自给定任务列表，不得编造 id；一个任务只能出现在一个线程；宁可少建线程也不要硬凑。',
-    '避免与已有线程重名或语义重复。',
+    '如果这些任务属于已有线程，outcomeId 填那个线程的 id，name 用原名，不要新建一条相似的。只有确是一件新的事才省略 outcomeId。',
     '必须调用 propose_threads 工具提交结果，不要输出其他文字。',
     DATA_RULE,
   ].join('');
   const tasks = input.unassignedTasks
     .map((t) => `- id=${t.id} ${t.title}${t.dueAt ? ` 截止 ${t.dueAt}` : ''}`)
     .join('\n');
+  const existing =
+    input.existing.length > 0
+      ? input.existing.map((row) => `- id=${row.id} ${row.name}`).join('\n')
+      : '（无）';
   const user = [
-    `已有线程：<data>${input.existingNames.length > 0 ? input.existingNames.join('、') : '（无）'}</data>`,
+    `已有线程：\n<data>\n${existing}\n</data>`,
     `未挂载任务：\n<data>\n${tasks}\n</data>`,
     input.suggestedGroups && input.suggestedGroups.length > 0
       ? `以下任务语义接近，可作为分组参考（最终分组与命名仍由你决定）：\n<data>\n${input.suggestedGroups.map((group, i) => `- 组${String(i + 1)}：${group.join('、')}`).join('\n')}\n</data>`

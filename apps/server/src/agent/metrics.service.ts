@@ -27,6 +27,7 @@ async function windowDaily(
     eq(agentActions.userId, userId),
     gte(agentActions.createdAt, since),
     sql`${agentActions.actionType} not in ('task.parse', 'task.followup')`,
+    sql`coalesce(${agentActions.feedbackPayload}->>'superseded', '') <> 'true'`,
   ];
   if (until !== undefined) filters.push(lt(agentActions.createdAt, until));
 
@@ -90,6 +91,7 @@ async function capabilityCosts(
           eq(agentActions.userId, userId),
           gte(agentActions.createdAt, since),
           inArray(agentActions.actionType, mappedActionTypes),
+          sql`coalesce(${agentActions.feedbackPayload}->>'superseded', '') <> 'true'`,
         ),
       )
       .groupBy(agentActions.actionType),

@@ -2,7 +2,8 @@ import { finishAgentSchedule } from './scheduling.js';
 import { RetryableAgentJobError, withAgentJobEffects } from './job-runtime.js';
 import { agentMemoryFeedback, agentMemoryHistory, agentMemoryMaintenance } from '../db/schema/agent-memory-history.js';
 import { agentEditEvents, agentEditFeedback } from '../db/schema/agent-edit-events.js';
-import { recordAgentAction } from './action-ledger.js';
+import { recordAgentAction, retireOlderPending } from './action-ledger.js';
+import { resolveClusterTarget } from './cluster.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { extractNotes, isRhythmMemoryScope, replaceNotes } from '@vital/dto';
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
@@ -231,27 +232,31 @@ async function processOutcomeRefresh(
         updatedAt: now,
       })
       .where(and(eq(outcomes.id, outcomeId), eq(outcomes.userId, user.id)));
+    const headlineId = randomUUID();
     await recordAgentAction(tx, {
-      id: randomUUID(),
+      id: headlineId,
       userId: user.id,
       jobId: job.id,
       actionType: 'outcome.headline',
       targetType: 'outcome',
       targetId: outcomeId,
-      payload: { headline },
+      payload: { headline, previousHeadline: current.agentHeadline },
       feedback: 'pending',
     });
+    await retireOlderPending(tx, user.id, outcomeId, 'outcome.headline', headlineId, now);
     if (suggestion !== '') {
+      const suggestionId = randomUUID();
       await recordAgentAction(tx, {
-        id: randomUUID(),
+        id: suggestionId,
         userId: user.id,
         jobId: job.id,
         actionType: 'outcome.suggestion',
         targetType: 'outcome',
         targetId: outcomeId,
-        payload: { suggestion },
+        payload: { suggestion, previousSuggestion: current.agentSuggestion },
         feedback: 'pending',
       });
+      await retireOlderPending(tx, user.id, outcomeId, 'outcome.suggestion', suggestionId, now);
     }
     for (const habitId of attachIds) {
       if (!attachable.has(habitId)) continue;
@@ -377,6 +382,7 @@ async function processOutcomeCluster(
         inArray(tasks.status, ['todo', 'doing']),
         isNull(tasks.outcomeId),
         isNull(tasks.habitId),
+        isNull(tasks.calendarKey),
       ),
     )
     .orderBy(desc(tasks.updatedAt))
@@ -389,13 +395,13 @@ async function processOutcomeCluster(
 
   executionResult({ inputSummary: `仅当前用户：${String(unassigned.length)} 项未归属任务` });
   const existing = await db
-    .select({ name: outcomes.name })
+    .select({ id: outcomes.id, name: outcomes.name })
     .from(outcomes)
     .where(and(eq(outcomes.userId, user.id), eq(outcomes.status, 'open')));
   const memory = await loadAgentMemory(user.id, 'cluster');
   const suggestedGroups = await suggestClusterGroups(user.id, unassigned);
   const prompt = buildClusterPrompt({
-    existingNames: existing.map((o) => o.name),
+    existing,
     unassignedTasks: unassigned.map((t) => ({ id: t.id, title: t.title, dueAt: iso(t.dueAt) })),
     memory: memory.map((m) => m.content),
     ...(suggestedGroups ? { suggestedGroups } : {}),
@@ -418,6 +424,7 @@ async function processOutcomeCluster(
     .map((t) => ({
       name: t.name.trim().slice(0, 120),
       headline: t.headline.trim().slice(0, 500),
+      outcomeId: t.outcomeId,
       taskIds: [...new Set(t.taskIds)].filter((id) => {
         if (!valid.has(id) || used.has(id)) return false;
         used.add(id);
@@ -437,14 +444,52 @@ async function processOutcomeCluster(
     let sortOrder = (maxRow?.max ?? -1) + 1;
     let created = 0;
     let attached = 0;
+    const known = existing.map((row) => ({ id: row.id, name: row.name }));
     for (const thread of threads) {
-      const currentTasks = await tx.select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt }).from(tasks).where(and(eq(tasks.userId, user.id), inArray(tasks.id, thread.taskIds), isNull(tasks.outcomeId), isNull(tasks.deletedAt), isNull(tasks.habitId), inArray(tasks.status, ['todo', 'doing']))).orderBy(asc(tasks.id)).for('update');
+      const currentTasks = await tx.select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt }).from(tasks).where(and(eq(tasks.userId, user.id), inArray(tasks.id, thread.taskIds), isNull(tasks.outcomeId), isNull(tasks.deletedAt), isNull(tasks.habitId), isNull(tasks.calendarKey), inArray(tasks.status, ['todo', 'doing']))).orderBy(asc(tasks.id)).for('update');
       const eligible = currentTasks.filter(task => {
         const snapshot = unassigned.find(source => source.id === task.id);
         return snapshot?.title === task.title && iso(snapshot.dueAt) === iso(task.dueAt);
       });
       if (eligible.length < 2) continue;
       const taskIds = eligible.map(t => t.id);
+      const resolved = resolveClusterTarget(thread, known);
+      const [liveTarget] =
+        resolved.kind === 'attach'
+          ? await tx
+              .select({ id: outcomes.id })
+              .from(outcomes)
+              .where(
+                and(
+                  eq(outcomes.id, resolved.outcomeId),
+                  eq(outcomes.userId, user.id),
+                  eq(outcomes.status, 'open'),
+                ),
+              )
+              .limit(1)
+          : [];
+      if (liveTarget) {
+        const linked = await tx
+          .update(tasks)
+          .set({ outcomeId: liveTarget.id, updatedAt: now })
+          .where(
+            and(
+              eq(tasks.userId, user.id),
+              inArray(tasks.id, taskIds),
+              isNull(tasks.outcomeId),
+              isNull(tasks.deletedAt),
+              isNull(tasks.habitId),
+              isNull(tasks.calendarKey),
+              inArray(tasks.status, ['todo', 'doing']),
+            ),
+          )
+          .returning({ id: tasks.id });
+        if (linked.length > 0) {
+          await enqueueOutcomeRefresh(tx, user.id, liveTarget.id, now);
+          attached += linked.length;
+        }
+        continue;
+      }
       const outcomeId = randomUUID();
       await tx.insert(outcomes).values({
         id: outcomeId,
@@ -470,9 +515,11 @@ async function processOutcomeCluster(
             isNull(tasks.outcomeId),
             isNull(tasks.deletedAt),
             isNull(tasks.habitId),
+            isNull(tasks.calendarKey),
             inArray(tasks.status, ['todo', 'doing']),
           ),
         );
+      known.push({ id: outcomeId, name: thread.name });
       await recordAgentAction(tx, {
         id: randomUUID(),
         userId: user.id,
@@ -486,7 +533,7 @@ async function processOutcomeCluster(
       created += 1;
       attached += taskIds.length;
     }
-    if (created === 0) skipExecution('NO_ELIGIBLE_TASKS');
+    if (created === 0 && attached === 0) skipExecution('NO_ELIGIBLE_TASKS');
     executionResult({ resultSummary: `创建 ${String(created)} 个线程，挂载 ${String(attached)} 项任务` });
     if ('scheduleGeneration' in job.payload && typeof job.payload.scheduleGeneration === 'number') await finishAgentSchedule(tx, user.id, 'outcome.cluster', job.payload.scheduleGeneration, now);
   });
@@ -825,6 +872,7 @@ async function processMemoryDistill(job: AgentJobRow, user: User, now: Date): Pr
   // catches a later edit to a previously processed feedback row.
   const candidates = maintenance ? [] : await db.select().from(agentActions).where(and(
     eq(agentActions.userId, user.id), inArray(agentActions.feedback, ['accepted', 'edited', 'dismissed', 'undone']),
+    sql`coalesce(${agentActions.feedbackPayload}->>'superseded', '') <> 'true'`,
     sql`${agentActions.feedbackAt} is not null`,
     ...('scheduleFeedbackThrough' in job.payload && job.payload.scheduleFeedbackThrough ? [sql`${agentActions.feedbackAt} <= ${new Date(job.payload.scheduleFeedbackThrough)}`] : []),
     sql`not exists (select 1 from ${agentMemoryFeedback} p where p.user_id = ${agentActions.userId} and p.action_id = ${agentActions.id} and p.feedback_at = ${agentActions.feedbackAt} and p.version = md5(${agentActions.feedback} || ':' || coalesce(${agentActions.feedbackPayload}::text, 'null') || ':' || ${agentActions.feedbackAt}::text))`,

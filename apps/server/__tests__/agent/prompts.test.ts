@@ -65,10 +65,11 @@ describe('agent prompt builders inject distilled memory', () => {
 
   it('cluster prompt carries memory', () => {
     const { user } = buildClusterPrompt({
-      existingNames: ['家庭'],
+      existing: [{ id: 'outcome-home', name: '家庭' }],
       unassignedTasks: [{ id: 't1', title: '买书', dueAt: null }],
       memory: MEMORY,
     });
+    expect(user).toContain('id=outcome-home 家庭');
     expect(user).toContain('从用户纠偏中学到的偏好');
     for (const item of MEMORY) expect(user).toContain(item);
   });

@@ -59,6 +59,44 @@ it('cluster ignores foreign IDs and revalidates eligibility changed while the mo
   expect(new Set(actions[0]?.payload['taskIds'] as string[])).toEqual(new Set([own[2], own[3]]));
 });
 
+it('cluster does not turn calendar events into threads', async () => {
+  const alice = await setupFauxUser('alice');
+  const ids = await unassignedTasks(alice.token);
+  for (const id of ids) {
+    await getDb().update(tasks).set({ calendarKey: `mac:meet:${id}` }).where(eq(tasks.id, id));
+  }
+  const faux = installFaux();
+  faux.setResponses([() => {
+    throw new Error('calendar events must not reach the model');
+  }]);
+  await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'outcome.cluster', dedupKey: `cluster-cal:${alice.id}`, payload: { date: 'today' }, scheduledAt: new Date() });
+  expect(await processDueAgentJobs()).toBe(1);
+  const created = await getDb().select().from(outcomes).where(eq(outcomes.userId, alice.id));
+  expect(created).toHaveLength(0);
+  const rows = await getDb().select().from(tasks).where(eq(tasks.userId, alice.id));
+  expect(rows.every((task) => task.outcomeId === null)).toBe(true);
+});
+
+it('cluster attaches tasks to an existing thread of the same name', async () => {
+  const alice = await setupFauxUser('alice');
+  const outcomeId = await createOutcome(alice.token, 'Agent 调研');
+  const ids = await unassignedTasks(alice.token);
+  const faux = installFaux();
+  faux.setResponses([() => fauxAssistantMessage(fauxToolCall('propose_threads', {
+    threads: [{ name: 'agent 调研', headline: '继续', taskIds: ids }],
+  }))]);
+  await enqueueAgentJob(getDb(), { userId: alice.id, jobType: 'outcome.cluster', dedupKey: `cluster-attach:${alice.id}`, payload: { date: 'today' }, scheduledAt: new Date() });
+  expect(await processDueAgentJobs()).toBe(1);
+  const created = await getDb().select().from(outcomes).where(eq(outcomes.userId, alice.id));
+  expect(created).toHaveLength(1);
+  expect(created[0]?.id).toBe(outcomeId);
+  expect(created[0]?.agentState).toBe('pending');
+  const linked = await getDb().select().from(tasks).where(eq(tasks.outcomeId, outcomeId));
+  expect(linked).toHaveLength(4);
+  const actions = await getDb().select().from(agentActions).where(and(eq(agentActions.userId, alice.id), eq(agentActions.actionType, 'outcome.create')));
+  expect(actions).toHaveLength(0);
+});
+
 beforeAll(async () => {
   app = await buildFastify();
 });

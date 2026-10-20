@@ -58,6 +58,12 @@ export interface NextStepTask {
   isAllDay: boolean;
 }
 
+/** Drop calendar sync suffixes such as 【From: 席铭(Simon)】. */
+export function plainTaskTitle(title: string): string {
+  const plain = title.replace(/【[^】]*】/g, '').replace(/\s+/g, ' ').trim();
+  return plain === '' ? title.trim() : plain;
+}
+
 /** Next step = nearest overdue open task, else nearest upcoming due, else highest priority. */
 export function selectRuleNextStep(tasks: NextStepTask[], now: Date, tz: string): string | null {
   const open = tasks.filter((t) => t.status === 'todo' || t.status === 'doing');
@@ -65,13 +71,13 @@ export function selectRuleNextStep(tasks: NextStepTask[], now: Date, tz: string)
   const overdue = open
     .filter((t) => isOverdue(t.dueAt, t.isAllDay, now, tz))
     .sort((a, b) => (a.dueAt?.getTime() ?? 0) - (b.dueAt?.getTime() ?? 0));
-  if (overdue[0]) return overdue[0].title;
+  if (overdue[0]) return plainTaskTitle(overdue[0].title);
   const upcoming = open
     .filter((t) => t.dueAt !== null)
     .sort((a, b) => (a.dueAt?.getTime() ?? 0) - (b.dueAt?.getTime() ?? 0));
-  if (upcoming[0]) return upcoming[0].title;
+  if (upcoming[0]) return plainTaskTitle(upcoming[0].title);
   const first = open.sort((a, b) => a.priority - b.priority)[0];
-  return first ? first.title : null;
+  return first ? plainTaskTitle(first.title) : null;
 }
 
 /** A defer = dueAt pushed strictly forward. null→date and same-day time changes don't count. */

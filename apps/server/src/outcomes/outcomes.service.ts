@@ -41,7 +41,9 @@ import { upcomingDay } from '../days/days.service.js';
 import { listTasks } from '../tasks/tasks.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 import { latestCompletionIdByTask } from '../tasks/tasks.shared.js';
+import { showsOnTodayBoard } from './board.js';
 import { computeNow } from './now-engine.js';
+import { removeAgentOutcome } from './remove-agent-outcome.js';
 import {
   computeSignal,
   isOverdue,
@@ -317,33 +319,10 @@ export async function undoOutcome(userId: string, id: string): Promise<void> {
   if (row.createdBy !== 'agent' || !row.undoUntil || row.undoUntil.getTime() <= Date.now()) {
     throw AppError.of(409, 'VALIDATION_ERROR');
   }
-  await getDb().transaction(async (tx) => {
-    await tx
-      .update(tasks)
-      .set({ outcomeId: null })
-      .where(and(eq(tasks.userId, userId), eq(tasks.outcomeId, id)));
-    await tx
-      .update(inboxItems)
-      .set({ outcomeId: null })
-      .where(and(eq(inboxItems.userId, userId), eq(inboxItems.outcomeId, id)));
-    await tx
-      .update(habits)
-      .set({ outcomeId: null, updatedAt: new Date() })
-      .where(and(eq(habits.userId, userId), eq(habits.outcomeId, id)));
-    await tx
-      .update(agentActions)
-      .set({ feedback: 'dismissed', feedbackAt: new Date() })
-      .where(
-        and(
-          eq(agentActions.userId, userId),
-          eq(agentActions.targetType, 'outcome'),
-          eq(agentActions.targetId, id),
-          eq(agentActions.feedback, 'pending'),
-        ),
-      );
-    await tx.delete(outcomes).where(eq(outcomes.id, id));
-  });
-  trackIndexJob(removeOutcomeIndex(id), 'removeOutcomeIndex');
+  const removed = await getDb().transaction(async (tx) =>
+    removeAgentOutcome(tx, userId, id, new Date()),
+  );
+  if (removed) trackIndexJob(removeOutcomeIndex(id), 'removeOutcomeIndex');
 }
 
 /** Hard cap for the detail timeline — mirrors the actions listing. */
@@ -473,6 +452,7 @@ export async function getOutcomeDetail(userId: string, id: string): Promise<Outc
 interface OpenRuleTask extends NextStepTask {
   outcomeId: string;
   habitId: string | null;
+  calendarKey: string | null;
 }
 
 interface MilestoneRuleTask {
@@ -532,6 +512,7 @@ async function loadOutcomeRuleContext(
       priority: tasks.priority,
       isAllDay: tasks.isAllDay,
       habitId: tasks.habitId,
+      calendarKey: tasks.calendarKey,
     })
     .from(tasks)
     .where(
@@ -554,6 +535,7 @@ async function loadOutcomeRuleContext(
       priority: row.priority,
       isAllDay: row.isAllDay,
       habitId: row.habitId,
+      calendarKey: row.calendarKey,
     });
   }
 
@@ -566,6 +548,7 @@ async function loadOutcomeRuleContext(
       and(
         eq(tasks.userId, userId),
         inArray(tasks.outcomeId, outcomeIds),
+        isNull(tasks.calendarKey),
         gte(taskCompletions.completedAt, twoWeeksAgo),
       ),
     );
@@ -584,7 +567,12 @@ async function loadOutcomeRuleContext(
     })
     .from(tasks)
     .where(
-      and(eq(tasks.userId, userId), inArray(tasks.outcomeId, outcomeIds), isNull(tasks.deletedAt)),
+      and(
+        eq(tasks.userId, userId),
+        inArray(tasks.outcomeId, outcomeIds),
+        isNull(tasks.deletedAt),
+        isNull(tasks.calendarKey),
+      ),
     )
     .groupBy(tasks.outcomeId);
   for (const row of activityRows) {
@@ -624,7 +612,7 @@ function ruleFieldsForOutcome(
   timezone: string,
 ): OutcomeRuleFields {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-  const openTasks = ctx.openByOutcome.get(outcomeId) ?? [];
+  const openTasks = (ctx.openByOutcome.get(outcomeId) ?? []).filter((task) => task.calendarKey === null);
   const doneAt = ctx.completionsByOutcome.get(outcomeId) ?? [];
   const completedLast7d = doneAt.filter((at) => at >= weekAgo).length;
   const completedPrev7d = doneAt.length - completedLast7d;
@@ -676,7 +664,9 @@ function statsFromRuleContext(
   const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
   const map = new Map<string, OutcomeStats>();
   for (const id of outcomeIds) {
-    const openCount = (ctx.openByOutcome.get(id) ?? []).filter((task) => task.habitId === null).length;
+    const openCount = (ctx.openByOutcome.get(id) ?? []).filter(
+      (task) => task.habitId === null && task.calendarKey === null,
+    ).length;
     const completedLast7d = (ctx.completionsByOutcome.get(id) ?? []).filter((at) => at >= weekAgo)
       .length;
     const habitDays = linkedHabitFacts(habitFacts, id).reduce(
@@ -836,7 +826,13 @@ export async function getTodayDashboard(userId: string, timezone: string): Promi
   });
 
   return {
-    outcomes: fresh.map((row) => toOutcomeDto(row, stats.get(row.id))),
+    outcomes: fresh.flatMap((row) => {
+      const open = ctx.openByOutcome.get(row.id) ?? [];
+      const realOpen = open.filter((task) => task.habitId === null && task.calendarKey === null).length;
+      const linkedHabits = linkedHabitFacts(habitFacts, row.id).filter((habit) => habit.active).length;
+      if (!showsOnTodayBoard({ createdBy: row.createdBy, realOpen, linkedHabits })) return [];
+      return [toOutcomeDto(row, stats.get(row.id))];
+    }),
     tasks: todayTasks,
     pulse,
     now: nowCard,

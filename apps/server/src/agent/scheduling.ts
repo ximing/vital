@@ -152,7 +152,7 @@ export async function dispatchAgentSchedule(userId: string, capability: Schedule
     const [state] = await tx.select().from(agentScheduling).where(and(eq(agentScheduling.userId, userId), eq(agentScheduling.capability, capability))).for('update');
     if (!state || (!manual && (state.generation <= state.processedGeneration || !state.dueAt || +state.dueAt > +now || (state.cooldownUntil && +state.cooldownUntil > +now)))) return null;
     if (!manual && capability === 'outcome.cluster') {
-      const eligible = await tx.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.userId, userId), isNull(tasks.deletedAt), isNull(tasks.habitId), isNull(tasks.outcomeId), inArray(tasks.status, ['todo', 'doing']))).limit(config.AGENT_CLUSTER_MIN_UNASSIGNED);
+      const eligible = await tx.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.userId, userId), isNull(tasks.deletedAt), isNull(tasks.habitId), isNull(tasks.outcomeId), isNull(tasks.calendarKey), inArray(tasks.status, ['todo', 'doing']))).limit(config.AGENT_CLUSTER_MIN_UNASSIGNED);
       if (eligible.length < config.AGENT_CLUSTER_MIN_UNASSIGNED) return null;
     }
     const dedupKey = `${capability}:${userId}`;

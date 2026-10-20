@@ -151,6 +151,13 @@ describe('selectRuleNextStep', () => {
       selectRuleNextStep([{ ...open, title: 'x', status: 'done', dueAt: null }], NOW, TZ),
     ).toBeNull();
     expect(selectRuleNextStep([], NOW, TZ)).toBeNull();
+    expect(
+      selectRuleNextStep(
+        [{ ...open, title: '席铭的会议【From: 席铭(Simon)】', dueAt: null }],
+        NOW,
+        TZ,
+      ),
+    ).toBe('席铭的会议');
   });
 });
 

@@ -71,8 +71,10 @@ export function submitNotificationTool(capture: (args: SubmitNotificationArgs) =
 export const proposeThreadsSchema = Type.Object({
   threads: Type.Array(
     Type.Object({
-      /** Short thread name (≤ 20 chars ideal). */
+      /** Short thread name (≤ 20 chars ideal). Use the existing name when attaching. */
       name: Type.String({ minLength: 1, maxLength: 60 }),
+      /** Open thread to attach these tasks to. Omit only when this is a new goal. */
+      outcomeId: Type.Optional(Type.String()),
       /** Task ids from the provided list only. */
       taskIds: Type.Array(Type.String(), { minItems: 1 }),
       /** One-sentence headline for the new thread. */
@@ -87,7 +89,7 @@ export function proposeThreadsTool(capture: (args: ProposeThreadsArgs) => void):
   return {
     name: 'propose_threads',
     label: '提议线程聚类',
-    description: '把未挂载的任务聚成 1-5 个线程，每个线程给出名字、包含的任务 id 和一句话状态。',
+    description: '把未挂载的任务聚成 1-5 个线程。属于已有线程时带上 outcomeId，否则给出新名字、任务 id 和一句话状态。',
     parameters: proposeThreadsSchema,
     execute: (_toolCallId, params) => {
       capture(params);
