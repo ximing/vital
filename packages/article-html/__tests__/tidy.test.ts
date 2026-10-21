@@ -42,6 +42,24 @@ describe('tidyArticleHtml', () => {
     expect(tidyArticleHtml('<p>hello<br>world</p>')).toBe('<p>hello<br>world</p>');
   });
 
+  it('keeps WeChat code-block breaks that sit alone inside a span', () => {
+    const html = [
+      '<pre><code>',
+      '<span leaf="">最终 patch</span>',
+      '<span leaf=""><br></span>',
+      '<span leaf="">&nbsp; &nbsp;│</span>',
+      '<span leaf=""><br></span>',
+      '<span leaf=""><br></span>',
+      '<span leaf="">next</span>',
+      '<span leaf=""><br></span>',
+      '</code></pre>',
+    ].join('');
+    const pre = parseBody(tidyArticleHtml(html)).querySelector('pre');
+    expect(pre?.querySelectorAll('br')).toHaveLength(4);
+    expect(pre?.textContent).toContain('最终 patch');
+    expect(pre?.textContent).toContain('next');
+  });
+
   it('keeps notebook code lines as a pre block, including indent and blank lines', () => {
     const html = [
       '<p>Create a <code>.env</code> file:</p>',

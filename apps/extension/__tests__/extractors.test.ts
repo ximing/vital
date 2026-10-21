@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { htmlToArticleDoc } from '@vital/article-doc';
 import { describe, expect, it } from 'vitest';
 import { extractSite, SITE_EXTRACTORS } from '../src/extractors.js';
 import { parseArticle } from '../src/parse-article.js';
@@ -200,5 +201,30 @@ describe('parseArticle site extractors', () => {
     expect(parsed.extractedHtml).toContain('微信正文段落');
     expect(parsed.extractedHtml).not.toMatch(/<br/i);
     expect(parsed.imageSrcs).toEqual(['https://mmbiz.qpic.cn/hero.jpg']);
+  });
+
+  it('keeps WeChat code-block line breaks through tidy and article doc', () => {
+    const code = [
+      '<pre><code>',
+      '<span leaf="">最终 patch</span><span leaf=""><br></span>',
+      '<span leaf="">&nbsp; &nbsp;│</span><span leaf=""><br></span>',
+      '<span leaf=""><br></span>',
+      '<span leaf="">next</span><span leaf=""><br></span>',
+      '</code></pre>',
+    ].join('');
+    const html = `<h1 id="activity-name">标题</h1>
+      <div id="js_content">
+        <p>${'微信正文段落。'.repeat(8)}</p>
+        ${code}
+      </div>`;
+    const parsed = parseArticle(html, 'https://mp.weixin.qq.com/s/xyz');
+    expect(parsed.extractedHtml).toMatch(/<br/i);
+    const block = htmlToArticleDoc(parsed.extractedHtml ?? '').content.find(
+      (node) => node.type === 'codeBlock',
+    );
+    expect(block).toEqual({
+      type: 'codeBlock',
+      content: [{ type: 'text', text: '最终 patch\n   │\n\nnext' }],
+    });
   });
 });

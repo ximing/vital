@@ -83,6 +83,30 @@ describe('htmlToArticleDoc — blocks', () => {
     expect(doc[1]).toEqual({ type: 'paragraph', content: [{ type: 'text', text: '正文' }] });
   });
 
+  it('turns br inside a WeChat pre into code-block newlines, including a blank line', () => {
+    const html = [
+      '<pre><code>',
+      '<span leaf="">最终 patch</span><span leaf=""><br></span>',
+      '<span leaf="">&nbsp; &nbsp;│</span><span leaf=""><br></span>',
+      '<span leaf=""><br></span>',
+      '<span leaf="">next</span><span leaf=""><br></span>',
+      '</code></pre>',
+    ].join('');
+    expect(blocks(html)[0]).toEqual({
+      type: 'codeBlock',
+      content: [{ type: 'text', text: '最终 patch\n   │\n\nnext' }],
+    });
+  });
+
+  it('still collapses consecutive br outside pre', () => {
+    const doc = blocks('<p>第一行<br><br>第二行</p>');
+    expect(inline(doc[0])).toEqual([
+      { type: 'text', text: '第一行' },
+      { type: 'hardBreak' },
+      { type: 'text', text: '第二行' },
+    ]);
+  });
+
   it('unwraps div/span wrappers and collapses whitespace', () => {
     const doc = blocks('<div><section><p><span>你好</span>   <span>世界</span></p></section></div>');
     expect(doc).toEqual([

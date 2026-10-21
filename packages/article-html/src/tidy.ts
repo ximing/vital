@@ -294,6 +294,9 @@ export function tidyArticleHtml(html: string): string {
     if (isVisuallyEmpty(el)) el.remove();
   }
   for (const br of [...root.querySelectorAll('br')]) {
+    // WeChat code lines are `<span><br></span>` inside pre. A br with no sibling
+    // looks like a block boundary and would be deleted, gluing the lines together.
+    if (br.closest('pre, code') !== null) continue;
     const prev = skipBlank(br.previousSibling, 'prev');
     const next = skipBlank(br.nextSibling, 'next');
     if (prev !== null && prev.nodeName === 'BR') {

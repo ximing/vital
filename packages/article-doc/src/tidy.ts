@@ -139,10 +139,14 @@ function collapseWs(nodes: HtmlNode[], inPre: boolean): HtmlNode[] {
   return out;
 }
 
-function collapseBr(nodes: HtmlNode[]): HtmlNode[] {
-  const mapped = nodes.map((node) =>
-    node.type === 'element' ? { ...node, children: collapseBr(node.children) } : node,
-  );
+function collapseBr(nodes: HtmlNode[], inPre = false): HtmlNode[] {
+  const mapped = nodes.map((node) => {
+    if (node.type !== 'element') return node;
+    const nextPre = inPre || node.tag === 'pre' || node.tag === 'code';
+    return { ...node, children: collapseBr(node.children, nextPre) };
+  });
+  // Blank lines in code are consecutive <br>. Keep them; paragraphs still collapse.
+  if (inPre) return mapped;
   const out: HtmlNode[] = [];
   for (const node of mapped) {
     if (isBr(node)) {

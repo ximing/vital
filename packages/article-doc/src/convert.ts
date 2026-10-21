@@ -1,4 +1,4 @@
-import { isElement, parseHtml, textContent, type HtmlNode } from './html-ast.js';
+import { isElement, parseHtml, type HtmlNode } from './html-ast.js';
 import { isSafeHref, safeMediaSrc } from './refs.js';
 import { tidyArticle } from './tidy.js';
 import type {
@@ -47,6 +47,23 @@ function blocksFromNodes(nodes: HtmlNode[]): ArticleBlockNode[] {
   return out;
 }
 
+/** `<br>` inside pre is a newline. `textContent` drops it, which glues WeChat code lines. */
+function codeText(nodes: HtmlNode[]): string {
+  let out = '';
+  for (const node of nodes) {
+    if (node.type === 'text') {
+      out += node.value;
+      continue;
+    }
+    if (node.tag === 'br') {
+      out += '\n';
+      continue;
+    }
+    out += codeText(node.children);
+  }
+  return out;
+}
+
 /** Block-producing elements; returns null for inline elements. */
 function blockFromElement(
   node: Extract<HtmlNode, { type: 'element' }>,
@@ -60,7 +77,7 @@ function blockFromElement(
   }
   if (tag === 'blockquote') return [{ type: 'blockquote', content: blocksFromNodes(node.children) }];
   if (tag === 'pre') {
-    const text = textContent(node.children).replace(/\n+$/, '');
+    const text = codeText(node.children).replace(/\n+$/, '');
     return text === '' ? [] : [{ type: 'codeBlock', content: [{ type: 'text', text }] }];
   }
   if (tag === 'ul' || tag === 'ol') return [listFromElement(node)];
