@@ -302,13 +302,13 @@ describe('loadAgentMemory hybrid retrieval', () => {
 });
 
 describe('processors pass a query into memory retrieval', () => {
-  async function createTask(token: string, title: string): Promise<string> {
+  async function createTask(token: string, title: string, outcomeId?: string): Promise<string> {
     const inbox = await inboxId(app, token);
     const res = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/tasks',
       token,
-      payload: { title, listId: inbox },
+      payload: { title, listId: inbox, ...(outcomeId ? { outcomeId } : {}) },
     });
     expect(res.statusCode).toBe(201);
     return res.json().id as string;
@@ -368,6 +368,10 @@ describe('processors pass a query into memory retrieval', () => {
     });
     expect(res.statusCode).toBe(200);
     const outcomeId = res.json().id as string;
+    await createTask(alice.token, '写设计稿', outcomeId);
+    await waitForTaskIndexIdle();
+    vi.mocked(embedding.embedTexts).mockClear();
+    vi.mocked(qdrant.queryPoints).mockClear();
 
     await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
     await processDueAgentJobs(new Date());

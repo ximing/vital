@@ -18,7 +18,7 @@ import { submitHeadlineTool } from '../../src/agent/tools.js';
 import { dailyUsage } from '../../src/agent/usage.service.js';
 import { resetDb } from '../helpers/db.js';
 import { injectJson } from '../helpers/http.js';
-import { registerUser } from '../helpers/session.js';
+import { inboxId, registerUser } from '../helpers/session.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildFastify(); });
@@ -65,6 +65,12 @@ describe('automatic model and execution telemetry', () => {
     await getDb().insert(agentModelBudgets).values({ userId: alice.id, day, requests: config.AGENT_DAILY_MODEL_CALL_LIMIT });
     const response = await injectJson(app, { method: 'POST', url: '/api/v1/outcomes', token: alice.token, payload: { name: 'budget test' } });
     const outcomeId = response.json().id as string;
+    const listId = await inboxId(app, alice.token);
+    const task = await injectJson(app, {
+      method: 'POST', url: '/api/v1/tasks', token: alice.token,
+      payload: { title: '写设计稿', listId, outcomeId },
+    });
+    expect(task.statusCode).toBe(201);
     await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
     expect(await processDueAgentJobs()).toBe(1);
     expect(faux.state.callCount).toBe(0);

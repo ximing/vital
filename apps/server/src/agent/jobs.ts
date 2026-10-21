@@ -260,7 +260,9 @@ export async function claimDueJobs(now: Date, limit: number): Promise<AgentJobRo
       if (!id) break;
       const [row] = await tx.update(agentJobs).set({
         status: 'running', leaseToken: randomUUID(),
-        leaseExpiresAt: new Date(now.getTime() + config.AGENT_LEASE_MS),
+        // Lease is worker liveness on the wall clock. `now` is the job's business
+        // clock and can sit in the past, which would expire the lease before finalize.
+        leaseExpiresAt: new Date(Date.now() + config.AGENT_LEASE_MS),
         claimedGeneration: sql`COALESCE(${agentJobs.claimedGeneration}, ${agentJobs.generation})`,
         claimedPayload: sql`COALESCE(${agentJobs.claimedPayload}, ${agentJobs.payload})`,
         firstAttemptAt: sql`COALESCE(${agentJobs.firstAttemptAt}, ${now})`, updatedAt: now,

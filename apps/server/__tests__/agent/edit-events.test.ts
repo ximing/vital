@@ -301,7 +301,7 @@ describe('agent write paths never produce edit events', () => {
       ),
     ]);
     const outcomeId = await createOutcome(alice.token, '上线 Q3');
-    await createTask(alice.token, '写设计稿');
+    await createTask(alice.token, '写设计稿', { outcomeId });
 
     await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
     expect(await processDueAgentJobs(new Date())).toBe(1);

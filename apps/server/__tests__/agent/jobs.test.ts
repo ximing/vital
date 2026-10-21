@@ -21,7 +21,7 @@ import { agentExecutions, agentJobs, agentUsage, outcomes } from '../../src/db/s
 import { setPiResolveOverride } from '../../src/llm/pi.js';
 import { resetDb } from '../helpers/db.js';
 import { injectJson } from '../helpers/http.js';
-import { registerUser } from '../helpers/session.js';
+import { inboxId, registerUser } from '../helpers/session.js';
 
 let app: FastifyInstance;
 
@@ -80,6 +80,17 @@ async function routeDefault(token: string, providerId: string): Promise<void> {
   expect(res.statusCode).toBe(200);
 }
 
+async function createTask(token: string, outcomeId: string, title: string): Promise<void> {
+  const listId = await inboxId(app, token);
+  const res = await injectJson(app, {
+    method: 'POST',
+    url: '/api/v1/tasks',
+    token,
+    payload: { title, listId, outcomeId },
+  });
+  expect(res.statusCode).toBe(201);
+}
+
 async function createOutcome(token: string, name = '上线 Q3'): Promise<string> {
   const res = await injectJson(app, {
     method: 'POST',
@@ -113,12 +124,12 @@ describe('agent jobs queue', () => {
     const [outcome] = await getDb().select().from(outcomes).where(eq(outcomes.id, outcomeId));
     expect(outcome!.agentState).toBe('pending');
 
-    // No LLM configured → skipped → done.
+    // No linked task → quiet refresh (NO_CHANGES) still finishes and can re-arm.
     const n = await processDueAgentJobs(new Date(Date.now() + 60_000));
     expect(n).toBe(1);
     rows = await jobByKey(key);
     expect(rows[0]!.status).toBe('done');
-    expect(rows[0]!.lastError).toBe('skipped:no-llm');
+    expect(rows[0]!.lastError).toBeNull();
 
     // Re-trigger re-arms the done job.
     await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
@@ -164,6 +175,7 @@ describe('agent jobs queue', () => {
       ),
     );
     const outcomeId = await createOutcome(alice.token);
+    await createTask(alice.token, outcomeId, '写设计稿');
     const key = `outcome.refresh:${outcomeId}`;
     await enqueueOutcomeRefresh(getDb(), alice.id, outcomeId, new Date(), { delayMs: 0 });
 
