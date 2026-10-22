@@ -20,6 +20,7 @@ export const apiMarkdownPath = path.join(referencesDir, 'index.md');
 const notesPath = path.join(repoRoot, 'skills/vital/notes.json');
 const routesDir = path.join(repoRoot, 'apps/server/src');
 const clientPath = path.join(repoRoot, 'packages/api-client/src/client.ts');
+const clientDomainsDir = path.join(repoRoot, 'packages/api-client/src/domains');
 const dtoDir = path.join(repoRoot, 'packages/dto/src');
 
 export interface ParsedRoute {
@@ -311,7 +312,7 @@ export function normalizeClientPath(raw: string): string {
   return normalizePath(raw.replace(/\?.*$/, ''));
 }
 
-function parseClientOps(source: string): Map<string, ClientOp> {
+function parseClientReturnTypes(source: string): Map<string, string> {
   const returns = new Map<string, string>();
   const iface = /export interface VitalClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? '';
   const sigRe = /(\w+)\(([\s\S]*?)\):\s*Promise<([\s\S]*?)>;/g;
@@ -322,10 +323,23 @@ function parseClientOps(source: string): Map<string, ClientOp> {
     if (name !== undefined && ret !== undefined) returns.set(name, ret);
     sig = sigRe.exec(iface);
   }
+  return returns;
+}
 
+function clientCallSource(source: string): string {
   const implStart = source.indexOf('export function createVitalClient');
-  const impl = implStart >= 0 ? source.slice(implStart) : source;
-  const ops = new Map<string, ClientOp>();
+  return implStart >= 0 ? source.slice(implStart) : source;
+}
+
+/** 4-space `name: (` or `name: async (`; the request may be on the next line. */
+const clientMethodKeyRe = /^ {4}(\w+):\s*(?:async\s*)?\(/gm;
+
+function scanClientRequests(
+  source: string,
+  returns: Map<string, string>,
+  ops: Map<string, ClientOp>,
+): void {
+  const impl = clientCallSource(source);
   const callRe = /http\.request(?:WithStatus)?\(/g;
   let call = callRe.exec(impl);
   while (call) {
@@ -342,7 +356,7 @@ function parseClientOps(source: string): Map<string, ClientOp> {
     const thisCall = nextCall === -1 ? fromCall.slice(0, 500) : fromCall.slice(0, nextCall + 1);
     const httpMethod = /method:\s*'([A-Z]+)'/.exec(thisCall)?.[1] ?? 'GET';
     const before = impl.slice(0, call.index);
-    const keyMatches = [...before.matchAll(/^ {4}(\w+):\s*(?:async\s*)?\(/gm)];
+    const keyMatches = [...before.matchAll(clientMethodKeyRe)];
     const fnMatches = [...before.matchAll(/async function (\w+)/g)];
     const key = keyMatches.at(-1);
     const fn = fnMatches.at(-1);
@@ -358,7 +372,24 @@ function parseClientOps(source: string): Map<string, ClientOp> {
     }
     call = callRe.exec(impl);
   }
+}
+
+function parseClientOps(
+  clientSource: string,
+  callSources: readonly string[] = [],
+): Map<string, ClientOp> {
+  const returns = parseClientReturnTypes(clientSource);
+  const ops = new Map<string, ClientOp>();
+  scanClientRequests(clientSource, returns, ops);
+  for (const source of callSources) scanClientRequests(source, returns, ops);
   return ops;
+}
+
+async function readDomainCallSources(): Promise<string[]> {
+  const names = (await fs.readdir(clientDomainsDir))
+    .filter((name) => name.endsWith('.ts'))
+    .sort();
+  return Promise.all(names.map((name) => fs.readFile(path.join(clientDomainsDir, name), 'utf8')));
 }
 
 function dtoSchema(name: string): ZodTypeAny | undefined {
@@ -586,13 +617,14 @@ function moduleHeader(title: string): string[] {
 }
 
 export async function generateApiCatalog(): Promise<Record<string, string>> {
-  const [routes, clientSource, notes, typesByModule] = await Promise.all([
+  const [routes, clientSource, domainSources, notes, typesByModule] = await Promise.all([
     collectRoutes(),
     fs.readFile(clientPath, 'utf8'),
+    readDomainCallSources(),
     readNotes(),
     collectTypesByModule(),
   ]);
-  const clientOps = parseClientOps(clientSource);
+  const clientOps = parseClientOps(clientSource, domainSources);
   const routesByModule = new Map<string, ParsedRoute[]>();
   for (const route of routes) {
     const module = catalogModule(route.path);
