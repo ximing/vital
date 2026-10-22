@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { bindServices, observer, useService } from '@rabjs/react';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,29 +9,27 @@ import {
   MIN_DAILY_MODEL_CALL_LIMIT,
   ONBOARDING_CHECKLIST_KEYS,
 } from '@vital/dto';
-import type { Theme } from '@vital/tokens';
-import { Activity, Brain, CalendarDays, Repeat, ScanLine, Waypoints } from 'lucide-react-native';
+import { ScanLine } from 'lucide-react-native';
 import { Banner } from '../../components/Banner';
-import { Button } from '../../components/Button';
-import { Field } from '../../components/Field';
 import { IconButton } from '../../components/IconButton';
-import { NavRow } from '../../components/NavRow';
 import { PageHeader } from '../../components/PageHeader';
-import { PickerOption, PickerSheet } from '../../components/PickerSheet';
 import { SectionHead } from '../../components/SectionHead';
-import { ThemeToggle } from '../../components/ThemeToggle';
-import { TimeField } from '../../components/TimeField';
 import { useFocusReload } from '../../hooks/use-focus-reload';
 import { copy } from '../../lib/copy';
 import { checklistHref, markOnboarding, showChecklist } from '../../lib/onboarding';
 import { useTheme } from '../../theme/use-theme';
-import { rnShadow } from '../../ui/card';
-import type { LucideIcon } from '../../ui/icon';
-import { formatProgress, progressRatio } from './app-update';
 import { LlmSection } from './LlmSection';
 import { InwitSection } from './InwitSection';
 import { QrLoginScanner } from './QrLoginScanner';
 import { QrLoginScanService } from './qr-login.service';
+import { SettingsAboutSection } from './SettingsAboutSection';
+import { SettingsAccountSection } from './SettingsAccountSection';
+import { SettingsAiSection } from './SettingsAiSection';
+import { SettingsAppearanceSection } from './SettingsAppearanceSection';
+import { SettingsChecklist } from './SettingsChecklist';
+import { SettingsNotificationsSection } from './SettingsNotificationsSection';
+import { SettingsPrefSheets, SettingsPrefsSection } from './SettingsPrefsSection';
+import { createSettingsHomeStyles } from './settings-home-styles';
 import { SettingsService } from './settings.service';
 import { openPhoneCalendarAccess } from '../today/phone-calendar';
 
@@ -53,7 +51,7 @@ const ZONES = [
  */
 const SettingsHomeContent = observer(function SettingsHomeContent() {
   const t = useTheme();
-  const styles = useMemo(() => createStyles(t), [t]);
+  const styles = useMemo(() => createSettingsHomeStyles(t), [t]);
   const s = useService(SettingsService);
   const scan = useService(QrLoginScanService);
   const auth = s.auth;
@@ -116,20 +114,17 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
   const updateBytes = update.bytesDownloaded;
   const updateTotal = update.totalBytes;
   const updateNotes = update.remote?.releaseNotes;
-
-  const aiItems: { icon: LucideIcon; label: string; href: string; value?: string }[] = [
-    { icon: Repeat, label: copy.me.habits, href: '/habits' },
-    { icon: CalendarDays, label: copy.me.days, href: '/days' },
-    { icon: Waypoints, label: copy.me.threads, href: '/threads' },
-    {
-      icon: Activity,
-      label: copy.me.agentActivity,
-      href: '/activity',
-      value:
-        todayExecs === null ? undefined : copy.me.activityToday.replace('{n}', String(todayExecs)),
-    },
-    { icon: Brain, label: copy.me.memory, href: '/memory' },
-  ];
+  const versionName = update.current.versionName;
+  const avatarUrl = user?.avatarUrl;
+  const profileName = user?.displayName;
+  const email = user?.email;
+  const checklistRows = checklist
+    ? ONBOARDING_CHECKLIST_KEYS.map((key) => ({
+        key,
+        done: user?.onboarding[key] === true,
+        label: copy.checklist.items[key],
+      }))
+    : [];
 
   return (
     <SafeAreaView style={styles.flex} edges={['top']}>
@@ -148,378 +143,77 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
         ) : null}
 
         {checklist ? (
-          <>
-            <SectionHead title={copy.checklist.title} first />
-            <View style={[styles.card, styles.cardFlush]}>
-              {ONBOARDING_CHECKLIST_KEYS.map((key, index) => {
-                const done = auth.user?.onboarding[key] === true;
-                return (
-                  <View key={key}>
-                    {index > 0 ? <View style={styles.hairline} /> : null}
-                    <Pressable
-                      accessibilityRole="button"
-                      style={({ pressed }) => [styles.checkRow, pressed && styles.rowPressed]}
-                      onPress={() => {
-                        if (key === 'openedWeekly') {
-                          void markOnboarding(auth.user, auth.refreshUser, { openedWeekly: true });
-                        }
-                        router.push(checklistHref(key));
-                      }}
-                    >
-                      <Text style={[styles.checkMark, done && styles.checkMarkDone]}>
-                        {done ? '✓' : '○'}
-                      </Text>
-                      <Text style={[styles.checkTitle, done && styles.done]}>
-                        {copy.checklist.items[key]}
-                      </Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </View>
-            <Button
-              variant="quiet"
-              size="sm"
-              onPress={() => void markOnboarding(auth.user, auth.refreshUser, { dismissed: true })}
-            >
-              {copy.checklist.dismiss}
-            </Button>
-          </>
+          <SettingsChecklist
+            styles={styles}
+            rows={checklistRows}
+            onOpen={(key) => {
+              if (key === 'openedWeekly') {
+                void markOnboarding(auth.user, auth.refreshUser, { openedWeekly: true });
+              }
+              router.push(checklistHref(key));
+            }}
+            onDismiss={() => void markOnboarding(auth.user, auth.refreshUser, { dismissed: true })}
+          />
         ) : null}
 
-        <SectionHead title={copy.settings.tabs.account} first={!checklist} />
-        <View style={styles.card}>
-          <View style={styles.identity}>
-            <View style={styles.avatar}>
-              {auth.user?.avatarUrl && !avatarFailed ? (
-                <Image
-                  source={{ uri: auth.user.avatarUrl }}
-                  accessibilityLabel={copy.settings.avatarAlt}
-                  style={StyleSheet.absoluteFill}
-                  resizeMode="cover"
-                  onError={() => s.setAvatarFailed(true)}
-                />
-              ) : (
-                <Text style={styles.avatarInitial}>{initial}</Text>
-              )}
-            </View>
-            <View style={styles.identityCopy}>
-              <Text style={styles.displayName} numberOfLines={1}>
-                {auth.user?.displayName || copy.settings.tabs.account}
-              </Text>
-              {auth.user ? (
-                <Text style={styles.hint} numberOfLines={1}>
-                  {auth.user.email}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-          <View style={styles.identityActions}>
-            <Button variant="ghost" size="sm" loading={busy} onPress={() => void s.pickAvatar()}>
-              {copy.settings.changeAvatar}
-            </Button>
-            {/* 危险文字钮：Button 无 danger 文本变体（只有描边），按 §g 在本地实现 */}
-            <Pressable
-              accessibilityRole="button"
-              hitSlop={t.space[2]}
-              onPress={() => void auth.logout()}
-              style={({ pressed }) => [styles.logoutBtn, pressed && styles.pressedSoft]}
-            >
-              <Text style={styles.logoutLabel}>{copy.auth.logout}</Text>
-            </Pressable>
-          </View>
-          <Field
-            label={copy.settings.displayName}
-            value={displayName}
-            onChangeText={(value) => s.setDisplayName(value)}
-            autoCapitalize="words"
-          />
-          <View style={styles.rowEnd}>
-            <Button
-              size="sm"
-              loading={busy}
-              disabled={!profileDirty}
-              onPress={() => void s.saveProfile()}
-            >
-              {copy.settings.saveProfile}
-            </Button>
-          </View>
-        </View>
+        <SettingsAccountSection
+          t={t}
+          styles={styles}
+          first={!checklist}
+          avatarUrl={avatarUrl}
+          avatarFailed={avatarFailed}
+          onAvatarError={() => s.setAvatarFailed(true)}
+          initial={initial}
+          profileName={profileName}
+          email={email}
+          hasUser={user != null}
+          displayName={displayName}
+          onDisplayName={(value) => s.setDisplayName(value)}
+          busy={busy}
+          profileDirty={profileDirty}
+          onPickAvatar={() => void s.pickAvatar()}
+          onLogout={() => void auth.logout()}
+          onSaveProfile={() => void s.saveProfile()}
+        />
 
-        <SectionHead title={copy.settings.tabs.appearance} />
-        <View style={styles.card}>
-          <Text style={styles.hint}>{copy.theme.hint}</Text>
-          <ThemeToggle />
-        </View>
+        <SettingsAppearanceSection styles={styles} />
 
-        <SectionHead title={copy.me.ai} />
-        <View style={[styles.card, styles.cardFlush]}>
-          {aiItems.map((item, index) => (
-            <NavRow
-              key={item.href}
-              icon={item.icon}
-              label={item.label}
-              value={item.value}
-              divider={index > 0}
-              onPress={() => router.push(item.href)}
-            />
-          ))}
-        </View>
+        <SettingsAiSection
+          styles={styles}
+          todayExecs={todayExecs}
+          onOpen={(href) => router.push(href)}
+        />
 
-        <SectionHead title={copy.settings.tabs.notifications} />
-        <View style={styles.card}>
-          <Text style={styles.hint}>{copy.settings.notify.hint}</Text>
-          <View>
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.taskRemind}</Text>
-              <Switch
-                value={prefs.taskRemind}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, taskRemind: v } })
-                }
-              />
-            </View>
-            <View style={styles.hairline} />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.dayRemind}</Text>
-              <Switch
-                value={prefs.dayRemind}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, dayRemind: v } })
-                }
-              />
-            </View>
-            <View style={styles.hairline} />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.taskDue}</Text>
-              <Switch
-                value={prefs.taskDue}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, taskDue: v } })
-                }
-              />
-            </View>
-            <View style={styles.hairline} />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.morningBrief}</Text>
-              <Switch
-                value={prefs.morningBrief}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, morningBrief: v } })
-                }
-              />
-            </View>
-            <View style={styles.hairline} />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.meetingPrep}</Text>
-              <Switch
-                value={prefs.meetingPrep}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, meetingPrep: v } })
-                }
-              />
-            </View>
-            <View style={styles.hairline} />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.weeklyObserve}</Text>
-              <Switch
-                value={prefs.weeklyObserve}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, weeklyObserve: v } })
-                }
-              />
-            </View>
-            <View style={styles.hairline} />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.agentErrand}</Text>
-              <Switch
-                value={prefs.agentErrand}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, agentErrand: v } })
-                }
-              />
-            </View>
-            <View style={styles.hairline} />
-            <View style={styles.switchRow}>
-              <Text style={styles.rowLabel}>{copy.settings.notify.scheduleSuggest}</Text>
-              <Switch
-                value={prefs.scheduleSuggest}
-                trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-                ios_backgroundColor={t.bgSurfaceMuted}
-                onValueChange={(v) =>
-                  void s.patchPrefs({ notifications: { ...prefs, scheduleSuggest: v } })
-                }
-              />
-            </View>
-          </View>
-          <Text style={styles.subHead}>{copy.settings.notify.scheduleSuggestHint}</Text>
-          <TimeField
-            label={copy.settings.notify.workHoursStart}
-            value={prefs.workHoursStart}
-            onChange={(value) => {
-              if (value === '' || value >= prefs.workHoursEnd) return;
-              void s.patchPrefs({ notifications: { ...prefs, workHoursStart: value } });
-            }}
-          />
-          <TimeField
-            label={copy.settings.notify.workHoursEnd}
-            value={prefs.workHoursEnd}
-            onChange={(value) => {
-              if (value === '' || value <= prefs.workHoursStart) return;
-              void s.patchPrefs({ notifications: { ...prefs, workHoursEnd: value } });
-            }}
-          />
-          <Field
-            label={copy.settings.notify.scheduleDayCap}
-            value={capDraft}
-            keyboardType="number-pad"
-            onChangeText={setCapDraft}
-            onBlur={() => {
-              const next = Number(capDraft.trim());
-              if (!Number.isInteger(next) || next < 30 || next > 1440) {
-                setCapDraft(String(prefs.scheduleDayCapMinutes));
-                return;
-              }
-              if (next === prefs.scheduleDayCapMinutes) return;
-              void s.patchPrefs({ notifications: { ...prefs, scheduleDayCapMinutes: next } });
-            }}
-          />
-          <TimeField
-            label={copy.settings.notify.morningBriefTime}
-            value={prefs.morningBriefTime}
-            disabled={!prefs.morningBrief}
-            onChange={(value) => {
-              if (value === '') return;
-              void s.patchPrefs({ notifications: { ...prefs, morningBriefTime: value } });
-            }}
-          />
-          <TimeField
-            label={copy.settings.notify.allDayTime}
-            value={prefs.allDayNotifyTime}
-            onChange={(value) => {
-              if (value === '') return;
-              void s.patchPrefs({ notifications: { ...prefs, allDayNotifyTime: value } });
-            }}
-          />
-          <TimeField
-            label={copy.settings.notify.quietStart}
-            value={prefs.quietHoursStart ?? ''}
-            clearable
-            onChange={(start) => {
-              const nextStart = start === '' ? null : start;
-              const end = nextStart === null ? null : (prefs.quietHoursEnd ?? '08:00');
-              void s.patchPrefs({
-                notifications: { ...prefs, quietHoursStart: nextStart, quietHoursEnd: end },
-              });
-            }}
-          />
-          <TimeField
-            label={copy.settings.notify.quietEnd}
-            value={prefs.quietHoursEnd ?? ''}
-            disabled={prefs.quietHoursStart === null}
-            clearable
-            onChange={(end) => {
-              const nextEnd = end === '' ? null : end;
-              const start = nextEnd === null ? null : prefs.quietHoursStart;
-              void s.patchPrefs({
-                notifications: { ...prefs, quietHoursStart: start, quietHoursEnd: nextEnd },
-              });
-            }}
-          />
-          <Text style={styles.subHead}>{copy.settings.notify.nickname}</Text>
-          <Field
-            label={copy.settings.notify.nickname}
-            value={nickname}
-            onChangeText={(value) => s.setNickname(value)}
-            autoCapitalize="none"
-          />
-          <View style={styles.switchRow}>
-            <Text style={styles.rowLabel}>{copy.settings.notify.enabled}</Text>
-            <Switch
-              value={enabled}
-              trackColor={{ false: t.bgSurfaceMuted, true: t.accentPrimary }}
-              ios_backgroundColor={t.bgSurfaceMuted}
-              onValueChange={(value) => s.setEnabled(value)}
-            />
-          </View>
-          <View style={styles.btnRow}>
-            <Button
-              size="sm"
-              loading={busy}
-              disabled={nickname.trim() === ''}
-              onPress={() => void s.saveChannel()}
-            >
-              {copy.settings.notify.saveChannel}
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!meow}
-              onPress={() => void s.testChannel()}
-            >
-              {copy.settings.notify.test}
-            </Button>
-          </View>
-        </View>
+        <SettingsNotificationsSection
+          t={t}
+          styles={styles}
+          prefs={prefs}
+          capDraft={capDraft}
+          setCapDraft={setCapDraft}
+          nickname={nickname}
+          setNickname={(value) => s.setNickname(value)}
+          enabled={enabled}
+          setEnabled={(value) => s.setEnabled(value)}
+          busy={busy}
+          meow={meow}
+          patchPrefs={(input) => s.patchPrefs(input)}
+          saveChannel={() => s.saveChannel()}
+          testChannel={() => s.testChannel()}
+        />
 
-        <SectionHead title={copy.settings.tabs.prefs} />
-        <View style={[styles.card, styles.cardFlush]}>
-          <NavRow
-            label={copy.settings.timezone}
-            value={timezone}
-            onPress={() => s.openPrefPicker('timezone')}
-          />
-          <NavRow
-            label={copy.settings.weekStartsOn}
-            value={weekStartsOn === 1 ? copy.settings.weekMon : copy.settings.weekSun}
-            divider
-            onPress={() => s.openPrefPicker('week')}
-          />
-          <View style={styles.hairline} />
-          <View style={styles.limitPad}>
-            <Text style={styles.calendarLabel}>{copy.settings.calendarTitle}</Text>
-            <Text style={styles.hint}>{copy.settings.calendarHint}</Text>
-            <Button size="sm" variant="secondary" onPress={() => void openPhoneCalendarAccess()}>
-              {copy.today.briefing.meetingsOpenSettings}
-            </Button>
-          </View>
-          <View style={styles.hairline} />
-          <View style={styles.limitPad}>
-            <Field
-              label={copy.settings.dailyModelCallLimit}
-              value={limitDraft}
-              keyboardType="number-pad"
-              inputMode="numeric"
-              isInvalid={limitError !== ''}
-              onChangeText={(value) => {
-                setLimitDraft(value);
-                if (limitError) setLimitError('');
-              }}
-              onBlur={() => commitLimit(limitDraft)}
-            />
-            {limitError ? <Text style={styles.limitError}>{limitError}</Text> : null}
-            <Text style={styles.hint}>
-              {copy.settings.dailyModelCallLimitHint.replace(
-                '{n}',
-                String(DEFAULT_DAILY_MODEL_CALL_LIMIT),
-              )}
-            </Text>
-          </View>
-        </View>
+        <SettingsPrefsSection
+          styles={styles}
+          timezone={timezone}
+          weekStartsOn={weekStartsOn}
+          limitDraft={limitDraft}
+          limitError={limitError}
+          setLimitDraft={setLimitDraft}
+          setLimitError={setLimitError}
+          commitLimit={commitLimit}
+          onOpenTimezone={() => s.openPrefPicker('timezone')}
+          onOpenWeek={() => s.openPrefPicker('week')}
+          onOpenCalendar={() => void openPhoneCalendarAccess()}
+        />
 
         <SectionHead title={copy.settings.tabs.llm} />
         <LlmSection />
@@ -527,186 +221,31 @@ const SettingsHomeContent = observer(function SettingsHomeContent() {
         <SectionHead title={copy.settings.tabs.inwit} />
         <InwitSection />
 
-        <SectionHead title={copy.settings.tabs.about} />
-        <View style={[styles.card, styles.cardFlush]}>
-          <NavRow
-            label={copy.settings.update.version}
-            value={versionValue(update)}
-            onPress={() => void update.pressPrimary()}
-          />
-        </View>
-        {updatePhase === 'downloading' ? (
-          <View style={styles.progressBlock}>
-            <View style={styles.track}>
-              <View
-                style={[
-                  styles.fill,
-                  { width: `${Math.round(progressRatio(updateBytes, updateTotal) * 100)}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.hint}>
-              {formatProgress(updateBytes, updateTotal) || copy.settings.update.downloading}
-            </Text>
-          </View>
-        ) : null}
-        {updatePhase === 'ready' ? (
-          <View style={styles.bannerWrap}>
-            <Banner
-              tone="info"
-              action={{
-                label: copy.settings.update.install,
-                onPress: () => void update.install(),
-              }}
-            >
-              {copy.settings.update.ready}
-            </Banner>
-          </View>
-        ) : null}
-        {updateNotes && updatePhase !== 'idle' ? (
-          <Text style={styles.hint}>{updateNotes}</Text>
-        ) : null}
+        <SettingsAboutSection
+          styles={styles}
+          updatePhase={updatePhase}
+          updateBytes={updateBytes}
+          updateTotal={updateTotal}
+          updateNotes={updateNotes}
+          versionName={versionName}
+          onPressPrimary={() => update.pressPrimary()}
+          onInstall={() => update.install()}
+        />
       </ScrollView>
 
-      <PickerSheet
-        visible={prefPicker === 'timezone'}
-        title={copy.settings.timezone}
+      <SettingsPrefSheets
+        prefPicker={prefPicker}
+        zones={zones}
+        timezone={timezone}
+        weekStartsOn={weekStartsOn}
         onClose={() => s.closePrefPicker()}
-      >
-        {zones.map((zone) => (
-          <PickerOption
-            key={zone}
-            label={zone}
-            selected={zone === timezone}
-            onPress={() => {
-              s.closePrefPicker();
-              void s.patchPrefs({ timezone: zone });
-            }}
-          />
-        ))}
-      </PickerSheet>
-      <PickerSheet
-        visible={prefPicker === 'week'}
-        title={copy.settings.weekStartsOn}
-        onClose={() => s.closePrefPicker()}
-      >
-        <PickerOption
-          label={copy.settings.weekSun}
-          selected={weekStartsOn === 0}
-          onPress={() => {
-            s.closePrefPicker();
-            void s.patchPrefs({ weekStartsOn: 0 });
-          }}
-        />
-        <PickerOption
-          label={copy.settings.weekMon}
-          selected={weekStartsOn === 1}
-          onPress={() => {
-            s.closePrefPicker();
-            void s.patchPrefs({ weekStartsOn: 1 });
-          }}
-        />
-      </PickerSheet>
+        patchPrefs={(input) => s.patchPrefs(input)}
+      />
     </SafeAreaView>
   );
 });
-
-function versionValue(update: {
-  phase: string;
-  current: { versionName: string };
-  bytesDownloaded: number;
-  totalBytes: number;
-}): string {
-  if (update.phase === 'checking') return copy.settings.update.checking;
-  if (update.phase === 'downloading') {
-    return (
-      formatProgress(update.bytesDownloaded, update.totalBytes) || copy.settings.update.downloading
-    );
-  }
-  if (update.phase === 'ready') return copy.settings.update.readyShort;
-  if (update.phase === 'installing') return copy.settings.update.installing;
-  if (update.phase === 'failed') return copy.settings.update.failed;
-  return update.current.versionName;
-}
 
 export const SettingsHome = bindServices(SettingsHomeContent, [
   SettingsService,
   QrLoginScanService,
 ]);
-
-const createStyles = (t: Theme) =>
-  StyleSheet.create({
-    flex: { flex: 1, backgroundColor: t.bgCanvas },
-    scroll: { paddingHorizontal: t.space[4], paddingBottom: t.space[6] },
-    bannerWrap: { marginTop: t.space[2], marginBottom: t.space[2] },
-    card: {
-      borderRadius: t.radius.lg,
-      backgroundColor: t.bgElevated,
-      padding: t.space[4],
-      gap: t.space[3],
-      ...rnShadow(t),
-    },
-    cardFlush: { padding: 0, gap: 0, overflow: 'hidden' },
-    hairline: { height: StyleSheet.hairlineWidth, backgroundColor: t.borderSubtle },
-    checkRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: t.space[3],
-      minHeight: t.space[12],
-      paddingHorizontal: t.space[4],
-    },
-    rowPressed: { backgroundColor: t.bgSurfaceMuted },
-    checkMark: { width: t.space[5], fontSize: 15, color: t.textTertiary },
-    checkMarkDone: { color: t.statusDone },
-    checkTitle: { flex: 1, fontSize: 15, color: t.fgPrimary },
-    done: { color: t.fgMuted, textDecorationLine: 'line-through' },
-    identity: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    avatar: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      overflow: 'hidden',
-      backgroundColor: t.bgAccentSubtle,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    avatarInitial: { fontSize: 20, fontWeight: '700', color: t.accentPrimary },
-    identityCopy: { flex: 1, minWidth: 0, gap: 2 },
-    displayName: { fontSize: 17, lineHeight: 24, fontWeight: '600', color: t.fgPrimary },
-    identityActions: { flexDirection: 'row', alignItems: 'center', gap: t.space[2] },
-    logoutBtn: { height: 32, justifyContent: 'center', paddingHorizontal: t.space[3] },
-    logoutLabel: { fontSize: t.type.meta.fontSize, fontWeight: '500', color: t.danger },
-    pressedSoft: { opacity: 0.7 },
-    rowEnd: { flexDirection: 'row', justifyContent: 'flex-end' },
-    hint: { fontSize: t.type.meta.fontSize, color: t.fgMuted },
-    calendarLabel: { fontSize: 15, color: t.fgPrimary },
-    limitPad: {
-      gap: t.space[2],
-      paddingHorizontal: t.space[4],
-      paddingTop: t.space[3],
-      paddingBottom: t.space[4],
-    },
-    limitError: { fontSize: t.type.meta.fontSize, color: t.danger },
-    subHead: {
-      fontSize: t.type.meta.fontSize,
-      fontWeight: '600',
-      color: t.fgMuted,
-      marginTop: t.space[1],
-    },
-    switchRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: t.space[3],
-      minHeight: t.space[12],
-    },
-    rowLabel: { flex: 1, fontSize: 15, color: t.fgPrimary },
-    btnRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.space[2] },
-    progressBlock: { gap: t.space[2], paddingHorizontal: t.space[1], paddingTop: t.space[2] },
-    track: {
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: t.bgSurfaceMuted,
-      overflow: 'hidden',
-    },
-    fill: { height: 8, borderRadius: 4, backgroundColor: t.accentPrimary },
-  });

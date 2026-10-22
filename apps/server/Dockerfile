@@ -18,6 +18,7 @@ COPY packages/markdown/package.json packages/markdown/
 COPY packages/article-html/package.json packages/article-html/
 COPY packages/tokens/package.json packages/tokens/
 COPY packages/api-client/package.json packages/api-client/
+COPY packages/view-model/package.json packages/view-model/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
@@ -49,6 +50,7 @@ COPY packages/markdown/package.json packages/markdown/
 COPY packages/article-html/package.json packages/article-html/
 COPY packages/tokens/package.json packages/tokens/
 COPY packages/api-client/package.json packages/api-client/
+COPY packages/view-model/package.json packages/view-model/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/
@@ -63,11 +65,13 @@ COPY packages/markdown packages/markdown
 COPY packages/article-html packages/article-html
 COPY packages/tokens packages/tokens
 COPY packages/api-client packages/api-client
+COPY packages/view-model packages/view-model
 COPY apps/web apps/web
 # 同源部署：/api 由本进程提供
 ENV VITE_API_BASE_URL=
 RUN pnpm --filter @vital/article-doc build \
  && pnpm --filter @vital/dto build \
+ && pnpm --filter @vital/view-model build \
  && pnpm --filter @vital/markdown build \
  && pnpm --filter @vital/tokens build \
  && pnpm --filter @vital/api-client build \
@@ -86,6 +90,7 @@ COPY packages/markdown/package.json packages/markdown/
 COPY packages/article-html/package.json packages/article-html/
 COPY packages/tokens/package.json packages/tokens/
 COPY packages/api-client/package.json packages/api-client/
+COPY packages/view-model/package.json packages/view-model/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/desktop/package.json apps/desktop/

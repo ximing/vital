@@ -1,6 +1,6 @@
 {
   "name": "@vital/web",
-  "version": "0.33.2",
+  "version": "0.33.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -32,6 +32,7 @@
     "@vital/dto": "workspace:*",
     "@vital/markdown": "workspace:*",
     "@vital/tokens": "workspace:*",
+    "@vital/view-model": "workspace:*",
     "lucide-react": "^1.41.0",
     "qrcode": "^1.5.4",
     "react": "19.1.0",

@@ -55,8 +55,9 @@ if [[ ! -f apps/server/.env ]]; then
   exit 1
 fi
 
-echo "构建 dto + api-client + tokens + markdown…"
+echo "构建 dto + view-model + api-client + tokens + markdown…"
 pnpm --filter @vital/dto build
+pnpm --filter @vital/view-model build
 pnpm --filter @vital/api-client build
 pnpm --filter @vital/tokens build
 pnpm --filter @vital/markdown build

@@ -21,6 +21,7 @@
     "@vital/dto": "workspace:*",
     "@vital/markdown": "workspace:*",
     "@vital/tokens": "workspace:*",
+    "@vital/view-model": "workspace:*",
     "apk-updater": "file:./modules/apk-updater",
     "babel-preset-expo": "~54.0.12",
     "expo": "~54.0.0",
