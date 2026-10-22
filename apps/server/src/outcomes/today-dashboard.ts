@@ -11,14 +11,12 @@ import { linkedHabitFacts, loadHabitHeadlineFacts } from '../habits/progress.js'
 import { listTasks } from '../tasks/tasks.service.js';
 import { showsOnTodayBoard } from './board.js';
 import { computeNow } from './now-engine.js';
+import { asSignal, loadMaterialCounts, toOutcomeDto } from './outcome-dto.js';
 import {
-  asSignal,
-  loadMaterialCounts,
   loadOutcomeRuleContext,
   ruleFieldsForOutcome,
   statsFromRuleContext,
-  toOutcomeDto,
-} from './outcomes.service.js';
+} from './rule-context.js';
 
 async function todayPulse(userId: string, timezone: string): Promise<TodayPulse> {
   const [inboxRow] = await getDb()
