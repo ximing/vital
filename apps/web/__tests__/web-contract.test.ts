@@ -6,6 +6,16 @@ import { describe, expect, it } from 'vitest';
 const webRoot = process.cwd();
 const read = (relative: string): string => readFileSync(path.resolve(webRoot, relative), 'utf8');
 
+/** Screen copy is split per top-level key. The contract still sees one vocabulary. */
+function readCopy(): string {
+  const dir = path.resolve(webRoot, 'src/copy');
+  const parts = readdirSync(dir)
+    .filter((name) => name.endsWith('.ts'))
+    .sort()
+    .map((name) => readFileSync(path.join(dir, name), 'utf8'));
+  return [read('src/copy.ts'), ...parts].join('\n');
+}
+
 describe('web shell contract', () => {
   it('index.html applies vital:theme before paint and preloads Sora', () => {
     const html = read('index.html');
@@ -84,7 +94,7 @@ describe('web shell contract', () => {
     const auth = read('src/shell/require-auth.tsx');
     expect(auth).toContain('Navigate to="/login"');
     expect(auth).toContain('HOME_PATH');
-    const copy = read('src/copy.ts');
+    const copy = readCopy();
     const routes = read('src/routes.ts');
     expect(routes).toContain("HOME_PATH = '/today'");
     expect(copy).not.toContain('HOME_PATH');
@@ -102,7 +112,7 @@ describe('web shell contract', () => {
       expect(kb).toContain(key);
     }
     expect(kb).toContain('if (event.metaKey || event.ctrlKey || event.altKey) return');
-    const copy = read('src/copy.ts');
+    const copy = readCopy();
     expect(copy).toContain('今天还没有安排，也没有逾期。按 N 新建。');
   });
 
@@ -118,7 +128,7 @@ describe('web shell contract', () => {
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
     // Sanitize/bundle lives in the shared @vital/article-doc package now.
     expect(pkg.dependencies['@vital/article-doc']).toBeTruthy();
-    const copy = read('src/copy.ts');
+    const copy = readCopy();
     expect(copy).toContain('把值得重读的东西，先安静地放在这里。');
     expect(copy).toContain('打开一条稍后再读。');
     const client = read('src/api/client.ts');
@@ -132,7 +142,7 @@ describe('web shell contract', () => {
     const pkg = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
     expect(pkg.dependencies['@tiptap/starter-kit']).toContain('^2');
     expect(pkg.dependencies['@vital/markdown']).toBe('workspace:*');
-    const copy = read('src/copy.ts');
+    const copy = readCopy();
     expect(copy).toContain('今天想留下一句就够。');
     expect(copy).toContain('格子深浅是完成多少');
     expect(copy).toContain('一键生成');
@@ -163,7 +173,7 @@ describe('web shell contract', () => {
     expect(palette).toContain('searchResultsToItems');
     const search = read('src/features/search/search-page.service.ts');
     expect(search).toContain('.search({ q, limit: 20 })');
-    const copy = read('src/copy.ts');
+    const copy = readCopy();
     expect(copy).toContain('输入关键词搜任务、稍后读和报告。');
   });
 
