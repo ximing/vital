@@ -24,6 +24,7 @@ import {
   type WeatherConditionKey,
   type WeatherSample,
 } from '@vital/dto';
+import { chineseYmd } from '@vital/view-model';
 import { client } from '../../lib/api';
 import { copy } from '../../lib/copy';
 import { clothingSuggestion, nearestStatutoryHoliday } from './briefing-core';
@@ -70,10 +71,7 @@ export type TodayBriefingModel = {
   modules: ReturnType<typeof todayModulesOrFallback>;
 };
 
-export function chineseYmd(ymd: string): string {
-  const [year, month, day] = ymd.split('-');
-  return `${year}年${Number(month)}月${Number(day)}日`;
-}
+export { chineseYmd };
 
 async function readSavedPlace(): Promise<GeoPlace | null> {
   const raw = await SecureStore.getItemAsync(PLACE_KEY).catch(() => null);

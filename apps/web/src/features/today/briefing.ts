@@ -26,6 +26,7 @@ import {
   type WeatherConditionKey,
   type WeatherSample,
 } from '@vital/dto';
+import { chineseYmd } from '@vital/view-model';
 import { client } from '@/api/client';
 import { t } from '@/copy';
 import { getVitalHost, type TodayCalendarEvent, type TodayCalendarRead } from '@/host';
@@ -68,10 +69,7 @@ export type TodayBriefingModel = {
   modules: ReturnType<typeof todayModulesOrFallback>;
 };
 
-export function chineseYmd(ymd: string): string {
-  const [year, month, day] = ymd.split('-');
-  return `${year}年${Number(month)}月${Number(day)}日`;
-}
+export { chineseYmd };
 
 export function monthDay(ymd: string): string {
   const [, month, day] = ymd.split('-');
