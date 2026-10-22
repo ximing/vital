@@ -570,10 +570,11 @@ describe('closed vocabulary parity', () => {
   it('web and mobile copy label every job type except index.sync', () => {
     // index.sync is an internal index heal with no user-facing label. Extra capability keys are allowed.
     const labeled = jobTypes.filter((jobType) => jobType !== 'index.sync');
-    const maps = [
+    const sources: Array<[string, string]> = [
       ['apps/web/src/copy.ts', webCopy],
       ['apps/mobile/src/lib/copy.ts', mobileCopy],
-    ].map(([label, source]) => {
+    ];
+    const maps = sources.map(([label, source]) => {
       const keys = new Set(objectKeysContaining(source, FOSSIL_JOB_TYPE));
       return {
         label,
