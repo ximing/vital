@@ -18,18 +18,15 @@ import {
 import { and, eq } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
-import { attachments, days, inboxItems, lists, type Attachment } from '../db/schema.js';
+import { attachments, days, inboxItems, lists } from '../db/schema.js';
 import { getOwnedReportOr404 } from '../reports/reports.service.js';
 import { AppError } from '../errors.js';
 import { currentStorageMeta, getStorage } from '../storage/factory.js';
 import { getOwnedTaskOr404 } from '../tasks/tasks.service.js';
 import { logger } from '../utils/logger.js';
+import { getOwnedAttachmentOr404, resolveAccessUrl } from './access-url.js';
 
-async function getOwnedAttachmentOr404(userId: string, id: string): Promise<Attachment> {
-  const [row] = await getDb().select().from(attachments).where(eq(attachments.id, id)).limit(1);
-  if (!row || row.userId !== userId) throw AppError.of(404, 'ATTACHMENT_NOT_FOUND');
-  return row;
-}
+export { resolveAccessUrl };
 
 export async function initUpload(userId: string, input: UploadInitInput): Promise<UploadInitResponse> {
   if (!isUploadableMime(input.mime)) {
@@ -188,16 +185,6 @@ export async function discardUpload(userId: string, id: string): Promise<void> {
         logger.warn('discard abort multipart failed', { id, err: String(err) });
       });
   }
-}
-
-export async function resolveAccessUrl(userId: string, id: string, expiresIn?: number): Promise<string> {
-  const row = await getOwnedAttachmentOr404(userId, id);
-  if (row.status !== 'ready') throw AppError.of(404, 'ATTACHMENT_NOT_FOUND');
-  return getStorage().generateAccessUrl(
-    row.s3Key,
-    row.storageMeta,
-    expiresIn ?? config.PRESIGN_GET_TTL_SECONDS,
-  );
 }
 
 /** Signed GET url for a ready attachment — the 302 replacement clients render from. */

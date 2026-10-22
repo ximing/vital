@@ -25,7 +25,7 @@ import { extensionAuthCodes, lists, users, type User } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { loadLlmPublic } from '../llm/settings.service.js';
 import { inboxListValues } from '../lists/lists.service.js';
-import { resolveAccessUrl } from '../uploads/uploads.service.js';
+import { resolveAccessUrl } from '../uploads/access-url.js';
 import { logger } from '../utils/logger.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { issueRefreshToken, revokeAllForUser, signAccessToken } from './token.service.js';
