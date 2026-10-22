@@ -150,7 +150,7 @@ function skipNumber(source: string, index: number): number {
 }
 
 function skipTypeAssertion(source: string, index: number): number {
-  let i = skipTrivia(source, index + 2);
+  const i = skipTrivia(source, index + 2);
   const char = source.charAt(i);
   if (char === '{') return skipBalanced(source, i, '{', '}');
   if (char === '(') return skipBalanced(source, i, '(', ')');
