@@ -8,11 +8,9 @@ import {
   type ReorderTasksInput,
   type Task,
   type TaskDraftTrigger,
-  type TaskStatus,
   type UncompleteTaskInput,
 } from '@vital/dto';
 import { and, desc, eq, isNotNull, isNull, or } from 'drizzle-orm';
-import { DateTime } from 'luxon';
 import { toAgentActionDto } from '../agent/actions.service.js';
 import { recordTaskEdit } from '../agent/edit-events.service.js';
 import { executionResult, skipExecution, withExecution } from '../agent/executions.service.js';
@@ -39,12 +37,7 @@ import {
 } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { spawnNextOnComplete } from '../habits/habits.service.js';
-import {
-  getInboxList,
-  getOwnedListOr404,
-  listLists,
-  SORT_GAP,
-} from '../lists/lists.service.js';
+import { getInboxList, getOwnedListOr404, listLists, SORT_GAP } from '../lists/lists.service.js';
 import {
   buildCreateInputFromIntent,
   interpretTaskText,
@@ -55,51 +48,16 @@ import { syncTaskNotifications } from '../notifications/outbox.js';
 import { isDefer, needsDecomposition } from '../outcomes/rule-engine.js';
 import { assertOwnedOutcomeId } from '../outcomes/shared.js';
 import { assertOwnedTagIds, listTags } from '../tags/tags.service.js';
-import {
-  allDayLocalMidnight,
-  nextFixedOccurrenceAfter,
-  nextOccurrenceAfter,
-  nextOccurrenceOnOrAfter,
-  parseRrule,
-} from './recurrence.js';
 import { nextSortOrder } from './sort-order.js';
-import { asRecurrenceKind, asReminderMode, asReminderOffsetMinutes } from './task-dto.js';
-import { getOwnedTaskOr404 } from './tasks.read.js';
 import {
-  dtoOf,
-  fireIndexTask,
-  fireRemoveTaskIndex,
-  replaceTags,
-  toRecurrence,
-} from './tasks.shared.js';
-
-function isRecurring(row: TaskRow): boolean {
-  return row.recurrenceRrule !== null || asRecurrenceKind(row.recurrenceKind) !== null;
-}
-
-function parseInstant(isoStr: string, allDay: boolean, zone: string): Date {
-  if (allDay) return allDayLocalMidnight(isoStr, zone);
-  const dt = DateTime.fromISO(isoStr);
-  if (!dt.isValid) throw AppError.of(400, 'VALIDATION_ERROR');
-  return dt.toJSDate();
-}
-
-function dueAtFromYmd(ymd: string, zone: string): Date {
-  const dt = DateTime.fromISO(`${ymd}T00:00:00`, { zone });
-  if (!dt.isValid) throw AppError.of(400, 'VALIDATION_ERROR');
-  return dt.toJSDate();
-}
-
-function snapExisting(d: Date | null, allDay: boolean, zone: string): Date | null {
-  if (d === null) return null;
-  if (!allDay) return d;
-  return DateTime.fromJSDate(d, { zone }).startOf('day').toJSDate();
-}
-
-function shiftBy(d: Date | null, deltaMs: number): Date | null {
-  if (d === null) return null;
-  return new Date(d.getTime() + deltaMs);
-}
+  isRecurring,
+  resolveCreateSchedule,
+  resolvePatchSchedule,
+  rollCompletionSchedule,
+  shiftBy,
+} from './schedule.js';
+import { getOwnedTaskOr404 } from './tasks.read.js';
+import { dtoOf, fireIndexTask, fireRemoveTaskIndex, replaceTags } from './tasks.shared.js';
 
 export type TaskTx = Pick<Database, 'insert' | 'update' | 'delete' | 'select'>;
 
@@ -126,47 +84,17 @@ export async function createTaskInTx(
   if (input.outcomeId) await assertOwnedOutcomeId(userId, input.outcomeId);
 
   const zone = input.timezone ?? user.timezone;
-  const isAllDay = input.dueYmd !== undefined ? (input.isAllDay ?? true) : (input.isAllDay ?? false);
-  const dueAt =
-    input.dueYmd !== undefined
-      ? dueAtFromYmd(input.dueYmd, zone)
-      : input.dueAt === undefined || input.dueAt === null
-        ? null
-        : parseInstant(input.dueAt, isAllDay, zone);
-  const startAt =
-    input.startAt === undefined || input.startAt === null
-      ? null
-      : parseInstant(input.startAt, isAllDay, zone);
-
-  const reminderMode = input.reminderMode ?? null;
-  const reminderOffsetMinutes =
-    reminderMode === 'offset' ? (input.reminderOffsetMinutes ?? null) : null;
-  const reminderAt =
-    reminderMode === 'custom' && input.reminderAt !== null && input.reminderAt !== undefined
-      ? parseInstant(input.reminderAt, false, zone)
-      : null;
-  if ((reminderMode === 'due' || reminderMode === 'offset') && dueAt === null) {
-    throw AppError.of(400, 'VALIDATION_ERROR');
-  }
-  if (
-    (reminderMode === 'offset' && reminderOffsetMinutes === null) ||
-    (reminderMode === 'custom' && reminderAt === null)
-  ) {
-    throw AppError.of(400, 'VALIDATION_ERROR');
-  }
-
-  let recurrence: string | null = null;
-  let recurrenceDtstart: Date | null = null;
-  if (input.recurrence !== undefined && input.recurrence !== null) {
-    if (dueAt === null) throw AppError.of(400, 'RRULE_DUE_REQUIRED');
-    parseRrule(input.recurrence);
-    recurrence = input.recurrence;
-    recurrenceDtstart = dueAt;
-  }
-  const recurrenceKind = input.recurrenceKind ?? null;
-  if (recurrenceKind !== null && (dueAt === null || input.recurrence !== undefined)) {
-    throw AppError.of(400, 'VALIDATION_ERROR');
-  }
+  const {
+    isAllDay,
+    dueAt,
+    startAt,
+    reminderMode,
+    reminderOffsetMinutes,
+    reminderAt,
+    recurrence,
+    recurrenceDtstart,
+    recurrenceKind,
+  } = resolveCreateSchedule(input, zone);
 
   const now = new Date();
   const row: NewTask = {
@@ -284,127 +212,26 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     await getOwnedListOr404(userId, input.listId);
   }
 
-  const zone = input.timezone ?? task.timezone;
-  const isAllDay =
-    input.dueYmd !== undefined ? (input.isAllDay ?? true) : (input.isAllDay ?? task.isAllDay);
-
-  let dueAt = task.dueAt;
-  let startAt = task.startAt;
-  let reminderMode = asReminderMode(task.reminderMode);
-  let reminderOffsetMinutes = asReminderOffsetMinutes(task.reminderOffsetMinutes);
-  let reminderAt = task.reminderAt;
-  const dueTouched = input.dueAt !== undefined || input.dueYmd !== undefined;
-  if (input.dueYmd !== undefined) {
-    dueAt = dueAtFromYmd(input.dueYmd, zone);
-  } else if (input.dueAt !== undefined) {
-    dueAt = input.dueAt === null ? null : parseInstant(input.dueAt, isAllDay, zone);
-  } else if (input.isAllDay !== undefined || input.timezone !== undefined) {
-    dueAt = snapExisting(dueAt, isAllDay, zone);
-  }
-  if (input.startAt !== undefined) {
-    startAt = input.startAt === null ? null : parseInstant(input.startAt, isAllDay, zone);
-  } else if (input.isAllDay !== undefined || input.timezone !== undefined) {
-    startAt = snapExisting(startAt, isAllDay, zone);
-  }
-
-  if (input.reminderMode !== undefined) {
-    reminderMode = input.reminderMode;
-    if (reminderMode === null || reminderMode === 'none' || reminderMode === 'due') {
-      reminderOffsetMinutes = null;
-      reminderAt = null;
-    }
-    if (reminderMode === 'offset') {
-      reminderOffsetMinutes = input.reminderOffsetMinutes ?? null;
-      reminderAt = null;
-    }
-    if (reminderMode === 'custom') {
-      reminderOffsetMinutes = null;
-      reminderAt =
-        input.reminderAt === null || input.reminderAt === undefined
-          ? null
-          : parseInstant(input.reminderAt, false, zone);
-    }
-  } else if (input.reminderOffsetMinutes !== undefined || input.reminderAt !== undefined) {
-    if (reminderMode === 'offset' && input.reminderOffsetMinutes !== undefined) {
-      reminderOffsetMinutes = input.reminderOffsetMinutes;
-    } else if (reminderMode === 'custom' && input.reminderAt !== undefined) {
-      reminderAt = input.reminderAt === null ? null : parseInstant(input.reminderAt, false, zone);
-    } else {
-      throw AppError.of(400, 'VALIDATION_ERROR');
-    }
-  }
-  if ((reminderMode === 'due' || reminderMode === 'offset') && dueAt === null) {
-    throw AppError.of(400, 'VALIDATION_ERROR');
-  }
-  if (
-    (reminderMode === 'offset' && reminderOffsetMinutes === null) ||
-    (reminderMode === 'custom' && reminderAt === null)
-  ) {
-    throw AppError.of(400, 'VALIDATION_ERROR');
-  }
-
-  let recurrence = task.recurrenceRrule;
-  let recurrenceDtstart = task.recurrenceDtstart;
-  let recurrenceKind = asRecurrenceKind(task.recurrenceKind);
-  if (input.recurrence !== undefined && input.recurrenceKind !== undefined) {
-    throw AppError.of(400, 'VALIDATION_ERROR');
-  }
-  if (input.recurrence !== undefined) {
-    if (input.recurrence === null) {
-      recurrence = null;
-      recurrenceDtstart = null;
-    } else {
-      if (dueAt === null) throw AppError.of(400, 'RRULE_DUE_REQUIRED');
-      parseRrule(input.recurrence);
-      recurrence = input.recurrence;
-      if (task.recurrenceDtstart === null) recurrenceDtstart = dueAt;
-    }
-  } else if (recurrence && dueAt === null) {
-    throw AppError.of(400, 'RRULE_DUE_REQUIRED');
-  }
-  if (input.recurrenceKind !== undefined) {
-    recurrenceKind = input.recurrenceKind;
-    recurrence = null;
-    recurrenceDtstart = recurrenceKind === null ? null : dueAt;
-  }
-  if (recurrenceKind !== null && dueAt === null) throw AppError.of(400, 'VALIDATION_ERROR');
-
-  const oldDue = task.dueAt;
-  if (dueTouched && recurrence && dueAt) {
-    const snapped = nextOccurrenceOnOrAfter(
-      {
-        ...toRecurrence(task),
-        recurrenceRrule: recurrence,
-        recurrenceDtstart,
-        isAllDay,
-        timezone: zone,
-        dueAt,
-      },
-      dueAt,
-    );
-    if (snapped === null) throw AppError.of(400, 'RRULE_INVALID');
-    if (oldDue) {
-      const delta = snapped.getTime() - oldDue.getTime();
-      startAt = shiftBy(startAt, delta);
-      reminderAt = shiftBy(reminderAt, delta);
-    }
-    dueAt = snapped;
-  }
+  const {
+    zone,
+    isAllDay,
+    dueAt,
+    startAt,
+    reminderMode,
+    reminderOffsetMinutes,
+    reminderAt,
+    recurrence,
+    recurrenceDtstart,
+    recurrenceKind,
+    dueTouched,
+    scheduleTouched,
+    oldDue,
+  } = resolvePatchSchedule(task, input);
 
   const now = new Date();
   const deferred = isDefer(oldDue, dueTouched ? dueAt : undefined, now);
   // Only columns this request decided. A title/notes/priority patch must not
   // write the schedule snapshot it read, or an overlapping due-date patch loses.
-  const scheduleTouched =
-    dueTouched ||
-    input.startAt !== undefined ||
-    input.isAllDay !== undefined ||
-    input.timezone !== undefined ||
-    input.reminderMode !== undefined ||
-    input.reminderOffsetMinutes !== undefined ||
-    input.reminderAt !== undefined ||
-    input.recurrence !== undefined ||
-    input.recurrenceKind !== undefined;
   const patch: Partial<TaskRow> = { updatedAt: now };
   if (scheduleTouched) {
     patch.timezone = zone;
@@ -437,7 +264,10 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
     patch.agentScheduled = input.agentScheduled;
   } else if (
     task.agentScheduled &&
-    (input.dueAt !== undefined || input.dueYmd !== undefined || input.startAt !== undefined || input.isAllDay !== undefined)
+    (input.dueAt !== undefined ||
+      input.dueYmd !== undefined ||
+      input.startAt !== undefined ||
+      input.isAllDay !== undefined)
   ) {
     patch.agentScheduled = false;
   }
@@ -462,9 +292,7 @@ export async function patchTask(userId: string, id: string, input: PatchTaskInpu
         // The computed instant also moves on isAllDay/timezone snaps — still a due change.
         dueAt,
         ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
-        ...(patch.estimateMinutes !== undefined
-          ? { estimateMinutes: patch.estimateMinutes }
-          : {}),
+        ...(patch.estimateMinutes !== undefined ? { estimateMinutes: patch.estimateMinutes } : {}),
         ...(patch.outcomeId !== undefined ? { outcomeId: patch.outcomeId } : {}),
       },
     );
@@ -555,7 +383,8 @@ export async function getTaskDraft(userId: string, id: string): Promise<TaskDraf
     .where(and(eq(agentJobs.userId, userId), eq(agentJobs.dedupKey, `task.draft:${task.id}`)))
     .limit(1);
   if (!job) return { status: 'idle', action: null };
-  if (job.status === 'pending' || job.status === 'running') return { status: 'queued', action: null };
+  if (job.status === 'pending' || job.status === 'running')
+    return { status: 'queued', action: null };
   if (job.status === 'failed' || job.lastError) return { status: 'failed', action: null };
 
   const [anyAction] = await getDb()
@@ -675,44 +504,8 @@ export async function completeTask(
   const dueWasNull = task.dueAt === null;
   const occurrenceAt = task.dueAt ?? now;
   const completionId = randomUUID();
-
-  let nextDue = task.dueAt;
-  let nextStart = task.startAt;
-  let nextReminderAt = task.reminderAt;
-  let nextStatus: TaskStatus = 'done';
-  let completedAt: Date | null = now;
-
-  if (task.recurrenceRrule && task.dueAt) {
-    const nxt = nextOccurrenceAfter(toRecurrence(task), task.dueAt);
-    if (nxt) {
-      const delta = nxt.getTime() - task.dueAt.getTime();
-      nextDue = nxt;
-      nextStart = shiftBy(task.startAt, delta);
-      nextReminderAt = shiftBy(task.reminderAt, delta);
-      nextStatus = 'todo';
-      completedAt = null;
-    }
-  }
-  const recurrenceKind = asRecurrenceKind(task.recurrenceKind);
-  if (recurrenceKind && task.dueAt) {
-    const nxt = await nextFixedOccurrenceAfter(
-      {
-        dueAt: task.dueAt,
-        timezone: task.timezone,
-        isAllDay: task.isAllDay,
-        recurrenceKind,
-      },
-      task.dueAt,
-    );
-    if (nxt) {
-      const delta = nxt.getTime() - task.dueAt.getTime();
-      nextDue = nxt;
-      nextStart = shiftBy(task.startAt, delta);
-      nextReminderAt = shiftBy(task.reminderAt, delta);
-      nextStatus = 'todo';
-      completedAt = null;
-    }
-  }
+  const { nextDue, nextStart, nextReminderAt, nextStatus, completedAt } =
+    await rollCompletionSchedule(task, now);
 
   try {
     await getDb().transaction(async (tx) => {

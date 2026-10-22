@@ -1,0 +1,15 @@
+export const empty = {
+  today: '今天还没有安排，也没有逾期。',
+  inboxList: '收集箱是空的。',
+  upcoming: '这里还没有任务。',
+  done: '完成的任务会出现在这里。',
+  userList: '把任务拖进来，或按新建。',
+  inbox: '把稍后读的页先丢进来。',
+  inboxReader: '打开一条稍后再读。',
+  reports: '写今天的日报，把完成的事留下痕迹。',
+  reportBody: '写下这一天。',
+  search: '输入关键词搜任务、稍后读和报告。',
+  searchNone: '没有匹配的任务、稍后读或报告。',
+  tags: '还没有标签。',
+  settings: '这是你的空间。称呼、提醒、外观和模型都在这里。',
+} as const;

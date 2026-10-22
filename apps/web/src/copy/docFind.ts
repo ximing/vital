@@ -1,0 +1,15 @@
+export const docFind = {
+  label: '文档内查找',
+  open: '查找和替换',
+  find: '查找',
+  replace: '替换为',
+  next: '下一处',
+  prev: '上一处',
+  matchCase: '区分大小写',
+  replaceOne: '替换',
+  replaceAll: '全部替换',
+  close: '关闭查找',
+  none: '无匹配',
+  progress: '{current}/{total}',
+  undo: '撤销替换',
+} as const;

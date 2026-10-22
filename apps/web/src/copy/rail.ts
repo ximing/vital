@@ -1,0 +1,17 @@
+export const rail = {
+  today: '今天',
+  capture: '收集',
+  reflect: '复盘',
+  lists: '集合',
+  todos: '待办',
+  habits: '习惯',
+  days: '日子',
+  threads: '线程',
+  activity: '系统行为',
+  memory: '记忆',
+  usage: '用量',
+  agent: '助手',
+  collapse: '收起导航',
+  expand: '展开导航',
+  resize: '拖动调整列宽',
+} as const;

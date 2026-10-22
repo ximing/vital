@@ -3,7 +3,7 @@
  * (importing apps/server modules opens Postgres).
  * habit.spawn is the one job type in the CHECK and copy maps with no processor case.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LLM_CAPABILITIES, agentActionTypeSchema } from '@vital/dto';
@@ -16,6 +16,15 @@ const FOSSIL_JOB_TYPE = 'habit.spawn';
 
 function readRepo(rel: string): string {
   return readFileSync(join(repoRoot, rel), 'utf8');
+}
+
+/** Screen copy is split per top-level key. Parity still sees one vocabulary. */
+function readCopyDir(rel: string): string {
+  return readdirSync(join(repoRoot, rel))
+    .filter((name) => name.endsWith('.ts'))
+    .sort()
+    .map((name) => readFileSync(join(repoRoot, rel, name), 'utf8'))
+    .join('\n');
 }
 
 function snippet(source: string, index: number): string {
@@ -115,7 +124,8 @@ function skipString(source: string, index: number): { next: number; value: strin
 }
 
 function readIdent(source: string, index: number): { value: string; next: number } {
-  if (!isIdentStart(source.charAt(index))) throw new Error(`expected ident ${snippet(source, index)}`);
+  if (!isIdentStart(source.charAt(index)))
+    throw new Error(`expected ident ${snippet(source, index)}`);
   let i = index + 1;
   while (isIdentPart(source.charAt(i))) i += 1;
   return { value: source.slice(index, i), next: i };
@@ -133,7 +143,8 @@ function skipMemberOrIdent(source: string, index: number): number {
 }
 
 function skipSpread(source: string, index: number): number {
-  if (!source.startsWith('...', index)) throw new Error(`expected spread ${snippet(source, index)}`);
+  if (!source.startsWith('...', index))
+    throw new Error(`expected spread ${snippet(source, index)}`);
   return skipMemberOrIdent(source, skipTrivia(source, index + 3));
 }
 
@@ -258,6 +269,11 @@ function objectKeyLists(source: string): string[][] {
     }
 
     if (top.kind === 'object' && top.phase === 'colon') {
+      // Split copy facades use shorthand properties: `{ brand, nav }`.
+      if (char === ',' || char === '}') {
+        top.phase = 'comma';
+        continue;
+      }
       if (char !== ':') throw new Error(`expected ':' ${snippet(source, i)}`);
       top.phase = 'value';
       i += 1;
@@ -446,15 +462,25 @@ function exportedStringConst(source: string, name: string): string | undefined {
 
 function resolveJobToken(token: string, errandSource: string): string {
   if (!/^[A-Za-z_$][\w$]*$/.test(token)) return token;
-  const value = exportedStringConst(errandSource, token);
-  if (value === undefined) throw new Error(`cannot resolve ${token} from errand.ts`);
-  return value;
+  const direct = exportedStringConst(errandSource, token);
+  if (direct !== undefined) return direct;
+  const reexport = new RegExp(
+    `export\\s*\\{[^}]*\\b${token}\\b[^}]*\\}\\s*from\\s*['"](\\./[^'"]+)['"]`,
+  ).exec(errandSource);
+  const spec = reexport?.[1];
+  if (spec !== undefined) {
+    const rel = spec.replace(/^\.\//, '').replace(/\.js$/, '.ts');
+    const nested = exportedStringConst(readRepo(`apps/server/src/agent/${rel}`), token);
+    if (nested !== undefined) return nested;
+  }
+  throw new Error(`cannot resolve ${token} from errand.ts`);
 }
 
 function isEventTypeEquality(source: string, stringAt: number): boolean {
   let j = stringAt - 1;
   while (j >= 0 && /\s/.test(source.charAt(j))) j -= 1;
-  if (source.charAt(j) !== '=' || source.charAt(j - 1) !== '=' || source.charAt(j - 2) !== '=') return false;
+  if (source.charAt(j) !== '=' || source.charAt(j - 1) !== '=' || source.charAt(j - 2) !== '=')
+    return false;
   if (source.charAt(j - 3) === '!') return false;
   j -= 3;
   while (j >= 0 && /\s/.test(source.charAt(j))) j -= 1;
@@ -497,7 +523,11 @@ function dispatchEventLiterals(source: string): { literals: Set<string>; compare
   return { literals, compared };
 }
 
-function expectSameMembers(label: string, actual: readonly string[], expected: readonly string[]): void {
+function expectSameMembers(
+  label: string,
+  actual: readonly string[],
+  expected: readonly string[],
+): void {
   const sorted = [...actual].sort();
   const duplicates = [...new Set(sorted.filter((value, index) => value === sorted[index - 1]))];
   const actualValues = [...new Set(sorted)];
@@ -520,8 +550,8 @@ describe('closed vocabulary parity', () => {
   const scheduler = readRepo('apps/server/src/agent/scheduler.ts');
   const errand = readRepo('apps/server/src/agent/errand.ts');
   const dispatch = readRepo('apps/server/src/notifications/dispatch.ts');
-  const webCopy = readRepo('apps/web/src/copy.ts');
-  const mobileCopy = readRepo('apps/mobile/src/lib/copy.ts');
+  const webCopy = readCopyDir('apps/web/src/copy');
+  const mobileCopy = readCopyDir('apps/mobile/src/lib/copy');
 
   const jobTypes = checkInList(agentSchema, 'agent_jobs_type_check');
 
@@ -571,8 +601,8 @@ describe('closed vocabulary parity', () => {
     // index.sync is an internal index heal with no user-facing label. Extra capability keys are allowed.
     const labeled = jobTypes.filter((jobType) => jobType !== 'index.sync');
     const sources: Array<[string, string]> = [
-      ['apps/web/src/copy.ts', webCopy],
-      ['apps/mobile/src/lib/copy.ts', mobileCopy],
+      ['apps/web/src/copy', webCopy],
+      ['apps/mobile/src/lib/copy', mobileCopy],
     ];
     const maps = sources.map(([label, source]) => {
       const keys = new Set(objectKeysContaining(source, FOSSIL_JOB_TYPE));

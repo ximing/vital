@@ -1,0 +1,16 @@
+export const calendar = {
+  picker: '日期选择器',
+  prevMonth: '上个月',
+  nextMonth: '下个月',
+  prevYear: '上一年',
+  nextYear: '下一年',
+  prevDecade: '上十年',
+  nextDecade: '下十年',
+  prevCentury: '上个世纪',
+  nextCentury: '下个世纪',
+  year: '{y}年',
+  month: '{m}月',
+  decade: '{from}–{to}',
+  selectYear: '选择年份',
+  selectMonth: '选择月份',
+} as const;

@@ -43,7 +43,6 @@ import type {
   CreateNotificationChannelInput,
   CreateInboxInput,
   CreateOutcomeInput,
-  CurrentReportQuery,
   ExchangeExtensionAuthInput,
   ExtensionAuthCodeResponse,
   QrLoginDecision,
@@ -64,7 +63,6 @@ import type {
   PatchOutcomeInput,
   PutLlmRoutingInput,
   ReportOverview,
-  ReportOverviewQuery,
   ReportReview,
   CreateListInput,
   NotificationChannel,
@@ -129,9 +127,27 @@ import type {
   CreateApiTokenInput,
   CreatedApiToken,
 } from '@vital/dto';
-import { Http, isAuthResponse, tokensForStore, type BootResult } from './http.js';
-import { ApiError, type VitalClientOptions } from './types.js';
-import { uploadImpl, type UploadInput } from './upload.js';
+import { Http, type BootResult } from './http.js';
+import type { VitalClientOptions } from './types.js';
+import type { UploadInput } from './upload.js';
+import { bindAgent } from './domains/agent.js';
+import { bindAuth } from './domains/auth.js';
+import { bindDays } from './domains/days.js';
+import { bindEnergy } from './domains/energy.js';
+import { bindHabits } from './domains/habits.js';
+import { bindInbox } from './domains/inbox.js';
+import { bindLists } from './domains/lists.js';
+import { bindLlm } from './domains/llm.js';
+import { bindNotifications } from './domains/notifications.js';
+import { bindOutcomes } from './domains/outcomes.js';
+import { bindReports } from './domains/reports.js';
+import { bindSearch } from './domains/search.js';
+import { bindSync } from './domains/sync.js';
+import { bindTags } from './domains/tags.js';
+import { bindTasks } from './domains/tasks.js';
+import { bindToday } from './domains/today.js';
+import { bindTokens } from './domains/tokens.js';
+import { bindUploads } from './domains/uploads.js';
 
 export interface VitalClient {
   readonly authMode: AuthMode;
@@ -221,7 +237,9 @@ export interface VitalClient {
   getChatSession(): Promise<ChatSession>;
   resetChat(): Promise<ChatSession>;
   postChatMessage(input: PostChatMessageInput, signal?: AbortSignal): Promise<Response>;
-  applyChatPreview(id: string): Promise<{ summary: string; invalidate: ChatInvalidateTag[]; errors: string[] }>;
+  applyChatPreview(
+    id: string,
+  ): Promise<{ summary: string; invalidate: ChatInvalidateTag[]; errors: string[] }>;
   applyAgentPlan(id: string): Promise<ApplyPlanResult>;
   cancelChatPreview(id: string): Promise<{ ok: true }>;
   undoChat(hintId: string): Promise<{ ok: true; invalidate: ChatInvalidateTag[] }>;
@@ -306,357 +324,33 @@ export interface VitalClient {
   syncChanges(query: { since: string; limit?: number }): Promise<SyncChanges>;
 }
 
-async function persistAuth(options: VitalClientOptions, data: unknown): Promise<AuthResponse> {
-  if (!isAuthResponse(data)) {
-    throw new ApiError(0, 'INVALID_RESPONSE', '响应格式错误');
-  }
-  const tokens = tokensForStore(options.authMode, data.tokens);
-  await options.tokenStore.setTokens(tokens);
-  return { user: data.user, tokens };
-}
-
 export function createVitalClient(options: VitalClientOptions): VitalClient {
   const http = new Http(options);
-  const skipAuth: { method: 'POST'; skipAuth: true; skipAuthRefresh: true } = {
-    method: 'POST',
-    skipAuth: true,
-    skipAuthRefresh: true,
+  const skipAuth = {
+    method: 'POST' as const,
+    skipAuth: true as const,
+    skipAuthRefresh: true as const,
   };
-
-  async function createInboxResult(
-    input: CreateInboxInput,
-    idempotencyKey?: string,
-  ): Promise<{ item: InboxItem; created: boolean }> {
-    const headers: Record<string, string> = {};
-    if (idempotencyKey !== undefined) headers['Idempotency-Key'] = idempotencyKey;
-    const result = await http.requestWithStatus('/api/v1/inbox', {
-      method: 'POST',
-      body: input,
-      ...(idempotencyKey !== undefined ? { headers } : {}),
-    });
-    return { item: result.data as InboxItem, created: result.status === 201 };
-  }
 
   return {
     authMode: options.authMode,
-    boot: () => http.boot(),
-    getAndroidRelease: () =>
-      http.request('/api/v1/app/android', { skipAuth: true, skipAuthRefresh: true }),
-    getAppLatest: () => http.request('/api/v1/app', { skipAuth: true, skipAuthRefresh: true }),
-    register: async (input) =>
-      persistAuth(
-        options,
-        await http.request<unknown>('/api/v1/auth/register', { ...skipAuth, body: input }),
-      ),
-    login: async (input) =>
-      persistAuth(
-        options,
-        await http.request<unknown>('/api/v1/auth/login', { ...skipAuth, body: input }),
-      ),
-    createExtensionAuthCode: () =>
-      http.request('/api/v1/auth/extension/code', { method: 'POST', body: {} }),
-    exchangeExtensionAuth: async (input) =>
-      persistAuth(
-        options,
-        await http.request<unknown>('/api/v1/auth/extension/exchange', {
-          ...skipAuth,
-          body: input,
-        }),
-      ),
-    createQrLogin: () =>
-      http.request('/api/v1/auth/qr', {
-        method: 'POST',
-        skipAuth: true,
-        skipAuthRefresh: true,
-        body: {},
-      }),
-    pollQrLogin: async (input) => {
-      const data: QrLoginPollResponse = await http.request('/api/v1/auth/qr/poll', {
-        method: 'POST',
-        skipAuth: true,
-        skipAuthRefresh: true,
-        body: input,
-      });
-      if (data.status === 'confirmed' && data.user && data.tokens) {
-        await persistAuth(options, { user: data.user, tokens: data.tokens });
-      }
-      return data;
-    },
-    scanQrLogin: (input) =>
-      http.request('/api/v1/auth/qr/scan', { method: 'POST', body: input }),
-    confirmQrLogin: (input) =>
-      http.request('/api/v1/auth/qr/confirm', { method: 'POST', body: input }),
-    cancelQrLogin: (input) =>
-      http.request('/api/v1/auth/qr/cancel', { method: 'POST', body: input }),
-    refresh: () => http.refresh(),
-    logout: async () => {
-      let body: { refreshToken?: string } = {};
-      if (options.authMode === 'bearer') {
-        const refreshToken = await options.tokenStore.getRefreshToken();
-        if (refreshToken !== null && refreshToken !== '') {
-          body = { refreshToken };
-        }
-      }
-      try {
-        await http.request('/api/v1/auth/logout', { ...skipAuth, body });
-      } finally {
-        try {
-          await options.tokenStore.clear();
-        } catch {
-          // Local clear is best-effort after logout.
-        }
-      }
-    },
-    me: () => http.request('/api/v1/auth/me'),
-    updateMe: (input) => http.request('/api/v1/auth/me', { method: 'PATCH', body: input }),
-    listApiTokens: () => http.request('/api/v1/tokens'),
-    createApiToken: (input) => http.request('/api/v1/tokens', { method: 'POST', body: input }),
-    revokeApiToken: (id) => http.request(`/api/v1/tokens/${id}`, { method: 'DELETE' }),
-    listApiTokenAccess: (id, query = {}) => {
-      const q: Record<string, string | number | boolean | undefined> = {};
-      if (query.cursor !== undefined) q.cursor = query.cursor;
-      if (query.limit !== undefined) q.limit = query.limit;
-      return http.request(`/api/v1/tokens/${id}/access`, { query: q });
-    },
-    listNotificationChannels: () => http.request('/api/v1/notification-channels'),
-    createNotificationChannel: (input) =>
-      http.request('/api/v1/notification-channels', { method: 'POST', body: input }),
-    patchNotificationChannel: (id, input) =>
-      http.request(`/api/v1/notification-channels/${id}`, { method: 'PATCH', body: input }),
-    deleteNotificationChannel: (id) =>
-      http.request(`/api/v1/notification-channels/${id}`, { method: 'DELETE' }),
-    testNotificationChannel: (id) =>
-      http.request(`/api/v1/notification-channels/${id}/test`, { method: 'POST' }),
-    registerPushDevice: (input) => http.request('/api/v1/push-devices', { method: 'POST', body: input }),
-    updateOnboarding: (input) =>
-      http.request('/api/v1/auth/onboarding', { method: 'PATCH', body: input }),
-    changePassword: async (input) => {
-      await http.request('/api/v1/auth/change-password', { method: 'POST', body: input });
-      try {
-        await options.tokenStore.clear();
-      } catch {
-        // Server already revoked every session.
-      }
-    },
-    abortUpload: (id) => http.request(`/api/v1/uploads/${id}/abort`, { method: 'POST' }),
-    discardUpload: (id) => http.request(`/api/v1/uploads/${id}`, { method: 'DELETE' }),
-    upload: (input) => uploadImpl(http, options, input),
-    bindUpload: (id, input) =>
-      http.request(`/api/v1/uploads/${id}/bind`, { method: 'POST', body: input }),
-    getUploadUrl: (id) => http.request(`/api/v1/uploads/${id}/url`),
-    listLists: () => http.request('/api/v1/lists'),
-    createList: (input) => http.request('/api/v1/lists', { method: 'POST', body: input }),
-    reorderLists: (input) => http.request('/api/v1/lists/reorder', { method: 'PUT', body: input }),
-    patchList: (id, input) => http.request(`/api/v1/lists/${id}`, { method: 'PATCH', body: input }),
-    deleteList: (id) => http.request(`/api/v1/lists/${id}`, { method: 'DELETE' }),
-    listTasks: (query) => {
-      const q: Record<string, string | number | boolean | undefined> = { listId: query.listId };
-      if (query.cursor !== undefined) q.cursor = query.cursor;
-      if (query.limit !== undefined) q.limit = query.limit;
-      return http.request('/api/v1/tasks', { query: q });
-    },
-    taskCounts: () => http.request('/api/v1/tasks/counts'),
-    createTask: (input) => http.request('/api/v1/tasks', { method: 'POST', body: input }),
-    createTaskFromText: (input) =>
-      http.request('/api/v1/tasks/from-text', { method: 'POST', body: input }),
-    llmCatalog: () => http.request('/api/v1/llm/catalog'),
-    addLlmProvider: (input) =>
-      http.request('/api/v1/llm/providers', { method: 'POST', body: input }),
-    patchLlmProvider: (id, input) =>
-      http.request(`/api/v1/llm/providers/${id}`, { method: 'PATCH', body: input }),
-    removeLlmProvider: (id) => http.request(`/api/v1/llm/providers/${id}`, { method: 'DELETE' }),
-    testLlmProvider: (id, model) =>
-      http.request(`/api/v1/llm/providers/${id}/test`, {
-        method: 'POST',
-        body: { providerId: id, model },
-      }),
-    putLlmRouting: (input) => http.request('/api/v1/llm/routing', { method: 'PUT', body: input }),
-    getToday: () => http.request('/api/v1/today'),
-    putTodayLayoutContext: (input) =>
-      http.request('/api/v1/today/layout-context', { method: 'PUT', body: input }),
-    syncDeviceCalendar: (input) =>
-      http.request('/api/v1/tasks/device-calendar', { method: 'POST', body: input }),
-    listOutcomes: (status) => http.request(`/api/v1/outcomes${status ? `?status=${status}` : ''}`),
-    getOutcomeDetail: (id) => http.request(`/api/v1/outcomes/${id}/detail`),
-    createOutcome: (input) => http.request('/api/v1/outcomes', { method: 'POST', body: input }),
-    patchOutcome: (id, input) =>
-      http.request(`/api/v1/outcomes/${id}`, { method: 'PATCH', body: input }),
-    closeOutcome: (id) => http.request(`/api/v1/outcomes/${id}/close`, { method: 'POST' }),
-    reopenOutcome: (id) => http.request(`/api/v1/outcomes/${id}/reopen`, { method: 'POST' }),
-    undoOutcome: async (id) => {
-      await http.request(`/api/v1/outcomes/${id}/undo`, { method: 'POST' });
-    },
-    refreshOutcome: async (id) => {
-      await http.request(`/api/v1/outcomes/${id}/refresh`, { method: 'POST' });
-    },
-    listHabits: () => http.request('/api/v1/habits'),
-    listHabitCheckins: (query) =>
-      http.request('/api/v1/habits/checkins', { query: { from: query.from, to: query.to } }),
-    createHabit: (input) => http.request('/api/v1/habits', { method: 'POST', body: input }),
-    patchHabit: (id, input) =>
-      http.request(`/api/v1/habits/${id}`, { method: 'PATCH', body: input }),
-    tickHabit: (id) => http.request(`/api/v1/habits/${id}/tick`, { method: 'POST' }),
-    deleteHabit: async (id) => {
-      await http.request(`/api/v1/habits/${id}`, { method: 'DELETE' });
-    },
-    listEnergyLogs: (query) => {
-      const q: Record<string, string | number | boolean | undefined> = {};
-      if (query?.date !== undefined) q.date = query.date;
-      if (query?.from !== undefined) q.from = query.from;
-      if (query?.to !== undefined) q.to = query.to;
-      if (query?.since !== undefined) q.since = query.since;
-      return http.request('/api/v1/energy-logs', { query: q });
-    },
-    createEnergyLog: (input) => http.request('/api/v1/energy-logs', { method: 'POST', body: input }),
-    listDays: () => http.request('/api/v1/days'),
-    listDayCatalog: () => http.request('/api/v1/days/catalog'),
-    getDayCalendarMeta: (year) => http.request('/api/v1/days/meta', { query: { year } }),
-    getDay: (id) => http.request(`/api/v1/days/${id}`),
-    createDay: (input) => http.request('/api/v1/days', { method: 'POST', body: input }),
-    patchDay: (id, input) => http.request(`/api/v1/days/${id}`, { method: 'PATCH', body: input }),
-    deleteDay: async (id) => {
-      await http.request(`/api/v1/days/${id}`, { method: 'DELETE' });
-    },
-    listAgentExecutions: (days) =>
-      http.request(`/api/v1/agent/executions${days ? `?days=${String(days)}` : ''}`),
-    organizeAgentTasks: () => http.request('/api/v1/agent/cluster', { method: 'POST' }),
-    getChatSession: () => http.request('/api/v1/agent/chat'),
-    resetChat: () => http.request('/api/v1/agent/chat/reset', { method: 'POST' }),
-    postChatMessage: (input, signal) =>
-      http.stream('/api/v1/agent/chat/messages', {
-        method: 'POST',
-        body: input,
-        ...(signal ? { signal } : {}),
-      }),
-    applyChatPreview: (id) => http.request(`/api/v1/agent/chat/previews/${id}/apply`, { method: 'POST' }),
-    applyAgentPlan: (id) => http.request(`/api/v1/agent/plans/${id}/apply`, { method: 'POST' }),
-    cancelChatPreview: (id) => http.request(`/api/v1/agent/chat/previews/${id}/cancel`, { method: 'POST' }),
-    undoChat: (hintId) => http.request('/api/v1/agent/chat/undo', { method: 'POST', body: { hintId } }),
-    distillAgentMemory: () => http.request('/api/v1/agent/memory/distill', { method: 'POST' }),
-    getAgentUsage: (days) =>
-      http.request(`/api/v1/agent/usage${days ? `?days=${String(days)}` : ''}`),
-    getAgentMetrics: (days) =>
-      http.request(`/api/v1/agent/metrics${days ? `?days=${String(days)}` : ''}`),
-    listAgentSchedule: () => http.request('/api/v1/agent/schedule'),
-    cancelAgentSchedule: (capability) =>
-      http.request(`/api/v1/agent/schedule/${capability}/cancel`, { method: 'POST' }),
-    listAgentActions: (query) =>
-      http.request('/api/v1/agent/actions', {
-        query: {
-          targetType: query?.targetType,
-          targetId: query?.targetId,
-          actionType: query?.actionType,
-          feedback: query?.feedback,
-          days: query?.days,
-        },
-      }),
-    sendAgentActionFeedback: (id, input) =>
-      http.request(`/api/v1/agent/actions/${id}/feedback`, { method: 'POST', body: input }),
-    undoAgentAction: (id) =>
-      http.request(`/api/v1/agent/actions/${id}/undo`, { method: 'POST' }),
-    listAgentMemory: () => http.request('/api/v1/agent/memory'),
-    createAgentMemory: (input) =>
-      http.request('/api/v1/agent/memory', { method: 'POST', body: input }),
-    patchAgentMemory: (id, input) =>
-      http.request(`/api/v1/agent/memory/${id}`, { method: 'PATCH', body: input }),
-    deleteAgentMemory: async (id) => {
-      await http.request(`/api/v1/agent/memory/${id}`, { method: 'DELETE' });
-    },
-    getTask: (id) => http.request(`/api/v1/tasks/${id}`),
-    patchTask: (id, input) => http.request(`/api/v1/tasks/${id}`, { method: 'PATCH', body: input }),
-    getTaskDraft: (id) => http.request(`/api/v1/tasks/${id}/draft`),
-    draftTask: (id) =>
-      http.request(`/api/v1/tasks/${id}/draft`, { method: 'POST', body: {} }),
-    deleteTask: (id) => http.request(`/api/v1/tasks/${id}`, { method: 'DELETE' }),
-    completeTask: (id) =>
-      http.request(`/api/v1/tasks/${id}/complete`, { method: 'POST', body: {} }),
-    uncompleteTask: (id, input) =>
-      http.request(`/api/v1/tasks/${id}/uncomplete`, { method: 'POST', body: input }),
-    restoreTask: (id) => http.request(`/api/v1/tasks/${id}/restore`, { method: 'POST', body: {} }),
-    reorderTasks: (input) => http.request('/api/v1/tasks/reorder', { method: 'PUT', body: input }),
-    calendar: (query) =>
-      http.request('/api/v1/tasks/calendar', { query: { from: query.from, to: query.to } }),
-    listTags: () => http.request('/api/v1/tags'),
-    createTag: (input) => http.request('/api/v1/tags', { method: 'POST', body: input }),
-    patchTag: (id, input) => http.request(`/api/v1/tags/${id}`, { method: 'PATCH', body: input }),
-    deleteTag: (id) => http.request(`/api/v1/tags/${id}`, { method: 'DELETE' }),
-    search: (input) => http.request('/api/v1/search', { method: 'POST', body: input }),
-    searchAll: (q, limit) =>
-      http.request('/api/v1/search', { query: { q, limit } }),
-    extractInbox: (input) => http.request('/api/v1/inbox/extract', { method: 'POST', body: input }),
-    startInboxExtract: (input) =>
-      http.request('/api/v1/inbox/extract-jobs', { method: 'POST', body: input }),
-    getInboxExtract: (id) => http.request(`/api/v1/inbox/extract-jobs/${id}`),
-    listInboxExtractJobs: (query = {}) => {
-      const q: Record<string, string | number | boolean | undefined> = {};
-      if (query.page !== undefined) q.page = query.page;
-      if (query.limit !== undefined) q.limit = query.limit;
-      return http.request('/api/v1/inbox/extract-jobs', { query: q });
-    },
-    listInbox: (query = {}) => {
-      const q: Record<string, string | number | boolean | undefined> = {};
-      if (query.status !== undefined) q.status = query.status;
-      if (query.tagId !== undefined) q.tagId = query.tagId;
-      if (query.cursor !== undefined) q.cursor = query.cursor;
-      if (query.limit !== undefined) q.limit = query.limit;
-      return http.request('/api/v1/inbox', { query: q });
-    },
-    createInboxResult,
-    createInbox: async (input, idempotencyKey) =>
-      (await createInboxResult(input, idempotencyKey)).item,
-    getInbox: (id) => http.request(`/api/v1/inbox/${id}`),
-    getInboxMarkdown: (id) => http.request(`/api/v1/inbox/${id}/markdown`),
-    patchInbox: (id, input) =>
-      http.request(`/api/v1/inbox/${id}`, { method: 'PATCH', body: input }),
-    patchInboxAssets: (id, input) =>
-      http.request(`/api/v1/inbox/${id}/assets`, { method: 'PATCH', body: input }),
-    deleteInbox: (id) => http.request(`/api/v1/inbox/${id}`, { method: 'DELETE' }),
-    convertInbox: (id, input = {}) =>
-      http.request(`/api/v1/inbox/${id}/convert`, { method: 'POST', body: input }),
-    startInboxErrand: (id) =>
-      http.request(`/api/v1/inbox/${id}/errand`, { method: 'POST', body: {} }),
-    startTaskErrand: (id) =>
-      http.request(`/api/v1/tasks/${id}/errand`, { method: 'POST', body: {} }),
-    exportInboxToInwit: (id) =>
-      http.request(`/api/v1/inbox/${id}/export-inwit`, { method: 'POST', body: {} }),
-    getInwitConfig: () => http.request('/api/v1/integrations/inwit'),
-    putInwitConfig: (input) =>
-      http.request('/api/v1/integrations/inwit', { method: 'PUT', body: input }),
-    testInwit: () => http.request('/api/v1/integrations/inwit/test', { method: 'POST', body: {} }),
-    listReports: (query = {}) => {
-      const q: Record<string, string | number | boolean | undefined> = {};
-      if (query.type !== undefined) q.type = query.type;
-      if (query.cursor !== undefined) q.cursor = query.cursor;
-      if (query.limit !== undefined) q.limit = query.limit;
-      return http.request('/api/v1/reports', { query: q });
-    },
-    getCurrentReport: (type, at) => {
-      const query: CurrentReportQuery = { type, ...(at ? { at } : {}) };
-      return http.request('/api/v1/reports/current', { query });
-    },
-    getReportCounts: () => http.request('/api/v1/reports/counts'),
-    getReportOverview: (type, at) => {
-      const query: ReportOverviewQuery = { type, ...(at ? { at } : {}) };
-      return http.request('/api/v1/reports/overview', { query });
-    },
-    getReport: (id, query = {}) => {
-      const q: Record<string, string | number | boolean | undefined> = {};
-      if (query.asOf !== undefined) q.asOf = query.asOf;
-      return http.request(`/api/v1/reports/${id}`, { query: q });
-    },
-    getReportReview: (id) => http.request(`/api/v1/reports/${id}/review`),
-    getReportEmbeds: (id) => http.request(`/api/v1/reports/${id}/embeds`),
-    patchReport: (id, input) =>
-      http.request(`/api/v1/reports/${id}`, { method: 'PATCH', body: input }),
-    fillReport: (id, input) =>
-      http.request(`/api/v1/reports/${id}/fill`, { method: 'POST', body: input }),
-    generateReport: (id) =>
-      http.request(`/api/v1/reports/${id}/generate`, { method: 'POST', body: {} }),
-    syncHead: () => http.request('/api/v1/sync/head'),
-    syncChanges: (query) => {
-      const q: Record<string, string | number | boolean | undefined> = { since: query.since };
-      if (query.limit !== undefined) q.limit = query.limit;
-      return http.request('/api/v1/sync/changes', { query: q });
-    },
+    ...bindAuth(http, options, skipAuth),
+    ...bindTokens(http),
+    ...bindNotifications(http),
+    ...bindUploads(http, options),
+    ...bindLists(http),
+    ...bindTasks(http),
+    ...bindLlm(http),
+    ...bindToday(http),
+    ...bindOutcomes(http),
+    ...bindHabits(http),
+    ...bindEnergy(http),
+    ...bindDays(http),
+    ...bindAgent(http),
+    ...bindTags(http),
+    ...bindSearch(http),
+    ...bindInbox(http),
+    ...bindReports(http),
+    ...bindSync(http),
   };
 }

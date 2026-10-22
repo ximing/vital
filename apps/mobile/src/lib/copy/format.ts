@@ -1,0 +1,16 @@
+export const format = {
+  h2: '小标题',
+  h3: '子标题',
+  bold: '粗体',
+  italic: '斜体',
+  strike: '删除线',
+  code: '行内代码',
+  bullet: '列表',
+  ordered: '编号列表',
+  quote: '引用',
+  codeBlock: '代码块',
+  link: '链接',
+  linkPrompt: '链接地址',
+  image: '图片',
+  uploadFailed: '图片没能放进正文',
+} as const;

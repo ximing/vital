@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, desc, eq, gte, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
-import { DateTime } from 'luxon';
 import type {
   CreateOutcomeInput,
   ListOutcomesQuery,
@@ -9,18 +8,13 @@ import type {
   OutcomeMaterial,
   OutcomeSignal,
   PatchOutcomeInput,
-  TodayDashboard,
-  TodayPulse,
 } from '@vital/dto';
 import { recordOutcomeRename } from '../agent/edit-events.service.js';
-import { readTodayLayout } from '../agent/today-layout.js';
 import { getDb } from '../db/index.js';
 import {
   agentActions,
-  habits,
   inboxItems,
   outcomes,
-  reports,
   taskCompletions,
   tasks,
   taskTags,
@@ -31,18 +25,14 @@ import { getUserEntity } from '../auth/auth.service.js';
 import { summarizePayload, targetNamesFor, toAgentActionDto } from '../agent/actions.service.js';
 import { trackIndexJob } from '../retrieval/pipeline.js';
 import { indexOutcome, removeOutcomeIndex } from '../retrieval/search.js';
-import { expireStaleHabitInstances, listHabitsForOutcome } from '../habits/habits.service.js';
+import { listHabitsForOutcome } from '../habits/habits.service.js';
 import {
   linkedHabitFacts,
   loadHabitHeadlineFacts,
   type HabitHeadlineFact,
 } from '../habits/progress.js';
-import { upcomingDay } from '../days/days.service.js';
-import { listTasks } from '../tasks/tasks.service.js';
 import { toTaskDto } from '../tasks/task-dto.js';
 import { latestCompletionIdByTask } from '../tasks/tasks.shared.js';
-import { showsOnTodayBoard } from './board.js';
-import { computeNow } from './now-engine.js';
 import { removeAgentOutcome } from './remove-agent-outcome.js';
 import {
   computeSignal,
@@ -60,7 +50,7 @@ function iso(d: Date | null): string | null {
   return d ? d.toISOString() : null;
 }
 
-function asSignal(value: string | null): OutcomeSignal | null {
+export function asSignal(value: string | null): OutcomeSignal | null {
   return value === 'up' || value === 'flat' || value === 'alert' ? value : null;
 }
 
@@ -73,13 +63,16 @@ interface OutcomeStats {
 }
 
 function emptyOutcomeStats(): OutcomeStats {
-  return { openTaskCount: 0, completedLast7d: 0, materialCount: 0, milestoneDone: 0, milestoneTotal: 0 };
+  return {
+    openTaskCount: 0,
+    completedLast7d: 0,
+    materialCount: 0,
+    milestoneDone: 0,
+    milestoneTotal: 0,
+  };
 }
 
-export function toOutcomeDto(
-  row: OutcomeRow,
-  stats: OutcomeStats = emptyOutcomeStats(),
-): Outcome {
+export function toOutcomeDto(row: OutcomeRow, stats: OutcomeStats = emptyOutcomeStats()): Outcome {
   return {
     id: row.id,
     name: row.name,
@@ -105,7 +98,7 @@ export function toOutcomeDto(
   };
 }
 
-async function loadMaterialCounts(
+export async function loadMaterialCounts(
   userId: string,
   outcomeIds: string[],
 ): Promise<Map<string, number>> {
@@ -484,7 +477,7 @@ function laterOf(a: Date | null, b: Date | null): Date | null {
 }
 
 /** Open tasks, 14d completions, and last activity — one query each, grouped in memory. */
-async function loadOutcomeRuleContext(
+export async function loadOutcomeRuleContext(
   userId: string,
   outcomeIds: string[],
   now: Date,
@@ -604,7 +597,7 @@ async function loadOutcomeRuleContext(
   return { openByOutcome, completionsByOutcome, lastTaskActivityByOutcome, milestonesByOutcome };
 }
 
-function ruleFieldsForOutcome(
+export function ruleFieldsForOutcome(
   outcomeId: string,
   ctx: OutcomeRuleContext,
   habitFacts: HabitHeadlineFact[],
@@ -612,7 +605,9 @@ function ruleFieldsForOutcome(
   timezone: string,
 ): OutcomeRuleFields {
   const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-  const openTasks = (ctx.openByOutcome.get(outcomeId) ?? []).filter((task) => task.calendarKey === null);
+  const openTasks = (ctx.openByOutcome.get(outcomeId) ?? []).filter(
+    (task) => task.calendarKey === null,
+  );
   const doneAt = ctx.completionsByOutcome.get(outcomeId) ?? [];
   const completedLast7d = doneAt.filter((at) => at >= weekAgo).length;
   const completedPrev7d = doneAt.length - completedLast7d;
@@ -654,7 +649,7 @@ function ruleFieldsForOutcome(
   };
 }
 
-function statsFromRuleContext(
+export function statsFromRuleContext(
   outcomeIds: string[],
   ctx: OutcomeRuleContext,
   habitFacts: HabitHeadlineFact[],
@@ -667,13 +662,16 @@ function statsFromRuleContext(
     const openCount = (ctx.openByOutcome.get(id) ?? []).filter(
       (task) => task.habitId === null && task.calendarKey === null,
     ).length;
-    const completedLast7d = (ctx.completionsByOutcome.get(id) ?? []).filter((at) => at >= weekAgo)
-      .length;
+    const completedLast7d = (ctx.completionsByOutcome.get(id) ?? []).filter(
+      (at) => at >= weekAgo,
+    ).length;
     const habitDays = linkedHabitFacts(habitFacts, id).reduce(
       (sum, habit) => sum + habit.daysDoneLast7d,
       0,
     );
-    const milestones = (ctx.milestonesByOutcome.get(id) ?? []).filter((task) => task.status !== 'canceled');
+    const milestones = (ctx.milestonesByOutcome.get(id) ?? []).filter(
+      (task) => task.status !== 'canceled',
+    );
     map.set(id, {
       openTaskCount: openCount,
       completedLast7d: completedLast7d + habitDays,
@@ -721,122 +719,4 @@ export async function refreshOutcomeRulesForTask(
   }
 }
 
-async function todayPulse(userId: string, timezone: string): Promise<TodayPulse> {
-  const [inboxRow] = await getDb()
-    .select({ n: sql<number>`count(*)::int` })
-    .from(inboxItems)
-    .where(and(eq(inboxItems.userId, userId), eq(inboxItems.status, 'unread'), isNull(inboxItems.deletedAt)));
-
-  const daily = await getDb()
-    .select({ id: reports.id, periodStart: reports.periodStart })
-    .from(reports)
-    .where(
-      and(
-        eq(reports.userId, userId),
-        eq(reports.type, 'daily'),
-        ne(reports.bodyMd, ''),
-      ),
-    )
-    .orderBy(desc(reports.periodStart))
-    .limit(120);
-  const today = DateTime.now().setZone(timezone).toISODate();
-  const written = new Set(daily.map((r) => r.periodStart));
-  let streak = 0;
-  let cursor = today;
-  if (cursor && !written.has(cursor)) {
-    // Today isn't written yet — don't break the streak, start from yesterday.
-    cursor = DateTime.fromISO(cursor).minus({ days: 1 }).toISODate();
-  }
-  while (cursor && written.has(cursor)) {
-    streak += 1;
-    cursor = DateTime.fromISO(cursor).minus({ days: 1 }).toISODate();
-  }
-
-  return {
-    inboxPending: inboxRow?.n ?? 0,
-    reportStreak: streak,
-    todayReportId: today && written.has(today) ? (daily.find((r) => r.periodStart === today)?.id ?? null) : null,
-    upcomingDay: await upcomingDay(userId, timezone),
-  };
-}
-
-export async function getTodayDashboard(userId: string, timezone: string): Promise<TodayDashboard> {
-  const now = new Date();
-  const rows = await getDb()
-    .select()
-    .from(outcomes)
-    .where(and(eq(outcomes.userId, userId), eq(outcomes.status, 'open')))
-    .orderBy(asc(outcomes.sortOrder), asc(outcomes.createdAt));
-  const outcomeIds = rows.map((r) => r.id);
-
-  // Compute in memory: overdue / habit-today depend on `now`, so a write would still go stale.
-  const [entity, habitFacts, ctx, materialCounts] = await Promise.all([
-    getUserEntity(userId),
-    loadHabitHeadlineFacts(userId, timezone, now),
-    loadOutcomeRuleContext(userId, outcomeIds, now),
-    loadMaterialCounts(userId, outcomeIds),
-  ]);
-  const stats = statsFromRuleContext(outcomeIds, ctx, habitFacts, materialCounts, now);
-  const fresh = rows.map((row) => {
-    const fields = ruleFieldsForOutcome(row.id, ctx, habitFacts, now, timezone);
-    return {
-      ...row,
-      ruleSignal: fields.ruleSignal,
-      ruleNextStep: fields.ruleNextStep,
-      lastActivityAt: fields.lastActivityAt,
-    };
-  });
-
-  await expireStaleHabitInstances(userId, timezone, now);
-  const [todayTasks, pulse, habitWindowRows, layout] = await Promise.all([
-    listTasks(userId, { listId: 'smart:today', limit: 100 }).then((r) => r.items),
-    todayPulse(userId, timezone),
-    getDb()
-      .select({ start: habits.windowStart, end: habits.windowEnd })
-      .from(habits)
-      .where(and(eq(habits.userId, userId), eq(habits.active, true))),
-    readTodayLayout(userId),
-  ]);
-
-  // "当下" card: rule layer only for now; the agent layer may later rewrite the reason.
-  const signalByOutcome = new Map(fresh.map((row) => [row.id, asSignal(row.ruleSignal)]));
-  const nowCard = computeNow({
-    now,
-    timezone,
-    tasks: todayTasks
-      .filter((task) => task.habitId === null)
-      .map((task) => ({
-        id: task.id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        estimateMinutes: task.estimateMinutes,
-        dueAt: task.dueAt ? new Date(task.dueAt) : null,
-        isAllDay: task.isAllDay,
-        agentScheduled: task.agentScheduled === true,
-        startAt: task.startAt ? new Date(task.startAt) : null,
-        outcomeId: task.outcomeId,
-        outcomeSignal: task.outcomeId ? (signalByOutcome.get(task.outcomeId) ?? null) : null,
-      })),
-    habitWindows: habitWindowRows.flatMap((row) =>
-      row.start !== null && row.end !== null ? [{ start: row.start, end: row.end }] : [],
-    ),
-    quietHoursStart: entity.quietHoursStart,
-    quietHoursEnd: entity.quietHoursEnd,
-  });
-
-  return {
-    outcomes: fresh.flatMap((row) => {
-      const open = ctx.openByOutcome.get(row.id) ?? [];
-      const realOpen = open.filter((task) => task.habitId === null && task.calendarKey === null).length;
-      const linkedHabits = linkedHabitFacts(habitFacts, row.id).filter((habit) => habit.active).length;
-      if (!showsOnTodayBoard({ createdBy: row.createdBy, realOpen, linkedHabits })) return [];
-      return [toOutcomeDto(row, stats.get(row.id))];
-    }),
-    tasks: todayTasks,
-    pulse,
-    now: nowCard,
-    layout,
-    generatedAt: now.toISOString(),
-  };
-}
+export { getTodayDashboard } from './today-dashboard.js';
