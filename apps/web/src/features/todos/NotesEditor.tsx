@@ -24,6 +24,7 @@ import { t } from '@/copy';
 import { Icon } from '@/ui/icon';
 import { Tip } from '@/ui/tip';
 import { PromptDialog } from '@/ui/prompt-dialog';
+import { hrefFromLinkClick, openTaskNoteLink } from './notes-link';
 
 function asPm(md: string): PmNode {
   return parseMarkdownToPmJSON(md);
@@ -54,16 +55,29 @@ export function NotesEditor({
     ],
     [],
   );
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions,
-    content: asPm(value),
-    editorProps: {
+  // Stable props: useEditor calls setOptions when editorProps changes identity,
+  // and that redraw drops the caret.
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         class: 'task-notes-doc tiptap',
         'aria-label': t.todos.notes,
       },
-    },
+      handleDOMEvents: {
+        click(_view: unknown, event: MouseEvent) {
+          const href = hrefFromLinkClick(event.target);
+          if (href === null) return false;
+          return openTaskNoteLink(event, href);
+        },
+      },
+    }),
+    [],
+  );
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions,
+    content: asPm(value),
+    editorProps,
     onCreate: () => {
       skip.current = false;
     },
