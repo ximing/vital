@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { bindServices, observer, useService } from '@rabjs/react';
-import { llmReady, todayModulesOrFallback } from '@vital/dto';
+import { llmReady } from '@vital/dto';
 import type { Theme } from '@vital/tokens';
 import { Banner } from '../../components/Banner';
 import { PageHeader } from '../../components/PageHeader';
@@ -56,8 +56,7 @@ const TodayWorkspaceContent = observer(function TodayWorkspaceContent() {
     timeZone: tz,
   }).format(new Date());
   const weather = useTodayWeather();
-  const showMeetings = todayModulesOrFallback(dashboard?.layout ?? null).some((module) => module.id === 'meetings');
-  const meetings = useTodayMeetings(tz, showMeetings && !(s.loading && dashboard === null));
+  const meetings = useTodayMeetings(tz, !(s.loading && dashboard === null));
   const briefing = buildTodayBriefing({
     tasks,
     upcomingTasks: s.upcomingTasks,

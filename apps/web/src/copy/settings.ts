@@ -4,7 +4,7 @@ export const settings = {
   appearance: '外观',
   prefs: '偏好',
   calendarTitle: '本地日历',
-  calendarHint: '读取 Mac 日历里今天的全部日程，包括会议以外的事项。不会修改日历。',
+  calendarHint: '读取 Mac 日历里的日程，写成任务。不会修改日历。',
   version: '版本 {v}',
   tabs: {
     account: '账户',

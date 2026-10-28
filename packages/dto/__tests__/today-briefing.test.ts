@@ -84,7 +84,6 @@ describe('today plan', () => {
       holidayName: '元旦',
       holidayDate: '2027-01-01',
       weather: '无',
-      meetings: '无',
       recommendations: [],
       quiet: false,
       habits: [],
@@ -103,7 +102,6 @@ describe('today plan', () => {
       holidayName: '元旦',
       holidayDate: '2027-01-01',
       weather: '无',
-      meetings: '无',
       recommendations: [],
       quiet: false,
       habits: [],
@@ -158,14 +156,13 @@ describe('today agenda', () => {
         [
           { id: 'lead' },
           { id: 'weather' },
-          { id: 'meetings' },
           { id: 'upcoming' },
           { id: 'holiday' },
           { id: 'focus' },
         ],
         2,
       ).map((row) => row.map((module) => module.id)),
-    ).toEqual([['lead'], ['weather'], ['meetings', 'upcoming'], ['holiday'], ['focus']]);
+    ).toEqual([['lead'], ['weather'], ['upcoming'], ['holiday'], ['focus']]);
     expect(
       groupTodayModuleRows([{ id: 'holiday' }, { id: 'lead' }, { id: 'note', text: '先收逾期' }], 2).map((row) =>
         row.map((module) => module.id),

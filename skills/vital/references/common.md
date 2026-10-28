@@ -218,7 +218,6 @@ export interface TodayLayoutFacts {
   holidayName: string;
   holidayDate: string;
   weather: string;
-  meetings: string;
   recommendations: string[];
   quiet: boolean;
   habits: string[];

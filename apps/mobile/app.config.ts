@@ -113,7 +113,7 @@ const config: ExpoConfig = {
     [
       'expo-calendar',
       {
-        calendarPermission: 'Vital 读取今天的日历日程，用来显示在今天页，不会修改日历。',
+        calendarPermission: 'Vital 读取日历日程并写成任务，不会修改日历。',
         remindersPermission: false,
       },
     ],

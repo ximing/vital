@@ -617,11 +617,11 @@ export function foldAgendaDays(items: readonly AgendaItem[], perDay = AGENDA_DAY
 }
 
 const WIDE_TODAY_MODULES = new Set(['lead', 'note', 'focus']);
-const AGENDA_TODAY_MODULES = new Set(['meetings', 'upcoming']);
+const AGENDA_TODAY_MODULES = new Set(['upcoming']);
 
 /**
- * lead, note, and focus take a row. meetings and upcoming share one agenda row,
- * including on a single column, so an empty today does not stretch beside later days.
+ * lead, note, and focus take a row. upcoming takes its own row, including on a
+ * single column, so later days do not stretch beside a short module.
  * Weather and holiday pair only with each other when two columns are open.
  */
 export function groupTodayModuleRows<T extends { id: string }>(

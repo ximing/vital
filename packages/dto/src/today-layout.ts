@@ -5,7 +5,6 @@ export const TODAY_MODULE_IDS = [
   'note',
   'lead',
   'weather',
-  'meetings',
   'upcoming',
   'holiday',
   'focus',
@@ -27,7 +26,6 @@ export interface TodayLayout {
 export const FALLBACK_TODAY_MODULES: readonly TodayLayoutModule[] = [
   { id: 'lead' },
   { id: 'weather' },
-  { id: 'meetings' },
   { id: 'upcoming' },
   { id: 'holiday' },
   { id: 'focus' },
@@ -64,8 +62,9 @@ export function normalizeTodayLayout(input: unknown): TodayLayoutModule[] {
 }
 
 export function todayModulesOrFallback(layout: TodayLayout | null | undefined): TodayLayoutModule[] {
-  if (!layout || layout.modules.length === 0) return [...FALLBACK_TODAY_MODULES];
-  return layout.modules;
+  const modules = normalizeTodayLayout(layout?.modules);
+  if (modules.length === 0) return [...FALLBACK_TODAY_MODULES];
+  return modules;
 }
 
 export interface TodayLayoutFacts {
@@ -83,7 +82,6 @@ export interface TodayLayoutFacts {
   holidayName: string;
   holidayDate: string;
   weather: string;
-  meetings: string;
   recommendations: string[];
   quiet: boolean;
   habits: string[];
@@ -116,7 +114,6 @@ export function describeTodayLayoutFacts(facts: TodayLayoutFacts): string {
     `今天之后七天内：${upcoming}`,
     `最近节假日：${facts.holidayName} ${facts.holidayDate}`,
     `天气：${facts.weather}`,
-    `日程：${facts.meetings}`,
     `习惯：${habits}`,
     `建议开始的候选：${picks}`,
     `长期偏好：${memory}`,

@@ -93,6 +93,7 @@ describe('today briefing helpers', () => {
       normalizeTodayLayout([
         { id: 'weather' },
         { id: 'nope' },
+        { id: 'meetings' },
         { id: 'weather' },
         { id: 'note', text: '   ' },
         { id: 'note', text: '先处理逾期' },
@@ -104,7 +105,6 @@ describe('today briefing helpers', () => {
     expect(todayModulesOrFallback(null).map((item) => item.id)).toEqual([
       'lead',
       'weather',
-      'meetings',
       'upcoming',
       'holiday',
       'focus',
@@ -117,7 +117,6 @@ describe('today briefing helpers', () => {
       holidayName: '元旦',
       holidayDate: '2027-01-01',
       weather: '上海 晴 33°C 短袖即可，注意防晒',
-      meetings: '今天没有日程',
       recommendations: [],
       quiet: false,
       habits: [],
@@ -127,14 +126,13 @@ describe('today briefing helpers', () => {
     expect(text).toContain('已逾期');
     expect(text).toContain('元旦');
     expect(text).toContain('上海 晴');
-    expect(text).toContain('日程：今天没有日程');
+    expect(text).not.toContain('日程');
   });
 
   it('keeps the agenda together and the lead and focus on their own rows', () => {
     const modules = [
       { id: 'lead' },
       { id: 'weather' },
-      { id: 'meetings' },
       { id: 'upcoming' },
       { id: 'holiday' },
       { id: 'focus' },
@@ -142,7 +140,7 @@ describe('today briefing helpers', () => {
     expect(groupTodayModuleRows(modules, 2).map((row) => row.map((module) => module.id))).toEqual([
       ['lead'],
       ['weather'],
-      ['meetings', 'upcoming'],
+      ['upcoming'],
       ['holiday'],
       ['focus'],
     ]);
@@ -154,7 +152,7 @@ describe('today briefing helpers', () => {
     expect(groupTodayModuleRows(modules, 1).map((row) => row.map((module) => module.id))).toEqual([
       ['lead'],
       ['weather'],
-      ['meetings', 'upcoming'],
+      ['upcoming'],
       ['holiday'],
       ['focus'],
     ]);

@@ -1,5 +1,6 @@
 import { Type, type Static } from '@earendil-works/pi-ai';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
+import { TODAY_MODULE_IDS } from '@vital/dto';
 import { AGENT_MEMORY_SCOPES } from '../db/schema/agent.js';
 
 /**
@@ -41,7 +42,7 @@ export const submitTodayLayoutSchema = Type.Object({
       id: Type.String({ minLength: 1, maxLength: 20 }),
       text: Type.Optional(Type.String({ maxLength: 80 })),
     }),
-    { minItems: 1, maxItems: 7 },
+    { minItems: 1, maxItems: TODAY_MODULE_IDS.length },
   ),
 });
 export type SubmitTodayLayoutArgs = Static<typeof submitTodayLayoutSchema>;

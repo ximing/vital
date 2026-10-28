@@ -145,7 +145,7 @@ export const settings = {
   timezone: '时区',
   weekStartsOn: '一周从哪天开始',
   calendarTitle: '本地日历',
-  calendarHint: '读取手机日历里今天的全部日程，包括会议以外的事项。不会修改日历。',
+  calendarHint: '读取手机日历里的日程，写成任务。不会修改日历。',
   weekSun: '周日',
   weekMon: '周一',
   dailyModelCallLimit: '每日后台处理额度',

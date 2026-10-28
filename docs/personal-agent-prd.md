@@ -21,7 +21,7 @@ Vital 的 agent 目前更像"后台清洁工"：排简报（today.layout）、�
 | Chat 闸门 | 一轮对话只允许一次 mutate（registry.ts gate），批量只能走 tasks.organize |
 | 记忆 | agent_memory 表 + memory.distill 蒸馏 + 按 scope 注入 prompt |
 | 目标 | outcomes 表有 ruleSignal/ruleNextStep/agentHeadline/agentSuggestion/lastActivityAt，outcome.refresh 定期刷新 |
-| 日历 | 本地日历单向同步成任务（calendar_key），今天页 meetings 模块展示当天日程 |
+| 日历 | 本地日历单向同步成任务（calendar_key）。今天页不再单独展示日程模块 |
 | 成本 | 每次模型调用有 telemetry 和 perCapability 摊销成本，model-budget 可熔断 |
 
 ## 需求 A：主动性——从"你问它答"到"它来找你"
