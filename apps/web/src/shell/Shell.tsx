@@ -11,6 +11,7 @@ import {
   LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Repeat,
   Search,
   Settings,
@@ -33,6 +34,8 @@ import { InboxUiService } from '@/features/inbox';
 import { ReportUiService } from '@/features/reports/report-ui.service';
 import { SimilarOpenToast } from '@/features/todos/SimilarOpenToast';
 import { TaskShortcutDialogs } from '@/features/todos/TaskShortcutDialogs';
+import { OPEN_QUICK_CREATE_EVENT } from '@/features/todos/quick-create';
+import { QuickCreateOverlay } from '@/features/todos/QuickCreateOverlay';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { AccountMenu } from '@/shell/AccountMenu';
 import {
@@ -215,6 +218,18 @@ function ShellContent() {
               {collapsed ? null : <span className="truncate">{t.nav.search}</span>}
             </button>
           </Tip>
+          {/* 全局新建入口：⌘N（桌面菜单）/ C（浏览器）之外的鼠标路径。 */}
+          <Tip label={collapsed ? t.nav.quickCreate : undefined} side="right">
+            <button
+              type="button"
+              aria-label={t.nav.quickCreate}
+              className={railItemClass(false, collapsed)}
+              onClick={() => window.dispatchEvent(new CustomEvent(OPEN_QUICK_CREATE_EVENT))}
+            >
+              <Icon icon={Plus} className="shrink-0" />
+              {collapsed ? null : <span className="truncate">{t.nav.quickCreate}</span>}
+            </button>
+          </Tip>
           {AI_NAV.map((item) => (
             <RailLink
               key={item.id}
@@ -287,6 +302,7 @@ function ShellContent() {
       <AgentChatRail />
       {todos.similarOpen.length > 0 ? <SimilarOpenToast /> : null}
       <CommandPalette />
+      <QuickCreateOverlay />
       <ShortcutsDialog />
       <TaskShortcutDialogs />
       <ActivationChecklist />

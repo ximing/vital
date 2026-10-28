@@ -124,6 +124,7 @@ export function shortcutGroups(mod = modKey()): ShortcutGroup[] {
       id: 'other',
       title: t.shortcuts.other,
       rows: [
+        { label: t.shortcuts.quickCreate, keys: ['C'] },
         { label: t.shortcuts.help, keys: ['?'] },
         { label: t.shortcuts.agent, keys: [combo(mod, 'J')] },
         { label: t.shortcuts.saveReport, keys: [combo(mod, 'S')] },

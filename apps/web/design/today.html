@@ -1,0 +1,396 @@
+<!-- 设计稿 · 今天 /today 改版 + 全局新建浮窗 · 1280 桌面 · 三块画板：速览条收起（默认）/ 速览条展开 / ⌘N 新建浮窗 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vital · 今天 · 速览条 + 全局新建 · 设计稿</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* emerald garden tokens —— 与 packages/tokens 对齐 */
+    --canvas:#F3F5F2; --surface:#FAFBF9; --elevated:#FFFFFF; --muted:#EBEEE9;
+    --accent:#1C7A4F; --accent-deep:#155E3D; --accent-subtle:#DFEDE4;
+    --ink:#1B211D; --dim:#555E56; --faint:#98A098; --line:#E2E6E0;
+    --soon:#B4761E; --soon-bg:#F5EAD7; --danger:#CE4A45; --doing:#3A6EA5;
+    --shadow:0 1px 2px rgb(20 34 24/5%),0 10px 28px rgb(20 34 24/7%);
+    --shadow-xs:0 1px 2px rgb(20 34 24/5%);
+    --display:Sora,Inter,"PingFang SC","Hiragino Sans GB","Noto Sans SC",sans-serif;
+    --sans:Inter,"PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+    --mono:"SF Mono",ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--sans);background:#E7EBE6;color:var(--ink);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:21px;
+    display:flex;flex-direction:column;align-items:center;gap:56px;padding:48px 0 96px}
+  .num{font-variant-numeric:tabular-nums}
+  .fd{font-family:var(--display);letter-spacing:-0.02em}
+  .art-label{font-size:12px;color:var(--dim);letter-spacing:.06em;margin-bottom:-40px;max-width:1280px}
+  .art-label b{color:var(--accent-deep)}
+  .board{width:1280px;background:var(--canvas);position:relative;overflow:hidden;
+    border-radius:12px;box-shadow:0 24px 64px rgb(20 34 24/14%);display:flex}
+
+  /* ===== Rail ===== */
+  .rail{width:224px;flex:none;background:var(--surface);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:16px 0 8px;min-height:100%}
+  .rail .brand{display:flex;align-items:center;gap:8px;padding:0 16px 10px;font-weight:600;font-size:15px}
+  .rail .brand .mark{width:30px;height:30px;border-radius:9px;background:var(--accent);color:#fff;
+    display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:15px}
+  .rail nav{display:flex;flex-direction:column;padding:0 4px}
+  .ri{position:relative;display:flex;align-items:center;gap:10px;height:36px;margin:0 4px;
+    padding:0 12px;border-radius:8px;font-size:13px;color:var(--dim);cursor:pointer}
+  .ri:hover{background:var(--muted);color:var(--ink)}
+  .ri.on{background:var(--accent-subtle);color:var(--accent);font-weight:500}
+  .ri.on::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:99px;background:var(--accent)}
+  .ri .ic{width:16px;text-align:center;font-size:14px}
+  .ri .kbd{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--faint)}
+  .ri.new{color:var(--accent);font-weight:500}
+  .ri.new .plus{width:18px;height:18px;border-radius:6px;border:1.5px solid var(--accent);
+    display:grid;place-items:center;font-size:13px;line-height:1;margin-left:-2px}
+  .rail .foot{margin-top:auto;border-top:1px solid var(--line);padding-top:6px}
+
+  /* ===== 页面骨架 ===== */
+  .page{flex:1;min-width:0;height:100%;overflow:hidden}
+  .col{max-width:880px;margin:0 auto;padding:24px 32px 64px}
+
+  /* 页头 */
+  .pagehead{display:flex;flex-direction:column;gap:12px;padding:0 4px 4px}
+  .ph-row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .ph-title{display:flex;align-items:baseline;gap:12px}
+  .ph-title h1{font-family:var(--display);font-size:30px;line-height:38px;font-weight:700}
+  .ph-title .date{font-size:13px;color:var(--faint)}
+  .pulse{display:flex;align-items:center;gap:14px;padding-bottom:6px}
+  .pulse .p{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim)}
+  .pulse .p b{font-family:var(--display);font-size:15px;color:var(--ink)}
+  .energy{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim)}
+  .energy .dots{display:flex;gap:4px}
+  .energy .dot{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface)}
+  .energy .dot.on{background:var(--accent);border-color:var(--accent)}
+  .energy .dot.sel{background:var(--accent-subtle);border-color:var(--accent)}
+
+  /* ===== 速览条（新增：收起的 NowCard） ===== */
+  .glance{margin-top:16px;background:var(--surface);border:1px solid var(--line);
+    border-left:3px solid var(--accent);border-radius:18px;box-shadow:var(--shadow-xs);
+    display:flex;align-items:center;gap:10px;padding:10px 16px;min-height:46px}
+  .glance .tag{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--faint);flex:none}
+  .glance .chips{display:flex;align-items:center;gap:8px;min-width:0;flex:1;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;
+    background:var(--muted);font-size:12px;color:var(--dim);white-space:nowrap}
+  .chip.hot{background:var(--soon-bg);color:var(--soon);font-weight:600}
+  .chip.over{background:#F7E4E2;color:var(--danger);font-weight:600}
+  .glance .rec{display:inline-flex;align-items:center;gap:6px;min-width:0;font-size:13px;color:var(--ink);
+    background:transparent;border:none;cursor:pointer;padding:2px 4px;border-radius:6px}
+  .glance .rec:hover{background:var(--accent-subtle)}
+  .glance .rec .spark{color:var(--accent)}
+  .glance .rec span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .glance .toggle{flex:none;display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;
+    border-radius:999px;border:1px solid var(--line);background:transparent;font-size:12px;
+    color:var(--dim);cursor:pointer}
+  .glance .toggle:hover{background:var(--muted);color:var(--ink)}
+
+  /* ===== 展开的 NowCard（与线上一致，仅顶部多收起钮） ===== */
+  .nowcard{margin-top:16px;background:var(--surface);border:1px solid var(--line);
+    border-left:3px solid var(--accent);border-radius:18px;box-shadow:var(--shadow-xs);padding:20px 24px}
+  .nowcard .nc-head{display:flex;align-items:center}
+  .nowcard .nc-head .t{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--faint)}
+  .nowcard .nc-head .toggle{margin-left:auto}
+  .nc-grid{margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .mod{background:rgb(243 245 242/50%);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .mod.wide{grid-column:span 2}
+  .mod .mt{font-size:11px;font-weight:600;letter-spacing:.06em;color:var(--faint)}
+  .mod .mb{margin-top:6px;font-size:13px;line-height:20px}
+  .mod .mark{display:inline-block;width:30px;font-size:11px;font-weight:600}
+  .mark.over{color:var(--danger)} .mark.high{color:var(--soon)} .mark.mid{color:var(--doing)}
+  .recbtn{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:var(--elevated);
+    border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-top:8px;cursor:pointer}
+  .recbtn:hover{border-color:var(--accent);box-shadow:var(--shadow-xs)}
+  .recbtn .rt{font-size:13px;font-weight:600}
+  .recbtn .rm{font-size:11px;color:var(--dim)}
+  .nowcard .nc-foot{margin-top:12px;font-size:13px;color:var(--dim)}
+
+  /* ===== 任务区 ===== */
+  .sect{margin-top:22px}
+  .sect-head{display:flex;align-items:baseline;gap:8px;padding:0 4px 8px}
+  .sect-head h2{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--faint)}
+  .sect-head .n{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .overdue-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;
+    border:1px solid var(--soon);background:var(--soon-bg);border-radius:14px;padding:10px 16px;font-size:13px}
+  .overdue-banner b{color:var(--soon)}
+  .overdue-banner .act{height:28px;padding:0 12px;border-radius:999px;border:1px solid var(--soon);
+    background:transparent;color:var(--soon);font-size:11px;font-weight:600;cursor:pointer}
+  .taskcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow-xs);padding:4px 8px}
+  .trow{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 8px;border-radius:10px;cursor:pointer}
+  .trow:hover{background:var(--muted)}
+  .trow .cb{width:18px;height:18px;flex:none;border-radius:50%;border:1.5px solid var(--faint)}
+  .trow .cb.p0{border-color:var(--danger)} .trow .cb.p1{border-color:var(--soon)}
+  .trow .tt{font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trow .tm{margin-left:auto;flex:none;font-size:12px;color:var(--faint);display:flex;gap:8px;align-items:center}
+  .trow .tm .over{color:var(--danger);font-weight:600}
+  .trow .tm .tagchip{font-size:11px;color:var(--dim);background:var(--muted);border-radius:6px;padding:1px 6px}
+  .compose{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 8px;
+    border-top:1px solid var(--line);margin-top:4px;color:var(--faint);font-size:14px}
+  .compose .plus{width:18px;height:18px;border-radius:50%;border:1.5px solid var(--faint);
+    display:grid;place-items:center;font-size:12px;color:var(--accent)}
+
+  /* 线程看板（下方内容，画板里只露出开头示意“首屏之外”） */
+  .board-teaser{margin-top:26px;opacity:.55}
+  .board-teaser .cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:8px}
+  .board-teaser .bcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:12px 14px;font-size:12px;color:var(--dim);height:64px}
+
+  /* ===== 新建浮窗 ===== */
+  .scrim{position:absolute;inset:0;background:rgb(20 26 21/38%);display:flex;justify-content:center}
+  .modal{margin-top:15vh;width:576px;height:fit-content;background:var(--elevated);
+    border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 56px rgb(20 34 24/22%)}
+  .modal .m-in{padding:10px 14px 12px}
+  .modal input{width:100%;height:32px;border:none;outline:none;font-size:15px;background:transparent;color:var(--ink)}
+  .modal input::placeholder{color:var(--faint)}
+  .modal .m-tools{display:flex;align-items:center;gap:6px;margin-top:8px}
+  .m-tool{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 9px;border-radius:8px;
+    border:1px solid var(--line);background:var(--surface);font-size:12px;color:var(--dim);cursor:pointer}
+  .m-tool:hover{background:var(--muted);color:var(--ink)}
+  .m-send{margin-left:auto;width:30px;height:30px;border-radius:50%;border:none;background:var(--accent);
+    color:#fff;font-size:15px;cursor:pointer;display:grid;place-items:center}
+  .modal .m-foot{border-top:1px solid var(--line);padding:7px 14px;display:flex;gap:14px;
+    font-size:11px;color:var(--faint)}
+  .modal .m-foot kbd{font-family:var(--mono);font-size:10px;border:1px solid var(--line);
+    border-radius:4px;padding:1px 5px;background:var(--surface)}
+  /* 浮窗底下被压暗的页面 */
+  .dimmed{filter:saturate(.85)}
+</style>
+</head>
+<body>
+
+<!-- ============================== 画板 1：收起态（默认） ============================== -->
+<div class="art-label">画板 1 · 今天页默认首屏 —— NowCard 收成一行 <b>速览条</b>，任务列表首屏可见；Rail 搜索旁新增 <b>＋ 新建</b> 入口</div>
+<div class="board" style="height:900px">
+  <aside class="rail">
+    <div class="brand"><span class="mark">V</span>Vital</div>
+    <nav>
+      <div class="ri on"><span class="ic">☀</span>今天<span class="kbd">⌘1</span></div>
+      <div class="ri"><span class="ic">☑</span>待办<span class="kbd">⌘2</span></div>
+      <div class="ri"><span class="ic">⌘</span>收集<span class="kbd">⌘3</span></div>
+      <div class="ri"><span class="ic">↻</span>习惯<span class="kbd">⌘4</span></div>
+      <div class="ri"><span class="ic">◷</span>回顾<span class="kbd">⌘5</span></div>
+      <div class="ri"><span class="ic">▦</span>日子<span class="kbd">⌘6</span></div>
+      <div class="ri"><span class="ic">⑂</span>线程</div>
+      <div class="ri"><span class="ic">⌕</span>搜索<span class="kbd">⌘K</span></div>
+      <div class="ri new"><span class="plus">＋</span>新建任务<span class="kbd">C</span></div>
+      <div class="ri"><span class="ic">◈</span>动态</div>
+      <div class="ri"><span class="ic">◉</span>记忆</div>
+    </nav>
+    <div class="foot">
+      <div class="ri"><span class="ic">⏻</span>用量</div>
+      <div class="ri"><span class="ic">⚙</span>设置</div>
+      <div class="ri"><span class="ic">⌨</span>快捷键</div>
+    </div>
+  </aside>
+
+  <div class="page">
+    <div class="col">
+      <header class="pagehead">
+        <div class="ph-row">
+          <div class="ph-title">
+            <h1>今天</h1>
+            <span class="date num">10月28日 · 周二</span>
+          </div>
+          <div class="pulse">
+            <span class="p"><b class="num">12</b>待办</span>
+            <span class="p"><b class="num">3</b>习惯</span>
+            <span class="p"><b class="num">2</b>专注</span>
+          </div>
+        </div>
+        <div class="energy">
+          精力
+          <span class="dots"><i class="dot on"></i><i class="dot on"></i><i class="dot on"></i><i class="dot sel"></i><i class="dot"></i></span>
+          <span style="color:var(--faint)">昨天 4 · 周一 3</span>
+        </div>
+      </header>
+
+      <!-- 速览条：默认收起态 -->
+      <div class="glance" style="outline:2px solid var(--accent-subtle);outline-offset:2px">
+        <span class="tag">速览</span>
+        <div class="chips">
+          <span class="chip">☀ 杭州 · 晴 22°C</span>
+          <span class="chip">元旦 · 1月1日</span>
+          <span class="chip over">2 逾期</span>
+          <span class="chip hot">3 高优</span>
+          <button class="rec"><span class="spark">✦</span><span>推荐：写月度复盘</span></button>
+        </div>
+        <button class="toggle">展开简报 ▾</button>
+      </div>
+
+      <!-- 任务区：首屏直接可见 -->
+      <section class="sect" style="outline:2px solid var(--accent-subtle);outline-offset:2px">
+        <div class="sect-head"><h2>今天</h2><span class="n">12</span></div>
+        <div class="overdue-banner">
+          <b>!</b>
+          <span style="flex:1;min-width:0"><b class="num">2 件任务已逾期</b>，要不要统一顺延到今天？</span>
+          <button class="act">全部顺延</button>
+        </div>
+        <div class="taskcard">
+          <div class="trow"><i class="cb p0"></i><span class="tt">写月度复盘初稿</span><span class="tm"><span class="over">昨天</span><span class="tagchip">写作</span></span></div>
+          <div class="trow"><i class="cb p1"></i><span class="tt">约牙医复诊</span><span class="tm"><span class="over">10/26</span></span></div>
+          <div class="trow"><i class="cb"></i><span class="tt">Claude 长时自主运行案例整理</span><span class="tm"><span class="tagchip">调研</span>14:00</span></div>
+          <div class="trow"><i class="cb"></i><span class="tt">买牛奶和鸡蛋</span><span class="tm">今天</span></div>
+          <div class="trow"><i class="cb"></i><span class="tt">回复 Inwit 设计反馈</span><span class="tm">今天</span></div>
+          <div class="trow"><i class="cb"></i><span class="tt">晚间拉伸 15 分钟</span><span class="tm"><span class="tagchip">习惯</span>21:00</span></div>
+          <div class="compose"><span class="plus">＋</span>添加任务</div>
+        </div>
+      </section>
+
+      <!-- 首屏以下：线程看板 / Agent 提案（保持原位） -->
+      <div class="board-teaser">
+        <div class="sect-head"><h2>线程</h2><span class="n">6</span></div>
+        <div class="cards">
+          <div class="bcard">Agent 调研学习 · 还有 3 件未完成</div>
+          <div class="bcard">开发问题修复 · 跑一次要花多少钱</div>
+          <div class="bcard">生活计划 · 信号在推进</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== 画板 2：展开态 ============================== -->
+<div class="art-label">画板 2 · 点「展开简报」—— 恢复现在的完整简报网格（内容零改动），顶部变「收起 ▴」，选择持久化到本地</div>
+<div class="board" style="height:940px">
+  <aside class="rail">
+    <div class="brand"><span class="mark">V</span>Vital</div>
+    <nav>
+      <div class="ri on"><span class="ic">☀</span>今天<span class="kbd">⌘1</span></div>
+      <div class="ri"><span class="ic">☑</span>待办</div>
+      <div class="ri"><span class="ic">⌘</span>收集</div>
+      <div class="ri"><span class="ic">↻</span>习惯</div>
+      <div class="ri"><span class="ic">◷</span>回顾</div>
+      <div class="ri"><span class="ic">▦</span>日子</div>
+      <div class="ri"><span class="ic">⑂</span>线程</div>
+      <div class="ri"><span class="ic">⌕</span>搜索<span class="kbd">⌘K</span></div>
+      <div class="ri new"><span class="plus">＋</span>新建任务<span class="kbd">C</span></div>
+    </nav>
+    <div class="foot">
+      <div class="ri"><span class="ic">⚙</span>设置</div>
+    </div>
+  </aside>
+
+  <div class="page">
+    <div class="col">
+      <header class="pagehead">
+        <div class="ph-row">
+          <div class="ph-title"><h1>今天</h1><span class="date num">10月28日 · 周二</span></div>
+          <div class="pulse"><span class="p"><b class="num">12</b>待办</span><span class="p"><b class="num">3</b>习惯</span></div>
+        </div>
+        <div class="energy">精力 <span class="dots"><i class="dot on"></i><i class="dot on"></i><i class="dot on"></i><i class="dot sel"></i><i class="dot"></i></span></div>
+      </header>
+
+      <div class="nowcard" style="outline:2px solid var(--accent-subtle);outline-offset:2px">
+        <div class="nc-head">
+          <span class="t">当下</span>
+          <button class="toggle glance" style="border:none;padding:0;min-height:0;height:28px"><span class="toggle" style="border:1px solid var(--line)">收起 ▴</span></button>
+        </div>
+        <div class="nc-grid">
+          <div class="mod wide">
+            <div class="mt">优先</div>
+            <div class="mb">
+              <div style="color:var(--dim);font-size:12px;margin-bottom:4px">2 逾期 · 3 高优 · 1 中优</div>
+              <div><span class="mark over">逾期</span><b>写月度复盘初稿</b> · 昨天</div>
+              <div><span class="mark over">逾期</span><b>约牙医复诊</b> · 10/26</div>
+              <div><span class="mark high">高</span><b>Claude 长时自主运行案例整理</b> · 14:00</div>
+              <div style="color:var(--faint);font-size:12px;margin-top:2px">还有 7 件没标优先级</div>
+            </div>
+          </div>
+          <div class="mod">
+            <div class="mt">天气</div>
+            <div class="mb">杭州 · 晴 22°C<br><span style="color:var(--dim)">早晚微凉，出门加件薄外套</span></div>
+          </div>
+          <div class="mod">
+            <div class="mt">节假日</div>
+            <div class="mb num">元旦 · 2026年1月1日</div>
+          </div>
+          <div class="mod wide">
+            <div class="mt">最近</div>
+            <div class="mb">
+              <div style="font-size:11px;font-weight:600;color:var(--faint)">10月29日</div>
+              <div>产品周会 · 10:00</div>
+              <div>牙医复诊 · 15:30</div>
+              <div style="font-size:11px;font-weight:600;color:var(--faint);margin-top:6px">10月30日</div>
+              <div>月度复盘提交</div>
+            </div>
+          </div>
+          <div class="mod wide">
+            <div class="mt" style="display:flex;justify-content:space-between">推荐 <button style="border:1px solid var(--line);border-radius:99px;font-size:11px;height:22px;padding:0 10px;background:transparent;color:var(--dim)">换一个</button></div>
+            <button class="recbtn"><span class="rt">写月度复盘初稿</span><span class="rm">写作 　约 45 分钟 　临期</span></button>
+          </div>
+        </div>
+        <div class="nc-foot">接下来连续空闲 95 分钟<br><span style="font-size:13px;color:var(--dim)">14:00 产品周会前有一整块时间，适合写复盘初稿</span></div>
+      </div>
+
+      <section class="sect">
+        <div class="sect-head"><h2>今天</h2><span class="n">12</span></div>
+        <div class="taskcard">
+          <div class="trow"><i class="cb p0"></i><span class="tt">写月度复盘初稿</span><span class="tm"><span class="over">昨天</span></span></div>
+          <div class="trow"><i class="cb"></i><span class="tt">Claude 长时自主运行案例整理</span><span class="tm">14:00</span></div>
+          <div class="compose"><span class="plus">＋</span>添加任务</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ============================== 画板 3：全局新建浮窗 ============================== -->
+<div class="art-label">画板 3 · ⌘N（桌面）/ C（浏览器）唤起全局新建浮窗 —— 任何页面不跳转，默认落收集箱，支持一句话 AI 解析日期/优先级</div>
+<div class="board" style="height:760px">
+  <aside class="rail dimmed">
+    <div class="brand"><span class="mark">V</span>Vital</div>
+    <nav>
+      <div class="ri"><span class="ic">☀</span>今天</div>
+      <div class="ri"><span class="ic">☑</span>待办</div>
+      <div class="ri"><span class="ic">⌘</span>收集</div>
+      <div class="ri"><span class="ic">↻</span>习惯</div>
+      <div class="ri on"><span class="ic">◷</span>回顾<span class="kbd">⌘5</span></div>
+      <div class="ri"><span class="ic">▦</span>日子</div>
+      <div class="ri"><span class="ic">⌕</span>搜索<span class="kbd">⌘K</span></div>
+      <div class="ri new"><span class="plus">＋</span>新建任务<span class="kbd">C</span></div>
+    </nav>
+    <div class="foot"><div class="ri"><span class="ic">⚙</span>设置</div></div>
+  </aside>
+
+  <div class="page dimmed">
+    <div class="col">
+      <header class="pagehead">
+        <div class="ph-row">
+          <div class="ph-title"><h1>回顾</h1><span class="date num">2026年10月</span></div>
+        </div>
+      </header>
+      <div class="taskcard" style="margin-top:20px">
+        <div class="trow"><span class="tt">2026年10月 月报</span><span class="tm">昨天</span></div>
+        <div class="trow"><span class="tt">2026年第43周 周报</span><span class="tm">周一</span></div>
+        <div class="trow"><span class="tt">2026年10月27日 日报</span><span class="tm">昨天</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim">
+    <div class="modal" style="outline:2px solid var(--accent-subtle);outline-offset:2px">
+      <div class="m-in">
+        <input value="明天下午三点和产品过复盘初稿" aria-label="任务标题" />
+        <div class="m-tools">
+          <span class="m-tool">📅 明天 15:00</span>
+          <span class="m-tool">⚑ 优先级</span>
+          <span class="m-tool">📁 收集箱</span>
+          <button class="m-send">➤</button>
+        </div>
+      </div>
+      <div class="m-foot">
+        <span><kbd>↵</kbd> 创建</span>
+        <span><kbd>Esc</kbd> 关闭</span>
+        <span style="margin-left:auto">✦ 已识别日期与时间 · 落到收集箱</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

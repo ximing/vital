@@ -4,7 +4,7 @@ import { useService } from '@rabjs/react';
 import { AgentChatService } from '@/features/agent-chat/agent-chat.service';
 import { InboxUiService } from '@/features/inbox';
 import { OPEN_PALETTE_EVENT, TOGGLE_PALETTE_EVENT } from '@/features/palette/model';
-import { QUICK_ADD_ID, focusById } from '@/features/todos/keyboard';
+import { OPEN_QUICK_CREATE_EVENT } from '@/features/todos/quick-create';
 import { TodosUiService } from '@/features/todos/todos-ui.service';
 import { isDesktopHost } from '@/host';
 import { docFindRootFor, DOC_FIND_EVENT, isDocFindChord } from '@/lib/doc-find';
@@ -12,6 +12,7 @@ import { HOME_PATH, TODOS_HOME_PATH } from '@/routes';
 import {
   CHORD_MS,
   isComposingEvent,
+  isInboxPath,
   isListFilterPath,
   isSearchPath,
   isShortcutLayerBlocked,
@@ -32,6 +33,10 @@ function openPalette(): void {
 
 function togglePalette(): void {
   window.dispatchEvent(new CustomEvent(TOGGLE_PALETTE_EVENT));
+}
+
+function openQuickCreate(): void {
+  window.dispatchEvent(new CustomEvent(OPEN_QUICK_CREATE_EVENT));
 }
 
 export function useAppShortcuts(): void {
@@ -68,13 +73,8 @@ export function useAppShortcuts(): void {
       const action = (event as CustomEvent<unknown>).detail;
       if (!isMenuShortcut(action)) return;
       if (action === 'new-task') {
-        const path = pathRef.current;
-        todos.requestQuickAdd();
-        if (path === HOME_PATH || path.startsWith('/todos')) {
-          focusById(QUICK_ADD_ID);
-          return;
-        }
-        navigate(HOME_PATH);
+        // ⌘N：任何页面都弹全局新建浮窗，不再跳回今天页聚焦输入框。
+        openQuickCreate();
         return;
       }
       if (action === 'new-inbox') {
@@ -134,6 +134,7 @@ export function useAppShortcuts(): void {
         repeat: event.repeat,
         chordPending: pending,
         listFilterPath: isListFilterPath(pathRef.current),
+        inboxPath: isInboxPath(pathRef.current),
         searchPage: isSearchPath(pathRef.current),
         desktop: isDesktopHost(),
       });
@@ -157,6 +158,10 @@ export function useAppShortcuts(): void {
       }
       if (plan.type === 'help') {
         openShortcuts();
+        return;
+      }
+      if (plan.type === 'create') {
+        openQuickCreate();
         return;
       }
       if (plan.type === 'find') {

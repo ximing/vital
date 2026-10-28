@@ -23,6 +23,7 @@ function key(overrides: Partial<GlobalKeyInput> = {}): GlobalKeyInput {
     repeat: false,
     chordPending: false,
     listFilterPath: false,
+    inboxPath: false,
     searchPage: false,
     desktop: false,
     ...overrides,
@@ -83,6 +84,16 @@ describe('shortcut chords', () => {
     expect(planGlobalKey(key({ key: 'z', ctrl: true }))).toEqual({ type: 'undo' });
     expect(planGlobalKey(key({ key: 'z', meta: true, typing: true }))).toEqual({ type: 'none' });
     expect(planGlobalKey(key({ key: 'z', meta: true, desktop: true }))).toEqual({ type: 'none' });
+  });
+
+  it('opens global quick create with c, except on the inbox page', () => {
+    expect(planGlobalKey(key({ key: 'c' }))).toEqual({ type: 'create' });
+    expect(planGlobalKey(key({ key: 'c', listFilterPath: true }))).toEqual({ type: 'create' });
+    expect(planGlobalKey(key({ key: 'c', inboxPath: true }))).toEqual({ type: 'none' });
+    expect(planGlobalKey(key({ key: 'c', typing: true }))).toEqual({ type: 'none' });
+    expect(planGlobalKey(key({ key: 'c', blocked: true }))).toEqual({ type: 'none' });
+    expect(planGlobalKey(key({ key: 'c', composing: true }))).toEqual({ type: 'none' });
+    expect(planGlobalKey(key({ key: 'C', shift: true }))).toEqual({ type: 'none' });
   });
 
   it('toggles the agent with ⌘J outside of a text field', () => {

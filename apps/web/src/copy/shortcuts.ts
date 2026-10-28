@@ -47,6 +47,7 @@ export const shortcuts = {
   saveReport: '保存报告',
   newTask: '新建任务',
   newInbox: '新建收集',
+  quickCreate: '新建任务（任意页面）',
   goSections: '今天、待办、收集、习惯、回顾、日子',
   closeWindow: '先关闭详情或阅读页，再关闭窗口',
   desktopSettings: '设置',

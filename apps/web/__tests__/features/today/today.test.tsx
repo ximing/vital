@@ -647,6 +647,8 @@ describe('now card', () => {
   beforeEach(() => {
     resetTodosUi();
     setAuthForTest(mockUser);
+    // 这个分组断言完整「当下」卡片：强制展开（速览条收起态另有专门用例）。
+    localStorage.setItem('vital.today.briefing-open', '1');
     vi.mocked(client.getToday).mockResolvedValue(makeDashboard());
     vi.mocked(client.listHabits).mockResolvedValue([]);
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
@@ -664,13 +666,13 @@ describe('now card', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     resetTodosUi();
   });
 
   async function nowCard(): Promise<HTMLElement> {
     return (await screen.findByLabelText(t.today.now.title)) as HTMLElement;
   }
-
   it('renders continuous minutes, reason and recommendations, and opens the task detail on click', async () => {
     const work = makeOutcome({ id: 'o-work', name: '换工作' });
     const taskA = makeTask({
@@ -818,12 +820,13 @@ describe('now card', () => {
 });
 
 describe('today briefing', () => {
-  beforeEach(() => {
-    resetTodosUi();
+  beforeEach(() => {    resetTodosUi();
     setAuthForTest(mockUser);
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-13T04:00:00.000Z'));
     localStorage.clear();
+    // 这个分组的断言都针对完整简报网格：默认展开（速览条收起态另有专门用例）。
+    localStorage.setItem('vital.today.briefing-open', '1');
     delete window.__VITAL_HOST__;
     vi.mocked(client.getToday).mockResolvedValue(makeDashboard());
     vi.mocked(client.listHabits).mockResolvedValue([]);
@@ -849,7 +852,7 @@ describe('today briefing', () => {
     resetTodosUi();
   });
 
-  it('leads with today work, weather, clothing, upcoming, the next holiday, and a Mac meeting', async () => {
+  it('leads with today work, weather, clothing, upcoming, and the next holiday', async () => {
     const work = makeOutcome({ id: 'o-work', name: '换工作' });
     const todayTask = makeTask({
       id: 'task-today',
@@ -913,8 +916,8 @@ describe('today briefing', () => {
     expect(screen.getByText(/明天交报告/)).toBeInTheDocument();
     expect(screen.getByText(/元旦/)).toBeInTheDocument();
     expect(screen.getByText(/2027年1月1日/)).toBeInTheDocument();
-    expect(screen.getByText(/周会/)).toBeInTheDocument();
-    expect(screen.getByText(/09:30/)).toBeInTheDocument();
+    expect(screen.queryByText('日程')).not.toBeInTheDocument();
+    expect(screen.queryByText(/周会/)).not.toBeInTheDocument();
 
     const tasksRegion = document.querySelector('[data-region="today-tasks"]');
     const board = document.querySelector('[data-region="outcome-board"]');
@@ -934,13 +937,19 @@ describe('today briefing', () => {
     expect(lead?.textContent ?? '').not.toContain('完成项目整理');
     expect(lead?.textContent ?? '').not.toContain('今天要做');
     expect(screen.getByText('优先')).toBeInTheDocument();
-    expect(screen.getByText('日程')).toBeInTheDocument();
+    expect(screen.getByText('最近')).toBeInTheDocument();
+    expect(document.querySelector('[data-region="today-meetings"]')).toBeNull();
   });
 
-  it('asks for calendar permission and re-reads after the system dialog', async () => {
-    const user = userEvent.setup();
-    const openCalendarSettings = vi.fn(async () => undefined);
-    let reads = 0;
+  it('drops a stored schedule module and does not ask for calendar permission on the page', async () => {
+    vi.mocked(client.getToday).mockResolvedValue(
+      makeDashboard({
+        layout: {
+          modules: [{ id: 'lead' }, { id: 'meetings' }],
+          updatedAt: '2026-10-13T00:00:00.000Z',
+        } as NonNullable<TodayDashboard['layout']>,
+      }),
+    );
     window.__VITAL_HOST__ = {
       kind: 'desktop',
       applyChrome() {},
@@ -949,24 +958,16 @@ describe('today briefing', () => {
       closeStickyAlert() {},
       openInMain() {},
       hideMain() {},
-      readTodayCalendar: async () => {
-        reads += 1;
-        if (reads === 1) return { status: 'denied', events: [] };
-        return {
-          status: 'ok',
-          events: [{ title: '周会', start: '2026-10-13T01:30:00.000Z', allDay: false }],
-        };
-      },
-      openCalendarSettings,
+      readTodayCalendar: async () => ({ status: 'denied', events: [] }),
+      openCalendarSettings: async () => undefined,
     };
 
     renderToday();
 
-    expect(await screen.findByText(t.today.briefing.meetingsDenied)).toBeInTheDocument();
-    expect(screen.getByText(t.today.briefing.meetingsDeniedHint)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: t.today.briefing.meetingsOpenSettings }));
-    expect(openCalendarSettings).toHaveBeenCalledOnce();
-    expect(await screen.findByText(/周会/)).toBeInTheDocument();
+    expect(await screen.findByText('优先')).toBeInTheDocument();
+    expect(screen.queryByText('日程')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.today.briefing.meetingsOpenSettings })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-module="meetings"]')).toBeNull();
   });
 
   it('shows an empty-today line and a weather-unavailable line without a clock', async () => {
@@ -979,7 +980,8 @@ describe('today briefing', () => {
     expect(await screen.findByText(t.today.briefing.empty)).toBeInTheDocument();
     expect(await screen.findByText(t.today.briefing.weatherUnavailable)).toBeInTheDocument();
     expect(screen.getByLabelText(t.today.briefing.setPlace)).toBeInTheDocument();
-    expect(screen.getByText(t.today.briefing.meetingsMacOnly)).toBeInTheDocument();
+    expect(screen.queryByText(t.today.briefing.meetingsMacOnly)).not.toBeInTheDocument();
+    expect(screen.queryByText('日程')).not.toBeInTheDocument();
     expect(screen.getByText(/元旦|春节|清明节|劳动节|端午节|中秋节|国庆节/)).toBeInTheDocument();
     expect(document.querySelector('[data-region="now-card"]')?.innerHTML ?? '').not.toContain('text-[34px]');
     expect(document.querySelectorAll('[data-region="today-module"]').length).toBeGreaterThan(1);
@@ -1021,5 +1023,64 @@ describe('today briefing', () => {
     expect(
       (holiday as Node).compareDocumentPosition(lead as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+  });
+
+  it('collapses the briefing into a glance strip by default and persists the toggle', async () => {
+    localStorage.removeItem('vital.today.briefing-open');
+    const urgent = makeTask({
+      id: 'task-urgent',
+      title: '回客户',
+      priority: 0,
+      isAllDay: false,
+      dueAt: '2026-10-13T10:00:00.000Z',
+    });
+    vi.mocked(client.getToday).mockResolvedValue(
+      makeDashboard({
+        tasks: [urgent],
+        now: {
+          continuousMinutes: 95,
+          quiet: false,
+          reason: '14:00 前有一整块时间。',
+          recommendations: [
+            {
+              taskId: 'task-urgent',
+              title: '回客户',
+              outcomeId: null,
+              estimateMinutes: 30,
+              dueSoon: true,
+              dueAt: '2026-10-13T10:00:00.000Z',
+            },
+          ],
+        },
+      }),
+    );
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [urgent], nextCursor: null });
+
+    renderToday();
+
+    // 速览条：优先计数 chip、节假日 chip、第一条推荐；不渲染模块网格。
+    expect(await screen.findByText(t.today.glance.title)).toBeInTheDocument();
+    expect(document.querySelector('[data-region="now-card"]')?.getAttribute('data-collapsed')).toBe(
+      'true',
+    );
+    expect(screen.getByText('紧急 1')).toBeInTheDocument();
+    expect(screen.getByText(/元旦/)).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-region="now-recommendation"]')?.textContent,
+    ).toContain('回客户');
+    expect(document.querySelector('[data-region="today-module"]')).toBeNull();
+
+    // 展开恢复完整简报网格，并把选择写进 localStorage。
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(t.today.glance.expand) }));
+    expect(localStorage.getItem('vital.today.briefing-open')).toBe('1');
+    expect(await screen.findByText('优先')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-region="today-module"]').length).toBeGreaterThan(0);
+
+    // 再收起。
+    await userEvent.click(screen.getByRole('button', { name: new RegExp(t.today.glance.collapse) }));
+    expect(localStorage.getItem('vital.today.briefing-open')).toBe('0');
+    expect(document.querySelector('[data-region="now-card"]')?.getAttribute('data-collapsed')).toBe(
+      'true',
+    );
   });
 });

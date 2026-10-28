@@ -23,6 +23,8 @@ export {
 } from './model';
 export { PriorityMark } from './priority';
 export { QuickAdd, type ComposeExtras } from './QuickAdd';
+export { QuickCreateOverlay } from './QuickCreateOverlay';
+export { OPEN_QUICK_CREATE_EVENT, quickCreateTask } from './quick-create';
 export { todoKeys } from './query-keys';
 export {
   useCountsQuery,

@@ -26,6 +26,7 @@ export type GlobalAction =
   | { type: 'palette' }
   | { type: 'find' }
   | { type: 'focus-search' }
+  | { type: 'create' }
   | { type: 'undo' }
   | { type: 'agent' };
 
@@ -55,6 +56,11 @@ export function isShortcutLayerBlocked(): boolean {
 /** `/` filters the list on 今天 and 待办. Everywhere else it opens the palette. */
 export function isListFilterPath(pathname: string): boolean {
   return pathname === '/today' || pathname.startsWith('/todos');
+}
+
+/** 收集页里 `c` 是「转为任务」，全局新建浮窗的 C 在这里让位。 */
+export function isInboxPath(pathname: string): boolean {
+  return pathname.startsWith('/inbox');
 }
 
 export function isSearchPath(pathname: string): boolean {
@@ -94,6 +100,7 @@ export type GlobalKeyInput = {
   repeat: boolean;
   chordPending: boolean;
   listFilterPath: boolean;
+  inboxPath: boolean;
   searchPage: boolean;
   desktop: boolean;
 };
@@ -147,7 +154,8 @@ export function planGlobalKey(input: GlobalKeyInput): GlobalAction {
 
   if (!free) return { type: 'none' };
 
-  if (input.key === '?' ) return { type: 'help' };
+  if (input.key === '?') return { type: 'help' };
+  if (input.key === 'c' && !input.shift && !input.inboxPath) return { type: 'create' };
   if (input.key === '/' && !input.shift && !input.listFilterPath) {
     return input.searchPage ? { type: 'focus-search' } : { type: 'palette' };
   }

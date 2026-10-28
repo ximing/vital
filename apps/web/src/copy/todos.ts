@@ -150,4 +150,10 @@ export const todos = {
   weekNext: '下一周',
   weekThis: '本周',
   weekday: ['日', '一', '二', '三', '四', '五', '六'],
+  quickCreate: {
+    title: '新建任务',
+    submit: '创建',
+    close: '关闭',
+    intentHint: '一句话识别日期与优先级',
+  },
 } as const;

@@ -73,6 +73,12 @@ export const today = {
   },
   overdueBanner: '{n} 件逾期',
   postponeAll: '一键顺延到今天',
+  glance: {
+    title: '速览',
+    expand: '展开简报',
+    collapse: '收起',
+    recommend: '推荐：{title}',
+  },
   briefing: {
     empty: '今天没有待办',
     planPlain: '今天 {n} 件，没有逾期，也没有标优先级',
@@ -98,20 +104,14 @@ export const today = {
     agendaCount: '{n} 场',
     dayMore: '还有 {n} 场',
     holidayTitle: '最近的节假日',
-    meetingsTitle: '今天的日程',
-    meetingsEmpty: '今天没有日程',
     meetingsMacOnly: '本地日历只在 Mac 桌面版',
-    meetingsDenied: '需要日历权限才能读取今天的日程',
     meetingsDeniedHint:
       '系统设置不能手动加入应用。点下面的按钮，由 Vital 向系统申请。已经允许或拒绝过时，会打开日历权限页。',
     meetingsOpenSettings: '申请日历权限',
-    meetingsFailed: '日历暂时读不到',
-    allDay: '全天',
     module: {
       note: '判断',
       lead: '优先',
       weather: '天气',
-      meetings: '日程',
       upcoming: '最近',
       holiday: '节假日',
     },

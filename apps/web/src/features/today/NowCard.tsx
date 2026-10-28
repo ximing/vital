@@ -12,12 +12,38 @@ import {
   type TodayPlanMark,
 } from '@vital/dto';
 import { observer, useService } from '@rabjs/react';
-import { useEffect, useRef, useState, type FC, type FormEvent } from 'react';
-import { useLocation } from 'react-router';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useState, type FC, type FormEvent } from 'react';
 import { t } from '@/copy';
 import { TodosUiService } from '@/features/todos';
 import { FIELD_CONTROL_CLASS } from '@/ui/field';
-import { canOpenCalendarSettings, monthDay, openCalendarSettings, type TodayBriefingModel } from './briefing';
+import { Icon } from '@/ui/icon';
+import { monthDay, type TodayBriefingModel } from './briefing';
+
+/** Collapse state of the briefing grid survives reloads (设计稿 design/today.html 画板 1/2). */
+const BRIEFING_OPEN_KEY = 'vital.today.briefing-open';
+
+function readBriefingOpen(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(BRIEFING_OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeBriefingOpen(open: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(BRIEFING_OPEN_KEY, open ? '1' : '0');
+  } catch {
+    /* storage may be unavailable */
+  }
+}
+
+const GLANCE_CHIP_CLASS =
+  'inline-flex h-6 items-center rounded-full bg-surface-muted px-2.5 text-[length:var(--text-caption)] leading-[var(--text-caption-lh)] text-muted';
+
+const GLANCE_TOGGLE_CLASS =
+  'ml-auto inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-border px-3 text-[length:var(--text-caption)] font-medium text-muted transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted hover:text-fg';
 
 /**
  * Today briefing plus the rule-based picks. The lead counts overdue and
@@ -39,11 +65,15 @@ export const NowCard: FC<{
   briefing: TodayBriefingModel;
 }) {
   const todos = useService(TodosUiService);
-  const location = useLocation();
-  const anchored = useRef('');
   const [offset, setOffset] = useState(0);
   const [placeDraft, setPlaceDraft] = useState('');
   const [editingPlace, setEditingPlace] = useState(false);
+  const [expanded, setExpanded] = useState(readBriefingOpen);
+
+  function toggleExpanded(next: boolean): void {
+    setExpanded(next);
+    writeBriefingOpen(next);
+  }
 
   const recs = now.recommendations;
   // 换一个: local rotation of the candidate list.
@@ -65,16 +95,6 @@ export const NowCard: FC<{
     return parts.join('　');
   }
 
-  useEffect(() => {
-    if (location.hash !== '#meetings') return;
-    const token = `${location.key}#meetings`;
-    if (anchored.current === token) return;
-    const node = document.getElementById('meetings');
-    if (!node) return;
-    node.scrollIntoView({ block: 'start' });
-    anchored.current = token;
-  }, [location.hash, location.key, briefing.modules]);
-
   function onPlace(event: FormEvent) {
     event.preventDefault();
     briefing.submitPlace(placeDraft);
@@ -87,15 +107,91 @@ export const NowCard: FC<{
   );
   const rows = groupTodayModuleRows(modules, 2);
 
+  // 收起态：一行速览条（天气/节假日/优先计数/第一条推荐），任务列表首屏可见。
+  if (!expanded) {
+    const weather = briefing.weather;
+    const tally = planSignalCounts(briefing.lead.counts);
+    const first = recs[0] ?? null;
+    return (
+      <section
+        data-region="now-card"
+        data-collapsed="true"
+        aria-label={t.today.now.title}
+        className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-[18px] border border-border border-l-[3px] border-l-accent bg-surface px-4 py-2.5 shadow-[var(--shadow-xs)]"
+      >
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-tertiary">
+          {t.today.glance.title}
+        </p>
+        {weather.status === 'ready' ? (
+          <span className={GLANCE_CHIP_CLASS}>
+            {weather.place} · {weather.condition} {weather.temperatureC}°C
+          </span>
+        ) : null}
+        <span className={`${GLANCE_CHIP_CLASS} tabular-nums`}>
+          {briefing.holidayName} · {briefing.holidayDate}
+        </span>
+        {tally.map((part) => (
+          <span
+            key={part.key}
+            className={`${GLANCE_CHIP_CLASS} ${
+              part.key === 'overdue' || part.key === 'urgent'
+                ? 'font-semibold text-overdue'
+                : part.key === 'high'
+                  ? 'font-semibold text-due'
+                  : ''
+            }`}
+          >
+            {t.today.briefing.planCount[part.key].replace('{n}', String(part.n))}
+          </span>
+        ))}
+        {first ? (
+          <button
+            type="button"
+            data-region="now-recommendation"
+            onClick={() => todos.openDetail(first.taskId)}
+            className="inline-flex h-6 min-w-0 max-w-64 items-center gap-1 rounded-full px-2 text-[length:var(--text-caption)] font-medium leading-[var(--text-caption-lh)] text-fg transition-[color,background-color] duration-[var(--ease-out)] hover:bg-accent-subtle"
+          >
+            <span aria-hidden className="shrink-0 text-accent">
+              ✦
+            </span>
+            <span className="truncate">
+              {t.today.glance.recommend.replace('{title}', first.title)}
+            </span>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-expanded="false"
+          onClick={() => toggleExpanded(true)}
+          className={GLANCE_TOGGLE_CLASS}
+        >
+          {t.today.glance.expand}
+          <Icon icon={ChevronDown} size={13} />
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section
       data-region="now-card"
       aria-label={t.today.now.title}
       className="mt-4 rounded-[18px] border border-border border-l-[3px] border-l-accent bg-surface px-6 py-5 shadow-[var(--shadow-xs)]"
     >
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-tertiary">
-        {t.today.now.title}
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-tertiary">
+          {t.today.now.title}
+        </p>
+        <button
+          type="button"
+          aria-expanded="true"
+          onClick={() => toggleExpanded(false)}
+          className={GLANCE_TOGGLE_CLASS}
+        >
+          {t.today.glance.collapse}
+          <Icon icon={ChevronUp} size={13} />
+        </button>
+      </div>
       <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2">
         {rows.map((row) => {
           const key = row.map((module) => module.id).join('-');
@@ -103,12 +199,11 @@ export const NowCard: FC<{
             return (
               <article
                 key={key}
-                id={row.some((module) => module.id === 'meetings') ? 'meetings' : undefined}
                 data-region="today-module"
                 data-module={row[0]?.id}
                 className="min-w-0 self-start rounded-xl border border-border bg-canvas/50 px-3.5 py-3 sm:col-span-2"
               >
-                <AgendaBlock ids={row.map((module) => module.id)} briefing={briefing} />
+                <AgendaBlock briefing={briefing} />
               </article>
             );
           }
@@ -212,7 +307,7 @@ function LeadBrief({ plan }: { plan: TodayPlan }) {
 }
 
 function isAgendaRow(row: readonly { id: string }[]): boolean {
-  return row.length > 0 && row.every((module) => module.id === 'meetings' || module.id === 'upcoming');
+  return row.length > 0 && row.every((module) => module.id === 'upcoming');
 }
 
 function agendaLineLabel(line: AgendaLine): string {
@@ -220,65 +315,20 @@ function agendaLineLabel(line: AgendaLine): string {
   return [line.title, line.clock, count].filter((part): part is string => part !== null && part !== '').join(' · ');
 }
 
-function MeetingsBody({ meetings }: { meetings: TodayBriefingModel['meetings'] }) {
-  return (
-    <div
-      data-region="today-meetings"
-      className="space-y-1 text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]"
-    >
-      {meetings.status === 'mac-only' ? <p>{t.today.briefing.meetingsMacOnly}</p> : null}
-      {meetings.status === 'denied' ? (
-        <div className="space-y-1.5">
-          <p>{t.today.briefing.meetingsDenied}</p>
-          <p className="text-muted">{t.today.briefing.meetingsDeniedHint}</p>
-          {canOpenCalendarSettings() ? (
-            <button
-              type="button"
-              onClick={openCalendarSettings}
-              className="inline-flex h-7 items-center rounded-full border border-border px-2.5 text-[11px] font-medium text-fg transition-[color,background-color] duration-[var(--ease-out)] hover:bg-surface-muted"
-            >
-              {t.today.briefing.meetingsOpenSettings}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-      {meetings.status === 'failed' ? <p>{t.today.briefing.meetingsFailed}</p> : null}
-      {meetings.status === 'events' && meetings.events.length === 0 ? (
-        <p>{t.today.briefing.meetingsEmpty}</p>
-      ) : null}
-      {meetings.status === 'events' && meetings.events.length > 0 ? (
-        <div className="space-y-0.5">
-          <p className="text-[11px] font-semibold text-tertiary">{t.lists.today}</p>
-          {meetings.events.map((event) => (
-            <p key={`${event.title}-${event.start}`}>
-              {event.title} · {event.allDay ? t.today.briefing.allDay : event.start}
-            </p>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function AgendaBlock({ ids, briefing }: { ids: readonly string[]; briefing: TodayBriefingModel }) {
-  const showMeetings = ids.includes('meetings');
-  const showUpcoming = ids.includes('upcoming');
-  const days = showUpcoming ? foldAgendaDays(briefing.upcoming) : [];
-  const label = showMeetings ? t.today.briefing.module.meetings : t.today.briefing.module.upcoming;
+function AgendaBlock({ briefing }: { briefing: TodayBriefingModel }) {
+  const days = foldAgendaDays(briefing.upcoming);
   return (
     <>
-      <p className="text-[11px] font-semibold tracking-wide text-tertiary">{label}</p>
+      <p className="text-[11px] font-semibold tracking-wide text-tertiary">{t.today.briefing.module.upcoming}</p>
       <div className="mt-1.5 space-y-3">
-        {showMeetings ? <MeetingsBody meetings={briefing.meetings} /> : null}
-        {showUpcoming && days.length === 0 ? (
+        {days.length === 0 ? (
           <p
             data-region="today-upcoming"
             className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)]"
           >
             {t.today.briefing.upcomingEmpty}
           </p>
-        ) : null}
-        {showUpcoming && days.length > 0 ? (
+        ) : (
           <div data-region="today-upcoming" className="space-y-3">
             {days.map((day) => (
               <div key={day.ymd}>
@@ -298,7 +348,7 @@ function AgendaBlock({ ids, briefing }: { ids: readonly string[]; briefing: Toda
               </div>
             ))}
           </div>
-        ) : null}
+        )}
       </div>
     </>
   );
