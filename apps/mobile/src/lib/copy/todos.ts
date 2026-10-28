@@ -85,6 +85,7 @@ export const todos = {
   markDone: '完成',
   markUndone: '标为未完成',
   addTaskPlaceholder: '添加任务',
+  quickCreateTitle: '新建任务',
   composeIntent: '用一句话说要做的事，日期和优先级会自动填',
   interpreting: '正在解析任务…',
   interpretingStages: ['正在理解语义…', '识别日期与时间…', '推断优先级与清单…'],

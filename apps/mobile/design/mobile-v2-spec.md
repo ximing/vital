@@ -350,3 +350,8 @@
 - **批次 5（今天 + 我的）**：NowCard 双推荐、banner 色调、习惯车道、提案卡样式；我的分节卡 + NavRow + AI 入口。参照：today.html、me.html。
 - **批次 6（新页面）**：习惯/线程/活动/记忆四页（全复用件）。
 - **批次 7（打磨）**：骨架屏、空态图标化、搜索防抖、splash 色、死代码清理、暗色走查。
+
+## 6. 追记（2026-10-28 · 速览条 + 全局新建）
+
+- **今天页 NowCard 速览条**：与 web 对齐，NowCard 默认收起为速览条（eyebrow「速览」+ 天气/节假日/优先计数 chips + 第一条「✦ 推荐」+ ghost「展开简报」），展开后内容与排版不变、右上 ghost「收起」。选择持久化 SecureStore key `vital.today.briefing-open`（'1'=展开）。
+- **全局新建 FAB**：今天/待办 tab 已有各自的创作入口（底部 NewTaskBar / 列表角落钮），所以全局 FAB 只出现在收集、回顾、我的三个 tab。样式沿用 §f 的 56×56 accent 圆 FAB（right 20、tab bar 上沿再抬 20），点击弹 `QuickCreateSheet`（BottomSheet openFull：eyebrow「新建任务」+ 自动聚焦输入行 + 发送圆钮）。默认落收集箱；`composeTaskRequest` due=preset + smartListId='smart:today'，配了模型走 task.parse 一句话解析。创建成功后 `pullSync()` 让各页刷新。

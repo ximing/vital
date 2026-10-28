@@ -1,7 +1,9 @@
 import { History, Inbox, ListChecks, Sun, User } from 'lucide-react-native';
 import { Tabs } from 'expo-router';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RequireAuth } from '../../src/components/RequireAuth';
+import { GlobalCreateFab } from '../../src/features/todos/QuickCreateFab';
 import { copy } from '../../src/lib/copy';
 import { useTheme } from '../../src/theme/use-theme';
 import { Icon } from '../../src/ui/icon';
@@ -12,6 +14,7 @@ export default function TabsLayout() {
   const tabPad = Math.max(insets.bottom, t.space[5]);
   return (
     <RequireAuth>
+      <View style={{ flex: 1 }}>
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -74,6 +77,8 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
+      <GlobalCreateFab />
+      </View>
     </RequireAuth>
   );
 }

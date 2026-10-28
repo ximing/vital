@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import {
   foldAgendaDays,
   noteRepeatsTasks,
@@ -21,13 +22,25 @@ import { rnShadow } from '../../ui/card';
 import { useOpenTask } from '../../components/TaskSheetHost';
 import type { TodayBriefingModel } from './briefing';
 import { groupTodayModuleRows } from './briefing-core';
-import { openPhoneCalendarAccess } from './phone-calendar';
 
 /** The web sidebar is gone here, so short modules pair once the screen can hold two cards. */
 const MODULE_PAIR_MIN_WIDTH = 360;
 
+/** Collapse state of the briefing grid survives relaunches（与 web 的 vital.today.briefing-open 对齐）. */
+const BRIEFING_OPEN_KEY = 'vital.today.briefing-open';
+
+function readBriefingOpen(): Promise<boolean> {
+  return SecureStore.getItemAsync(BRIEFING_OPEN_KEY)
+    .then((raw) => raw === '1')
+    .catch(() => false);
+}
+
+function writeBriefingOpen(open: boolean): void {
+  void SecureStore.setItemAsync(BRIEFING_OPEN_KEY, open ? '1' : '0').catch(() => undefined);
+}
+
 /**
- * 今天简报：优先事项、天气穿衣、本地日历日程、最近安排和最近节假日。
+ * 今天简报：优先事项、天气穿衣、最近安排和最近节假日。日历日程已写成任务。
  * 「建议开始」仍在卡内；「换一个」本地轮转。
  */
 export function NowCard({
@@ -45,6 +58,23 @@ export function NowCard({
   const openTask = useOpenTask();
   const { width } = useWindowDimensions();
   const styles = useMemo(() => createStyles(t), [t]);
+  // 速览条：默认收起（设计稿 apps/web/design/today.html 画板 1/2），选择持久化。
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void readBriefingOpen().then((open) => {
+      if (!cancelled) setExpanded(open);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function toggleExpanded(next: boolean): void {
+    setExpanded(next);
+    writeBriefingOpen(next);
+  }
+
   const modules = briefing.modules.filter(
     (module) => module.id !== 'note' || !noteRepeatsTasks(module.text ?? '', briefing.lead.titles),
   );
@@ -95,18 +125,72 @@ export function NowCard({
         .filter((part) => part.trim() !== '')
         .join(' · ');
 
+  // 收起态：一行速览条（天气/节假日/优先计数/第一条推荐），任务列表不用滑远。
+  if (!expanded) {
+    const weather = briefing.weather;
+    const tally = planSignalCounts(briefing.lead.counts);
+    const first = recs[0] ?? null;
+    return (
+      <View testID="now-card" style={[styles.card, rnShadow(t)]}>
+        <View style={styles.accent} />
+        <View style={styles.body}>
+          <View style={styles.glanceHead}>
+            <Text style={styles.eyebrow}>{copy.today.glance.title}</Text>
+            <Button variant="ghost" size="sm" onPress={() => toggleExpanded(true)}>
+              {copy.today.glance.expand}
+            </Button>
+          </View>
+          <View style={styles.glanceChips}>
+            {weather.status === 'ready' ? (
+              <Text style={styles.chip}>
+                {weather.place} · {weather.condition} {weather.temperatureC}°C
+              </Text>
+            ) : null}
+            <Text style={styles.chip}>
+              {briefing.holidayName} · {briefing.holidayDate}
+            </Text>
+            {tally.map((part) => (
+              <Text
+                key={part.key}
+                style={[styles.chip, { color: glanceTallyColor(part.key, t) }]}
+              >
+                {copy.today.briefing.planCount[part.key].replace('{n}', String(part.n))}
+              </Text>
+            ))}
+            {first ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => openTask(first.taskId)}
+                style={({ pressed }) => [pressed && styles.miniPressed]}
+              >
+                <Text style={styles.glanceRec} numberOfLines={1}>
+                  ✦ {copy.today.glance.recommend.replace('{title}', first.title)}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View testID="now-card" style={[styles.card, rnShadow(t)]}>
       <View style={styles.accent} />
       <View style={styles.body}>
-        <Text style={styles.eyebrow}>{copy.today.now.title}</Text>
+        <View style={styles.glanceHead}>
+          <Text style={styles.eyebrow}>{copy.today.now.title}</Text>
+          <Button variant="ghost" size="sm" onPress={() => toggleExpanded(false)}>
+            {copy.today.glance.collapse}
+          </Button>
+        </View>
         <View style={styles.modules}>
           {moduleRows.map((row) => {
             const key = row.map((module) => module.id).join('-');
             if (isAgendaRow(row)) {
               return (
                 <View key={key} testID={`today-module-${row[0]?.id ?? 'agenda'}`} style={styles.module}>
-                  <AgendaBlock ids={row.map((module) => module.id)} briefing={briefing} styles={styles} />
+                  <AgendaBlock briefing={briefing} styles={styles} />
                 </View>
               );
             }
@@ -171,6 +255,30 @@ const createStyles = (t: Theme) =>
       lineHeight: 14,
       fontWeight: '600',
       letterSpacing: 1,
+      color: t.accentPrimary,
+    },
+    glanceHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    glanceChips: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: t.space[2],
+      marginTop: t.space[2],
+    },
+    chip: {
+      borderRadius: 999,
+      backgroundColor: t.bgSurfaceMuted,
+      paddingHorizontal: t.space[2],
+      paddingVertical: 2,
+      fontSize: t.type.caption.fontSize,
+      lineHeight: t.type.caption.lineHeight,
+      color: t.textSecondary,
+      overflow: 'hidden',
+    },
+    glanceRec: {
+      fontSize: t.type.caption.fontSize,
+      lineHeight: t.type.caption.lineHeight,
+      fontWeight: '500',
       color: t.accentPrimary,
     },
     modules: { gap: t.space[2], marginTop: t.space[2] },
@@ -256,7 +364,14 @@ const createStyles = (t: Theme) =>
   });
 
 function isAgendaRow(row: readonly { id: string }[]): boolean {
-  return row.length > 0 && row.every((module) => module.id === 'meetings' || module.id === 'upcoming');
+  return row.length > 0 && row.every((module) => module.id === 'upcoming');
+}
+
+/** 速览条计数 chip 的着色：逾期/紧急红、高优橙，其余 muted。 */
+function glanceTallyColor(key: TodayPlanMark, theme: Theme): string {
+  if (key === 'overdue' || key === 'urgent') return theme.statusOverdue;
+  if (key === 'high') return theme.statusDueSoon;
+  return theme.textTertiary;
 }
 
 function monthDay(ymd: string): string {
@@ -270,80 +385,29 @@ function agendaLineLabel(line: AgendaLine): string {
 }
 
 function AgendaBlock({
-  ids,
   briefing,
   styles,
 }: {
-  ids: readonly string[];
   briefing: TodayBriefingModel;
   styles: ReturnType<typeof createStyles>;
 }) {
-  const showMeetings = ids.includes('meetings');
-  const showUpcoming = ids.includes('upcoming');
-  const days = showUpcoming ? foldAgendaDays(briefing.upcoming) : [];
-  const label = showMeetings ? copy.today.briefing.module.meetings : copy.today.briefing.module.upcoming;
+  const days = foldAgendaDays(briefing.upcoming);
   return (
     <View>
-      <Text style={styles.moduleEyebrow}>{label}</Text>
-      {showMeetings ? <MeetingsBlock meetings={briefing.meetings} styles={styles} /> : null}
-      {showUpcoming && days.length === 0 ? (
-        <Text style={styles.fact}>{copy.today.briefing.upcomingEmpty}</Text>
-      ) : null}
-      {showUpcoming
-        ? days.map((day) => (
-            <View key={day.ymd}>
-              <Text style={styles.moduleEyebrow}>{monthDay(day.ymd)}</Text>
-              {day.lines.map((line) => (
-                <Text key={line.key} style={styles.fact}>
-                  {agendaLineLabel(line)}
-                </Text>
-              ))}
-              {day.hidden > 0 ? (
-                <Text style={styles.factMuted}>
-                  {copy.today.briefing.dayMore.replace('{n}', String(day.hidden))}
-                </Text>
-              ) : null}
-            </View>
-          ))
-        : null}
-    </View>
-  );
-}
-
-function MeetingsBlock({
-  meetings,
-  styles,
-}: {
-  meetings: TodayBriefingModel['meetings'];
-  styles: ReturnType<typeof createStyles>;
-}) {
-  if (meetings.status === 'loading' || meetings.status === 'skipped') {
-    return <Text style={styles.fact}>{copy.today.briefing.meetingsLoading}</Text>;
-  }
-  if (meetings.status === 'denied') {
-    return (
-      <View>
-        <Text style={styles.fact}>{copy.today.briefing.meetingsDenied}</Text>
-        <Text style={styles.meta}>{copy.today.briefing.meetingsDeniedHint}</Text>
-        <Button size="sm" variant="ghost" onPress={() => void openPhoneCalendarAccess()}>
-          {copy.today.briefing.meetingsOpenSettings}
-        </Button>
-      </View>
-    );
-  }
-  if (meetings.status === 'failed') {
-    return <Text style={styles.fact}>{copy.today.briefing.meetingsFailed}</Text>;
-  }
-  if (meetings.events.length === 0) {
-    return <Text style={styles.fact}>{copy.today.briefing.meetingsEmpty}</Text>;
-  }
-  return (
-    <View>
-      <Text style={styles.moduleEyebrow}>{copy.lists.today}</Text>
-      {meetings.events.map((event, index) => (
-        <Text key={`${event.start}-${event.title}-${index}`} style={styles.fact}>
-          {event.title} · {event.allDay ? copy.today.briefing.allDay : event.start}
-        </Text>
+      <Text style={styles.moduleEyebrow}>{copy.today.briefing.module.upcoming}</Text>
+      {days.length === 0 ? <Text style={styles.fact}>{copy.today.briefing.upcomingEmpty}</Text> : null}
+      {days.map((day) => (
+        <View key={day.ymd}>
+          <Text style={styles.moduleEyebrow}>{monthDay(day.ymd)}</Text>
+          {day.lines.map((line) => (
+            <Text key={line.key} style={styles.fact}>
+              {agendaLineLabel(line)}
+            </Text>
+          ))}
+          {day.hidden > 0 ? (
+            <Text style={styles.factMuted}>{copy.today.briefing.dayMore.replace('{n}', String(day.hidden))}</Text>
+          ) : null}
+        </View>
       ))}
     </View>
   );
