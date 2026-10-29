@@ -77,8 +77,13 @@ function openCond(userId: string): SQL {
 async function smartFilter(userId: string, listId: string, tz: string, now = new Date()): Promise<SQL> {
   switch (listId) {
     case 'smart:inbox': {
+      // The inbox list, plus every open task with no date. Undated tasks stay
+      // in 无日期 and also show up here, whichever list they belong to.
       const inbox = await getInboxList(userId);
-      return and(openCond(userId), eq(tasks.listId, inbox.id)) as SQL;
+      return and(
+        openCond(userId),
+        or(eq(tasks.listId, inbox.id), and(isNull(tasks.dueAt), isNull(tasks.startAt))),
+      ) as SQL;
     }
     case 'smart:today': {
       const { start: todayStart, end: tomorrowStart } = localDayUtcRange(tz, now, 0, 1);

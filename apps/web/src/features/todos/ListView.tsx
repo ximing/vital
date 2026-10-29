@@ -9,6 +9,7 @@ import { EmptyTasks } from './EmptyTasks';
 import {
   flattenNodes,
   formatHumanDay,
+  inboxList,
   listSections,
   listTitle,
   orderedAfterDrop,
@@ -218,6 +219,7 @@ export const ListView: FC<{
   if (tasks.length === 0) return <EmptyTasks listId={listId} kind="list" done={doneScope} />;
 
   const manualSort = todos.taskSort.key === 'manual';
+  const inboxId = inboxList(lists)?.id;
   const boxLabel =
     listId === 'smart:today'
       ? t.lists.today
@@ -278,7 +280,8 @@ export const ListView: FC<{
                   timeZone={timeZone}
                   tags={tags}
                   listName={
-                    listId.startsWith('smart:') && listId !== 'smart:inbox'
+                    listId.startsWith('smart:') &&
+                    (listId !== 'smart:inbox' || row.task.listId !== inboxId)
                       ? listTitle(row.task.listId, lists, '')
                       : undefined
                   }

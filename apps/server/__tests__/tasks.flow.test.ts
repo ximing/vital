@@ -409,6 +409,12 @@ describe('tasks', () => {
       token: alice.token,
     });
     expect(listed.json().items.map((task: { id: string }) => task.id)).toContain(created.json().id);
+    const inInbox = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks?listId=smart:inbox',
+      token: alice.token,
+    });
+    expect(inInbox.json().items.map((task: { id: string }) => task.id)).toContain(created.json().id);
     const noDue = await injectJson(app, {
       method: 'POST',
       url: '/api/v1/tasks',
@@ -417,6 +423,63 @@ describe('tasks', () => {
     });
     expect(noDue.statusCode).toBe(400);
     expect(noDue.json().error.code).toBe('RRULE_DUE_REQUIRED');
+  });
+
+  it('undated tasks from other lists also appear in the inbox smart list', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const project = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/lists',
+      token: alice.token,
+      payload: { name: '项目' },
+    });
+    const projectId = project.json().id as string;
+    const undated = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '没日期', listId: projectId },
+    });
+    const dated = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '有日期',
+        listId: projectId,
+        dueAt: shanghaiDate('2026-09-08'),
+        isAllDay: true,
+      },
+    });
+    const captured = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: { title: '收集箱里的', listId: inbox },
+    });
+    expect(undated.statusCode).toBe(201);
+    expect(dated.statusCode).toBe(201);
+    expect(captured.statusCode).toBe(201);
+
+    const listed = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks?listId=smart:inbox',
+      token: alice.token,
+    });
+    const ids = listed.json().items.map((task: { id: string }) => task.id);
+    expect(ids).toContain(undated.json().id);
+    expect(ids).toContain(captured.json().id);
+    expect(ids).not.toContain(dated.json().id);
+
+    const counts = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks/counts',
+      token: alice.token,
+    });
+    expect(counts.json().counts['smart:inbox']).toBe(2);
+    expect(counts.json().counts['smart:someday']).toBe(2);
+    expect(counts.json().counts[projectId]).toBe(2);
   });
 
   it('persists semantic reminders and fixed recurrence', async () => {

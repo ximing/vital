@@ -567,6 +567,22 @@ describe('todos workspace', () => {
     expect(screen.queryByRole('menu', { name: '写周报' })).not.toBeInTheDocument();
   });
 
+  it('shows another list name for an undated task inside the inbox smart list', async () => {
+    vi.mocked(client.listLists).mockResolvedValue({ items: [smartToday, inbox, project] });
+    vi.mocked(client.listTasks).mockResolvedValue({
+      items: [
+        makeTask({ id: 'home', title: '收集箱任务', listId: inbox.id, dueAt: null, startAt: null }),
+        makeTask({ id: 'away', title: '项目里没日期', listId: project.id, dueAt: null, startAt: null }),
+      ],
+      nextCursor: null,
+    });
+    renderAt('/todos/lists/smart:inbox');
+    const foreign = await screen.findByRole('option', { name: '项目里没日期' });
+    expect(within(foreign).getByText(project.name)).toBeInTheDocument();
+    const native = screen.getByRole('option', { name: '收集箱任务' });
+    expect(within(native).queryByText(inbox.name)).not.toBeInTheDocument();
+  });
+
   it('renders a pinned section above other tasks in any list', async () => {
     vi.mocked(client.listTasks).mockResolvedValue({
       items: [
