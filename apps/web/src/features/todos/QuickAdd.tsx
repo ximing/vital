@@ -34,6 +34,7 @@ export const QuickAdd: FC<{
   lockedPriority?: TaskPriority;
   lockedStatus?: 'todo' | 'doing';
   intent?: boolean;
+  initialDraft?: ScheduleDraft;
 }> = observer(function QuickAdd({
   onSubmit,
   disabled,
@@ -48,6 +49,7 @@ export const QuickAdd: FC<{
   lockedPriority,
   lockedStatus,
   intent = false,
+  initialDraft,
 }: {
   onSubmit: (title: string, draft: ScheduleDraft, extras: ComposeExtras) => Promise<void> | void;
   disabled?: boolean;
@@ -62,12 +64,13 @@ export const QuickAdd: FC<{
   lockedPriority?: TaskPriority;
   lockedStatus?: 'todo' | 'doing';
   intent?: boolean;
+  initialDraft?: ScheduleDraft;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
   const statusId = useId();
   const nonce = useService(TodosUiService).quickAddNonce;
-  const [draft, setDraft] = useState<ScheduleDraft>(emptyScheduleDraft);
+  const [draft, setDraft] = useState<ScheduleDraft>(initialDraft ?? emptyScheduleDraft);
   const [priority, setPriority] = useState<TaskPriority>(lockedPriority ?? 3);
   const [listId, setListId] = useState(defaultListId);
   const [prevDefaultListId, setPrevDefaultListId] = useState(defaultListId);

@@ -9,7 +9,14 @@ import { AuthService } from '@/services/auth.service';
 import { Overlay } from '@/ui/overlay';
 import { inboxList } from './model';
 import { QuickAdd } from './QuickAdd';
-import { OPEN_QUICK_CREATE_EVENT, quickCreateTask } from './quick-create';
+import {
+  CLOSE_QUICK_CREATE_EVENT,
+  OPEN_QUICK_CREATE_EVENT,
+  QUICK_CREATE_CLOSED_EVENT,
+  isQuickCreatePin,
+  quickCreateTask,
+  type QuickCreateOpenDetail,
+} from './quick-create';
 import { todoKeys, useListsQuery } from './queries';
 import type { ComposeExtras } from './QuickAdd';
 import type { ScheduleDraft } from './schedule-draft';
@@ -25,14 +32,29 @@ export const QuickCreateOverlay: FC = () => {
   const queryClient = useQueryClient();
   const listsQuery = useListsQuery();
   const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState<QuickCreateOpenDetail | null>(null);
+  const [session, setSession] = useState(0);
 
-  const openOverlay = useCallback((): void => setOpen(true), []);
-  const close = useCallback((): void => setOpen(false), []);
+  const close = useCallback((): void => {
+    setOpen(false);
+    setPinned(null);
+    window.dispatchEvent(new CustomEvent(QUICK_CREATE_CLOSED_EVENT));
+  }, []);
 
   useEffect(() => {
-    window.addEventListener(OPEN_QUICK_CREATE_EVENT, openOverlay);
-    return () => window.removeEventListener(OPEN_QUICK_CREATE_EVENT, openOverlay);
-  }, [openOverlay]);
+    function onOpen(event: Event): void {
+      const detail = event instanceof CustomEvent ? event.detail : undefined;
+      setPinned(isQuickCreatePin(detail) ? detail : null);
+      setSession((value) => value + 1);
+      setOpen(true);
+    }
+    window.addEventListener(OPEN_QUICK_CREATE_EVENT, onOpen);
+    window.addEventListener(CLOSE_QUICK_CREATE_EVENT, close);
+    return () => {
+      window.removeEventListener(OPEN_QUICK_CREATE_EVENT, onOpen);
+      window.removeEventListener(CLOSE_QUICK_CREATE_EVENT, close);
+    };
+  }, [close]);
 
   const lists = listsQuery.data ?? [];
   const inbox = inboxList(lists);
@@ -43,7 +65,15 @@ export const QuickCreateOverlay: FC = () => {
 
   async function onSubmit(name: string, draft: ScheduleDraft, extras: ComposeExtras): Promise<void> {
     if (inboxId === '') return;
-    const task = await quickCreateTask({ name, draft, extras, inboxId, timeZone, intent });
+    const task = await quickCreateTask({
+      name,
+      draft,
+      extras,
+      inboxId,
+      timeZone,
+      intent,
+      pinSchedule: pinned?.pinSchedule === true,
+    });
     queryClient.setQueryData(todoKeys.item(task.id), task);
     todos.noteSimilarOpen(task.similarOpenTasks);
     await markOnboarding({ createdTask: true });
@@ -73,10 +103,20 @@ export const QuickCreateOverlay: FC = () => {
         className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-elevated shadow-[var(--shadow)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
+        {pinned ? (
+          <p
+            data-schedule-draft-range
+            className="px-4 pt-3 font-mono text-[length:var(--text-meta)] text-muted"
+          >
+            {pinned.rangeLabel}
+          </p>
+        ) : null}
         <div className="px-1 pt-1">
           <QuickAdd
+            key={session}
             variant="card"
             captureId={false}
+            initialDraft={pinned?.draft}
             onSubmit={(name, draft, extras) => onSubmit(name, draft, extras)}
             disabled={!inboxId}
             listName={inbox?.name ?? ''}

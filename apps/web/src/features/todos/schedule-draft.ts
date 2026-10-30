@@ -149,6 +149,29 @@ export function draftToPatch(draft: ScheduleDraft, zone: string): PatchTaskInput
   };
 }
 
+/** Start, end, and all-day only. A post-parse pin must not clear reminder or repeat. */
+export function schedulePinPatch(
+  draft: ScheduleDraft,
+  zone: string,
+): Pick<PatchTaskInput, 'startAt' | 'dueAt' | 'isAllDay'> | null {
+  if (draft.startYmd === null) return null;
+  const full = draftToPatch(draft, zone);
+  if (full.startAt === undefined || full.dueAt === undefined || full.isAllDay === undefined) {
+    return null;
+  }
+  return { startAt: full.startAt, dueAt: full.dueAt, isAllDay: full.isAllDay };
+}
+
+export function applySchedulePin(
+  base: CreateTaskInput,
+  draft: ScheduleDraft,
+  zone: string,
+): CreateTaskInput {
+  const pin = schedulePinPatch(draft, zone);
+  if (pin === null) return base;
+  return { ...base, startAt: pin.startAt, dueAt: pin.dueAt, isAllDay: pin.isAllDay };
+}
+
 export function applyDraftToCreate(
   base: CreateTaskInput,
   draft: ScheduleDraft,

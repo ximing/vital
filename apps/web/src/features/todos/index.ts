@@ -24,7 +24,15 @@ export {
 export { PriorityMark } from './priority';
 export { QuickAdd, type ComposeExtras } from './QuickAdd';
 export { QuickCreateOverlay } from './QuickCreateOverlay';
-export { OPEN_QUICK_CREATE_EVENT, quickCreateTask } from './quick-create';
+export {
+  CLOSE_QUICK_CREATE_EVENT,
+  OPEN_QUICK_CREATE_EVENT,
+  QUICK_CREATE_CLOSED_EVENT,
+  closeQuickCreate,
+  isQuickCreatePin,
+  openQuickCreate,
+  quickCreateTask,
+} from './quick-create';
 export { todoKeys } from './query-keys';
 export {
   useCountsQuery,
@@ -34,7 +42,12 @@ export {
   useTasksQuery,
   useTodoActions,
 } from './queries';
-export { applyDraftToCreate, type ScheduleDraft } from './schedule-draft';
+export {
+  applyDraftToCreate,
+  applySchedulePin,
+  schedulePinPatch,
+  type ScheduleDraft,
+} from './schedule-draft';
 export { SimilarOpenToast } from './SimilarOpenToast';
 export { TaskDetail } from './TaskDetail';
 export { TodosUiService, resetTodosUi, todosUi } from './todos-ui.service';

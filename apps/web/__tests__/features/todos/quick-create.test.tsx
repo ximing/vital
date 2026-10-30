@@ -18,7 +18,7 @@ import {
   OPEN_QUICK_CREATE_EVENT,
   quickCreateTask,
 } from '../../../src/features/todos/quick-create';
-import { emptyScheduleDraft } from '../../../src/features/todos/schedule-draft';
+import { emptyScheduleDraft, type ScheduleDraft } from '../../../src/features/todos/schedule-draft';
 import { resetTodosUi } from '../../../src/features/todos/todos-ui.service';
 import { RabRoot } from '../../helpers/rab-root';
 
@@ -30,6 +30,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       listLists: vi.fn(),
       createTask: vi.fn(),
       createTaskFromText: vi.fn(),
+      patchTask: vi.fn(),
       updateOnboarding: vi.fn(),
     },
   };
@@ -97,9 +98,20 @@ function renderOverlay() {
 
 describe('quickCreateTask', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(client.createTask).mockResolvedValue(createdTask);
     vi.mocked(client.createTaskFromText).mockResolvedValue(createdTask);
+    vi.mocked(client.patchTask).mockResolvedValue(createdTask);
   });
+
+  const pinned: ScheduleDraft = {
+    ...emptyScheduleDraft(),
+    mode: 'range',
+    startYmd: '2026-10-30',
+    endYmd: '2026-10-30',
+    startHm: '09:00',
+    endHm: '09:15',
+  };
 
   it('parses one-liners with the today smart list as the date fallback', async () => {
     await quickCreateTask({
@@ -116,6 +128,53 @@ describe('quickCreateTask', () => {
       timezone: 'Asia/Shanghai',
       smartListId: 'smart:today',
     });
+    expect(client.patchTask).not.toHaveBeenCalled();
+  });
+
+  it('pins the dragged interval after the AI parse and leaves reminder fields alone', async () => {
+    await quickCreateTask({
+      name: '高优 明天下午三点开会',
+      draft: pinned,
+      extras: { listId: '' },
+      inboxId: 'inbox-1',
+      timeZone: 'Asia/Shanghai',
+      intent: true,
+      pinSchedule: true,
+    });
+    expect(client.createTaskFromText).toHaveBeenCalledWith({
+      text: '高优 明天下午三点开会',
+      listId: 'inbox-1',
+      timezone: 'Asia/Shanghai',
+      smartListId: 'smart:today',
+    });
+    expect(client.patchTask).toHaveBeenCalledWith('task-new', {
+      startAt: new Date('2026-10-30T09:00:00+08:00').toISOString(),
+      dueAt: new Date('2026-10-30T09:15:00+08:00').toISOString(),
+      isAllDay: false,
+    });
+    expect(client.createTask).not.toHaveBeenCalled();
+  });
+
+  it('writes the pinned interval into a plain create when no model is used', async () => {
+    await quickCreateTask({
+      name: '买牛奶',
+      draft: pinned,
+      extras: { listId: '' },
+      inboxId: 'inbox-1',
+      timeZone: 'Asia/Shanghai',
+      intent: false,
+      pinSchedule: true,
+    });
+    expect(client.createTask).toHaveBeenCalledWith({
+      title: '买牛奶',
+      listId: 'inbox-1',
+      timezone: 'Asia/Shanghai',
+      isAllDay: false,
+      startAt: new Date('2026-10-30T09:00:00+08:00').toISOString(),
+      dueAt: new Date('2026-10-30T09:15:00+08:00').toISOString(),
+    });
+    expect(client.createTaskFromText).not.toHaveBeenCalled();
+    expect(client.patchTask).not.toHaveBeenCalled();
   });
 
   it('creates a plain task into the inbox without a date', async () => {

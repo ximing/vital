@@ -324,6 +324,74 @@ export type IntentContext = {
   now?: Date;
 };
 
+const SPOKEN_PRIORITIES: { phrase: string; priority: TaskPriority }[] = [
+  { phrase: '不紧急', priority: 3 },
+  { phrase: '不急', priority: 3 },
+  { phrase: '低优先级', priority: 3 },
+  { phrase: '优先级低', priority: 3 },
+  { phrase: '低优', priority: 3 },
+  { phrase: '最高优先级', priority: 0 },
+  { phrase: '优先级最高', priority: 0 },
+  { phrase: '最高优', priority: 0 },
+  { phrase: '高优先级', priority: 0 },
+  { phrase: '优先级高', priority: 0 },
+  { phrase: '高优', priority: 0 },
+  { phrase: '加急', priority: 0 },
+  { phrase: '紧急', priority: 0 },
+  { phrase: '较高优先级', priority: 1 },
+  { phrase: '优先级较高', priority: 1 },
+  { phrase: '中等优先级', priority: 2 },
+  { phrase: '中优先级', priority: 2 },
+  { phrase: '优先级中等', priority: 2 },
+  { phrase: '中优', priority: 2 },
+];
+
+function spokenPhraseIndex(text: string, phrase: string): number {
+  const hay = text.toLowerCase();
+  const needle = phrase.toLowerCase();
+  let from = 0;
+  while (from < hay.length) {
+    const index = hay.indexOf(needle, from);
+    if (index < 0) return -1;
+    const before = hay[index - 1];
+    // 提高优势 / 降低优势 are not priority words.
+    if ((phrase === '高优' && before === '提') || (phrase === '低优' && before === '降')) {
+      from = index + needle.length;
+      continue;
+    }
+    return index;
+  }
+  return -1;
+}
+
+type SpokenHit = { index: number; length: number; priority: TaskPriority };
+
+function preferHit(current: SpokenHit | null, index: number, length: number, priority: TaskPriority): SpokenHit | null {
+  if (index < 0) return current;
+  if (current === null || index < current.index || (index === current.index && length > current.length)) {
+    return { index, length, priority };
+  }
+  return current;
+}
+
+/** Leftmost priority word in the sentence. A longer phrase at the same spot wins. */
+export function spokenPriority(text: string): TaskPriority | null {
+  let best: SpokenHit | null = null;
+  for (const { phrase, priority } of SPOKEN_PRIORITIES) {
+    best = preferHit(best, spokenPhraseIndex(text, phrase), phrase.length, priority);
+  }
+  const levels = text.toLowerCase();
+  const level = /(?:^|[^a-z0-9])p([0-3])(?![a-z0-9])/g;
+  for (let match = level.exec(levels); match !== null; match = level.exec(levels)) {
+    const digit = match[1];
+    const at = match.index + match[0].length - 2;
+    if (digit === '0' || digit === '1' || digit === '2' || digit === '3') {
+      best = preferHit(best, at, 2, Number(digit) as TaskPriority);
+    }
+  }
+  return best === null ? null : best.priority;
+}
+
 export function buildCreateInputFromIntent(
   input: CreateTaskFromTextInput,
   extracted: ExtractedTask | null,
@@ -393,7 +461,10 @@ export function buildCreateInputFromIntent(
   }
   const reminder = reminderOf(reminderToken, hasDue);
 
-  const priority: TaskPriority | undefined = input.priority ?? extracted?.priority;
+  // A priority named in the sentence wins over the model. A caller-supplied
+  // priority (a board column lock) still wins over the sentence.
+  const priority: TaskPriority | undefined =
+    input.priority ?? spokenPriority(input.text) ?? extracted?.priority;
 
   const draft: CreateTaskInput = {
     title,
@@ -441,9 +512,9 @@ function buildPrompt(input: {
   const system = [
     '你把用户的一句话理解成一条待办任务，只输出 JSON 对象，不要 markdown。',
     '字段：title, notes, priority, dueDate, dueTime, startDate, startTime, isAllDay, someday, reminder, recurrenceKind, recurrenceInterval, listName, tagNames。',
-    'title：短标题，去掉日期时间等调度用语。',
+    'title：短标题，去掉日期、时间和高优、低优、紧急这类优先级用语。',
     'notes：仅当用户补充了说明、上下文或摘要时填写，否则 null。',
-    'priority：0 最高紧急，3 普通。没说紧急程度时用 3。',
+    'priority：0 最高紧急，3 普通。高优、最高、紧急、加急是 0；低优、不急、不紧急是 3。没说紧急程度时用 3。',
     '日期用 YYYY-MM-DD，时间用 HH:mm，按「现在是」和时区计算。没有日期也没有时刻则 dueDate 为 null。',
     '相对日期要换算：今天、明天、后天、大后天、昨天、前天、周几、这周几、下周几、下下周几、下周这天、周末、N天后、N周后、N个月后、几月几日、本月或下月几号。',
     '当前视图不能覆盖用户说出的日期。每天、每周、每月、每隔是重复，不是单次日期。',

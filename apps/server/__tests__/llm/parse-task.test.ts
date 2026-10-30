@@ -108,6 +108,51 @@ describe('buildCreateInputFromIntent', () => {
     expect(payload.priority).toBe(0);
   });
 
+  it('reads 高优 as priority 0 ahead of the model', () => {
+    const payload = buildCreateInputFromIntent(
+      { text: '高优 明天下午三点开会', timezone: 'Asia/Shanghai', smartListId: 'smart:today' },
+      extractedOf({ title: '开会', priority: 3, dueDate: '2026-10-31', dueTime: '15:00' }),
+      { ...ctx, now: new Date('2026-10-30T02:00:00.000Z') },
+    );
+    expect(payload.priority).toBe(0);
+    const marked = buildCreateInputFromIntent(
+      { text: 'P0 发版', timezone: 'Asia/Shanghai' },
+      extractedOf({ title: '发版', priority: 3 }),
+      ctx,
+    );
+    expect(marked.priority).toBe(0);
+    const low = buildCreateInputFromIntent(
+      { text: '低优 整理附件', timezone: 'Asia/Shanghai' },
+      extractedOf({ title: '整理附件', priority: 0 }),
+      ctx,
+    );
+    expect(low.priority).toBe(3);
+  });
+
+  it('does not treat 不紧急 or 提高优势 as urgent', () => {
+    const quiet = buildCreateInputFromIntent(
+      { text: '不紧急 整理书架', timezone: 'Asia/Shanghai' },
+      extractedOf({ title: '整理书架', priority: 0 }),
+      ctx,
+    );
+    expect(quiet.priority).toBe(3);
+    const advantage = buildCreateInputFromIntent(
+      { text: '提高优势', timezone: 'Asia/Shanghai' },
+      extractedOf({ title: '提高优势', priority: 2 }),
+      ctx,
+    );
+    expect(advantage.priority).toBe(2);
+  });
+
+  it('keeps a locked priority over a spoken one', () => {
+    const payload = buildCreateInputFromIntent(
+      { text: '高优 修 bug', timezone: 'Asia/Shanghai', priority: 2 },
+      extractedOf({ title: '修 bug', priority: 3 }),
+      ctx,
+    );
+    expect(payload.priority).toBe(2);
+  });
+
   it('turns 每间隔两个月 at 21:00 into a timed two-month task', () => {
     const text = '每间隔两个月的晚上九点提醒我用油擦一下菜板';
     const now = new Date('2026-09-08T04:00:00.000Z');

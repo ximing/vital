@@ -1,11 +1,28 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { observer, useService } from '@rabjs/react';
-import { useLayoutEffect, useMemo, useRef, useState, type FC } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FC } from 'react';
 import { t } from '@/copy';
-import { useCalendarQuery } from '@/features/todos/queries';
+import {
+  OPEN_QUICK_CREATE_EVENT,
+  QUICK_CREATE_CLOSED_EVENT,
+  closeQuickCreate,
+  isQuickCreatePin,
+  openQuickCreate,
+} from '@/features/todos';
 import { todayYmd } from '@/features/todos/model';
+import { useCalendarQuery } from '@/features/todos/queries';
 import { AuthService } from '@/services/auth.service';
 import { Icon } from '@/ui/icon';
+import {
+  QUARTER_MINUTES,
+  scheduleDraftFromRange,
+  scheduleRangeHitsCell,
+  scheduleRangeLabel,
+  type DayCell,
+  type HourCell,
+  type ScheduleCreateRange,
+  type SlotMinute,
+} from './gesture';
 import {
   placeSchedule,
   scheduleRangeIso,
@@ -15,6 +32,7 @@ import {
   type ScheduleView,
   type WeekPlacement,
 } from './place';
+import { useScheduleGesture } from './use-schedule-gesture';
 
 function periodHeading(placement: WeekPlacement | MonthPlacement): string {
   if (placement.view === 'month') return `${placement.year}年${placement.month}月`;
@@ -63,19 +81,101 @@ function DayNumber({ ymd, today }: { ymd: string; today: string }) {
 
 const WEEK_COLS = 'grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]';
 
-function WeekGrid({ model, today }: { model: WeekPlacement; today: string }) {
+function quarterMinute(timeLabel: string | null): number {
+  if (timeLabel === null || timeLabel.length < 5) return 0;
+  const minute = Number(timeLabel.slice(3, 5));
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return 0;
+  return Math.floor(minute / 15) * 15;
+}
+
+function selectedProps(on: boolean): { 'data-schedule-selected'?: 'true' } {
+  return on ? { 'data-schedule-selected': 'true' } : {};
+}
+
+function cellClass(base: string, selected: boolean): string {
+  return selected ? `${base} bg-accent-subtle` : base;
+}
+
+function QuarterRow({
+  days,
+  hour,
+  minute,
+  shown,
+}: {
+  days: WeekPlacement['days'];
+  hour: number;
+  minute: SlotMinute;
+  shown: ScheduleCreateRange | null;
+}) {
+  return (
+    <div
+      data-schedule-hour={hour}
+      data-schedule-minute={minute}
+      className={`grid ${WEEK_COLS} min-h-6 border-b ${
+        minute === 45 ? 'border-border' : 'border-border/40'
+      }`}
+    >
+      <div className="whitespace-nowrap px-2 pt-0.5 font-mono text-[length:var(--text-caption)] leading-none text-muted">
+        {minute === 0 ? `${String(hour).padStart(2, '0')}:00` : ''}
+      </div>
+      {days.map((day) => {
+        const cell: HourCell = { kind: 'hour', ymd: day.ymd, hour, minute };
+        const selected = shown !== null && scheduleRangeHitsCell(shown, cell);
+        const chips = (day.hours[hour]?.items ?? []).filter(
+          (chip) => quarterMinute(chip.timeLabel) === minute,
+        );
+        return (
+          <div
+            key={day.ymd}
+            data-schedule-day={day.ymd}
+            data-schedule-hour={hour}
+            data-schedule-minute={minute}
+            {...selectedProps(selected)}
+            className={cellClass('border-l border-border/40 px-0.5', selected)}
+          >
+            {chips.map((chip) => (
+              <Chip key={chip.key} chip={chip} />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function WeekGrid({
+  model,
+  today,
+  timeZone,
+  draft,
+  onDraft,
+}: {
+  model: WeekPlacement;
+  today: string;
+  timeZone: string;
+  draft: ScheduleCreateRange | null;
+  onDraft: (range: ScheduleCreateRange) => void;
+}) {
+  const gesture = useScheduleGesture(timeZone, draft !== null, onDraft);
+  const shown = gesture.preview ?? draft;
   const scroller = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const root = scroller.current;
     if (root === null) return;
-    const row = root.querySelector<HTMLElement>('[data-schedule-hour="8"]');
+    const row = root.querySelector<HTMLElement>(
+      '[data-schedule-hour="8"][data-schedule-minute="0"]',
+    );
     if (row === null) return;
     const top = row.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
     root.scrollTop = top;
   }, [model.startYmd]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-region="schedule-week">
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      data-region="schedule-week"
+      onPointerDown={gesture.onPointerDown}
+    >
       <div className={`grid ${WEEK_COLS} shrink-0 border-b border-border`}>
         <div />
         {model.days.map((day) => {
@@ -99,46 +199,39 @@ function WeekGrid({ model, today }: { model: WeekPlacement; today: string }) {
         <div className="px-2 py-1.5 font-mono text-[length:var(--text-caption)] text-muted">
           {t.schedule.allDay}
         </div>
-        {model.days.map((day) => (
-          <div
-            key={day.ymd}
-            data-schedule-all-day={day.ymd}
-            className="min-h-8 border-l border-border px-1 py-1"
-          >
-            {day.allDay.map((chip) => (
-              <Chip key={chip.key} chip={chip} />
-            ))}
-          </div>
-        ))}
+        {model.days.map((day) => {
+          const cell: DayCell = { kind: 'day', ymd: day.ymd };
+          const selected = shown !== null && scheduleRangeHitsCell(shown, cell);
+          return (
+            <div
+              key={day.ymd}
+              data-schedule-all-day={day.ymd}
+              {...selectedProps(selected)}
+              className={cellClass('min-h-8 border-l border-border px-1 py-1', selected)}
+            >
+              {day.allDay.map((chip) => (
+                <Chip key={chip.key} chip={chip} />
+              ))}
+            </div>
+          );
+        })}
       </div>
       <div
         ref={scroller}
         className="relative min-h-0 flex-1 overflow-y-auto"
         data-region="schedule-hours"
       >
-        {model.days[0]?.hours.map((slot) => (
-          <div
-            key={slot.hour}
-            data-schedule-hour={slot.hour}
-            className={`grid ${WEEK_COLS} min-h-12 border-b border-border/70`}
-          >
-            <div className="whitespace-nowrap px-2 py-1 font-mono text-[length:var(--text-caption)] text-muted">
-              {String(slot.hour).padStart(2, '0')}:00
-            </div>
-            {model.days.map((day) => (
-              <div
-                key={day.ymd}
-                data-schedule-day={day.ymd}
-                data-schedule-hour={slot.hour}
-                className="border-l border-border/70 px-0.5 py-0.5"
-              >
-                {day.hours[slot.hour]?.items.map((chip) => (
-                  <Chip key={chip.key} chip={chip} />
-                ))}
-              </div>
-            ))}
-          </div>
-        ))}
+        {model.days[0]?.hours.flatMap((slot) =>
+          QUARTER_MINUTES.map((minute) => (
+            <QuarterRow
+              key={`${slot.hour}-${minute}`}
+              days={model.days}
+              hour={slot.hour}
+              minute={minute}
+              shown={shown}
+            />
+          )),
+        )}
       </div>
     </div>
   );
@@ -148,14 +241,26 @@ function MonthGrid({
   model,
   today,
   weekStartsOn,
+  timeZone,
+  draft,
+  onDraft,
 }: {
   model: MonthPlacement;
   today: string;
   weekStartsOn: 0 | 1;
+  timeZone: string;
+  draft: ScheduleCreateRange | null;
+  onDraft: (range: ScheduleCreateRange) => void;
 }) {
+  const gesture = useScheduleGesture(timeZone, draft !== null, onDraft);
+  const shown = gesture.preview ?? draft;
   const heads = weekStartsOn === 0 ? [0, 1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 0];
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-region="schedule-month">
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      data-region="schedule-month"
+      onPointerDown={gesture.onPointerDown}
+    >
       <div className="grid shrink-0 grid-cols-7 border-b border-border">
         {heads.map((weekday) => (
           <div
@@ -167,22 +272,30 @@ function MonthGrid({
         ))}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6">
-        {model.cells.map((cell) => (
-          <div
-            key={cell.ymd}
-            data-schedule-date={cell.ymd}
-            className="flex min-h-0 flex-col overflow-y-auto border-b border-l border-border px-1 py-1"
-          >
-            <span className={cell.inMonth ? '' : 'text-muted'}>
-              <DayNumber ymd={cell.ymd} today={today} />
-            </span>
-            <div className="mt-0.5 flex min-h-0 flex-col">
-              {cell.chips.map((chip) => (
-                <Chip key={chip.key} chip={chip} />
-              ))}
+        {model.cells.map((cell) => {
+          const day: DayCell = { kind: 'day', ymd: cell.ymd };
+          const selected = shown !== null && scheduleRangeHitsCell(shown, day);
+          return (
+            <div
+              key={cell.ymd}
+              data-schedule-date={cell.ymd}
+              {...selectedProps(selected)}
+              className={cellClass(
+                'flex min-h-0 flex-col overflow-y-auto border-b border-l border-border px-1 py-1',
+                selected,
+              )}
+            >
+              <span className={cell.inMonth ? '' : 'text-muted'}>
+                <DayNumber ymd={cell.ymd} today={today} />
+              </span>
+              <div className="mt-0.5 flex min-h-0 flex-col">
+                {cell.chips.map((chip) => (
+                  <Chip key={chip.key} chip={chip} />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -195,6 +308,7 @@ export const SchedulePage: FC = observer(function SchedulePageContent() {
   const today = todayYmd(timeZone);
   const [view, setView] = useState<ScheduleView>('week');
   const [cursor, setCursor] = useState(today);
+  const [draft, setDraft] = useState<ScheduleCreateRange | null>(null);
   const range = useMemo(
     () => scheduleRangeIso(cursor, view, weekStartsOn, timeZone),
     [cursor, view, weekStartsOn, timeZone],
@@ -218,6 +332,43 @@ export const SchedulePage: FC = observer(function SchedulePageContent() {
   const prevLabel = view === 'week' ? t.schedule.prevWeek : t.schedule.prevMonth;
   const nextLabel = view === 'week' ? t.schedule.nextWeek : t.schedule.nextMonth;
 
+  useEffect(() => {
+    function onOpen(event: Event): void {
+      const detail = event instanceof CustomEvent ? event.detail : undefined;
+      if (!isQuickCreatePin(detail)) setDraft(null);
+    }
+    function onClosed(): void {
+      setDraft(null);
+    }
+    window.addEventListener(OPEN_QUICK_CREATE_EVENT, onOpen);
+    window.addEventListener(QUICK_CREATE_CLOSED_EVENT, onClosed);
+    return () => {
+      window.removeEventListener(OPEN_QUICK_CREATE_EVENT, onOpen);
+      window.removeEventListener(QUICK_CREATE_CLOSED_EVENT, onClosed);
+    };
+  }, []);
+
+  const onDraft = useCallback((range: ScheduleCreateRange): void => {
+    setDraft(range);
+    openQuickCreate({
+      pinSchedule: true,
+      draft: scheduleDraftFromRange(range),
+      rangeLabel: scheduleRangeLabel(range),
+    });
+  }, []);
+
+  function moveCursor(next: string): void {
+    if (draft !== null) closeQuickCreate();
+    setDraft(null);
+    setCursor(next);
+  }
+
+  function moveView(next: ScheduleView): void {
+    if (draft !== null) closeQuickCreate();
+    setDraft(null);
+    setView(next);
+  }
+
   return (
     <div
       data-region="schedule"
@@ -234,14 +385,14 @@ export const SchedulePage: FC = observer(function SchedulePageContent() {
             type="button"
             aria-label={prevLabel}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
-            onClick={() => setCursor((current) => shiftScheduleCursor(current, view, -1))}
+            onClick={() => moveCursor(shiftScheduleCursor(cursor, view, -1))}
           >
             <Icon icon={ChevronLeft} size={16} />
           </button>
           <button
             type="button"
             className="h-8 rounded-md px-2.5 text-[length:var(--text-meta)] text-muted hover:bg-surface-muted hover:text-fg"
-            onClick={() => setCursor(todayYmd(timeZone))}
+            onClick={() => moveCursor(todayYmd(timeZone))}
           >
             {t.schedule.today}
           </button>
@@ -249,7 +400,7 @@ export const SchedulePage: FC = observer(function SchedulePageContent() {
             type="button"
             aria-label={nextLabel}
             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-surface-muted hover:text-fg"
-            onClick={() => setCursor((current) => shiftScheduleCursor(current, view, 1))}
+            onClick={() => moveCursor(shiftScheduleCursor(cursor, view, 1))}
           >
             <Icon icon={ChevronRight} size={16} />
           </button>
@@ -268,7 +419,7 @@ export const SchedulePage: FC = observer(function SchedulePageContent() {
             className={`h-7 rounded-sm px-3 text-[length:var(--text-meta)] ${
               view === 'week' ? 'bg-surface text-fg shadow-[var(--shadow-xs)]' : 'text-muted'
             }`}
-            onClick={() => setView('week')}
+            onClick={() => moveView('week')}
           >
             {t.schedule.week}
           </button>
@@ -278,7 +429,7 @@ export const SchedulePage: FC = observer(function SchedulePageContent() {
             className={`h-7 rounded-sm px-3 text-[length:var(--text-meta)] ${
               view === 'month' ? 'bg-surface text-fg shadow-[var(--shadow-xs)]' : 'text-muted'
             }`}
-            onClick={() => setView('month')}
+            onClick={() => moveView('month')}
           >
             {t.schedule.month}
           </button>
@@ -297,9 +448,22 @@ export const SchedulePage: FC = observer(function SchedulePageContent() {
         </div>
       ) : null}
       {placement.view === 'week' ? (
-        <WeekGrid model={placement} today={today} />
+        <WeekGrid
+          model={placement}
+          today={today}
+          timeZone={timeZone}
+          draft={draft}
+          onDraft={onDraft}
+        />
       ) : (
-        <MonthGrid model={placement} today={today} weekStartsOn={weekStartsOn} />
+        <MonthGrid
+          model={placement}
+          today={today}
+          weekStartsOn={weekStartsOn}
+          timeZone={timeZone}
+          draft={draft}
+          onDraft={onDraft}
+        />
       )}
     </div>
   );
