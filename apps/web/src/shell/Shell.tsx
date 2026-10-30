@@ -3,6 +3,7 @@ import {
   Activity,
   Brain,
   CalendarDays,
+  CalendarRange,
   ChartColumn,
   History,
   Inbox,
@@ -65,6 +66,7 @@ import { Tip } from '@/ui/tip';
 const PRIMARY: { id: AppSection; to: string; icon: LucideIcon; label: string }[] = [
   { id: 'today', to: HOME_PATH, icon: Sun, label: t.rail.today },
   { id: 'todos', to: TODOS_HOME_PATH, icon: ListChecks, label: t.rail.todos },
+  { id: 'schedule', to: '/schedule', icon: CalendarRange, label: t.rail.schedule },
   { id: 'capture', to: '/inbox', icon: Inbox, label: t.rail.capture },
   { id: 'habits', to: '/habits', icon: Repeat, label: t.rail.habits },
   { id: 'reflect', to: '/reports', icon: History, label: t.rail.reflect },

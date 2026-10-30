@@ -19,6 +19,7 @@ import {
   loadRegister,
   loadReports,
   loadSearch,
+  loadSchedule,
   loadSettings,
   loadShell,
   loadThread,
@@ -70,6 +71,9 @@ const ReportsWorkspace = lazy(() =>
 const SearchPage = lazy(() => trackRoute(loadSearch).then((m) => ({ default: m.SearchPage })));
 const HabitsPage = lazy(() => trackRoute(loadHabits).then((m) => ({ default: m.HabitsPage })));
 const DaysWorkspace = lazy(() => trackRoute(loadDays).then((m) => ({ default: m.DaysWorkspace })));
+const SchedulePage = lazy(() =>
+  trackRoute(loadSchedule).then((m) => ({ default: m.SchedulePage })),
+);
 const ThreadsPage = lazy(() => trackRoute(loadThreads).then((m) => ({ default: m.ThreadsPage })));
 const ActivityPage = lazy(() =>
   trackRoute(loadActivity).then((m) => ({ default: m.ActivityPage })),
@@ -149,6 +153,7 @@ export function App() {
               <Route path="/library" element={<Navigate to="/search" replace />} />
               <Route path="/habits" element={<HabitsPage />} />
               <Route path="/days" element={<DaysWorkspace />} />
+              <Route path="/schedule" element={<SchedulePage />} />
               <Route path="/threads" element={<ThreadsPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/memory" element={<MemoryPage />} />

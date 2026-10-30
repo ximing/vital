@@ -26,6 +26,7 @@ import { settings } from './settings';
 import { boot } from './boot';
 import { route } from './route';
 import { landing } from './landing';
+import { schedule } from './schedule';
 
 export const t = {
   brand,
@@ -54,4 +55,5 @@ export const t = {
   boot,
   route,
   landing,
+  schedule,
 } as const;

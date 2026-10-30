@@ -6,12 +6,14 @@ import {
   loadInboxReader,
   loadReportEditor,
   loadReports,
+  loadSchedule,
   loadThreads,
   loadToday,
   loadTodos,
 } from '@/shell/route-loaders';
 
-export type WarmTarget = 'today' | 'todos' | 'inbox' | 'habits' | 'reports' | 'days' | 'threads';
+export type WarmTarget =
+  'today' | 'todos' | 'inbox' | 'habits' | 'reports' | 'days' | 'schedule' | 'threads';
 
 export type NeighborWarm = 'today' | 'todos' | 'inbox' | 'report-editor';
 
@@ -24,6 +26,7 @@ export function warmTarget(path: string): WarmTarget | null {
   if (pathname.startsWith('/habits')) return 'habits';
   if (pathname.startsWith('/reports')) return 'reports';
   if (pathname.startsWith('/days')) return 'days';
+  if (pathname.startsWith('/schedule')) return 'schedule';
   if (pathname.startsWith('/threads')) return 'threads';
   return null;
 }
@@ -58,6 +61,7 @@ export function warmPath(path: string): void {
   else if (target === 'habits') warm('habits', loadHabits);
   else if (target === 'reports') warm('reports', loadReports);
   else if (target === 'days') warm('days', loadDays);
+  else if (target === 'schedule') warm('schedule', loadSchedule);
   else if (target === 'threads') warm('threads', loadThreads);
 }
 

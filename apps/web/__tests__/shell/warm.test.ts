@@ -9,6 +9,7 @@ describe('route warmup', () => {
     expect(warmTarget('/habits')).toBe('habits');
     expect(warmTarget('/reports?type=weekly')).toBe('reports');
     expect(warmTarget('/days')).toBe('days');
+    expect(warmTarget('/schedule')).toBe('schedule');
     expect(warmTarget('/threads')).toBe('threads');
     expect(warmTarget('/settings')).toBeNull();
     expect(warmTarget('/usage')).toBeNull();

@@ -90,7 +90,7 @@ describe('primary rail', () => {
     document.documentElement.removeAttribute('data-theme');
   });
 
-  it('puts today first, then todos, capture, habits, reflect, days, threads, activity, memory, and a palette search button', () => {
+  it('puts today first, then todos, schedule, capture, habits, reflect, days, threads, activity, memory, and a palette search button', () => {
     renderShell();
     const rail = screen.getByLabelText('主导航');
     const nav = within(rail).getByRole('navigation');
@@ -98,6 +98,7 @@ describe('primary rail', () => {
     expect([...hrefs].map((el) => el.getAttribute('href'))).toEqual([
       HOME_PATH,
       TODOS_HOME_PATH,
+      '/schedule',
       '/inbox',
       '/habits',
       '/reports',
@@ -106,8 +107,35 @@ describe('primary rail', () => {
       '/activity',
       '/memory',
     ]);
+    expect(within(nav).getByRole('link', { name: t.rail.schedule })).toHaveAttribute(
+      'href',
+      '/schedule',
+    );
     // 搜索入口是打开命令面板的按钮，不再跳转独立页。
     expect(within(nav).getByRole('button', { name: t.nav.search })).toBeInTheDocument();
+  });
+
+  it('highlights 日程 only on its own route', () => {
+    const { unmount } = renderShell('/schedule');
+    const rail = screen.getByLabelText('主导航');
+    const schedule = within(rail).getByRole('link', { name: t.rail.schedule });
+    expect(schedule.className).toContain('bg-accent-subtle');
+    expect(within(rail).getByRole('link', { name: t.rail.todos }).className).not.toContain(
+      'bg-accent-subtle',
+    );
+    expect(within(rail).getByRole('link', { name: t.rail.days }).className).not.toContain(
+      'bg-accent-subtle',
+    );
+    unmount();
+
+    renderShell('/todos/calendar');
+    const todosRail = screen.getByLabelText('主导航');
+    expect(within(todosRail).getByRole('link', { name: t.rail.schedule }).className).not.toContain(
+      'bg-accent-subtle',
+    );
+    expect(within(todosRail).getByRole('link', { name: t.rail.todos }).className).toContain(
+      'bg-accent-subtle',
+    );
   });
 
   it('opens the shortcut sheet from the lower rail button', async () => {
@@ -202,10 +230,9 @@ describe('primary rail', () => {
     const user = userEvent.setup();
     themeService().setChoice('light');
     renderShell();
-    const toggle = within(document.querySelector('[data-region="rail-account"]') as HTMLElement).getByRole(
-      'switch',
-      { name: t.theme.switch },
-    );
+    const toggle = within(
+      document.querySelector('[data-region="rail-account"]') as HTMLElement,
+    ).getByRole('switch', { name: t.theme.switch });
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     await user.click(toggle);
     expect(document.documentElement.dataset.theme).toBe('dark');

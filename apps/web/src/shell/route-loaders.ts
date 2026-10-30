@@ -83,6 +83,10 @@ export function loadDays() {
   return import('@/features/days/DaysWorkspace');
 }
 
+export function loadSchedule() {
+  return import('@/features/schedule/SchedulePage');
+}
+
 export function loadThreads() {
   return import('@/pages/ai');
 }

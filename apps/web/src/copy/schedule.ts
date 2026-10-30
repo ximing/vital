@@ -1,0 +1,14 @@
+export const schedule = {
+  title: '日程',
+  week: '周',
+  month: '月',
+  today: '今天',
+  prevWeek: '上一周',
+  nextWeek: '下一周',
+  prevMonth: '上个月',
+  nextMonth: '下个月',
+  allDay: '全天',
+  view: '切换视图',
+  loadError: '日程没有加载出来',
+  retry: '重试',
+} as const;

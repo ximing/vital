@@ -1,5 +1,6 @@
 export const rail = {
   today: '今天',
+  schedule: '日程',
   capture: '收集',
   reflect: '复盘',
   lists: '集合',

@@ -34,7 +34,13 @@ export function commandItems(): PaletteItem[] {
       href: '/todos/lists/smart:inbox',
     },
     { id: 'goto-later', kind: 'goto', title: t.nav.inbox, hint: t.palette.goto, href: '/inbox' },
-    { id: 'goto-daily', kind: 'goto', title: t.reports.daily, hint: t.palette.goto, href: '/reports' },
+    {
+      id: 'goto-daily',
+      kind: 'goto',
+      title: t.reports.daily,
+      hint: t.palette.goto,
+      href: '/reports',
+    },
     {
       id: 'goto-weekly',
       kind: 'goto',
@@ -57,7 +63,13 @@ export function commandItems(): PaletteItem[] {
       href: '/reports?type=yearly',
     },
     { id: 'goto-search', kind: 'goto', title: t.nav.search, hint: t.palette.goto, href: '/search' },
-    { id: 'goto-board', kind: 'goto', title: t.palette.board, hint: t.palette.goto, href: '/todos/board' },
+    {
+      id: 'goto-board',
+      kind: 'goto',
+      title: t.palette.board,
+      hint: t.palette.goto,
+      href: '/todos/board',
+    },
     {
       id: 'goto-calendar',
       kind: 'goto',
@@ -65,8 +77,21 @@ export function commandItems(): PaletteItem[] {
       hint: t.palette.goto,
       href: '/todos/calendar',
     },
-    { id: 'goto-settings', kind: 'goto', title: t.nav.settings, hint: t.palette.goto, href: '/settings' },
+    {
+      id: 'goto-settings',
+      kind: 'goto',
+      title: t.nav.settings,
+      hint: t.palette.goto,
+      href: '/settings',
+    },
     { id: 'goto-days', kind: 'goto', title: t.rail.days, hint: t.palette.goto, href: '/days' },
+    {
+      id: 'goto-schedule',
+      kind: 'goto',
+      title: t.rail.schedule,
+      hint: t.palette.goto,
+      href: '/schedule',
+    },
     {
       id: 'help-shortcuts',
       kind: 'goto',

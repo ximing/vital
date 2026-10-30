@@ -16,6 +16,10 @@ describe('app section', () => {
     expect(sectionOf('/search', '')).toBe('search');
     expect(sectionOf('/habits', '')).toBe('habits');
     expect(sectionOf('/days', '')).toBe('days');
+    expect(sectionOf('/schedule', '')).toBe('schedule');
+    expect(sectionOf('/schedule', '')).not.toBe('todos');
+    expect(sectionOf('/schedule', '')).not.toBe('days');
+    expect(sectionOf('/todos/calendar', '')).toBe('todos');
     expect(sectionOf('/threads', '')).toBe('threads');
     expect(sectionOf('/activity', '')).toBe('activity');
     expect(sectionOf('/memory', '')).toBe('memory');
