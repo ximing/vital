@@ -7,6 +7,8 @@ import { DateTime } from 'luxon';
  * Weeks are Monday-first. 下周这天 is the same weekday next week.
  * 下周 with no weekday is next Monday. A bare weekday is the next one on or after today.
  * A month-day with no year rolls forward when it is already past.
+ * 2026-11-02, 2026/11/2, and 2026.11.02 keep that calendar day, including a past one.
+ * 路/街/道/巷/弄/里/条/胡同 plus 号, and 号楼/号院/号线/号室, are addresses, not days.
  */
 
 const CN = '[零〇一二三四五六七八九十两]{1,3}';
@@ -250,11 +252,27 @@ function collect(text: string): Hit[] {
     };
   });
 
-  push(text, hits, new RegExp(`(?<![\\d月])(${NUM})\\s*[号日]`, 'g'), (match) => {
-    const day = cnInt(match[1] ?? '', 31);
-    if (day === null) return null;
-    return (today) => rollDayOfMonth(today, day);
+  push(text, hits, /(?<!\d)(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)/g, (match) => {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return (today) => calendarDay(today, year, month, day);
   });
+
+  push(
+    text,
+    hits,
+    new RegExp(
+      `(?<![\\d月路街道巷弄里条]|胡同)(${NUM})\\s*(?:号(?![楼院门铺线房室库栋幢])|日)`,
+      'g',
+    ),
+    (match) => {
+      const day = cnInt(match[1] ?? '', 31);
+      if (day === null) return null;
+      return (today) => rollDayOfMonth(today, day);
+    },
+  );
 
   return hits;
 }

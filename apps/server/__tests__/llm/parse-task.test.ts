@@ -325,6 +325,22 @@ describe('buildCreateInputFromIntent', () => {
     expect(due.toFormat('yyyy-MM-dd')).toBe('2026-10-14');
   });
 
+  it('keeps an explicit 2026-11-02 when the model and an address 8号 say November 8', () => {
+    const now = new Date('2026-10-29T02:00:00.000Z');
+    const text = [
+      '面试时间：2026-11-02 15:00 (GMT+08:00) China Standard Time - Beijing',
+      '面试地点：北京 海淀区中关村街道中关村东路8号东升大厦A座801室',
+    ].join('\n');
+    const payload = buildCreateInputFromIntent(
+      { text, timezone: 'Asia/Shanghai' },
+      extractedOf({ title: '生数科技面试', dueDate: '2026-11-08', dueTime: null, isAllDay: true }),
+      { ...ctx, now },
+    );
+    const due = DateTime.fromISO(payload.dueAt ?? '', { zone: 'utc' }).setZone('Asia/Shanghai');
+    expect(due.toFormat('yyyy-MM-dd HH:mm')).toBe('2026-11-02 15:00');
+    expect(payload.isAllDay).toBe(false);
+  });
+
   it('lets a named day beat the week column the user is composing on', () => {
     const now = new Date('2026-10-14T02:00:00.000Z');
     const payload = buildCreateInputFromIntent(
