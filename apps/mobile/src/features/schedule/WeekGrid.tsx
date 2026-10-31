@@ -224,6 +224,7 @@ export function WeekGrid({
                       width: colW,
                       top: 0,
                       height: GRID_HEIGHT,
+                      overflow: 'hidden',
                     }}
                   >
                     {day.blocks.map((block) => (

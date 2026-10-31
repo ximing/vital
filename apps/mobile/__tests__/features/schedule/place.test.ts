@@ -106,6 +106,34 @@ describe('mobile schedule placement', () => {
     expect(saturday?.blocks[0]?.resizeEnd).toBe(true);
   });
 
+  it('places a point beside a span instead of under it', () => {
+    const placed = asWeek(
+      placeSchedule({
+        occurrences: [
+          at('span', '评审', '2026-10-30T06:00:00.000Z', false, '2026-10-30T08:00:00.000Z'),
+          at('talk', 'Shopee 面试', '2026-10-30T06:00:00.000Z', false),
+          at('later', '稍后', '2026-10-30T08:00:00.000Z', false),
+        ],
+        timeZone: ZONE,
+        weekStartsOn: 1,
+        cursorYmd: '2026-10-30',
+        view: 'week',
+      }),
+    );
+    const friday = placed.days.find((day) => day.ymd === '2026-10-30');
+    const span = friday?.blocks.find((block) => block.title === '评审');
+    const point = friday?.blocks.find((block) => block.title === 'Shopee 面试');
+    expect(span?.laneCount).toBe(2);
+    expect(point?.laneCount).toBe(2);
+    expect(point?.lane).not.toBe(span?.lane);
+    expect(point?.resizeStart).toBe(false);
+    expect(point?.resizeEnd).toBe(false);
+    expect(point?.startMinute).toBe(14 * 60);
+    expect(point?.endMinute).toBe(14 * 60 + 15);
+    expect(friday?.hours[14]?.items).toEqual([]);
+    expect(friday?.hours[16]?.items.map((item) => item.title)).toEqual(['稍后']);
+  });
+
   it('keeps a point as a chip and locks a device-calendar mirror', () => {
     const placed = asWeek(
       placeSchedule({

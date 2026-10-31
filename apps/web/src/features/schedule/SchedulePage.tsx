@@ -79,7 +79,7 @@ function Chip({
       data-schedule-span-end={chip.spanEndYmd}
       data-schedule-locked={chip.locked ? 'true' : undefined}
       aria-label={label}
-      className={`mb-0.5 block w-full truncate rounded-sm border-l-2 border-accent bg-surface-muted px-1 py-0.5 text-left text-[length:var(--text-caption)] leading-tight text-fg ${
+      className={`relative z-[3] mb-0.5 block w-full truncate rounded-sm border-l-2 border-accent bg-surface-muted px-1 py-0.5 text-left text-[length:var(--text-caption)] leading-tight text-fg ${
         chip.locked ? '' : 'cursor-grab'
       }`}
       onClick={(event) => {
@@ -386,7 +386,7 @@ function WeekGrid({
           <div className={`pointer-events-none absolute inset-0 grid ${cols}`}>
             <div />
             {model.days.map((day) => (
-              <div key={day.ymd} className="relative">
+              <div key={day.ymd} className="relative overflow-hidden">
                 {day.ymd === today ? (
                   <div
                     data-schedule-now=""

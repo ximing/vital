@@ -377,6 +377,7 @@ function placeColumns(
   }
   const spans = allDaySpans(input.occurrences, input.timeZone);
   const pending = new Map<string, Unlaned[]>();
+  const points = new Map<string, { block: Unlaned; chip: ScheduleChip }[]>();
   const ordered = [...input.occurrences].sort((a, b) => {
     const byTime = a.occurrenceAt.localeCompare(b.occurrenceAt);
     return byTime === 0 ? a.title.localeCompare(b.title, 'zh') : byTime;
@@ -399,8 +400,26 @@ function placeColumns(
       const column = columns.get(slice.ymd);
       if (column === undefined) continue;
       if (slice.endMinute <= slice.startMinute) {
-        const hour = Math.floor(slice.startMinute / 60);
-        column.hours[hour]?.items.push(chipOf(item, hm(slice.startMinute), slice.ymd, clock));
+        const startMinute = slice.startMinute;
+        const chip = chipOf(item, hm(startMinute), slice.ymd, clock);
+        const list = points.get(slice.ymd) ?? [];
+        list.push({
+          chip,
+          block: {
+            key: chip.key,
+            taskId: item.taskId,
+            title: item.title,
+            startMinute,
+            endMinute: Math.min(startMinute + 15, DAY_MINUTES),
+            timeLabel: hm(startMinute),
+            startAt: clock.startAt,
+            dueAt: clock.dueAt,
+            resizeStart: false,
+            resizeEnd: false,
+            locked: clock.locked,
+          },
+        });
+        points.set(slice.ymd, list);
         continue;
       }
       const list = pending.get(slice.ymd) ?? [];
@@ -422,7 +441,21 @@ function placeColumns(
     }
   }
   for (const [ymd, column] of columns) {
-    column.blocks = assignLanes(pending.get(ymd) ?? []);
+    const spans = pending.get(ymd) ?? [];
+    const slots = points.get(ymd) ?? [];
+    const beside = slots.filter((slot) =>
+      spans.some(
+        (span) =>
+          slot.block.startMinute < span.endMinute && span.startMinute < slot.block.endMinute,
+      ),
+    );
+    const besideKeys = new Set(beside.map((slot) => slot.block.key));
+    column.blocks = assignLanes([...spans, ...beside.map((slot) => slot.block)]);
+    for (const slot of slots) {
+      if (besideKeys.has(slot.block.key)) continue;
+      const hour = Math.floor(slot.block.startMinute / 60);
+      column.hours[hour]?.items.push(slot.chip);
+    }
   }
   const placed = days.flatMap((ymd) => {
     const column = columns.get(ymd);
