@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
 import { db, getDb, setDb } from '../src/db/index.js';
-import { attachments } from '../src/db/schema.js';
+import { attachments, users } from '../src/db/schema.js';
 import { setStorageAdapter } from '../src/storage/factory.js';
 import { bindUpload } from '../src/uploads/uploads.service.js';
 import { resetDb } from './helpers/db.js';
@@ -367,8 +368,7 @@ describe('uploads (multipart)', () => {
     expect(res.json().error.code).toBe('MEDIA_INVALID_STATE');
   });
 
-  it('avatar PATCH after init+complete renders a 6h signed url', async () => {
-    const alice = await register('alice');
+  async function readyImage(alice: { token: string }): Promise<string> {
     const { id, totalParts } = (await initUploadFor(alice, { mime: 'image/png', size: PART })).json();
     storage.headObject.mockResolvedValueOnce({
       size: PART,
@@ -384,6 +384,19 @@ describe('uploads (multipart)', () => {
       },
     });
     expect(complete.statusCode).toBe(200);
+    return id as string;
+  }
+
+  it('avatar PATCH after bind renders a 6h signed url', async () => {
+    const alice = await register('alice');
+    const id = await readyImage(alice);
+    const bind = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/uploads/${id}/bind`,
+      token: alice.token,
+      payload: { ownerType: 'user', ownerId: alice.id },
+    });
+    expect(bind.statusCode).toBe(200);
 
     const patch = await injectJson(app, {
       method: 'PATCH',
@@ -395,6 +408,77 @@ describe('uploads (multipart)', () => {
     expect(patch.json().avatarAttachmentId).toBe(id);
     expect(patch.json().avatarUrl).toBe('https://fake.local/presigned-get');
     expect(storage.generateAccessUrl).toHaveBeenCalledWith(expect.any(String), expect.anything(), 21_600);
+  });
+
+  it('rejects an avatar id that is missing or still temporary and does not write it', async () => {
+    const alice = await register('alice');
+    const missing = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { avatarAttachmentId: randomUUID(), displayName: 'Nope' },
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().error.code).toBe('ATTACHMENT_NOT_FOUND');
+
+    const tmpId = await readyImage(alice);
+    const temporary = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { avatarAttachmentId: tmpId },
+    });
+    expect(temporary.statusCode).toBe(404);
+    expect(temporary.json().error.code).toBe('ATTACHMENT_NOT_FOUND');
+
+    const me = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().avatarAttachmentId).toBeNull();
+    expect(me.json().displayName).toBe('alice');
+  });
+
+  it('a stored avatar id that does not resolve still lets login and profile succeed', async () => {
+    const email = `broken-${Date.now()}@test.com`;
+    const registered = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/register',
+      payload: { email, password: 'secret123', displayName: 'broken' },
+    });
+    expect(registered.statusCode).toBe(201);
+    const alice = { id: registered.json().user.id as string, token: registered.json().tokens.accessToken as string };
+    const badId = randomUUID();
+    await getDb().update(users).set({ avatarAttachmentId: badId }).where(eq(users.id, alice.id));
+
+    const me = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+    });
+    expect(me.statusCode).toBe(200);
+    expect(me.json().avatarAttachmentId).toBe(badId);
+    expect(me.json().avatarUrl).toBeNull();
+
+    const login = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email, password: 'secret123' },
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json().user.avatarUrl).toBeNull();
+
+    const cleared = await injectJson(app, {
+      method: 'PATCH',
+      url: '/api/v1/auth/me',
+      token: alice.token,
+      payload: { avatarAttachmentId: null },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json().avatarAttachmentId).toBeNull();
+    expect(cleared.json().avatarUrl).toBeNull();
   });
 
   it('list icon bind then PATCH returns iconUrl', async () => {

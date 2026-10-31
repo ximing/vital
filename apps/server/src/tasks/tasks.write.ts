@@ -508,7 +508,7 @@ export async function completeTask(
   const dueWasNull = task.dueAt === null;
   const occurrenceAt = task.dueAt ?? now;
   const completionId = randomUUID();
-  const { nextDue, nextStart, nextReminderAt, nextStatus, completedAt } =
+  const { nextDue, nextStart, nextReminderAt, nextStatus, completedAt, pinRecurrenceDtstart } =
     await rollCompletionSchedule(task, now);
 
   try {
@@ -530,6 +530,7 @@ export async function completeTask(
           status: nextStatus,
           completedAt,
           updatedAt: now,
+          ...(pinRecurrenceDtstart ? { recurrenceDtstart: pinRecurrenceDtstart } : {}),
         })
         .where(eq(tasks.id, task.id));
       if (user.convertArchiveOnComplete) {

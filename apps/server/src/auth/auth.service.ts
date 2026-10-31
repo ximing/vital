@@ -25,7 +25,7 @@ import { extensionAuthCodes, lists, users, type User } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { loadLlmPublic } from '../llm/settings.service.js';
 import { inboxListValues } from '../lists/lists.service.js';
-import { resolveAccessUrl } from '../uploads/access-url.js';
+import { assertAvatarAttachment, resolveAccessUrl } from '../uploads/access-url.js';
 import { logger } from '../utils/logger.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { issueRefreshToken, revokeAllForUser, signAccessToken } from './token.service.js';
@@ -81,16 +81,27 @@ function notificationsOf(user: User): NotificationPrefs {
   };
 }
 
+async function avatarUrlOf(user: User): Promise<string | null> {
+  if (user.avatarAttachmentId === null) return null;
+  try {
+    return await resolveAccessUrl(user.id, user.avatarAttachmentId, 21_600);
+  } catch (err) {
+    logger.warn('auth.avatar.unresolved', {
+      userId: user.id,
+      attachmentId: user.avatarAttachmentId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
 export async function toProfile(user: User): Promise<UserProfile> {
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
     avatarAttachmentId: user.avatarAttachmentId,
-    avatarUrl:
-      user.avatarAttachmentId === null
-        ? null
-        : await resolveAccessUrl(user.id, user.avatarAttachmentId, 21_600),
+    avatarUrl: await avatarUrlOf(user),
     timezone: user.timezone,
     locale: user.locale,
     themePreference: themeOf(user.themePreference),
@@ -246,7 +257,12 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
 export async function updateMe(userId: string, input: UpdateMeInput): Promise<UserProfile> {
   const patch: Partial<User> = { updatedAt: new Date() };
   if (input.displayName !== undefined) patch.displayName = input.displayName;
-  if (input.avatarAttachmentId !== undefined) patch.avatarAttachmentId = input.avatarAttachmentId;
+  if (input.avatarAttachmentId !== undefined) {
+    if (input.avatarAttachmentId !== null) {
+      await assertAvatarAttachment(userId, input.avatarAttachmentId);
+    }
+    patch.avatarAttachmentId = input.avatarAttachmentId;
+  }
   if (input.timezone !== undefined) patch.timezone = input.timezone;
   if (input.locale !== undefined) patch.locale = input.locale;
   if (input.themePreference !== undefined) patch.themePreference = input.themePreference;

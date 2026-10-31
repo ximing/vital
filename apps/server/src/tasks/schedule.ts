@@ -103,6 +103,7 @@ export function resolveCreateSchedule(input: CreateTaskInput, zone: string): Tas
   if (recurrenceKind !== null && (dueAt === null || input.recurrence !== undefined)) {
     throw AppError.of(400, 'VALIDATION_ERROR');
   }
+  if (recurrenceKind !== null) recurrenceDtstart = dueAt;
 
   return {
     isAllDay,
@@ -213,6 +214,9 @@ export function resolvePatchSchedule(task: TaskRow, input: PatchTaskInput): Patc
     recurrenceDtstart = recurrenceKind === null ? null : dueAt;
   }
   if (recurrenceKind !== null && dueAt === null) throw AppError.of(400, 'VALIDATION_ERROR');
+  if (dueTouched && recurrenceKind !== null && recurrence === null && dueAt !== null) {
+    recurrenceDtstart = dueAt;
+  }
 
   const oldDue = task.dueAt;
   if (dueTouched && recurrence && dueAt) {
@@ -274,12 +278,15 @@ export async function rollCompletionSchedule(
   nextReminderAt: Date | null;
   nextStatus: TaskStatus;
   completedAt: Date | null;
+  /** Set when a fixed series is rolling and the row has no anchor yet. */
+  pinRecurrenceDtstart: Date | null;
 }> {
   let nextDue = task.dueAt;
   let nextStart = task.startAt;
   let nextReminderAt = task.reminderAt;
   let nextStatus: TaskStatus = 'done';
   let completedAt: Date | null = now;
+  let pinRecurrenceDtstart: Date | null = null;
 
   if (task.recurrenceRrule && task.dueAt) {
     const nxt = nextOccurrenceAfter(toRecurrence(task), task.dueAt);
@@ -300,10 +307,12 @@ export async function rollCompletionSchedule(
         timezone: task.timezone,
         isAllDay: task.isAllDay,
         recurrenceKind,
+        recurrenceDtstart: task.recurrenceDtstart,
       },
       task.dueAt,
     );
     if (nxt) {
+      if (task.recurrenceDtstart === null) pinRecurrenceDtstart = task.dueAt;
       const delta = nxt.getTime() - task.dueAt.getTime();
       nextDue = nxt;
       nextStart = shiftBy(task.startAt, delta);
@@ -313,5 +322,5 @@ export async function rollCompletionSchedule(
     }
   }
 
-  return { nextDue, nextStart, nextReminderAt, nextStatus, completedAt };
+  return { nextDue, nextStart, nextReminderAt, nextStatus, completedAt, pinRecurrenceDtstart };
 }

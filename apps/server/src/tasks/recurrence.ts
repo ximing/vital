@@ -107,6 +107,8 @@ export type FixedRecurrenceKind =
 
 export type FixedRecurrenceTask = Pick<RecurrenceTask, 'dueAt' | 'timezone' | 'isAllDay'> & {
   recurrenceKind: FixedRecurrenceKind;
+  /** Original due instant. Yearly matching uses this so a clamped Feb 28 does not become the new anchor. */
+  recurrenceDtstart?: Date | null;
 };
 
 export type FixedCalendarTask = RecurrenceTask & {
@@ -460,6 +462,55 @@ export function nextOccurrenceOnOrAfter(task: RecurrenceTask, fromDue: Date): Da
   return task.isAllDay ? nextAllDayOnOrAfter(task, fromDue) : rruleOnOrAfter(task, fromDue);
 }
 
+function isGregorianLeap(year: number): boolean {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+
+/** Due instant the series was anchored on. A rolled due date is not the anchor. */
+function fixedAnchor(task: FixedRecurrenceTask): DateTime | null {
+  const instant = task.recurrenceDtstart ?? task.dueAt;
+  if (instant === null) return null;
+  const wall = DateTime.fromJSDate(instant, { zone: task.timezone });
+  return wall.isValid ? wall : null;
+}
+
+/**
+ * One local anniversary. Feb 29 stays the anchor and falls on Feb 28 in a
+ * common year, including century years such as 2100.
+ */
+function anniversaryInYear(anchor: DateTime, year: number): DateTime | null {
+  const day = anchor.month === 2 && anchor.day === 29 && !isGregorianLeap(year) ? 28 : anchor.day;
+  const hit = DateTime.fromObject(
+    {
+      year,
+      month: anchor.month,
+      day,
+      hour: anchor.hour,
+      minute: anchor.minute,
+      second: anchor.second,
+      millisecond: anchor.millisecond,
+    },
+    { zone: anchor.zone },
+  );
+  return hit.isValid ? hit : null;
+}
+
+function nextYearlyAfter(anchor: DateTime, after: DateTime): Date | null {
+  for (let year = after.year; year <= after.year + 8; year += 1) {
+    const hit = anniversaryInYear(anchor, year);
+    if (hit && hit.toMillis() > after.toMillis()) return hit.toJSDate();
+  }
+  return null;
+}
+
+function firstYearlyOnOrAfter(anchor: DateTime, from: DateTime): Date | null {
+  for (let year = from.year; year <= from.year + 8; year += 1) {
+    const hit = anniversaryInYear(anchor, year);
+    if (hit && hit.toMillis() >= from.toMillis()) return hit.toJSDate();
+  }
+  return null;
+}
+
 function matchesFixedKind(
   cursor: DateTime,
   origin: DateTime,
@@ -510,6 +561,11 @@ export async function nextFixedOccurrenceAfter(
   lookup?: ChinaCalendarLookup,
 ): Promise<Date | null> {
   if (task.dueAt === null) return null;
+  if (task.recurrenceKind === 'yearly') {
+    const anchor = fixedAnchor(task);
+    if (!anchor) return null;
+    return nextYearlyAfter(anchor, DateTime.fromJSDate(afterDue, { zone: task.timezone }));
+  }
   const resolved = await resolveChinaLookup(task, afterDue, lookup, 401);
   const zone = task.timezone;
   const origin = DateTime.fromJSDate(task.dueAt, { zone });
@@ -534,6 +590,11 @@ export async function firstFixedOccurrenceOnOrAfter(
 ): Promise<Date | null> {
   if (task.dueAt === null) return null;
   if (task.dueAt >= fromUtc) return task.dueAt;
+  if (task.recurrenceKind === 'yearly') {
+    const anchor = fixedAnchor(task);
+    if (!anchor) return null;
+    return firstYearlyOnOrAfter(anchor, DateTime.fromJSDate(fromUtc, { zone: task.timezone }));
+  }
   const resolved = await resolveChinaLookup(task, fromUtc, lookup, 401);
   const zone = task.timezone;
   const origin = DateTime.fromJSDate(task.dueAt, { zone });

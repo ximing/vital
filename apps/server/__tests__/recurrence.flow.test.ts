@@ -1,9 +1,10 @@
+import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { buildFastify } from '../src/app.js';
 import { db } from '../src/db/index.js';
-import { holidayCalendar } from '../src/db/schema.js';
+import { holidayCalendar, tasks } from '../src/db/schema.js';
 import { resetDb } from './helpers/db.js';
 import { injectJson } from './helpers/http.js';
 import { inboxId, registerUser } from './helpers/session.js';
@@ -231,5 +232,74 @@ describe('recurrence flow', () => {
       '2026-10-01T01:00:00.000Z',
       '2026-10-07T01:00:00.000Z',
     ]);
+  });
+
+  it('yearly Feb 29 rolls to Feb 28 and keeps the original anchor', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '闰日',
+        listId: inbox,
+        dueAt: '2028-02-29T09:00:00+08:00',
+        timezone: 'Asia/Shanghai',
+        recurrenceKind: 'yearly',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const anchor = created.json().dueAt as string;
+    expect(created.json().recurrenceDtstart).toBe(anchor);
+    await db.update(tasks).set({ recurrenceDtstart: null }).where(eq(tasks.id, created.json().id as string));
+
+    const completed = await injectJson(app, {
+      method: 'POST',
+      url: `/api/v1/tasks/${created.json().id}/complete`,
+      token: alice.token,
+      payload: {},
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json().task.status).toBe('todo');
+    expect(completed.json().task.dueAt).toBe('2029-02-28T01:00:00.000Z');
+    expect(completed.json().task.recurrenceDtstart).toBe(anchor);
+
+    const later = await injectJson(app, {
+      method: 'GET',
+      url: '/api/v1/tasks/calendar?from=2032-02-01T00:00:00.000Z&to=2032-03-01T00:00:00.000Z',
+      token: alice.token,
+    });
+    expect(later.statusCode).toBe(200);
+    expect(later.json().instances.map((item: { occurrenceAt: string }) => item.occurrenceAt)).toEqual([
+      '2032-02-29T01:00:00.000Z',
+    ]);
+  });
+
+  it('editing the due date of a yearly task moves the anchor', async () => {
+    const alice = await registerUser(app);
+    const inbox = await inboxId(app, alice.token);
+    const created = await injectJson(app, {
+      method: 'POST',
+      url: '/api/v1/tasks',
+      token: alice.token,
+      payload: {
+        title: '周年',
+        listId: inbox,
+        dueAt: '2028-02-29T09:00:00+08:00',
+        timezone: 'Asia/Shanghai',
+        recurrenceKind: 'yearly',
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const patched = await injectJson(app, {
+      method: 'PATCH',
+      url: `/api/v1/tasks/${created.json().id}`,
+      token: alice.token,
+      payload: { dueAt: '2028-03-05T09:00:00+08:00' },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().dueAt).toBe('2028-03-05T01:00:00.000Z');
+    expect(patched.json().recurrenceDtstart).toBe('2028-03-05T01:00:00.000Z');
   });
 });

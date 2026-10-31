@@ -11,6 +11,14 @@ export async function getOwnedAttachmentOr404(userId: string, id: string): Promi
   return row;
 }
 
+/** A profile avatar must already be a ready attachment bound to this user. */
+export async function assertAvatarAttachment(userId: string, id: string): Promise<void> {
+  const row = await getOwnedAttachmentOr404(userId, id);
+  if (row.status !== 'ready' || row.ownerType !== 'user' || row.ownerId !== userId) {
+    throw AppError.of(404, 'ATTACHMENT_NOT_FOUND');
+  }
+}
+
 export async function resolveAccessUrl(userId: string, id: string, expiresIn?: number): Promise<string> {
   const row = await getOwnedAttachmentOr404(userId, id);
   if (row.status !== 'ready') throw AppError.of(404, 'ATTACHMENT_NOT_FOUND');

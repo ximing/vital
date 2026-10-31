@@ -258,6 +258,102 @@ describe('fixed recurrence kinds', () => {
       '2026-10-02T01:00:00.000Z',
     ]);
   });
+
+  function atShanghai(iso: string): Date {
+    return DateTime.fromISO(iso, { zone: 'Asia/Shanghai' }).toJSDate();
+  }
+
+  function shanghaiClock(date: Date): string {
+    return DateTime.fromJSDate(date, { zone: 'Asia/Shanghai' }).toFormat('yyyy-MM-dd HH:mm');
+  }
+
+  function yearlyTask(anchor: Date, dueAt = anchor) {
+    return {
+      id: 't-year',
+      listId: 'l1',
+      title: '生日',
+      timezone: 'Asia/Shanghai',
+      isAllDay: false,
+      dueAt,
+      startAt: null,
+      recurrenceRrule: null,
+      recurrenceDtstart: anchor,
+      status: 'todo' as const,
+      priority: 3,
+      pinned: false,
+      recurrenceKind: 'yearly' as const,
+    };
+  }
+
+  it('keeps a Feb 29 anchor and uses Feb 28 in common years', async () => {
+    const anchor = atShanghai('2028-02-29T09:00:00');
+    const next = await nextFixedOccurrenceAfter(
+      { dueAt: anchor, timezone: 'Asia/Shanghai', isAllDay: false, recurrenceKind: 'yearly', recurrenceDtstart: anchor },
+      anchor,
+    );
+    expect(shanghaiClock(next as Date)).toBe('2029-02-28 09:00');
+    const beforeLeap = atShanghai('2031-02-28T09:00:00');
+    const leap = await nextFixedOccurrenceAfter(
+      {
+        dueAt: beforeLeap,
+        timezone: 'Asia/Shanghai',
+        isAllDay: false,
+        recurrenceKind: 'yearly',
+        recurrenceDtstart: anchor,
+      },
+      beforeLeap,
+    );
+    expect(shanghaiClock(leap as Date)).toBe('2032-02-29 09:00');
+  });
+
+  it('uses Feb 28 when the next anniversary is the common century year 2100', async () => {
+    const anchor = atShanghai('2096-02-29T09:00:00');
+    const after = atShanghai('2099-02-28T09:00:00');
+    const next = await nextFixedOccurrenceAfter(
+      { dueAt: after, timezone: 'Asia/Shanghai', isAllDay: false, recurrenceKind: 'yearly', recurrenceDtstart: anchor },
+      after,
+    );
+    expect(shanghaiClock(next as Date)).toBe('2100-02-28 09:00');
+    const beforeLeap = atShanghai('2103-02-28T09:00:00');
+    const leap = await nextFixedOccurrenceAfter(
+      {
+        dueAt: beforeLeap,
+        timezone: 'Asia/Shanghai',
+        isAllDay: false,
+        recurrenceKind: 'yearly',
+        recurrenceDtstart: anchor,
+      },
+      beforeLeap,
+    );
+    expect(shanghaiClock(leap as Date)).toBe('2104-02-29 09:00');
+  });
+
+  it('steps an ordinary yearly date forward one year', async () => {
+    const anchor = atShanghai('2026-03-09T09:00:00');
+    const next = await nextFixedOccurrenceAfter(
+      { dueAt: anchor, timezone: 'Asia/Shanghai', isAllDay: false, recurrenceKind: 'yearly' },
+      anchor,
+    );
+    expect(shanghaiClock(next as Date)).toBe('2027-03-09 09:00');
+  });
+
+  it('shows the clamped day and the later leap day on the calendar', async () => {
+    const anchor = atShanghai('2028-02-29T09:00:00');
+    const common = await expandFixedTask(
+      yearlyTask(anchor),
+      [],
+      atShanghai('2029-02-01T00:00:00'),
+      atShanghai('2029-03-01T00:00:00'),
+    );
+    expect(common.map((item) => shanghaiClock(item.occurrenceAt))).toEqual(['2029-02-28 09:00']);
+    const leap = await expandFixedTask(
+      yearlyTask(anchor, atShanghai('2029-02-28T09:00:00')),
+      [],
+      atShanghai('2032-02-01T00:00:00'),
+      atShanghai('2032-03-01T00:00:00'),
+    );
+    expect(leap.map((item) => shanghaiClock(item.occurrenceAt))).toEqual(['2032-02-29 09:00']);
+  });
 });
 
 describe('timed blocks', () => {
