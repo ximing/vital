@@ -32,7 +32,7 @@ export interface ExplorationWindowList {
 export interface ExplorationVerification {
   id: string;
   proposalId: string;
-  stage: ExplorationVerifyStage | string;
+  stage: ExplorationVerifyStage;
   field: string;
   value: unknown;
   url: string | null;

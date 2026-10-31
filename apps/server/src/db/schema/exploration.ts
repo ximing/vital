@@ -17,6 +17,7 @@ import type {
   ExplorationFactStatus,
   ExplorationProposalContent,
   ExplorationProposalStatus,
+  ExplorationVerifyStage,
   ExplorationWindowStatus,
 } from '@vital/dto';
 
@@ -95,7 +96,7 @@ export const explorationVerifications = pgTable(
     id: char('id', { length: 36 }).primaryKey(),
     userId: char('user_id', { length: 36 }).notNull(),
     proposalId: char('proposal_id', { length: 36 }).notNull(),
-    stage: varchar('stage', { length: 32 }).notNull().default('initial'),
+    stage: varchar('stage', { length: 32 }).notNull().default('initial').$type<ExplorationVerifyStage>(),
     field: varchar('field', { length: 64 }).notNull().default(''),
     value: jsonb('value').$type<unknown>(),
     url: text('url'),
