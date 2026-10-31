@@ -347,4 +347,48 @@ describe('timed blocks', () => {
     );
     expect(saturday?.occurrenceAt.toISOString()).toBe(saturdayStart.toISOString());
   });
+
+  it('keeps an early-morning daily series on the task calendar day', () => {
+    const due = DateTime.fromISO('2099-10-30T01:00:00', { zone }).toJSDate();
+    const start = DateTime.fromISO('2099-10-29T23:00:00', { zone }).toJSDate();
+    const instances = expandTask(
+      shot({
+        startAt: start,
+        dueAt: due,
+        recurrenceRrule: 'FREQ=DAILY',
+        recurrenceDtstart: due,
+      }),
+      [],
+      DateTime.fromISO('2099-10-29T16:00:00.000Z').toJSDate(),
+      DateTime.fromISO('2099-11-01T16:00:00.000Z').toJSDate(),
+    );
+    const friday = instances.find((item) => item.endsAt?.toISOString() === due.toISOString());
+    expect(friday?.occurrenceAt.toISOString()).toBe(start.toISOString());
+  });
+
+  it('keeps a daily clock time across a DST change', () => {
+    const la = 'America/Los_Angeles';
+    const due = DateTime.fromISO('2099-03-07T09:00:00', { zone: la }).toJSDate();
+    const instances = expandTask(
+      shot({
+        timezone: la,
+        dueAt: due,
+        recurrenceRrule: 'FREQ=DAILY',
+        recurrenceDtstart: due,
+      }),
+      [],
+      DateTime.fromISO('2099-03-07T00:00:00', { zone: la }).toJSDate(),
+      DateTime.fromISO('2099-03-10T00:00:00', { zone: la }).toJSDate(),
+    );
+    expect(
+      instances.map((item) =>
+        DateTime.fromJSDate(item.occurrenceAt, { zone: la }).toFormat('yyyy-MM-dd HH:mm'),
+      ),
+    ).toEqual(['2099-03-07 09:00', '2099-03-08 09:00', '2099-03-09 09:00']);
+    expect(instances.map((item) => item.occurrenceAt.toISOString())).toEqual([
+      '2099-03-07T17:00:00.000Z',
+      '2099-03-08T16:00:00.000Z',
+      '2099-03-09T16:00:00.000Z',
+    ]);
+  });
 });

@@ -356,15 +356,90 @@ export function nextAllDayOnOrAfter(task: RecurrenceTask, fromDue: Date): Date |
   return null;
 }
 
-export function makeTimedRule(task: RecurrenceTask): RRuleInstance {
+/**
+ * rrule's `tzid` path (`dateInTimeZone`) subtracts the target offset and then
+ * adds the machine offset. A Shanghai 11:00 series is correct on a UTC host
+ * and eight hours late when the process itself is Asia/Shanghai. Store the
+ * wall clock as floating UTC and convert each hit with Luxon, which does not
+ * read the machine zone. A spring-forward gap has no real instant, so that
+ * hit is skipped.
+ */
+function wallInZone(instant: Date, zone: string): DateTime {
+  const wall = DateTime.fromJSDate(instant, { zone: 'utc' }).setZone(zone);
+  if (!wall.isValid) invalid();
+  return wall;
+}
+
+function floatingUtc(wall: DateTime): Date {
+  return new Date(
+    Date.UTC(
+      wall.year,
+      wall.month - 1,
+      wall.day,
+      wall.hour,
+      wall.minute,
+      wall.second,
+      wall.millisecond,
+    ),
+  );
+}
+
+function realFromFloating(floating: Date, zone: string): Date | null {
+  const wall = DateTime.fromJSDate(floating, { zone: 'utc' });
+  const real = DateTime.fromObject(
+    {
+      year: wall.year,
+      month: wall.month,
+      day: wall.day,
+      hour: wall.hour,
+      minute: wall.minute,
+      second: wall.second,
+      millisecond: wall.millisecond,
+    },
+    { zone },
+  );
+  if (!real.isValid) return null;
+  return real.toJSDate();
+}
+
+type TimedRule = {
+  between(after: Date, before: Date, inc?: boolean): Date[];
+  after(dt: Date, inc?: boolean): Date | null;
+};
+
+export function makeTimedRule(task: RecurrenceTask): TimedRule {
   if (!task.recurrenceRrule || !task.recurrenceDtstart) invalid();
   parseRrule(task.recurrenceRrule);
   const parsed: Partial<Options> = RRule.parseString(task.recurrenceRrule.replace(/^RRULE:/i, ''));
-  return new RRule({
+  const zone = task.timezone;
+  const rule = new RRule({
     ...parsed,
-    dtstart: task.recurrenceDtstart,
-    tzid: task.timezone,
+    dtstart: floatingUtc(wallInZone(task.recurrenceDtstart, zone)),
   });
+  const toFloat = (instant: Date) => floatingUtc(wallInZone(instant, zone));
+  return {
+    between(after, before, inc = false) {
+      return rule
+        .between(toFloat(after), toFloat(before), inc)
+        .flatMap((hit) => {
+          const real = realFromFloating(hit, zone);
+          return real ? [real] : [];
+        });
+    },
+    after(dt, inc = false) {
+      let cursor = toFloat(dt);
+      let include = inc;
+      for (let hop = 0; hop < 8; hop += 1) {
+        const found = rule.after(cursor, include);
+        if (!found) return null;
+        const real = realFromFloating(found, zone);
+        if (real) return real;
+        cursor = found;
+        include = false;
+      }
+      return null;
+    },
+  };
 }
 
 export function rruleAfter(task: RecurrenceTask, afterDue: Date): Date | null {
