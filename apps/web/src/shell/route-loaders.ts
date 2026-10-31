@@ -43,6 +43,10 @@ export function loadToday() {
   return import('@/features/today/TodayWorkspace');
 }
 
+export function loadExplore() {
+  return import('@/features/explore/ExploreWorkspace');
+}
+
 export function loadChat() {
   return import('@/features/agent-chat/ChatRoute');
 }

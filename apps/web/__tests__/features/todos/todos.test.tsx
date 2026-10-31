@@ -50,6 +50,9 @@ vi.mock('@/api/client', async (importOriginal) => {
       listHabits: vi.fn(),
       listAgentActions: vi.fn(),
       listAgentExecutions: vi.fn(),
+      listContinuityInterventions: vi.fn(),
+      markContinuityInterventionSeen: vi.fn(),
+      listExplorationWindows: vi.fn(),
       listInbox: vi.fn(),
       createOutcome: vi.fn(),
       patchOutcome: vi.fn(),
@@ -196,6 +199,8 @@ describe('todos workspace', () => {
     vi.mocked(client.listHabits).mockResolvedValue([]);
     vi.mocked(client.listAgentActions).mockResolvedValue([]);
     vi.mocked(client.listAgentExecutions).mockResolvedValue([]);
+    vi.mocked(client.listContinuityInterventions).mockResolvedValue({ items: [] });
+    vi.mocked(client.listExplorationWindows).mockResolvedValue({ items: [] });
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.getTask).mockImplementation(async (id) =>
@@ -502,6 +507,9 @@ describe('todos workspace', () => {
           listId: 'inbox-1',
           title: '全天会议',
           occurrenceAt: zonedLocalMidnightIso('2026-09-06', TZ),
+          endsAt: null,
+          habitId: null,
+          calendarKey: null,
           isAllDay: true,
           status: 'todo',
           priority: 2,
@@ -512,6 +520,9 @@ describe('todos workspace', () => {
           listId: 'inbox-1',
           title: '下午电话',
           occurrenceAt: '2026-09-06T06:00:00.000Z',
+          endsAt: null,
+          habitId: null,
+          calendarKey: null,
           isAllDay: false,
           status: 'todo',
           priority: 1,

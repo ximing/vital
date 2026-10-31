@@ -14,6 +14,11 @@ import {
   type AgentMemoryScope,
   type User,
 } from '../db/schema.js';
+import {
+  isMemorySuppressed,
+  memoryEvidenceFingerprint,
+  memoryTopicFingerprint,
+} from '../continuity/memory-suppress.js';
 import { memorySimilarityPairs } from '../retrieval/dedup.js';
 import { indexMemory, removeMemoryIndex, trackIndexJob } from '../retrieval/pipeline.js';
 import { executionResult, skipExecution } from './executions.service.js';
@@ -147,6 +152,9 @@ export async function processMemoryDistill(job: AgentJobRow, user: User, now: Da
     for (const a of adds) {
       const duplicate = current.some(m => !drops.has(m.id) && m.content === a.content && m.kind === a.kind);
       if (duplicate) continue;
+      const topic = memoryTopicFingerprint(a.kind, a.content);
+      const evidenceFp = memoryEvidenceFingerprint(sources.map((item) => item.actionId), a.content);
+      if (await isMemorySuppressed(user.id, topic, evidenceFp, tx)) continue;
       const [after] = await tx.insert(agentMemory).values({ id: randomUUID(), userId: user.id, kind: a.kind, content: a.content, sourceCount: sources.length, scope: a.scope ?? ['all'], createdAt: now, updatedAt: now }).returning();
       if (after) { counts.added++; await history('add', null, after); current.push(after); indexUpserts.push(after); }
     }

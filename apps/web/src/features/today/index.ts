@@ -6,8 +6,10 @@ export { decomposeSubtasks, habitTodayProgress, isUndoable } from './model';
 export { todayKeys } from './query-keys';
 export {
   useAllOutcomesQuery,
+  useContinuityInterventionsQuery,
   useHabitsQuery,
   useOutcomeActions,
+  useOutcomeContinuityQuery,
   useOutcomeDetailQuery,
   useOutcomesQuery,
   usePendingDecomposeQuery,

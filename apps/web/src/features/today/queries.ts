@@ -1,5 +1,8 @@
 import type {
   AgentAction,
+  ContinuityDependencyList,
+  ContinuityGetResponse,
+  ContinuityInterventionList,
   CreateOutcomeInput,
   Habit,
   Outcome,
@@ -7,7 +10,7 @@ import type {
   PatchOutcomeInput,
   TodayDashboard,
 } from '@vital/dto';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { TODAY_HOME_STALE_MS, todayKeys } from './query-keys';
 
@@ -100,4 +103,39 @@ export function useOutcomeActions() {
   });
 
   return { create, patch, close, reopen, undo, refresh, invalidate };
+}
+
+export function invalidateContinuity(qc: QueryClient, outcomeId?: string): void {
+  void qc.invalidateQueries({ queryKey: todayKeys.all });
+  void qc.invalidateQueries({ queryKey: todayKeys.continuityInterventions });
+  if (outcomeId) {
+    void qc.invalidateQueries({ queryKey: todayKeys.continuity(outcomeId) });
+    void qc.invalidateQueries({ queryKey: todayKeys.continuityDependencies(outcomeId) });
+  }
+}
+
+export function useContinuityInterventionsQuery() {
+  return useQuery({
+    queryKey: todayKeys.continuityInterventions,
+    queryFn: (): Promise<ContinuityInterventionList> => client.listContinuityInterventions(),
+    retry: false,
+  });
+}
+
+export function useOutcomeContinuityQuery(outcomeId: string) {
+  return useQuery({
+    queryKey: todayKeys.continuity(outcomeId),
+    enabled: outcomeId !== '',
+    queryFn: (): Promise<ContinuityGetResponse> => client.getOutcomeContinuity(outcomeId),
+    retry: false,
+  });
+}
+
+export function useOutcomeContinuityDependenciesQuery(outcomeId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: todayKeys.continuityDependencies(outcomeId),
+    enabled: enabled && outcomeId !== '',
+    queryFn: (): Promise<ContinuityDependencyList> => client.listOutcomeContinuityDependencies(outcomeId),
+    retry: false,
+  });
 }

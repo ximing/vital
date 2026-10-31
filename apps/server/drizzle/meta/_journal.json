@@ -428,6 +428,48 @@
       "when": 1791820800000,
       "tag": "0060_task_milestone",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1791907200000,
+      "tag": "0061_continuity",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1791993600000,
+      "tag": "0062_continuity_job",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792080000000,
+      "tag": "0063_continuity_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792166400000,
+      "tag": "0064_continuity_work",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792252800000,
+      "tag": "0065_exploration_windows",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792339200000,
+      "tag": "0066_exploration_verify",
+      "breakpoints": true
     }
   ]
 }

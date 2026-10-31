@@ -451,8 +451,10 @@ const DTO_FILE_GROUP: Record<string, string> = {
   'agent.ts': 'agent',
   'app-release.ts': 'app',
   'auth.ts': 'auth',
+  'continuity.ts': 'continuity',
   'days.ts': 'days',
   'errors.ts': 'common',
+  'exploration.ts': 'exploration',
   'habits.ts': 'habits',
   'inbox.ts': 'inbox',
   'inwit.ts': 'integrations',
@@ -513,6 +515,7 @@ function groupName(routePath: string): string {
 
 /** Route prefix group → catalog module. Health is folded into common. */
 function catalogModule(routePath: string): string {
+  if (routePath.includes('/continuity')) return 'continuity';
   const group = groupName(routePath);
   return group === 'health' ? 'common' : group;
 }
@@ -527,6 +530,8 @@ const MODULE_ORDER = [
   'tags',
   'inbox',
   'outcomes',
+  'continuity',
+  'exploration',
   'habits',
   'days',
   'reports',
@@ -550,6 +555,8 @@ const MODULE_TITLE: Record<string, string> = {
   tags: 'Tags',
   inbox: 'Inbox',
   outcomes: 'Threads',
+  continuity: 'Continuity',
+  exploration: 'Exploration',
   habits: 'Habits',
   days: 'Days',
   reports: 'Reports',

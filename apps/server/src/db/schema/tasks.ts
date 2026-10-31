@@ -32,6 +32,8 @@ export const tasks = pgTable(
     /** Owning thread. No FK — ownership enforced in the service layer. */
     outcomeId: char('outcome_id', { length: 36 }),
     estimateMinutes: integer('estimate_minutes'),
+    /** Remaining work may occupy non-contiguous slots. Default is a single contiguous gap. */
+    splitAllowed: boolean('split_allowed').notNull().default(false),
     /** How many times dueAt was pushed strictly forward. */
     deferCount: integer('defer_count').notNull().default(0),
     /** User opted this task in for agent-drafted execution plans. */

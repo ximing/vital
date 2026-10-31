@@ -28,6 +28,7 @@ function makeTaskRow(overrides: Partial<TaskRow> = {}): TaskRow {
     parentId: null,
     outcomeId: null,
     estimateMinutes: null,
+    splitAllowed: false,
     deferCount: 0,
     delegable: false,
     habitId: null,

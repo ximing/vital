@@ -314,6 +314,7 @@ export const settings = {
       'agent.errand': '数字代办',
       'errand.run': '数字代办',
       errand: '数字代办',
+      'continuity.recompute': '跟进重算',
     },
   },
   activity: {

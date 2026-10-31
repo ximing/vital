@@ -27,6 +27,7 @@ import { boot } from './boot';
 import { route } from './route';
 import { landing } from './landing';
 import { schedule } from './schedule';
+import { explore } from './explore';
 
 export const t = {
   brand,
@@ -56,4 +57,5 @@ export const t = {
   route,
   landing,
   schedule,
+  explore,
 } as const;

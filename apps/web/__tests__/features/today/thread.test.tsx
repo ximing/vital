@@ -2,6 +2,7 @@ import {
   DEFAULT_LLM_SETTINGS,
   DEFAULT_NOTIFICATION_PREFS,
   type AgentActionLogItem,
+  type ContinuityContractSummary,
   type List,
   type Outcome,
   type OutcomeDetail,
@@ -27,6 +28,15 @@ vi.mock('@/api/client', async (importOriginal) => {
     ...actual,
     client: {
       getOutcomeDetail: vi.fn(),
+      getOutcomeContinuity: vi.fn(),
+      listOutcomeContinuityDependencies: vi.fn(),
+      createOutcomeContinuityDependency: vi.fn(),
+      patchContinuityDependency: vi.fn(),
+      activateOutcomeContinuity: vi.fn(),
+      pauseOutcomeContinuity: vi.fn(),
+      resumeOutcomeContinuity: vi.fn(),
+      endOutcomeContinuity: vi.fn(),
+      createContinuityEvidence: vi.fn(),
       listOutcomes: vi.fn(),
       patchOutcome: vi.fn(),
       closeOutcome: vi.fn(),
@@ -170,6 +180,44 @@ function makeDetail(over: Partial<OutcomeDetail> = {}): OutcomeDetail {
   };
 }
 
+function makeContract(
+  over: Partial<ContinuityContractSummary> = {},
+): ContinuityContractSummary {
+  return {
+    id: 'c1',
+    outcomeId: OUTCOME_ID,
+    lifecycle: 'active',
+    judgement: 'watching',
+    currentRevision: 1,
+    authorizationVersion: 1,
+    factsVersion: 1,
+    nextCheckAt: '2026-11-02T12:00:00.000Z',
+    pausedUntil: null,
+    inAppOnlyUntil: null,
+    unansweredStreak: 0,
+    meaning: '把算法基础练扎实',
+    stageGoal: '',
+    completionCriteria: [],
+    cadence: { kind: 'weekly_count', count: 2, durationMin: 20, graceHours: 12 },
+    timezone: TZ,
+    weekStartsOn: 1,
+    minAction: { title: '做一题', durationMin: 20, completionStandard: '写下思路' },
+    evidenceBindings: [],
+    actionableWindows: [],
+    authorization: {
+      readVital: true,
+      prepareMaterials: true,
+      generateDrafts: true,
+      externalSearch: false,
+    },
+    concernRefs: [],
+    activatedAt: '2026-10-01T00:00:00.000Z',
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
 function renderThread(id: string = OUTCOME_ID) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -194,6 +242,8 @@ describe('thread workspace', () => {
     resetTodosUi();
     setAuthForTest(mockUser);
     vi.mocked(client.getOutcomeDetail).mockResolvedValue(makeDetail());
+    vi.mocked(client.getOutcomeContinuity).mockResolvedValue({ hosted: false, contract: null });
+    vi.mocked(client.listOutcomeContinuityDependencies).mockResolvedValue({ items: [] });
     vi.mocked(client.listOutcomes).mockResolvedValue([]);
     vi.mocked(client.listInbox).mockResolvedValue({ items: [], nextCursor: null });
     vi.mocked(client.listLists).mockResolvedValue({ items: [inboxList] });
@@ -456,5 +506,45 @@ describe('thread workspace', () => {
 
     expect(await screen.findByText(t.thread.loadFailedTitle)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: t.today.retry })).toBeInTheDocument();
+  });
+
+  it('offers to start continuity on a thread that is not hosted', async () => {
+    renderThread();
+
+    expect(
+      await screen.findByRole('button', { name: t.thread.continuity.follow }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(t.thread.continuity.followHint)).toBeInTheDocument();
+    expect(document.querySelector('[data-region="thread-continuity-deps"]')).toBeNull();
+  });
+
+  it('shows a calm banner when activating continuity is disabled', async () => {
+    const user = userEvent.setup();
+    vi.mocked(client.activateOutcomeContinuity).mockRejectedValue(
+      new ApiError(403, 'CONTINUITY_DISABLED', '托管能力未开启'),
+    );
+    renderThread();
+
+    await user.click(await screen.findByRole('button', { name: t.thread.continuity.follow }));
+    expect(await screen.findByText(t.thread.continuity.disabled)).toBeInTheDocument();
+    expect(document.querySelector('[data-region="continuity-disabled"]')).not.toBeNull();
+  });
+
+  it('summarizes an active continuity contract', async () => {
+    vi.mocked(client.getOutcomeContinuity).mockResolvedValue({
+      hosted: true,
+      contract: makeContract(),
+    });
+    renderThread();
+
+    expect(await screen.findByText('把算法基础练扎实')).toBeInTheDocument();
+    expect(screen.getByText(t.thread.continuity.cadenceWeekly.replace('{n}', '2').replace('{m}', '20'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.thread.continuity.pause })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.thread.continuity.evidence })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.thread.continuity.end })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.thread.continuity.follow })).not.toBeInTheDocument();
+    expect(await screen.findByText(t.thread.continuity.deps)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t.thread.continuity.depsAdd })).toBeInTheDocument();
+    expect(document.querySelector('[data-region="thread-continuity-deps"]')).not.toBeNull();
   });
 });

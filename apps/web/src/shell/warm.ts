@@ -20,7 +20,7 @@ export type NeighborWarm = 'today' | 'todos' | 'inbox' | 'report-editor';
 /** Rail hover target. Settings, usage, memory, and activity stay cold. */
 export function warmTarget(path: string): WarmTarget | null {
   const pathname = path.split('?')[0] ?? path;
-  if (pathname.startsWith('/today')) return 'today';
+  if (pathname.startsWith('/today') || pathname.startsWith('/explore')) return 'today';
   if (pathname.startsWith('/todos')) return 'todos';
   if (pathname.startsWith('/inbox')) return 'inbox';
   if (pathname.startsWith('/habits')) return 'habits';

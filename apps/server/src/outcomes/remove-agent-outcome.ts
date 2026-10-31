@@ -1,5 +1,6 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import type { AgentDb } from '../agent/jobs.js';
+import { purgeContinuityForOutcome } from '../continuity/purge.js';
 import { agentActions, habits, inboxItems, outcomes, tasks } from '../db/schema.js';
 
 /**
@@ -60,6 +61,7 @@ export async function removeAgentOutcome(
     .update(agentActions)
     .set({ feedback: 'dismissed', feedbackAt: now })
     .where(and(...pendingOnThread));
+  await purgeContinuityForOutcome(tx, userId, outcomeId);
   await tx.delete(outcomes).where(and(eq(outcomes.id, outcomeId), eq(outcomes.userId, userId)));
   return true;
 }

@@ -18,6 +18,8 @@ Open **only** the module for the domain you are calling. Do not load every file.
 | Tags | [tags.md](tags.md) |
 | Inbox | [inbox.md](inbox.md) |
 | Threads | [outcomes.md](outcomes.md) |
+| Continuity | [continuity.md](continuity.md) |
+| Exploration | [exploration.md](exploration.md) |
 | Habits | [habits.md](habits.md) |
 | Days | [days.md](days.md) |
 | Reports | [reports.md](reports.md) |

@@ -12,8 +12,24 @@ import {
   agentChatPreviews,
   agentMemory,
   agentUsage,
+  continuityContractRevisions,
+  continuityContracts,
+  continuityDependencies,
+  continuityEvidence,
+  continuityEvidenceLinks,
+  continuityEvents,
+  continuityExperiments,
+  continuityExposures,
+  continuityInterventions,
+  continuityMemorySuppressions,
+  continuityOpportunities,
+  continuityProtectedBlocks,
+  continuityUserSettings,
   days,
   energyLogs,
+  explorationProposals,
+  explorationVerifications,
+  explorationWindows,
   inboxExtractJobs,
   inboxIdempotencyResponses,
   inboxItems,
@@ -85,6 +101,28 @@ export async function buildSnapshot(opts: { tamper?: boolean } = {}): Promise<Ag
   }
   await db.delete(energyLogs).where(eq(energyLogs.userId, FIXTURE_USER_ID));
   await db.delete(days).where(eq(days.userId, FIXTURE_USER_ID));
+  await db.delete(continuityExposures).where(eq(continuityExposures.userId, FIXTURE_USER_ID));
+  await db.delete(continuityInterventions).where(eq(continuityInterventions.userId, FIXTURE_USER_ID));
+  await db.delete(continuityExperiments).where(eq(continuityExperiments.userId, FIXTURE_USER_ID));
+  await db.delete(continuityEvidenceLinks).where(eq(continuityEvidenceLinks.userId, FIXTURE_USER_ID));
+  await db.delete(continuityEvidence).where(eq(continuityEvidence.userId, FIXTURE_USER_ID));
+  await db.delete(continuityOpportunities).where(eq(continuityOpportunities.userId, FIXTURE_USER_ID));
+  await db.delete(continuityEvents).where(eq(continuityEvents.userId, FIXTURE_USER_ID));
+  await db
+    .delete(continuityMemorySuppressions)
+    .where(eq(continuityMemorySuppressions.userId, FIXTURE_USER_ID));
+  await db.delete(continuityDependencies).where(eq(continuityDependencies.userId, FIXTURE_USER_ID));
+  await db
+    .delete(continuityProtectedBlocks)
+    .where(eq(continuityProtectedBlocks.userId, FIXTURE_USER_ID));
+  await db
+    .delete(continuityContractRevisions)
+    .where(eq(continuityContractRevisions.userId, FIXTURE_USER_ID));
+  await db.delete(continuityContracts).where(eq(continuityContracts.userId, FIXTURE_USER_ID));
+  await db.delete(continuityUserSettings).where(eq(continuityUserSettings.userId, FIXTURE_USER_ID));
+  await db.delete(explorationVerifications).where(eq(explorationVerifications.userId, FIXTURE_USER_ID));
+  await db.delete(explorationProposals).where(eq(explorationProposals.userId, FIXTURE_USER_ID));
+  await db.delete(explorationWindows).where(eq(explorationWindows.userId, FIXTURE_USER_ID));
   await db.delete(userInwitConfig).where(eq(userInwitConfig.userId, FIXTURE_USER_ID));
   await db.delete(inboxExtractJobs).where(eq(inboxExtractJobs.userId, FIXTURE_USER_ID));
   await db.delete(todayLayouts).where(eq(todayLayouts.userId, FIXTURE_USER_ID));

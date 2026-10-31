@@ -72,6 +72,10 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 | `CHAT_TURN_LIMIT` | 今日对话次数已用完 |
 | `CHAT_BUSY` | 上一条还在回复 |
 | `CHAT_PREVIEW_CLOSED` | 预览已失效 |
+| `CONTINUITY_DISABLED` | 托管能力未开启 |
+| `CONTINUITY_VERSION_CONFLICT` | 约定已被更新，请先同步 |
+| `CONTINUITY_EXPERIMENT_ACTIVE` | 该事项已有进行中的纠偏实验 |
+| `EXPLORATION_FACTS_UNKNOWN` | 存在待核实信息，需明确接受后才能确认 |
 
 ## Types
 

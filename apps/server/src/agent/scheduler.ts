@@ -14,6 +14,9 @@ import {
   users,
 } from '../db/schema.js';
 import { spawnDailyHabits } from '../habits/habits.service.js';
+import { generateDueExplorationWindows } from '../continuity/exploration-windows.js';
+import { runDueExplorationVerifications } from '../continuity/exploration-verify.js';
+import { enqueueDueContinuityRecomputes } from '../continuity/recompute-job.js';
 import { enqueueAgentJobOnce, enqueueTodayLayout } from './jobs.js';
 import { weeklyObserveDedupKey, weeklyObserveWhen } from '../notifications/weekly-observe.js';
 import { ERRAND_JOB_TYPE } from './errand.js';
@@ -23,7 +26,7 @@ import { lockAgentUser } from './user-lock.js';
 const ACTIVE_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
 /** Demand-driven. Chat, the inbox button, and draft upgrade enqueue these. This scan does not. */
-export const DEMAND_ONLY_JOB_TYPES = [ERRAND_JOB_TYPE] as const;
+export const DEMAND_ONLY_JOB_TYPES = [ERRAND_JOB_TYPE, 'continuity.recompute'] as const;
 
 interface UserSignals {
   activityLatest: Date | null;
@@ -161,7 +164,9 @@ export async function runAgentScheduler(now = new Date()): Promise<number> {
   if (!config.AGENT_ENABLED) return 0;
   const db = getDb();
   let cursor: string | undefined;
-  let scheduled = 0;
+  let scheduled = await enqueueDueContinuityRecomputes(now);
+  scheduled += await generateDueExplorationWindows(now);
+  scheduled += await runDueExplorationVerifications(now);
   for (;;) {
     const page = await db
       .select()

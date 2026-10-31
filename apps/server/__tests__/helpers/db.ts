@@ -22,10 +22,27 @@ import {
   entityLinks,
   extensionAuthCodes,
   qrLoginTickets,
+  continuityContractRevisions,
+  continuityContracts,
+  continuityDependencies,
+  continuityEvidence,
+  continuityEvidenceLinks,
+  continuityEvents,
+  continuityExperiments,
+  continuityExposures,
+  continuityInterventions,
+  continuityMemorySuppressions,
+  continuityOpportunities,
+  continuityProtectedBlocks,
+  continuityUserSettings,
   days,
   energyLogs,
+  explorationProposals,
+  explorationVerifications,
+  explorationWindows,
   habits,
   holidayCalendar,
+  holidayCalendarSources,
   inboxAssets,
   inboxExtractJobs,
   inboxIdempotencyResponses,
@@ -113,7 +130,24 @@ export async function resetDb(): Promise<void> {
     await db.delete(energyLogs);
     await db.delete(days);
     await db.delete(habits);
+    await db.delete(continuityExposures);
+    await db.delete(continuityInterventions);
+    await db.delete(continuityExperiments);
+    await db.delete(continuityEvidenceLinks);
+    await db.delete(continuityEvidence);
+    await db.delete(continuityOpportunities);
+    await db.delete(continuityEvents);
+    await db.delete(continuityMemorySuppressions);
+    await db.delete(continuityDependencies);
+    await db.delete(continuityProtectedBlocks);
+    await db.delete(continuityContractRevisions);
+    await db.delete(continuityContracts);
+    await db.delete(continuityUserSettings);
+    await db.delete(explorationVerifications);
+    await db.delete(explorationProposals);
+    await db.delete(explorationWindows);
     await db.delete(outcomes);
+    await db.delete(holidayCalendarSources);
     await db.delete(holidayCalendar);
     await db.delete(tags);
     await db.delete(lists);

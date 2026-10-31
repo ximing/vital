@@ -30,6 +30,8 @@ import { OutcomeBoard } from './OutcomeBoard';
 import { NowCard } from './NowCard';
 import { PulseStrip } from './PulseStrip';
 import { AgentProposalsCard } from './AgentProposalsCard';
+import { ContinuityNoticeCard } from './ContinuityNoticeCard';
+import { ExploreSeasonalLine } from '@/features/explore/ExploreSeasonalLine';
 import { TodaySectionHead } from './SectionHead';
 import { TodayTaskList } from './TodayTaskList';
 import { EnergyLogBar } from '@/features/energy/EnergyLogBar';
@@ -209,6 +211,9 @@ function TodayWorkspaceContent() {
               </Button>
             </div>
           ) : null}
+
+          <ContinuityNoticeCard />
+          <ExploreSeasonalLine />
 
           {loading ? (
             <div className="pt-4">

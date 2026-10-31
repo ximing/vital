@@ -44,12 +44,16 @@ export type NotificationOutboxPayload = {
   remindAt: string | null;
   isAllDay: boolean;
   timezone: string;
-  eventType: 'task.remind' | 'task.due' | 'agent.insight' | 'day.remind' | 'task.digest' | 'agent.briefing' | 'meeting.prep' | 'agent.observe' | 'agent.errand';
+  eventType: 'task.remind' | 'task.due' | 'agent.insight' | 'day.remind' | 'task.digest' | 'agent.briefing' | 'meeting.prep' | 'agent.observe' | 'agent.errand' | 'agent.continuity';
   insightKind?: 'outcome.stale' | 'task.decompose' | 'habit.window' | 'review.missing';
   message?: string;
   /** Defer follow-up (task.decompose insight). In-app click target, not a WEB_ORIGIN URL. */
   taskId?: string;
   deeplink?: string;
+  /** Continuity stall candidate. Dispatch reloads copy from this id; do not trust queued prose. */
+  candidateId?: string;
+  outcomeId?: string;
+  revision?: number;
   /** Meeting prep. Open tasks and inbox notes named in the card. */
   relatedTaskIds?: string[];
   relatedInboxIds?: string[];
@@ -95,11 +99,11 @@ export const notificationOutbox = pgTable(
     ),
     check(
       'notification_outbox_event_type_check',
-      sql`${t.eventType} IN ('task.remind', 'task.due', 'agent.insight', 'day.remind', 'task.digest', 'agent.briefing', 'meeting.prep', 'agent.observe', 'agent.errand')`,
+      sql`${t.eventType} IN ('task.remind', 'task.due', 'agent.insight', 'day.remind', 'task.digest', 'agent.briefing', 'meeting.prep', 'agent.observe', 'agent.errand', 'agent.continuity')`,
     ),
     check(
       'notification_outbox_entity_type_check',
-      sql`${t.entityType} IN ('task', 'outcome', 'habit', 'day', 'user')`,
+      sql`${t.entityType} IN ('task', 'outcome', 'habit', 'day', 'user', 'continuity')`,
     ),
   ],
 );

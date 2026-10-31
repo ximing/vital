@@ -24,6 +24,27 @@ import type {
   DeviceCalendarSyncResult,
   ChangePasswordInput,
   CompleteTaskResponse,
+  ContinuityActivateInput,
+  ContinuityDependency,
+  ContinuityDependencyList,
+  ContinuityDraftInput,
+  ContinuityEvidence,
+  ContinuityEvidenceCreateInput,
+  ContinuityEvidencePatchInput,
+  ContinuityExperiment,
+  ContinuityExperimentCreateInput,
+  ContinuityFeedbackInput,
+  ContinuityGetResponse,
+  ContinuityIntervention,
+  ContinuityInterventionList,
+  ContinuityPauseInput,
+  ContinuityProtectedBlock,
+  ContinuityProtectedBlockList,
+  ContinuitySettings,
+  ContinuitySnoozeInput,
+  ContinuityVersionInput,
+  CreateContinuityDependencyInput,
+  CreateContinuityProtectedBlockInput,
   ConvertInboxInput,
   ConvertInboxResponse,
   CreateDayInput,
@@ -31,6 +52,13 @@ import type {
   EnergyLog,
   EnergyLogList,
   EnergyLogQuery,
+  ExplorationConfirmInput,
+  ExplorationGenerateInput,
+  ExplorationProposal,
+  ExplorationSelectInput,
+  ExplorationWindow,
+  ExplorationWindowDetail,
+  ExplorationWindowList,
   CreateHabitInput,
   Day,
   DayCalendarMeta,
@@ -60,6 +88,8 @@ import type {
   OutcomeDetail,
   PatchHabitInput,
   PatchAgentMemoryInput,
+  PatchContinuityDependencyInput,
+  PatchContinuityProtectedBlockInput,
   PatchOutcomeInput,
   PutLlmRoutingInput,
   ReportOverview,
@@ -91,6 +121,7 @@ import type {
   PatchInboxAssetsInput,
   PatchInboxInput,
   PatchReportInput,
+  PutContinuitySettingsInput,
   PatchListInput,
   PatchTagInput,
   PatchTaskInput,
@@ -134,11 +165,13 @@ import { bindAgent } from './domains/agent.js';
 import { bindAuth } from './domains/auth.js';
 import { bindDays } from './domains/days.js';
 import { bindEnergy } from './domains/energy.js';
+import { bindExploration } from './domains/exploration.js';
 import { bindHabits } from './domains/habits.js';
 import { bindInbox } from './domains/inbox.js';
 import { bindLists } from './domains/lists.js';
 import { bindLlm } from './domains/llm.js';
 import { bindNotifications } from './domains/notifications.js';
+import { bindContinuity } from './domains/continuity.js';
 import { bindOutcomes } from './domains/outcomes.js';
 import { bindReports } from './domains/reports.js';
 import { bindSearch } from './domains/search.js';
@@ -216,6 +249,65 @@ export interface VitalClient {
   reopenOutcome(id: string): Promise<Outcome>;
   undoOutcome(id: string): Promise<void>;
   refreshOutcome(id: string): Promise<void>;
+  getOutcomeContinuity(id: string): Promise<ContinuityGetResponse>;
+  putOutcomeContinuity(id: string, input: ContinuityDraftInput): Promise<ContinuityGetResponse>;
+  activateOutcomeContinuity(
+    id: string,
+    input?: ContinuityActivateInput,
+  ): Promise<ContinuityGetResponse>;
+  pauseOutcomeContinuity(id: string, input?: ContinuityPauseInput): Promise<ContinuityGetResponse>;
+  resumeOutcomeContinuity(id: string, input?: ContinuityVersionInput): Promise<ContinuityGetResponse>;
+  endOutcomeContinuity(id: string, input?: ContinuityVersionInput): Promise<ContinuityGetResponse>;
+  getContinuitySettings(): Promise<ContinuitySettings>;
+  putContinuitySettings(input: PutContinuitySettingsInput): Promise<ContinuitySettings>;
+  listContinuityInterventions(): Promise<ContinuityInterventionList>;
+  markContinuityInterventionSeen(id: string): Promise<ContinuityIntervention>;
+  snoozeContinuityIntervention(
+    id: string,
+    input?: ContinuitySnoozeInput,
+  ): Promise<ContinuityIntervention>;
+  feedbackContinuityIntervention(
+    id: string,
+    input: ContinuityFeedbackInput,
+  ): Promise<ContinuityIntervention>;
+  createContinuityEvidence(input: ContinuityEvidenceCreateInput): Promise<ContinuityEvidence>;
+  patchContinuityEvidence(id: string, input: ContinuityEvidencePatchInput): Promise<ContinuityEvidence>;
+  deleteContinuityEvidence(id: string): Promise<ContinuityEvidence>;
+  createContinuityExperiment(input: ContinuityExperimentCreateInput): Promise<ContinuityExperiment>;
+  getContinuityExperiment(id: string): Promise<ContinuityExperiment>;
+  completeContinuityExperiment(id: string): Promise<ContinuityExperiment>;
+  listOutcomeContinuityDependencies(id: string): Promise<ContinuityDependencyList>;
+  createOutcomeContinuityDependency(
+    id: string,
+    input: CreateContinuityDependencyInput,
+  ): Promise<ContinuityDependency>;
+  patchContinuityDependency(
+    id: string,
+    input: PatchContinuityDependencyInput,
+  ): Promise<ContinuityDependency>;
+  deleteContinuityDependency(id: string): Promise<{ ok: true }>;
+  listContinuityProtectedBlocks(): Promise<ContinuityProtectedBlockList>;
+  createContinuityProtectedBlock(
+    input: CreateContinuityProtectedBlockInput,
+  ): Promise<ContinuityProtectedBlock>;
+  patchContinuityProtectedBlock(
+    id: string,
+    input: PatchContinuityProtectedBlockInput,
+  ): Promise<ContinuityProtectedBlock>;
+  deleteContinuityProtectedBlock(id: string): Promise<{ ok: true }>;
+  listExplorationWindows(): Promise<ExplorationWindowList>;
+  getExplorationWindow(id: string): Promise<ExplorationWindowDetail>;
+  generateExplorationWindow(
+    id: string,
+    input?: ExplorationGenerateInput,
+  ): Promise<ExplorationWindowDetail>;
+  restExplorationWindow(id: string): Promise<ExplorationWindow>;
+  selectExplorationProposal(id: string, input?: ExplorationSelectInput): Promise<ExplorationProposal>;
+  confirmExplorationProposal(
+    id: string,
+    input?: ExplorationConfirmInput,
+  ): Promise<ExplorationProposal>;
+  rejectExplorationProposal(id: string): Promise<ExplorationProposal>;
   listHabits(): Promise<Habit[]>;
   listHabitCheckins(query: HabitCheckinsQuery): Promise<HabitCheckinsResponse>;
   createHabit(input: CreateHabitInput): Promise<Habit>;
@@ -343,6 +435,8 @@ export function createVitalClient(options: VitalClientOptions): VitalClient {
     ...bindLlm(http),
     ...bindToday(http),
     ...bindOutcomes(http),
+    ...bindContinuity(http),
+    ...bindExploration(http),
     ...bindHabits(http),
     ...bindEnergy(http),
     ...bindDays(http),

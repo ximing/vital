@@ -1,6 +1,7 @@
 import {
   DEFAULT_LLM_SETTINGS,
   DEFAULT_NOTIFICATION_PREFS,
+  type ContinuityIntervention,
   type List,
   type LlmSettingsPublic,
   type Outcome,
@@ -52,6 +53,10 @@ vi.mock('@/api/client', async (importOriginal) => {
       putTodayLayoutContext: vi.fn(() => Promise.resolve({ ok: true as const })),
       listEnergyLogs: vi.fn(() => Promise.resolve({ items: [] })),
       createEnergyLog: vi.fn(),
+      listContinuityInterventions: vi.fn(),
+      markContinuityInterventionSeen: vi.fn(),
+      feedbackContinuityIntervention: vi.fn(),
+      listExplorationWindows: vi.fn(),
     },
   };
 });
@@ -178,6 +183,31 @@ function makeDashboard(over: Partial<TodayDashboard> = {}): TodayDashboard {
   };
 }
 
+function makeIntervention(
+  over: Partial<ContinuityIntervention> & Pick<ContinuityIntervention, 'id'>,
+): ContinuityIntervention {
+  return {
+    contractId: 'c1',
+    outcomeId: 'o-work',
+    revision: 1,
+    kind: 'stall_adjust',
+    factFingerprint: 'fp1',
+    status: 'open',
+    expiresAt: null,
+    actionableUntil: null,
+    snoozedUntil: null,
+    content: {
+      facts: ['没有记录'],
+      whyNow: '约定时段没有记录，可以补记、做一次最小行动，或调整约定。',
+      primaryAction: { title: '做一次最小行动', durationMin: 20, completionStandard: '' },
+      secondaryActions: [],
+    },
+    createdAt: '2026-10-30T00:00:00.000Z',
+    updatedAt: '2026-10-30T00:00:00.000Z',
+    ...over,
+  };
+}
+
 function renderToday() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -189,6 +219,7 @@ function renderToday() {
           <Routes>
             <Route path="/today" element={<TodayWorkspace />} />
             <Route path="/today/threads/:id" element={<ThreadStub />} />
+            <Route path="/explore/:windowId" element={<div data-testid="explore-page" />} />
             <Route path="/inbox" element={<div />} />
             <Route path="/reports" element={<div />} />
             <Route path="/settings" element={<div />} />
@@ -220,6 +251,9 @@ describe('today workspace', () => {
       ...mockUser,
       onboarding: { createdTask: true },
     });
+    vi.mocked(client.listContinuityInterventions).mockResolvedValue({ items: [] });
+    vi.mocked(client.markContinuityInterventionSeen).mockResolvedValue({} as ContinuityIntervention);
+    vi.mocked(client.listExplorationWindows).mockResolvedValue({ items: [] });
   });
 
   afterEach(() => {
@@ -381,6 +415,69 @@ describe('today workspace', () => {
     await screen.findByRole('heading', { name: t.today.title });
     await waitFor(() => {
       expect(screen.queryByText(t.today.llmBanner)).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides the continuity notice when there are no interventions', async () => {
+    renderToday();
+    await screen.findByRole('heading', { name: t.today.title });
+    expect(document.querySelector('[data-region="continuity-notice"]')).toBeNull();
+    expect(screen.queryByRole('region', { name: t.today.notice.title })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-region="exploration-seasonal"]')).toBeNull();
+  });
+
+  it('shows a quiet seasonal explore link when an open window exists', async () => {
+    vi.mocked(client.listExplorationWindows).mockResolvedValue({
+      items: [
+        {
+          id: 'win-1',
+          windowKey: 'holiday:CN:2026-10-01:2026-10-07',
+          startDate: '2026-10-01',
+          endDate: '2026-10-07',
+          timezone: TZ,
+          region: 'CN',
+          calendarVersion: 'v1',
+          status: 'open',
+          closedReason: null,
+          generatedAt: '2026-09-21T04:00:00.000Z',
+        },
+      ],
+    });
+    renderToday();
+    const line = await screen.findByText('10月1日–10月7日 有一段空闲，可以看看探索建议');
+    expect(line.closest('[data-region="exploration-seasonal"]')).not.toBeNull();
+    expect(line.closest('a')).toHaveAttribute('href', '/explore/win-1');
+  });
+
+  it('expands the first continuity notice and keeps the rest collapsed', async () => {
+    const first = makeIntervention({ id: 'i-1' });
+    const second = makeIntervention({
+      id: 'i-2',
+      content: {
+        facts: ['10月20日约定时段没有记录'],
+        whyNow: '另一件事也没有记录。',
+        primaryAction: { title: '做一次最小行动', durationMin: 10, completionStandard: '' },
+        secondaryActions: [],
+      },
+    });
+    vi.mocked(client.listContinuityInterventions).mockResolvedValue({ items: [first, second] });
+    vi.mocked(client.markContinuityInterventionSeen).mockResolvedValue(first);
+
+    renderToday();
+
+    const region = await screen.findByRole('region', { name: t.today.notice.title });
+    expect(region).toHaveAttribute('data-region', 'continuity-notice');
+    expect(within(region).getByText('没有记录')).toBeInTheDocument();
+    expect(within(region).getByRole('link', { name: t.today.notice.start })).toHaveAttribute(
+      'href',
+      '/today/threads/o-work',
+    );
+    expect(within(region).getByRole('button', { name: t.today.notice.done })).toBeInTheDocument();
+    expect(
+      within(region).getByRole('button', { name: `${t.today.notice.expand}：另一件事也没有记录。` }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(client.markContinuityInterventionSeen).toHaveBeenCalledWith('i-1');
     });
   });
 
@@ -662,6 +759,9 @@ describe('now card', () => {
       ...mockUser,
       onboarding: { createdTask: true },
     });
+    vi.mocked(client.listContinuityInterventions).mockResolvedValue({ items: [] });
+    vi.mocked(client.markContinuityInterventionSeen).mockResolvedValue({} as ContinuityIntervention);
+    vi.mocked(client.listExplorationWindows).mockResolvedValue({ items: [] });
   });
 
   afterEach(() => {
@@ -841,6 +941,9 @@ describe('today briefing', () => {
       ...mockUser,
       onboarding: { createdTask: true },
     });
+    vi.mocked(client.listContinuityInterventions).mockResolvedValue({ items: [] });
+    vi.mocked(client.markContinuityInterventionSeen).mockResolvedValue({} as ContinuityIntervention);
+    vi.mocked(client.listExplorationWindows).mockResolvedValue({ items: [] });
   });
 
   afterEach(() => {

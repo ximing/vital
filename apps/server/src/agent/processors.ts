@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '../db/index.js';
 import { users, type AgentJobRow, type User } from '../db/schema.js';
+import { processContinuityRecompute } from '../continuity/recompute-job.js';
 import { processWeeklyObserve } from '../notifications/weekly-observe.js';
 import { syncSearchIndexes } from '../retrieval/search.js';
 import { syncUserIndexes } from '../retrieval/sync.js';
@@ -86,6 +87,8 @@ async function processAgentJobInner(job: AgentJobRow, now: Date): Promise<AgentJ
       return processErrand(job, user, now);
     case 'notify.scan':
       return processNotifyScan(job, user, now);
+    case 'continuity.recompute':
+      return processContinuityRecompute(job, user, now);
     default:
       // Old worker meeting a newer job type (e.g. task.draft during the v1.3
       // rollout): never swallow it as done — fail loudly so it is visible.

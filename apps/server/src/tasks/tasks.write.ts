@@ -23,6 +23,10 @@ import {
 } from '../agent/jobs.js';
 import { markAgentSchedule } from '../agent/scheduling.js';
 import { getUserEntity } from '../auth/auth.service.js';
+import {
+  syncContinuityOnTaskComplete,
+  syncContinuityOnTaskUncomplete,
+} from '../continuity/dependencies.service.js';
 import { getDb, type Database } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
 import {
@@ -561,6 +565,7 @@ export async function completeTask(
           .limit(1);
         if (habit?.outcomeId) await enqueueOutcomeRefresh(tx, userId, habit.outcomeId, now);
       }
+      await syncContinuityOnTaskComplete(tx, userId, task, now);
     });
   } catch (err) {
     if (isUniqueViolation(err)) throw AppError.of(409, 'VALIDATION_ERROR');
@@ -646,6 +651,7 @@ export async function uncompleteTask(
         .limit(1);
       if (habit?.outcomeId) await enqueueOutcomeRefresh(tx, userId, habit.outcomeId, now);
     }
+    await syncContinuityOnTaskUncomplete(tx, userId, task, now);
   });
   const restored = await getOwnedTaskOr404(userId, id);
   fireIndexTask(restored);

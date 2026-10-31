@@ -83,6 +83,8 @@ export const envSchema = z.object({
   AGENT_ENABLED: boolEnum.default('true'),
   /** Sidebar chat. Independent of AGENT_ENABLED. Set false to hide the rail entry. */
   AGENT_CHAT_ENABLED: boolEnum.default('true'),
+  /** Thread hosting. Off: no new drafts/activations; GET/pause/resume/end/purge still work. */
+  CONTINUITY_ENABLED: boolEnum.default('false'),
   AGENT_LEASE_MS: z.coerce.number().int().min(1000).default(300_000),
   AGENT_HEARTBEAT_MS: z.coerce.number().int().min(100).default(30_000),
   // Seeded onto new accounts. Each user can change it in Settings → 偏好.

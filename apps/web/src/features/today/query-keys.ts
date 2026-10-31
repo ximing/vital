@@ -11,4 +11,7 @@ export const todayKeys = {
   decompose: (taskId: string) => ['today', 'decompose', taskId] as const,
   agentPending: ['today', 'agent-pending'] as const,
   agentExecStatus: ['today', 'agent-exec-status'] as const,
+  continuityInterventions: ['today', 'continuity-interventions'] as const,
+  continuity: (id: string) => ['today', 'continuity', id] as const,
+  continuityDependencies: (id: string) => ['today', 'continuity', id, 'deps'] as const,
 };

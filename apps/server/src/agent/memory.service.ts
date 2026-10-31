@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
 import type {
   AgentMemoryItem,
   CreateAgentMemoryInput,
   PatchAgentMemoryInput,
 } from '@vital/dto';
+import { and, desc, eq } from 'drizzle-orm';
+import { recordMemorySuppression } from '../continuity/memory-suppress.js';
 import { getDb } from '../db/index.js';
 import { agentMemory, agentMemoryHistory, users, AGENT_MEMORY_SCOPES, type AgentMemoryRow } from '../db/schema.js';
 import { AppError } from '../errors.js';
@@ -101,7 +102,15 @@ export async function deleteAgentMemory(userId: string, id: string): Promise<voi
     await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('no key update');
     const [row] = await tx.delete(agentMemory).where(and(eq(agentMemory.id, id), eq(agentMemory.userId, userId))).returning();
     if (!row) throw AppError.of(404, 'NOT_FOUND');
-    await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: id, revision: row.version + 1, operation: 'manual.drop', before: row, after: null, sourceFeedback: [], createdAt: new Date() });
+    const now = new Date();
+    await tx.insert(agentMemoryHistory).values({ id: randomUUID(), userId, memoryId: id, revision: row.version + 1, operation: 'manual.drop', before: row, after: null, sourceFeedback: [], createdAt: now });
+    await recordMemorySuppression(tx, {
+      userId,
+      memoryId: id,
+      kind: row.kind,
+      content: row.content,
+      now,
+    });
     return row;
   });
   trackIndexJob(removeMemoryIndex(deleted.id), 'removeMemoryIndex');

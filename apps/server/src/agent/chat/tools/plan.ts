@@ -1,24 +1,31 @@
 import { randomUUID } from 'node:crypto';
-import type { ApplyPlanResult, ChatInvalidateTag, ChatPlanDiff, ChatUndoHint } from '@vital/dto';
+import {
+  planDependencyGroupSchema,
+  planProtectedBlockVersionSchema,
+  type ApplyPlanResult,
+  type ChatInvalidateTag,
+  type ChatPlanDiff,
+} from '@vital/dto';
 import { Type } from '@earendil-works/pi-ai';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
-import { recordAgentEdit } from '../../edit-events.service.js';
-import { enqueueOutcomeRefresh, enqueueTaskDecompose, enqueueTodayLayout, hasPendingDecomposeAction } from '../../jobs.js';
-import { markAgentSchedule } from '../../scheduling.js';
 import { getUserEntity } from '../../../auth/auth.service.js';
+import {
+  annotateProtectedImpact,
+  applyPlanPatches,
+  detectPlanGroups,
+  loadProtectedBlocks,
+  snapshotProtectedBlocks,
+} from '../../../continuity/plan-apply.js';
 import { getDb } from '../../../db/index.js';
 import {
   agentChatMessages,
   agentChatPreviews,
   outcomes,
-  taskCompletions,
   tasks,
   type TaskRow,
 } from '../../../db/schema.js';
-import { syncTaskNotifications } from '../../../notifications/outbox.js';
-import { isDefer, needsDecomposition } from '../../../outcomes/rule-engine.js';
 import { formatSlotRange } from '../../schedule-proposal.js';
 import { fireIndexTask } from '../../../tasks/tasks.shared.js';
 import { register } from '../registry.js';
@@ -55,11 +62,12 @@ const storedPatchSchema = planPatchSchema.extend({
 const storedPlanSchema = z.object({
   timezone: z.string().min(1),
   patches: z.array(storedPatchSchema).max(PLAN_MAX),
+  groups: z.array(planDependencyGroupSchema).max(PLAN_MAX).optional(),
+  protectedBlocks: z.array(planProtectedBlockVersionSchema).max(100).optional(),
 });
 
 export type PlanPatchInput = z.infer<typeof planPatchSchema>;
 type StoredPatch = z.infer<typeof storedPatchSchema>;
-type PlanStep = Extract<ChatUndoHint, { kind: 'plan' }>['steps'][number];
 type Tx = Parameters<Parameters<ReturnType<typeof getDb>['transaction']>[0]>[0];
 
 const STATUS_LABEL: Record<z.infer<typeof status>, string> = {
@@ -84,17 +92,8 @@ function sameInstant(a: Date | null, b: Date | null): boolean {
   return a.getTime() === b.getTime();
 }
 
-function sameRevision(updatedAt: Date, revision: string): boolean {
-  const parsed = Date.parse(revision);
-  return Number.isFinite(parsed) && updatedAt.getTime() === parsed;
-}
-
 function isRecurring(row: TaskRow): boolean {
   return row.recurrenceRrule !== null || row.recurrenceKind !== null;
-}
-
-function clipTitle(value: string): string {
-  return value.length > 120 ? value.slice(0, 120) : value;
 }
 
 function toInput(patch: StoredPatch): PlanPatchInput {
@@ -128,10 +127,12 @@ function previewResult(summary: string, previewId: string, expiresAt: string, di
   return { status: 'preview', summary, previewId, expiresAt, invalidate: [], diffs };
 }
 
+type StoredPlan = z.infer<typeof storedPlanSchema>;
+
 export async function screenPlan(
   ctx: ToolCtx,
   patches: PlanPatchInput[],
-): Promise<{ stored: { timezone: string; patches: StoredPatch[] }; summary: string; diffs: ChatPlanDiff[] } | ToolResult> {
+): Promise<{ stored: StoredPlan; summary: string; diffs: ChatPlanDiff[] } | ToolResult> {
   if (patches.length === 0) return needsInput('方案里至少要有一条改动。');
   if (patches.length > PLAN_MAX) return needsInput('一份方案最多 20 条。');
   const seen = new Set<string>();
@@ -192,7 +193,21 @@ export async function screenPlan(
     stored.push(built.stored);
     diffs.push(built.diff);
   }
-  return { stored: { timezone: ctx.timezone, patches: stored }, summary: `确认后改 ${String(stored.length)} 条`, diffs };
+  const blocks = await loadProtectedBlocks(ctx.userId);
+  const labels = annotateProtectedImpact(diffs, stored, byId, blocks, ctx.timezone);
+  const groups = detectPlanGroups(stored, byId);
+  let summary = `确认后改 ${String(stored.length)} 条`;
+  if (labels.length > 0) summary += `。保护安排「${labels.join('、')}」不会被占用`;
+  return {
+    stored: {
+      timezone: ctx.timezone,
+      patches: stored,
+      groups,
+      protectedBlocks: snapshotProtectedBlocks(blocks),
+    },
+    summary,
+    diffs,
+  };
 }
 
 function buildChange(
@@ -279,13 +294,6 @@ export async function appendToOpenPlan(ctx: ToolCtx, patch: PlanPatchInput): Pro
   return previewResult(screened.summary, created.id, created.expiresAt, screened.diffs);
 }
 
-interface AppliedItem {
-  taskId: string;
-  title: string;
-  summary: string;
-  steps: PlanStep[];
-}
-
 export async function applyAgentPlan(userId: string, planId: string, now = new Date()): Promise<ApplyPlanResult | null> {
   const user = await getUserEntity(userId);
   const outcome = await getDb().transaction(async (tx) => {
@@ -304,23 +312,18 @@ export async function applyAgentPlan(userId: string, planId: string, now = new D
       await tx.update(agentChatPreviews).set({ status: 'cancelled' }).where(eq(agentChatPreviews.id, row.id));
       return null;
     }
-    const applied: AppliedItem[] = [];
-    const skipped: { taskId: string; reason: string }[] = [];
-    let marked = false;
-    for (const patch of parsed.data.patches) {
-      const one = await applyOne(tx, user, userId, parsed.data.timezone, patch, now);
-      if ('reason' in one) {
-        skipped.push({ taskId: patch.taskId, reason: one.reason });
-        continue;
-      }
-      if (!marked) {
-        await markAgentSchedule(tx, userId, 'outcome.cluster', { now });
-        marked = true;
-      }
-      applied.push(one);
-    }
+    const { applied, skipped } = await applyPlanPatches(tx, {
+      user,
+      userId,
+      timezone: parsed.data.timezone,
+      patches: parsed.data.patches,
+      groups: parsed.data.groups,
+      now,
+    });
     await tx.update(agentChatPreviews).set({ status: 'applied' }).where(eq(agentChatPreviews.id, row.id));
     const steps = applied.flatMap((item) => item.steps);
+    const afterRevisions: Record<string, string> = {};
+    for (const item of applied) afterRevisions[item.taskId] = item.afterRevision;
     const lines = [
       ...applied.map((item) => item.summary),
       ...skipped.map((item) => `已跳过：${item.reason}`),
@@ -339,7 +342,7 @@ export async function applyAgentPlan(userId: string, planId: string, now = new D
         toolPayload: clipPayload({
           status: 'ok',
           summary: '方案已应用',
-          undo: { kind: 'plan', steps },
+          undo: { kind: 'plan', steps, afterRevisions },
           invalidate: ['tasks', 'today', 'outcomes'],
         }),
         createdAt: now,
@@ -354,12 +357,10 @@ export async function applyAgentPlan(userId: string, planId: string, now = new D
       createdAt: new Date(now.getTime() + 1),
     });
     await sealCards(tx, userId, row.conversationId, row.id);
-    const appliedIds = applied.map((item) => item.taskId);
-    const indexed = appliedIds.length === 0 ? [] : await tx.select().from(tasks).where(inArray(tasks.id, appliedIds));
     const invalidate: ChatInvalidateTag[] = applied.length > 0 ? ['tasks', 'today', 'outcomes'] : [];
     return {
       public: { summary, invalidate, applied: applied.length, skipped, undoHintId },
-      indexed,
+      indexed: applied.map((item) => item.indexed),
     };
   });
   if (!outcome) return null;
@@ -396,215 +397,11 @@ async function sealCards(tx: Tx, userId: string, conversationId: string, preview
   }
 }
 
-async function applyOne(
-  tx: Tx,
-  user: Awaited<ReturnType<typeof getUserEntity>>,
-  userId: string,
-  zone: string,
-  patch: StoredPatch,
-  now: Date,
-): Promise<AppliedItem | { reason: string }> {
-  const [row] = await tx
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.id, patch.taskId), eq(tasks.userId, userId)))
-    .for('update');
-  if (!row || row.deletedAt) return { reason: '这条已经不在了' };
-  if (row.habitId) return { reason: `「${row.title}」是习惯打卡` };
-  if (!sameRevision(row.updatedAt, patch.revision)) return { reason: `「${row.title}」这条在方案之后被改过` };
-  if (row.calendarKey && (patch.startAt !== undefined || patch.dueYmd !== undefined)) {
-    return { reason: `「${row.title}」来自日历，不改时间` };
-  }
-  if (isRecurring(row) && (patch.dueYmd !== undefined || patch.startAt !== undefined || patch.status === 'done')) {
-    return { reason: `「${row.title}」是重复任务，日期和完成不放进方案` };
-  }
-  if (patch.outcomeId) {
-    const [outcome] = await tx
-      .select({ id: outcomes.id })
-      .from(outcomes)
-      .where(and(eq(outcomes.id, patch.outcomeId), eq(outcomes.userId, userId)))
-      .limit(1);
-    if (!outcome) return { reason: `「${row.title}」的归属已经不存在` };
-  }
-  const nextOutcomeId = patch.outcomeId !== undefined ? patch.outcomeId : row.outcomeId;
-  if (patch.isMilestone === true && !nextOutcomeId) {
-    return { reason: `「${row.title}」没有归属目标，不能标成里程碑` };
-  }
-  if (patch.status === 'done' && (row.status === 'done' || row.status === 'canceled')) {
-    return { reason: row.status === 'done' ? `「${row.title}」已经完成` : `「${row.title}」已取消，不能标完成` };
-  }
-  if (patch.status && patch.status !== 'done' && row.status === 'done') {
-    return { reason: `「${row.title}」已经完成，方案里不能改回` };
-  }
-
-  const column: Partial<TaskRow> = { updatedAt: now };
-  const previous: Record<string, unknown> = {};
-  const fields: { field: string; before: unknown; after: unknown }[] = [];
-  let nextDue = row.dueAt;
-  if (patch.title !== undefined && patch.title !== row.title) {
-    column.title = patch.title;
-    previous.title = row.title;
-    fields.push({ field: 'title', before: clipTitle(row.title), after: clipTitle(patch.title) });
-  }
-  if (patch.priority !== undefined && patch.priority !== row.priority) {
-    column.priority = patch.priority;
-    previous.priority = row.priority;
-    fields.push({ field: 'priority', before: row.priority, after: patch.priority });
-  }
-  if (patch.outcomeId !== undefined && patch.outcomeId !== row.outcomeId) {
-    column.outcomeId = patch.outcomeId;
-    previous.outcomeId = row.outcomeId;
-    fields.push({ field: 'outcomeId', before: row.outcomeId, after: patch.outcomeId });
-  }
-  if (patch.isMilestone !== undefined && patch.isMilestone !== row.isMilestone) {
-    column.isMilestone = patch.isMilestone;
-    previous.isMilestone = row.isMilestone;
-    fields.push({ field: 'isMilestone', before: row.isMilestone, after: patch.isMilestone });
-  }
-  if (patch.startAt !== undefined && patch.dueAt !== undefined) {
-    const start = new Date(patch.startAt);
-    const due = new Date(patch.dueAt);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(due.getTime()) || due.getTime() <= start.getTime()) {
-      return { reason: `「${row.title}」的时段无效` };
-    }
-    const unchanged =
-      sameInstant(start, row.startAt) && sameInstant(due, row.dueAt) && !row.isAllDay && row.agentScheduled;
-    if (!unchanged) {
-      column.startAt = start;
-      column.dueAt = due;
-      column.isAllDay = false;
-      column.timezone = zone;
-      column.agentScheduled = true;
-      nextDue = due;
-      previous.startAt = row.startAt ? row.startAt.toISOString() : null;
-      previous.dueAt = row.dueAt ? row.dueAt.toISOString() : null;
-      previous.isAllDay = row.isAllDay;
-      previous.timezone = row.timezone;
-      previous.agentScheduled = row.agentScheduled;
-      fields.push({
-        field: 'startAt',
-        before: row.startAt ? row.startAt.toISOString() : null,
-        after: start.toISOString(),
-      });
-      fields.push({
-        field: 'dueAt',
-        before: row.dueAt ? row.dueAt.toISOString() : null,
-        after: due.toISOString(),
-      });
-      if (isDefer(row.dueAt, due, now)) column.deferCount = row.deferCount + 1;
-    }
-  }
-  if (patch.dueYmd !== undefined) {
-    const due = patch.dueYmd === null ? null : dueAtFromYmd(patch.dueYmd, zone);
-    if (due === null && patch.dueYmd !== null) return { reason: `「${row.title}」的日期无效` };
-    if (!sameInstant(due, row.dueAt)) {
-      column.dueAt = due;
-      column.timezone = zone;
-      column.isAllDay = patch.dueYmd === null ? row.isAllDay : true;
-      nextDue = due;
-      previous.dueAt = row.dueAt ? row.dueAt.toISOString() : null;
-      previous.isAllDay = row.isAllDay;
-      previous.timezone = row.timezone;
-      fields.push({
-        field: 'dueAt',
-        before: row.dueAt ? row.dueAt.toISOString() : null,
-        after: due ? due.toISOString() : null,
-      });
-      if (due === null && (row.reminderMode === 'due' || row.reminderMode === 'offset')) {
-        column.reminderMode = 'none';
-        column.reminderOffsetMinutes = null;
-        column.reminderAt = null;
-        previous.reminderMode = row.reminderMode;
-        previous.reminderOffsetMinutes = row.reminderOffsetMinutes;
-        previous.reminderAt = row.reminderAt ? row.reminderAt.toISOString() : null;
-      }
-      if (isDefer(row.dueAt, due, now)) column.deferCount = row.deferCount + 1;
-      if (row.agentScheduled) {
-        column.agentScheduled = false;
-        previous.agentScheduled = true;
-      }
-    }
-  }
-  const wantComplete = patch.status === 'done' && row.status !== 'done';
-  if (patch.status && patch.status !== 'done' && patch.status !== row.status) {
-    column.status = patch.status;
-    previous.status = row.status;
-    fields.push({ field: 'status', before: row.status, after: patch.status });
-  }
-  if (wantComplete) {
-    fields.push({ field: 'status', before: row.status, after: 'done' });
-    if (row.status !== 'todo') previous.status = row.status;
-  }
-  if (Object.keys(previous).length === 0 && !wantComplete) return { reason: `「${row.title}」没有变化` };
-
-  await tx.update(tasks).set(column).where(eq(tasks.id, row.id));
-  let current: TaskRow = { ...row, ...column, dueAt: nextDue };
-  let completionId: string | null = null;
-  if (wantComplete) {
-    completionId = randomUUID();
-    const occurrenceAt = current.dueAt ?? now;
-    await tx.insert(taskCompletions).values({
-      id: completionId,
-      taskId: row.id,
-      occurrenceAt,
-      completedAt: now,
-      dueWasNull: current.dueAt === null,
-    });
-    await tx
-      .update(tasks)
-      .set({ status: 'done', completedAt: now, updatedAt: now })
-      .where(eq(tasks.id, row.id));
-    current = { ...current, status: 'done', completedAt: now, updatedAt: now };
-  }
-  await recordAgentEdit(tx, userId, row.id, fields);
-  await syncTaskNotifications(
-    {
-      id: current.id,
-      userId: current.userId,
-      listId: current.listId,
-      title: current.title,
-      status: current.status,
-      dueAt: current.dueAt,
-      reminderMode: current.reminderMode,
-      reminderOffsetMinutes: current.reminderOffsetMinutes,
-      reminderAt: current.reminderAt,
-      isAllDay: current.isAllDay,
-      timezone: current.timezone,
-      deletedAt: current.deletedAt,
-      habitId: current.habitId,
-      habitSeq: current.habitSeq,
-      habitKey: current.habitKey,
-      createdAt: current.createdAt,
-    },
-    user,
-    now,
-    tx,
-  );
-  const outcomeIds = new Set<string>();
-  if (row.outcomeId) outcomeIds.add(row.outcomeId);
-  if (current.outcomeId) outcomeIds.add(current.outcomeId);
-  for (const outcomeId of outcomeIds) await enqueueOutcomeRefresh(tx, userId, outcomeId, now);
-  if (
-    column.deferCount !== undefined &&
-    needsDecomposition(column.deferCount) &&
-    !(await hasPendingDecomposeAction(tx, row.id, userId))
-  ) {
-    await enqueueTaskDecompose(tx, userId, row.id, now);
-  }
-  if (wantComplete) await enqueueTodayLayout(tx, userId, now, 'complete');
-
-  const steps: PlanStep[] = [];
-  if (completionId) steps.push({ kind: 'uncomplete', taskId: row.id, completionId });
-  if (Object.keys(previous).length > 0) steps.push({ kind: 'patch_task', taskId: row.id, previous });
-  const summary = wantComplete ? `已完成「${current.title}」` : `已更新「${current.title}」`;
-  return { taskId: row.id, title: current.title, summary, steps };
-}
-
 register({
   name: 'tasks.propose_plan',
   label: '提交变更方案',
   description:
-    '提交一份待办变更方案，最多 20 条，不会立刻改数据。每条用 taskId，可改 title、dueYmd（YYYY-MM-DD 或 null）、startAt 与 dueAt（成对的带时区时刻，表示时段）、priority、status（todo/doing/done/canceled）、outcomeId（或 null）、isMilestone（是否为所属目标的里程碑，任务必须已有归属）。不要删除任务，不要改日历镜像的时间，不要包含习惯打卡或重复任务的日期和完成。把待办塞进某一天请改用 tasks.propose_schedule。确认前不改任务。',
+    '提交一份待办变更方案，最多 20 条，不会立刻改数据。每条用 taskId，可改 title、dueYmd（YYYY-MM-DD 或 null）、startAt 与 dueAt（成对的带时区时刻，表示时段）、priority、status（todo/doing/done/canceled）、outcomeId（或 null）、isMilestone（是否为所属目标的里程碑，任务必须已有归属）。不要删除任务，不要改日历镜像的时间，不要包含习惯打卡或重复任务的日期和完成。不能取消家庭、休息等保护安排。把待办塞进某一天请改用 tasks.propose_schedule。确认前不改任务。',
   parameters: Type.Object({
     patches: Type.Array(
       Type.Object({

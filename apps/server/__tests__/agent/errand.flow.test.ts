@@ -136,7 +136,7 @@ function markerCount(notes: string, marker: string): number {
 
 describe('errand.run', () => {
   it('is demand-driven and not part of the weekly scan', () => {
-    expect(DEMAND_ONLY_JOB_TYPES).toEqual(['errand.run']);
+    expect(DEMAND_ONLY_JOB_TYPES).toEqual(['errand.run', 'continuity.recompute']);
   });
 
   it('reads an article, replaces the excerpt, completes the task, and notifies', async () => {

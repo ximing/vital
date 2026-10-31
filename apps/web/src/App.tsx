@@ -6,6 +6,7 @@ import {
   loadActivity,
   loadChat,
   loadDays,
+  loadExplore,
   loadExtensionAuth,
   loadExtractJobs,
   loadHabits,
@@ -48,6 +49,9 @@ const ExtensionAuthPage = lazy(() =>
 const Shell = lazy(() => trackRoute(loadShell).then((m) => ({ default: m.Shell })));
 const TodayWorkspace = lazy(() =>
   trackRoute(loadToday).then((m) => ({ default: m.TodayWorkspace })),
+);
+const ExploreWorkspace = lazy(() =>
+  trackRoute(loadExplore).then((m) => ({ default: m.ExploreWorkspace })),
 );
 const ChatRoute = lazy(() => trackRoute(loadChat).then((m) => ({ default: m.ChatRoute })));
 const ThreadWorkspace = lazy(() =>
@@ -139,6 +143,7 @@ export function App() {
               <Route path="/today" element={<TodayWorkspace />} />
               <Route path="/chat" element={<ChatRoute />} />
               <Route path="/today/threads/:id" element={<ThreadWorkspace />} />
+              <Route path="/explore/:windowId" element={<ExploreWorkspace />} />
               <Route path="/todos" element={<Navigate to={TODOS_HOME_PATH} replace />} />
               <Route path="/todos/lists/:listId" element={<TodosWorkspace view="list" />} />
               <Route path="/todos/board" element={<TodosWorkspace view="board" />} />

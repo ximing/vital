@@ -30,7 +30,7 @@ export function listIdFrom(pathname: string, search: string): string | null {
 }
 
 export function sectionOf(pathname: string, _search: string): AppSection {
-  if (pathname.startsWith('/today')) return 'today';
+  if (pathname.startsWith('/today') || pathname.startsWith('/explore')) return 'today';
   if (pathname.startsWith('/inbox')) return 'capture';
   if (pathname.startsWith('/reports')) return 'reflect';
   if (pathname.startsWith('/search')) return 'search';

@@ -71,6 +71,16 @@ export const today = {
     title: 'Agent 提议',
     all: '全部系统行为 →',
   },
+  notice: {
+    title: '值得留意',
+    start: '开始这一步',
+    done: '已经做过',
+    adjust: '调整安排',
+    pause: '暂时不跟进',
+    duration: '{m} 分钟',
+    expand: '展开',
+  },
+  exploreLine: '{start}–{end} 有一段空闲，可以看看探索建议',
   overdueBanner: '{n} 件逾期',
   postponeAll: '一键顺延到今天',
   glance: {

@@ -18,6 +18,7 @@ import { HOME_PATH } from '@/routes';
 import { AuthService } from '@/services/auth.service';
 import { Button } from '@/ui/button';
 import { ThreadAgentLog } from './ThreadAgentLog';
+import { ThreadContinuity } from './ThreadContinuity';
 import { ThreadHabits } from './ThreadHabits';
 import { ThreadHeader } from './ThreadHeader';
 import { ThreadMilestones } from './ThreadMilestones';
@@ -154,6 +155,7 @@ function ThreadWorkspaceContent() {
       <ThreadCanvas>
         {backLink}
         <ThreadHeader detail={detail} timeZone={timeZone} now={now} />
+        <ThreadContinuity outcomeId={detail.outcome.id} timeZone={timeZone} />
         <ThreadMilestones detail={detail} />
         <ThreadNextStep
           detail={detail}

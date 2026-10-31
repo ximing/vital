@@ -64,6 +64,7 @@ export const activity = {
     'agent.errand': '数字代办',
     'errand.run': '数字代办',
     errand: '数字代办',
+    'continuity.recompute': '跟进重算',
   },
   scheduleStatuses: { idle: '空闲', waiting: '等待中', due: '已到期', cooldown: '冷却中' },
   schedulePending: '待处理 {n}',

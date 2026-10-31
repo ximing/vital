@@ -14,7 +14,12 @@ export const chatUndoHintSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('patch_task'), taskId: z.string().uuid(), previous: z.record(z.unknown()) }),
   z.object({ kind: z.literal('pause_habit'), habitId: z.string().uuid() }),
   z.object({ kind: z.literal('patch_habit'), habitId: z.string().uuid(), previous: z.record(z.unknown()) }),
-  z.object({ kind: z.literal('plan'), steps: z.array(chatPlanStepSchema).min(1).max(40) }),
+  z.object({
+    kind: z.literal('plan'),
+    steps: z.array(chatPlanStepSchema).min(1).max(40),
+    /** Post-apply task.updatedAt ISO. Undo skips a task whose row no longer matches. */
+    afterRevisions: z.record(z.string().min(1)).optional(),
+  }),
 ]);
 export type ChatUndoHint = z.infer<typeof chatUndoHintSchema>;
 

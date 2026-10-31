@@ -39,6 +39,7 @@ export type AgentJobPayload = (
   | { taskId: string }
   | { date: string }
   | { reportId: string }
+  | { contractId: string }
   | {
       taskId: string;
       kind: 'inbox.read_summarize' | 'inbox.organize';
@@ -80,7 +81,7 @@ export const agentJobs = pgTable(
     index('idx_agent_jobs_user_type').on(t.userId, t.jobType),
     check(
       'agent_jobs_type_check',
-      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'reflect.weekly', 'memory.distill', 'habit.spawn', 'notify.scan', 'index.sync', 'report.generate', 'today.layout', 'errand.run')`,
+      sql`${t.jobType} IN ('outcome.refresh', 'outcome.cluster', 'task.decompose', 'task.draft', 'reflect.daily', 'reflect.weekly', 'memory.distill', 'habit.spawn', 'notify.scan', 'index.sync', 'report.generate', 'today.layout', 'errand.run', 'continuity.recompute')`,
     ),
     check(
       'agent_jobs_status_check',

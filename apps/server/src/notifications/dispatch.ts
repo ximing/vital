@@ -2,6 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { config } from '../config.js';
+import {
+  markContinuityPushSent,
+  prepareContinuityPush,
+  releaseContinuityOutbox,
+} from '../continuity/delivery-policy.js';
 import { getDb } from '../db/index.js';
 import {
   notificationChannels,
@@ -73,6 +78,12 @@ function notifyPath(job: {
     if (link && link.startsWith('/') && !link.startsWith('//') && !link.includes('://')) return link;
     return '/inbox';
   }
+  if (job.eventType === 'agent.continuity') {
+    const link = job.payload.deeplink;
+    if (link && link.startsWith('/') && !link.startsWith('//') && !link.includes('://')) return link;
+    if (job.payload.outcomeId) return `/today/threads/${job.payload.outcomeId}`;
+    return '/today';
+  }
   if (job.eventType === 'day.remind') return `/days?id=${job.entityId}`;
   return `/todos/lists/${job.payload.listId}?task=${job.entityId}`;
 }
@@ -117,6 +128,9 @@ export function renderMeowMessage(payload: NotificationOutboxPayload): {
   }
   if (payload.eventType === 'agent.errand') {
     return { title: payload.title || '代办完成', msg: payload.message ?? '' };
+  }
+  if (payload.eventType === 'agent.continuity') {
+    return { title: payload.title || '值得留意', msg: payload.message ?? '' };
   }
   if (payload.eventType === 'day.remind') {
     return { title: '日子提醒', msg: payload.message ?? `「${payload.title}」` };
@@ -254,6 +268,10 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
     const outcome = await prepareMeetingPrep(user, job, now);
     if (outcome !== 'ready') return;
   }
+  if (job.eventType === 'agent.continuity') {
+    const outcome = await prepareContinuityPush(user, job, now);
+    if (outcome !== 'ready') return;
+  }
   // Meeting prep applies quiet hours itself and refuses a delay that misses the start.
   if (job.eventType !== 'meeting.prep') {
     const delayed = applyQuietHours(now, user.quietHoursStart, user.quietHoursEnd, user.timezone);
@@ -343,6 +361,7 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
       .update(notificationOutbox)
       .set({ status: 'sent', sentAt: now, lastError: null, updatedAt: now })
       .where(stillClaimed(job.id));
+    if (job.eventType === 'agent.continuity') await markContinuityPushSent(job.id, now);
     return;
   }
   if (channelsDone && huawei.allDone && !anyRetryable) {
@@ -350,6 +369,7 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
       .update(notificationOutbox)
       .set({ status: 'failed', lastError: lastError ?? '渠道永久失败', updatedAt: now })
       .where(stillClaimed(job.id));
+    if (job.eventType === 'agent.continuity') await releaseContinuityOutbox(job.id, now);
     return;
   }
 
@@ -364,6 +384,7 @@ export async function dispatchOne(job: NotificationOutboxRow, now: Date): Promis
         updatedAt: now,
       })
       .where(stillClaimed(job.id));
+    if (job.eventType === 'agent.continuity') await releaseContinuityOutbox(job.id, now);
     return;
   }
   const wait = BACKOFF_MS[Math.min(attempts - 1, BACKOFF_MS.length - 1)] ?? 30_000;
