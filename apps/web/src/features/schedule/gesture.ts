@@ -1,5 +1,11 @@
 import type { ScheduleDraft } from '@/features/todos';
-import { addDaysYmd, zonedLocalMidnightIso, zonedWallTimeIso } from '@/features/todos/model';
+import {
+  addDaysYmd,
+  formatHm,
+  formatYmd,
+  zonedLocalMidnightIso,
+  zonedWallTimeIso,
+} from '@/features/todos/model';
 
 /** Drag-to-create snaps to a quarter hour, the same increment as Google Calendar. */
 export const SLOT_MINUTES = 15;
@@ -204,4 +210,236 @@ export function scheduleDraftFromRange(range: ScheduleCreateRange): ScheduleDraf
     startHm: hmText(minutesOf(range.startHour, range.startMinute)),
     endHm: nextDay ? '00:00' : hmText(endTotal),
   };
+}
+
+/** Clock change written with patchTask. `dueAt` equals `startAt` for a point. */
+export type ScheduleTimeChange = {
+  startAt: string;
+  dueAt: string;
+  isAllDay: boolean;
+};
+
+function dayIndex(ymd: string): number {
+  const year = Number(ymd.slice(0, 4));
+  const month = Number(ymd.slice(5, 7));
+  const day = Number(ymd.slice(8, 10));
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
+function dayDelta(fromYmd: string, toYmd: string): number {
+  return dayIndex(toYmd) - dayIndex(fromYmd);
+}
+
+function sameInstant(left: string, right: string): boolean {
+  const a = new Date(left).getTime();
+  const b = new Date(right).getTime();
+  return Number.isFinite(a) && a === b;
+}
+
+function shiftInstant(iso: string, deltaMs: number): string | null {
+  const at = new Date(iso).getTime();
+  if (!Number.isFinite(at)) return null;
+  return new Date(at + deltaMs).toISOString();
+}
+
+/**
+ * Move a timed occurrence by the quarter-hour cells the pointer crossed.
+ * The grab offset stays, so a 14:07 start dropped one hour later lands at 15:07.
+ * The day can change. A zero move returns null.
+ */
+export function shiftTimedOccurrence(input: {
+  startAt: string;
+  dueAt: string;
+  origin: HourCell;
+  target: HourCell;
+}): ScheduleTimeChange | null {
+  const deltaMinutes =
+    dayDelta(input.origin.ymd, input.target.ymd) * DAY_MINUTES +
+    (minutesOf(input.target.hour, input.target.minute) -
+      minutesOf(input.origin.hour, input.origin.minute));
+  if (deltaMinutes === 0) return null;
+  const deltaMs = deltaMinutes * 60_000;
+  const startAt = shiftInstant(input.startAt, deltaMs);
+  const dueAt = shiftInstant(input.dueAt, deltaMs);
+  if (startAt === null || dueAt === null) return null;
+  return { startAt, dueAt, isAllDay: false };
+}
+
+/**
+ * Move a timed occurrence that lives in a day cell (month view) by whole days.
+ * The clock time stays. A zero move returns null.
+ */
+export function shiftTimedByDays(input: {
+  startAt: string;
+  dueAt: string;
+  originYmd: string;
+  targetYmd: string;
+}): ScheduleTimeChange | null {
+  const days = dayDelta(input.originYmd, input.targetYmd);
+  if (days === 0) return null;
+  const deltaMs = days * DAY_MINUTES * 60_000;
+  const startAt = shiftInstant(input.startAt, deltaMs);
+  const dueAt = shiftInstant(input.dueAt, deltaMs);
+  if (startAt === null || dueAt === null) return null;
+  return { startAt, dueAt, isAllDay: false };
+}
+
+/**
+ * Move an all-day span by whole days. `startYmd` and `endYmd` are the inclusive
+ * local dates. Both midnights move by the same amount.
+ */
+export function shiftAllDayOccurrence(input: {
+  startYmd: string;
+  endYmd: string;
+  originYmd: string;
+  targetYmd: string;
+  timeZone: string;
+}): ScheduleTimeChange | null {
+  const days = dayDelta(input.originYmd, input.targetYmd);
+  if (days === 0) return null;
+  if (!YMD.test(input.startYmd) || !YMD.test(input.endYmd)) return null;
+  const startYmd = addDaysYmd(input.startYmd, days);
+  const endYmd = addDaysYmd(input.endYmd, days);
+  return {
+    startAt: zonedLocalMidnightIso(startYmd, input.timeZone),
+    dueAt: zonedLocalMidnightIso(endYmd, input.timeZone),
+    isAllDay: true,
+  };
+}
+
+type LocalMinute = { ymd: string; minute: number };
+
+function localMinute(iso: string, timeZone: string): LocalMinute | null {
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return null;
+  const label = formatHm(iso, timeZone);
+  const hour = Number(label.slice(0, 2));
+  const minute = Number(label.slice(3, 5));
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null;
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) return null;
+  return { ymd: formatYmd(instant, timeZone), minute: hour * 60 + minute };
+}
+
+/**
+ * Drag the top or bottom edge of a timed block. The edge stays on `ymd`.
+ * The bottom sets the exclusive end to the target quarter plus 15 minutes
+ * (23:45 ends at the next local midnight). The top sets the start to that
+ * quarter. The shorter end is 15 minutes.
+ */
+export function resizeTimedOccurrence(input: {
+  ymd: string;
+  startAt: string;
+  dueAt: string;
+  edge: 'start' | 'end';
+  hour: number;
+  minute: SlotMinute;
+  timeZone: string;
+}): ScheduleTimeChange | null {
+  if (!YMD.test(input.ymd)) return null;
+  const start = localMinute(input.startAt, input.timeZone);
+  const end = localMinute(input.dueAt, input.timeZone);
+  if (start === null || end === null) return null;
+  if (!Number.isInteger(input.hour) || input.hour < 0 || input.hour > 23) return null;
+  if (!isSlotMinute(input.minute)) return null;
+  const endAbs = dayIndex(end.ymd) * DAY_MINUTES + end.minute;
+  const startAbs = dayIndex(start.ymd) * DAY_MINUTES + start.minute;
+
+  if (input.edge === 'end') {
+    let endExclusive = minutesOf(input.hour, input.minute) + SLOT_MINUTES;
+    if (endExclusive > DAY_MINUTES) endExclusive = DAY_MINUTES;
+    if (dayIndex(input.ymd) * DAY_MINUTES + endExclusive < startAbs + SLOT_MINUTES) {
+      const minEnd =
+        start.ymd === input.ymd
+          ? Math.ceil((start.minute + SLOT_MINUTES) / SLOT_MINUTES) * SLOT_MINUTES
+          : SLOT_MINUTES;
+      if (minEnd > DAY_MINUTES) return null;
+      endExclusive = minEnd;
+    }
+    const dueAt =
+      endExclusive >= DAY_MINUTES
+        ? zonedLocalMidnightIso(addDaysYmd(input.ymd, 1), input.timeZone)
+        : zonedWallTimeIso(input.ymd, clock(endExclusive), input.timeZone);
+    if (sameInstant(dueAt, input.dueAt)) return null;
+    return { startAt: input.startAt, dueAt, isAllDay: false };
+  }
+
+  let startMinute = minutesOf(input.hour, input.minute);
+  const maxAbs = endAbs - SLOT_MINUTES;
+  const dayStart = dayIndex(input.ymd) * DAY_MINUTES;
+  if (dayStart + startMinute > maxAbs) {
+    if (maxAbs < dayStart) return null;
+    startMinute = Math.floor((maxAbs - dayStart) / SLOT_MINUTES) * SLOT_MINUTES;
+    if (startMinute < 0 || dayStart + startMinute + SLOT_MINUTES > endAbs) return null;
+  }
+  const startAt = zonedWallTimeIso(input.ymd, clock(startMinute), input.timeZone);
+  if (sameInstant(startAt, input.startAt)) return null;
+  return { startAt, dueAt: input.dueAt, isAllDay: false };
+}
+
+function quartersCovered(startMinute: number, endMinute: number): { start: number; end: number } | null {
+  if (endMinute <= startMinute) {
+    const slot = Math.floor(startMinute / SLOT_MINUTES) * SLOT_MINUTES;
+    if (slot < 0 || slot >= DAY_MINUTES) return null;
+    return { start: slot, end: slot };
+  }
+  const start = Math.floor(startMinute / SLOT_MINUTES) * SLOT_MINUTES;
+  const last = endMinute % SLOT_MINUTES === 0 ? endMinute - SLOT_MINUTES : Math.floor(endMinute / SLOT_MINUTES) * SLOT_MINUTES;
+  if (last < start) return { start, end: start };
+  return { start, end: Math.min(last, DAY_MINUTES - SLOT_MINUTES) };
+}
+
+function rangeFromQuarters(
+  ymd: string,
+  startMinute: number,
+  endMinute: number,
+  timeZone: string,
+): TimedCreateRange | null {
+  if (!isSlotMinute(startMinute % 60) || !isSlotMinute(endMinute % 60)) return null;
+  return timedRange(
+    ymd,
+    Math.floor(startMinute / 60),
+    (startMinute % 60) as SlotMinute,
+    Math.floor(endMinute / 60),
+    (endMinute % 60) as SlotMinute,
+    timeZone,
+  );
+}
+
+/** Quarter cells a moved or resized interval should highlight. */
+export function scheduleChangeHighlight(
+  change: ScheduleTimeChange,
+  timeZone: string,
+): ScheduleCreateRange[] {
+  if (change.isAllDay) {
+    const start = localMinute(change.startAt, timeZone);
+    const end = localMinute(change.dueAt, timeZone);
+    if (start === null || end === null) return [];
+    const range = allDayRange(start.ymd, end.ymd, timeZone);
+    return range === null ? [] : [range];
+  }
+  const start = localMinute(change.startAt, timeZone);
+  const end = localMinute(change.dueAt, timeZone);
+  if (start === null || end === null) return [];
+  if (end.ymd < start.ymd || (end.ymd === start.ymd && end.minute <= start.minute)) {
+    const slot = quartersCovered(start.minute, start.minute);
+    if (slot === null) return [];
+    const range = rangeFromQuarters(start.ymd, slot.start, slot.end, timeZone);
+    return range === null ? [] : [range];
+  }
+  const ranges: ScheduleCreateRange[] = [];
+  let ymd = start.ymd;
+  for (let guard = 0; ymd <= end.ymd && guard < 70; guard += 1) {
+    const dayStart = ymd === start.ymd ? start.minute : 0;
+    const dayEnd = ymd === end.ymd ? end.minute : DAY_MINUTES;
+    if (dayEnd > dayStart) {
+      const slot = quartersCovered(dayStart, dayEnd);
+      if (slot !== null) {
+        const range = rangeFromQuarters(ymd, slot.start, slot.end, timeZone);
+        if (range) ranges.push(range);
+      }
+    }
+    if (ymd === end.ymd) break;
+    ymd = addDaysYmd(ymd, 1);
+  }
+  return ranges;
 }

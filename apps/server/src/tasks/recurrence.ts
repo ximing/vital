@@ -69,6 +69,15 @@ export interface RecurrenceTask {
   title: string;
   priority: number;
   pinned: boolean;
+  /** Habit instance linkage. Absent on older callers means none. */
+  habitId?: string | null;
+  /**
+   * End of a device-calendar block. Absent means there is no separate end.
+   * Mirrors keep `startAt` and `dueAt` on the start instant.
+   */
+  calendarEndAt?: Date | null;
+  /** Device-calendar mirror key. Absent means this task is not a mirror. */
+  calendarKey?: string | null;
 }
 
 export interface CalendarInstance {
@@ -76,6 +85,10 @@ export interface CalendarInstance {
   listId: string;
   title: string;
   occurrenceAt: Date;
+  /** Later end of a timed block. Null for a point or an all-day occurrence. */
+  endsAt: Date | null;
+  habitId: string | null;
+  calendarKey: string | null;
   isAllDay: boolean;
   status: 'todo' | 'doing' | 'done' | 'canceled';
   priority: number;
@@ -481,21 +494,79 @@ function isAfterToday(task: RecurrenceTask, cursor: DateTime, now: DateTime): bo
   return cursor.toMillis() > now.toMillis();
 }
 
+function instanceFrom(
+  task: RecurrenceTask,
+  occurrenceAt: Date,
+  status: CalendarInstance['status'],
+  endsAt: Date | null,
+): CalendarInstance {
+  return {
+    taskId: task.id,
+    listId: task.listId,
+    title: task.title,
+    occurrenceAt,
+    endsAt,
+    habitId: task.habitId ?? null,
+    calendarKey: task.calendarKey ?? null,
+    isAllDay: task.isAllDay,
+    status,
+    priority: task.priority,
+    pinned: task.pinned,
+  };
+}
+
+/**
+ * Length of a timed block, and whether the recurrence instant is the start.
+ * Device mirrors store the end on `calendarEndAt` while `startAt` and `dueAt`
+ * stay on the start, so that instant is the block start. A user task with a
+ * later `dueAt` anchors recurrence on the due instant, so the block begins
+ * one duration earlier.
+ */
+function blockDuration(task: RecurrenceTask): { ms: number; fromStart: boolean } {
+  if (task.isAllDay) return { ms: 0, fromStart: true };
+  const start = task.startAt ?? task.dueAt;
+  if (!start) return { ms: 0, fromStart: true };
+  const mirror =
+    task.calendarEndAt !== null &&
+    task.calendarEndAt !== undefined &&
+    task.calendarEndAt.getTime() > start.getTime() &&
+    (task.dueAt === null || task.startAt === null || task.dueAt.getTime() === task.startAt.getTime());
+  if (mirror && task.calendarEndAt) {
+    return { ms: task.calendarEndAt.getTime() - start.getTime(), fromStart: true };
+  }
+  if (task.startAt && task.dueAt && task.dueAt.getTime() > task.startAt.getTime()) {
+    return { ms: task.dueAt.getTime() - task.startAt.getTime(), fromStart: false };
+  }
+  return { ms: 0, fromStart: true };
+}
+
+/** Place one recurrence instant on its timed block. All-day stays a point. */
+function spanAt(task: RecurrenceTask, occurrenceAt: Date): { start: Date; end: Date | null } {
+  const { ms, fromStart } = blockDuration(task);
+  if (task.isAllDay || ms === 0) return { start: occurrenceAt, end: null };
+  if (fromStart) return { start: occurrenceAt, end: new Date(occurrenceAt.getTime() + ms) };
+  return { start: new Date(occurrenceAt.getTime() - ms), end: occurrenceAt };
+}
+
+function oneShotBlock(task: RecurrenceTask): { start: Date; end: Date | null } | null {
+  const start = task.startAt ?? task.dueAt;
+  if (!start) return null;
+  const { ms, fromStart } = blockDuration(task);
+  if (ms === 0) return { start, end: null };
+  if (fromStart) return { start, end: new Date(start.getTime() + ms) };
+  return { start: task.startAt ?? start, end: task.dueAt };
+}
+
+function covers(start: Date, end: Date | null, fromUtc: Date, toUtc: Date): boolean {
+  const finish = end ?? start;
+  return start.getTime() <= toUtc.getTime() && finish.getTime() >= fromUtc.getTime();
+}
+
 function rowIfOverlaps(
   task: RecurrenceTask,
   fromUtc: Date,
   toUtc: Date,
 ): CalendarInstance[] {
-  const instants: Date[] = [];
-  if (task.dueAt && task.dueAt >= fromUtc && task.dueAt <= toUtc) instants.push(task.dueAt);
-  if (
-    task.startAt &&
-    task.startAt >= fromUtc &&
-    task.startAt <= toUtc &&
-    (task.dueAt === null || task.startAt.getTime() !== task.dueAt.getTime())
-  ) {
-    instants.push(task.startAt);
-  }
   const status =
     task.status === 'todo' ||
     task.status === 'doing' ||
@@ -503,16 +574,22 @@ function rowIfOverlaps(
     task.status === 'canceled'
       ? task.status
       : 'todo';
-  return instants.map((occurrenceAt) => ({
-    taskId: task.id,
-    listId: task.listId,
-    title: task.title,
-    occurrenceAt,
-    isAllDay: task.isAllDay,
-    status,
-    priority: task.priority,
-    pinned: task.pinned,
-  }));
+  if (task.isAllDay) {
+    const instants: Date[] = [];
+    if (task.dueAt && task.dueAt >= fromUtc && task.dueAt <= toUtc) instants.push(task.dueAt);
+    if (
+      task.startAt &&
+      task.startAt >= fromUtc &&
+      task.startAt <= toUtc &&
+      (task.dueAt === null || task.startAt.getTime() !== task.dueAt.getTime())
+    ) {
+      instants.push(task.startAt);
+    }
+    return instants.map((occurrenceAt) => instanceFrom(task, occurrenceAt, status, null));
+  }
+  const block = oneShotBlock(task);
+  if (block === null || !covers(block.start, block.end, fromUtc, toUtc)) return [];
+  return [instanceFrom(task, block.start, status, block.end)];
 }
 
 export function expandTask(
@@ -550,16 +627,8 @@ export function expandTask(
           : 'todo';
     } else if (isAfterToday(task, cursor, now)) status = 'todo';
     if (status === null) continue;
-    out.push({
-      taskId: task.id,
-      listId: task.listId,
-      title: task.title,
-      occurrenceAt: cursor.toJSDate(),
-      isAllDay: task.isAllDay,
-      status,
-      priority: task.priority,
-      pinned: task.pinned,
-    });
+    const span = spanAt(task, cursor.toJSDate());
+    out.push(instanceFrom(task, span.start, status, span.end));
   }
   return out;
 }
@@ -579,31 +648,17 @@ export async function expandFixedTask(
     (completion) => completion.occurrenceAt >= fromUtc && completion.occurrenceAt <= toUtc,
   );
   const doneAt = new Set(inRange.map((completion) => completion.occurrenceAt.getTime()));
-  const out: CalendarInstance[] = inRange.map((completion) => ({
-    taskId: task.id,
-    listId: task.listId,
-    title: task.title,
-    occurrenceAt: completion.occurrenceAt,
-    isAllDay: task.isAllDay,
-    status: 'done',
-    priority: task.priority,
-    pinned: task.pinned,
-  }));
+  const out: CalendarInstance[] = inRange.map((completion) => {
+    const span = spanAt(task, completion.occurrenceAt);
+    return instanceFrom(task, span.start, 'done', span.end);
+  });
   const dueMs = task.dueAt?.getTime();
   const resolved = await resolveChinaLookup(task, fromUtc, lookup, 401);
   let cursor = await firstFixedOccurrenceOnOrAfter(task, fromUtc, resolved);
   for (let count = 0; cursor !== null && cursor <= toUtc && count < 400; count += 1) {
     if (cursor >= fromUtc && !doneAt.has(cursor.getTime())) {
-      out.push({
-        taskId: task.id,
-        listId: task.listId,
-        title: task.title,
-        occurrenceAt: cursor,
-        isAllDay: task.isAllDay,
-        status: dueMs === cursor.getTime() ? status : 'todo',
-        priority: task.priority,
-        pinned: task.pinned,
-      });
+      const span = spanAt(task, cursor);
+      out.push(instanceFrom(task, span.start, dueMs === cursor.getTime() ? status : 'todo', span.end));
     }
     cursor = await nextFixedOccurrenceAfter(task, cursor, resolved);
   }

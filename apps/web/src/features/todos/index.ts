@@ -39,6 +39,7 @@ export {
   useDetailTask,
   useListsQuery,
   useTagsQuery,
+  useTaskQuery,
   useTasksQuery,
   useTodoActions,
 } from './queries';

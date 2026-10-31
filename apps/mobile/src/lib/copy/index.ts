@@ -24,6 +24,7 @@ import { threads } from './threads';
 import { activity } from './activity';
 import { memory } from './memory';
 import { me } from './me';
+import { schedule } from './schedule';
 import { loading } from './loading';
 import { offline } from './offline';
 import { back } from './back';
@@ -58,6 +59,7 @@ export const copy = {
   activity,
   memory,
   me,
+  schedule,
   loading,
   offline,
   back,

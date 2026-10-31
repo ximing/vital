@@ -27,6 +27,11 @@ vi.mock('@/api/client', async (importOriginal) => {
     ...actual,
     client: {
       listLists: vi.fn(),
+      listTags: vi.fn(),
+      listTasks: vi.fn(),
+      listOutcomes: vi.fn(),
+      listAgentActions: vi.fn(),
+      getTask: vi.fn(),
       calendar: vi.fn(),
       createTask: vi.fn(),
       createTaskFromText: vi.fn(),
@@ -39,6 +44,39 @@ const ZONE = 'Asia/Shanghai';
 const DASH = '\u2013';
 
 const world: { instances: CalendarInstance[]; title: string } = { instances: [], title: '' };
+
+const detailTask = {
+  id: 'old',
+  listId: 'inbox-1',
+  parentId: null,
+  outcomeId: null,
+  estimateMinutes: null,
+  deferCount: 0,
+  delegable: false,
+  habitId: null,
+  habitSeq: null,
+  title: '已有安排',
+  notes: '',
+  status: 'todo',
+  priority: 3,
+  pinned: false,
+  dueAt: null,
+  startAt: null,
+  reminderMode: 'none',
+  reminderOffsetMinutes: null,
+  reminderAt: null,
+  isAllDay: false,
+  timezone: ZONE,
+  recurrence: null,
+  recurrenceKind: null,
+  recurrenceDtstart: null,
+  completedAt: null,
+  sortOrder: 1,
+  tagIds: [],
+  deletedAt: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+} as Task;
 
 const inbox: List = {
   id: 'inbox-1',
@@ -145,6 +183,15 @@ function drag(from: Element, to: Element): void {
   pointer(to, 'pointerUp');
 }
 
+/** jsdom does not implement this. Blocks sit above the hour cells, so the gesture reads the stack. */
+function stubElementsFromPoint(stack: () => Element[]): () => void {
+  const previous = document.elementsFromPoint;
+  document.elementsFromPoint = () => stack();
+  return () => {
+    document.elementsFromPoint = typeof previous === 'function' ? previous : () => [];
+  };
+}
+
 function draftLabel(): string {
   return document.querySelector('[data-schedule-draft-range]')?.textContent ?? '';
 }
@@ -161,6 +208,11 @@ describe('schedule create gesture', () => {
     world.title = '';
     setAuthForTest(aiUser);
     vi.mocked(client.listLists).mockResolvedValue({ items: [inbox] });
+    vi.mocked(client.listTags).mockResolvedValue({ items: [] });
+    vi.mocked(client.listTasks).mockResolvedValue({ items: [], nextCursor: null });
+    vi.mocked(client.listOutcomes).mockResolvedValue([]);
+    vi.mocked(client.listAgentActions).mockResolvedValue([]);
+    vi.mocked(client.getTask).mockResolvedValue(detailTask);
     vi.mocked(client.calendar).mockImplementation(async () => ({
       instances: world.instances.map((item) => ({ ...item })),
     }));
@@ -170,6 +222,9 @@ describe('schedule create gesture', () => {
         listId: input.listId,
         title: input.title,
         occurrenceAt: input.startAt ?? input.dueAt ?? '',
+        endsAt: null,
+        habitId: null,
+        calendarKey: null,
         isAllDay: input.isAllDay === true,
         status: 'todo',
         priority: 3,
@@ -189,6 +244,9 @@ describe('schedule create gesture', () => {
         listId: 'inbox-1',
         title: world.title,
         occurrenceAt: startAt ?? dueAt ?? '',
+        endsAt: null,
+        habitId: null,
+        calendarKey: null,
         isAllDay: patch.isAllDay === true,
         status: 'todo',
         priority: 3,
@@ -404,6 +462,9 @@ describe('schedule create gesture', () => {
         listId: 'inbox-1',
         title: '已有安排',
         occurrenceAt: zonedWallTimeIso(ymd, '10:00:00', ZONE),
+        endsAt: null,
+        habitId: null,
+        calendarKey: null,
         isAllDay: false,
         status: 'todo',
         priority: 3,
@@ -421,6 +482,7 @@ describe('schedule create gesture', () => {
     expect(document.querySelector('[data-schedule-selected]')).toBeNull();
     expect(client.createTask).not.toHaveBeenCalled();
     expect(client.createTaskFromText).not.toHaveBeenCalled();
+    expect(client.patchTask).not.toHaveBeenCalled();
 
     const host = chip.closest('[data-schedule-day]');
     if (host === null) throw new Error('chip cell');
@@ -457,5 +519,261 @@ describe('schedule create gesture', () => {
         )?.textContent,
       ).toContain('买牛奶');
     });
+  });
+
+  it('opens the task detail when a title is clicked', async () => {
+    const user = userEvent.setup();
+    const ymd = startOfWeekYmd(todayYmd(ZONE), 1, ZONE);
+    world.instances = [
+      {
+        taskId: 'old',
+        listId: 'inbox-1',
+        title: '已有安排',
+        occurrenceAt: zonedWallTimeIso(ymd, '10:00:00', ZONE),
+        endsAt: null,
+        habitId: null,
+        calendarKey: null,
+        isAllDay: false,
+        status: 'todo',
+        priority: 3,
+        pinned: false,
+      },
+    ];
+    renderSchedule();
+    await user.click(await screen.findByRole('button', { name: '10:00 已有安排' }));
+    expect(await screen.findByRole('complementary', { name: '已有安排' })).toBeInTheDocument();
+    expect(client.getTask).toHaveBeenCalledWith('old');
+  });
+
+  it('draws a start-to-end block instead of a start chip', async () => {
+    const ymd = startOfWeekYmd(todayYmd(ZONE), 1, ZONE);
+    world.instances = [
+      {
+        taskId: 'span',
+        listId: 'inbox-1',
+        title: '评审',
+        occurrenceAt: zonedWallTimeIso(ymd, '14:00:00', ZONE),
+        endsAt: zonedWallTimeIso(ymd, '16:00:00', ZONE),
+        habitId: null,
+        calendarKey: null,
+        isAllDay: false,
+        status: 'todo',
+        priority: 3,
+        pinned: false,
+      },
+    ];
+    renderSchedule();
+    const block = await screen.findByRole('button', { name: '14:00–16:00 评审' });
+    expect(block).toHaveAttribute('data-schedule-span', `${14 * 60}-${16 * 60}`);
+    expect(
+      document.querySelector(
+        `[data-schedule-day="${ymd}"][data-schedule-hour="14"][data-schedule-minute="0"]`,
+      )?.textContent,
+    ).not.toContain('评审');
+  });
+
+  it('keeps the month overflow behind 查看更多', async () => {
+    const user = userEvent.setup();
+    const ymd = todayYmd(ZONE);
+    world.instances = ['甲', '乙', '丙', '丁'].map((title, index) => ({
+      taskId: title,
+      listId: 'inbox-1',
+      title,
+      occurrenceAt: zonedWallTimeIso(ymd, `${String(9 + index).padStart(2, '0')}:00:00`, ZONE),
+      endsAt: null,
+      habitId: title === '丁' ? 'habit-1' : null,
+      calendarKey: null,
+      isAllDay: false,
+      status: 'todo' as const,
+      priority: 3 as const,
+      pinned: false,
+    }));
+    renderSchedule();
+    await user.click(await screen.findByRole('button', { name: t.schedule.month }));
+    const cell = document.querySelector(`[data-schedule-date="${ymd}"]`);
+    expect(cell?.textContent).toContain('甲');
+    expect(cell?.textContent).toContain('乙');
+    expect(cell?.textContent).not.toContain('丙');
+    expect(cell?.textContent).not.toContain('丁');
+    await user.click(screen.getByRole('button', { name: t.schedule.more }));
+    const more = document.querySelector('[data-region="schedule-more"]');
+    expect(more?.textContent).toContain('丙');
+    expect(more?.textContent).toContain('丁');
+    expect(more?.textContent).not.toContain('甲');
+  });
+
+  it('moves a timed chip onto another quarter without creating', async () => {
+    const ymd = startOfWeekYmd(todayYmd(ZONE), 1, ZONE);
+    world.instances = [
+      {
+        taskId: 'old',
+        listId: 'inbox-1',
+        title: '已有安排',
+        occurrenceAt: zonedWallTimeIso(ymd, '10:00:00', ZONE),
+        endsAt: null,
+        habitId: null,
+        calendarKey: null,
+        isAllDay: false,
+        status: 'todo',
+        priority: 3,
+        pinned: false,
+      },
+    ];
+    renderSchedule();
+    const chip = await screen.findByRole('button', { name: '10:00 已有安排' });
+    const dest = document.querySelector(
+      `[data-schedule-day="${ymd}"][data-schedule-hour="11"][data-schedule-minute="15"]`,
+    );
+    if (dest === null) throw new Error('dest cell');
+    drag(chip, dest);
+    expect(client.createTask).not.toHaveBeenCalled();
+    expect(client.createTaskFromText).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: t.todos.quickCreate.title })).not.toBeInTheDocument();
+    // patchTask runs in the mutation microtask, after the pointer handler returns.
+    await waitFor(() => {
+      expect(client.patchTask).toHaveBeenCalledWith('old', {
+        startAt: zonedWallTimeIso(ymd, '11:15:00', ZONE),
+        dueAt: zonedWallTimeIso(ymd, '11:15:00', ZONE),
+        isAllDay: false,
+      });
+    });
+  });
+
+  it('moves a block to another day and resizes one edge', async () => {
+    const ymd = startOfWeekYmd(todayYmd(ZONE), 1, ZONE);
+    world.instances = [
+      {
+        taskId: 'span',
+        listId: 'inbox-1',
+        title: '评审',
+        occurrenceAt: zonedWallTimeIso(ymd, '14:00:00', ZONE),
+        endsAt: zonedWallTimeIso(ymd, '16:00:00', ZONE),
+        habitId: null,
+        calendarKey: null,
+        isAllDay: false,
+        status: 'todo',
+        priority: 3,
+        pinned: false,
+      },
+    ];
+    renderSchedule();
+    const block = await screen.findByRole('button', { name: '14:00–16:00 评审' });
+    const origin = slotCell(14, 0, 0);
+    const dest = slotCell(15, 30, 1);
+    const next = dest.dataset.scheduleDay ?? '';
+    let stack: Element[] = [origin];
+    const restore = stubElementsFromPoint(() => stack);
+    pointer(block, 'pointerDown');
+    stack = [dest];
+    pointer(dest, 'pointerMove');
+    pointer(dest, 'pointerUp');
+    restore();
+    await waitFor(() => {
+      expect(client.patchTask).toHaveBeenCalledWith('span', {
+        startAt: zonedWallTimeIso(next, '15:30:00', ZONE),
+        dueAt: zonedWallTimeIso(next, '17:30:00', ZONE),
+        isAllDay: false,
+      });
+    });
+    expect(client.createTask).not.toHaveBeenCalled();
+
+    vi.mocked(client.patchTask).mockClear();
+    const handle = document.querySelector('[data-schedule-resize="end"]');
+    if (handle === null) throw new Error('resize handle');
+    const endCell = slotCell(16, 45, 0);
+    const hideCells = stubElementsFromPoint(() => []);
+    pointer(handle, 'pointerDown');
+    pointer(endCell, 'pointerMove');
+    pointer(endCell, 'pointerUp');
+    hideCells();
+    await waitFor(() => {
+      expect(client.patchTask).toHaveBeenCalledWith('span', {
+        startAt: zonedWallTimeIso(ymd, '14:00:00', ZONE),
+        dueAt: zonedWallTimeIso(ymd, '17:00:00', ZONE),
+        isAllDay: false,
+      });
+    });
+  });
+
+  it('does not move a device-calendar mirror', async () => {
+    const ymd = startOfWeekYmd(todayYmd(ZONE), 1, ZONE);
+    world.instances = [
+      {
+        taskId: 'mirror',
+        listId: 'inbox-1',
+        title: '日历会议',
+        occurrenceAt: zonedWallTimeIso(ymd, '10:00:00', ZONE),
+        endsAt: null,
+        habitId: null,
+        calendarKey: 'mac:event-1',
+        isAllDay: false,
+        status: 'todo',
+        priority: 3,
+        pinned: false,
+      },
+    ];
+    renderSchedule();
+    const chip = await screen.findByRole('button', { name: '10:00 日历会议' });
+    const dest = document.querySelector(
+      `[data-schedule-day="${ymd}"][data-schedule-hour="11"][data-schedule-minute="0"]`,
+    );
+    if (dest === null) throw new Error('dest cell');
+    drag(chip, dest);
+    expect(client.patchTask).not.toHaveBeenCalled();
+    expect(client.createTask).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: t.todos.quickCreate.title })).not.toBeInTheDocument();
+  });
+
+  it('moves an all-day chip by a day', async () => {
+    const ymd = startOfWeekYmd(todayYmd(ZONE), 1, ZONE);
+    world.instances = [
+      {
+        taskId: 'day',
+        listId: 'inbox-1',
+        title: '读书',
+        occurrenceAt: new Date(`${ymd}T00:00:00+08:00`).toISOString(),
+        endsAt: null,
+        habitId: null,
+        calendarKey: null,
+        isAllDay: true,
+        status: 'todo',
+        priority: 3,
+        pinned: false,
+      },
+    ];
+    renderSchedule();
+    const chip = await screen.findByRole('button', { name: '读书' });
+    const from = chip.closest('[data-schedule-all-day]');
+    const cells = [...document.querySelectorAll<HTMLElement>('[data-schedule-all-day]')];
+    const index = from === null ? -1 : cells.indexOf(from as HTMLElement);
+    const to = cells[index + 1];
+    if (to === undefined) throw new Error('next all-day cell');
+    drag(chip, to);
+    const next = to.dataset.scheduleAllDay ?? '';
+    await waitFor(() => {
+      expect(client.patchTask).toHaveBeenCalledWith('day', {
+        startAt: new Date(`${next}T00:00:00+08:00`).toISOString(),
+        dueAt: new Date(`${next}T00:00:00+08:00`).toISOString(),
+        isAllDay: true,
+      });
+    });
+    expect(client.createTask).not.toHaveBeenCalled();
+  });
+
+  it('opens the day view from a month date', async () => {
+    const user = userEvent.setup();
+    renderSchedule();
+    await user.click(await screen.findByRole('button', { name: t.schedule.month }));
+    const ymd = todayYmd(ZONE);
+    const link = document.querySelector<HTMLElement>(`[data-schedule-day-link="${ymd}"]`);
+    if (link === null) throw new Error('day link');
+    await user.click(link);
+    expect(document.querySelector('[data-region="schedule"]')).toHaveAttribute('data-schedule-view', 'day');
+    expect(document.querySelector('[data-region="schedule-day"]')).not.toBeNull();
+    const columns = document.querySelectorAll(
+      `[data-schedule-hour="9"][data-schedule-minute="0"][data-schedule-day="${ymd}"]`,
+    );
+    expect(columns).toHaveLength(1);
+    expect(screen.getByRole('button', { name: t.schedule.day })).toHaveAttribute('aria-pressed', 'true');
   });
 });

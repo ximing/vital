@@ -93,7 +93,21 @@ export interface CalendarInstance {
   taskId: string;
   listId: string;
   title: string;
+  /** Block start, or the point in time when `endsAt` is null. */
   occurrenceAt: string;
+  /**
+   * End of a timed block. Null for a point in time or an all-day occurrence.
+   * A device-calendar mirror keeps `startAt` and `dueAt` on the start and
+   * stores this end separately; a user task uses `dueAt` when it is later.
+   */
+  endsAt: string | null;
+  /** Set when this occurrence is a habit instance. */
+  habitId: string | null;
+  /**
+   * Set when this occurrence mirrors a device calendar event.
+   * The schedule grid does not move or resize those rows.
+   */
+  calendarKey: string | null;
   isAllDay: boolean;
   status: TaskStatus;
   priority: TaskPriority;

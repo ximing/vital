@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  resizeTimedOccurrence,
+  scheduleChangeHighlight,
   scheduleDraftFromRange,
   scheduleGestureRange,
   scheduleRangeHitsCell,
   scheduleRangeLabel,
+  shiftAllDayOccurrence,
+  shiftTimedByDays,
+  shiftTimedOccurrence,
   type ScheduleCreateRange,
   type SlotMinute,
 } from '../../../src/features/schedule/gesture';
@@ -245,6 +250,127 @@ describe('scheduleGestureRange', () => {
     expect(
       scheduleGestureRange({ kind: 'item' }, { kind: 'day', ymd: '2026-10-30' }, ZONE),
     ).toBeNull();
+  });
+
+  it('moves a timed block by the quarter-hour delta, including another day', () => {
+    const origin = { kind: 'hour' as const, ymd: '2026-10-30', hour: 14, minute: 0 as const };
+    const same = shiftTimedOccurrence({
+      startAt: at('2026-10-30T14:07:00+08:00'),
+      dueAt: at('2026-10-30T16:07:00+08:00'),
+      origin,
+      target: origin,
+    });
+    expect(same).toBeNull();
+    const later = shiftTimedOccurrence({
+      startAt: at('2026-10-30T14:07:00+08:00'),
+      dueAt: at('2026-10-30T16:07:00+08:00'),
+      origin,
+      target: { kind: 'hour', ymd: '2026-10-30', hour: 15, minute: 0 },
+    });
+    expect(later).toEqual({
+      startAt: at('2026-10-30T15:07:00+08:00'),
+      dueAt: at('2026-10-30T17:07:00+08:00'),
+      isAllDay: false,
+    });
+    const nextDay = shiftTimedOccurrence({
+      startAt: at('2026-10-30T10:00:00+08:00'),
+      dueAt: at('2026-10-30T11:30:00+08:00'),
+      origin: { kind: 'hour', ymd: '2026-10-30', hour: 10, minute: 0 },
+      target: { kind: 'hour', ymd: '2026-10-31', hour: 11, minute: 15 },
+    });
+    expect(nextDay).toEqual({
+      startAt: at('2026-10-31T11:15:00+08:00'),
+      dueAt: at('2026-10-31T12:45:00+08:00'),
+      isAllDay: false,
+    });
+    const highlight = scheduleChangeHighlight(nextDay!, ZONE);
+    expect(
+      scheduleRangeHitsCell(highlight[0]!, { kind: 'hour', ymd: '2026-10-31', hour: 11, minute: 15 }),
+    ).toBe(true);
+    expect(
+      scheduleRangeHitsCell(highlight[0]!, { kind: 'hour', ymd: '2026-10-30', hour: 10, minute: 0 }),
+    ).toBe(false);
+  });
+
+  it('moves a month chip by whole days and an all-day span by its date delta', () => {
+    expect(
+      shiftTimedByDays({
+        startAt: at('2026-10-30T10:00:00+08:00'),
+        dueAt: at('2026-10-30T10:00:00+08:00'),
+        originYmd: '2026-10-30',
+        targetYmd: '2026-10-30',
+      }),
+    ).toBeNull();
+    expect(
+      shiftTimedByDays({
+        startAt: at('2026-10-30T10:00:00+08:00'),
+        dueAt: at('2026-10-30T11:30:00+08:00'),
+        originYmd: '2026-10-30',
+        targetYmd: '2026-11-01',
+      }),
+    ).toEqual({
+      startAt: at('2026-11-01T10:00:00+08:00'),
+      dueAt: at('2026-11-01T11:30:00+08:00'),
+      isAllDay: false,
+    });
+    expect(
+      shiftAllDayOccurrence({
+        startYmd: '2026-10-30',
+        endYmd: '2026-11-01',
+        originYmd: '2026-10-30',
+        targetYmd: '2026-10-31',
+        timeZone: ZONE,
+      }),
+    ).toEqual({
+      startAt: at('2026-10-31T00:00:00+08:00'),
+      dueAt: at('2026-11-02T00:00:00+08:00'),
+      isAllDay: true,
+    });
+  });
+
+  it('resizes one edge, keeps at least 15 minutes, and ends 23:45 at the next midnight', () => {
+    const block = {
+      ymd: '2026-10-30',
+      startAt: at('2026-10-30T14:00:00+08:00'),
+      dueAt: at('2026-10-30T16:00:00+08:00'),
+      timeZone: ZONE,
+    };
+    expect(resizeTimedOccurrence({ ...block, edge: 'end', hour: 15, minute: 45 })).toBeNull();
+    expect(resizeTimedOccurrence({ ...block, edge: 'end', hour: 16, minute: 45 })).toEqual({
+      startAt: block.startAt,
+      dueAt: at('2026-10-30T17:00:00+08:00'),
+      isAllDay: false,
+    });
+    expect(resizeTimedOccurrence({ ...block, edge: 'end', hour: 13, minute: 0 })).toEqual({
+      startAt: block.startAt,
+      dueAt: at('2026-10-30T14:15:00+08:00'),
+      isAllDay: false,
+    });
+    expect(resizeTimedOccurrence({ ...block, edge: 'start', hour: 15, minute: 0 })).toEqual({
+      startAt: at('2026-10-30T15:00:00+08:00'),
+      dueAt: block.dueAt,
+      isAllDay: false,
+    });
+    expect(resizeTimedOccurrence({ ...block, edge: 'start', hour: 16, minute: 0 })).toEqual({
+      startAt: at('2026-10-30T15:45:00+08:00'),
+      dueAt: block.dueAt,
+      isAllDay: false,
+    });
+    expect(
+      resizeTimedOccurrence({
+        ymd: '2026-10-30',
+        startAt: at('2026-10-30T23:00:00+08:00'),
+        dueAt: at('2026-10-30T23:30:00+08:00'),
+        edge: 'end',
+        hour: 23,
+        minute: 45,
+        timeZone: ZONE,
+      }),
+    ).toEqual({
+      startAt: at('2026-10-30T23:00:00+08:00'),
+      dueAt: at('2026-10-31T00:00:00+08:00'),
+      isAllDay: false,
+    });
   });
 
   it('rejects a minute that is not a quarter hour', () => {

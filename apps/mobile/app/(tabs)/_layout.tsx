@@ -1,4 +1,4 @@
-import { History, Inbox, ListChecks, Sun, User } from 'lucide-react-native';
+import { CalendarRange, History, Inbox, ListChecks, Sun, User } from 'lucide-react-native';
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,6 +46,15 @@ export default function TabsLayout() {
             title: copy.nav.todos,
             tabBarIcon: ({ focused, color }) => (
               <Icon icon={ListChecks} color={focused ? t.accentPrimary : color} size={22} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="schedule"
+          options={{
+            title: copy.nav.schedule,
+            tabBarIcon: ({ focused, color }) => (
+              <Icon icon={CalendarRange} color={focused ? t.accentPrimary : color} size={22} />
             ),
           }}
         />

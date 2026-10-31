@@ -20,6 +20,9 @@ export function toRecurrence(row: TaskRow): RecurrenceTask {
     status: row.status,
     priority: row.priority,
     pinned: row.pinned,
+    habitId: row.habitId,
+    calendarEndAt: row.calendarEndAt,
+    calendarKey: row.calendarKey,
   };
 }
 

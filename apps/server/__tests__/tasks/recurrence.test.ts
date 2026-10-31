@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   allDayDates,
   expandFixedTask,
+  expandTask,
   matchesAllDay,
   nextFixedOccurrenceAfter,
   nextAllDayAfter,
@@ -256,5 +257,94 @@ describe('fixed recurrence kinds', () => {
       '2026-09-30T01:00:00.000Z',
       '2026-10-02T01:00:00.000Z',
     ]);
+  });
+});
+
+describe('timed blocks', () => {
+  const zone = 'Asia/Shanghai';
+  const from = DateTime.fromISO('2026-10-26T00:00:00.000Z').toJSDate();
+  const to = DateTime.fromISO('2026-11-01T16:00:00.000Z').toJSDate();
+
+  function shot(partial: Partial<RecurrenceTask>): RecurrenceTask {
+    return {
+      id: 't1',
+      listId: 'l1',
+      title: '评审',
+      timezone: zone,
+      isAllDay: false,
+      dueAt: null,
+      startAt: null,
+      recurrenceRrule: null,
+      recurrenceDtstart: null,
+      status: 'todo',
+      priority: 3,
+      pinned: false,
+      habitId: null,
+      calendarEndAt: null,
+      ...partial,
+    };
+  }
+
+  it('keeps one block from startAt to a later dueAt', () => {
+    const start = DateTime.fromISO('2026-10-30T09:00:00', { zone }).toJSDate();
+    const due = DateTime.fromISO('2026-10-30T11:00:00', { zone }).toJSDate();
+    const instances = expandTask(
+      shot({ startAt: start, dueAt: due, habitId: 'habit-1' }),
+      [],
+      from,
+      to,
+    );
+    expect(instances).toHaveLength(1);
+    expect(instances[0]?.occurrenceAt.toISOString()).toBe(start.toISOString());
+    expect(instances[0]?.endsAt?.toISOString()).toBe(due.toISOString());
+    expect(instances[0]?.habitId).toBe('habit-1');
+    expect(instances[0]?.calendarKey).toBeNull();
+  });
+
+  it('uses calendarEndAt when start and due are the same instant', () => {
+    const start = DateTime.fromISO('2026-10-30T14:00:00', { zone }).toJSDate();
+    const end = DateTime.fromISO('2026-10-30T15:30:00', { zone }).toJSDate();
+    const instances = expandTask(
+      shot({ startAt: start, dueAt: start, calendarEndAt: end, calendarKey: 'mac:event-1' }),
+      [],
+      from,
+      to,
+    );
+    expect(instances).toHaveLength(1);
+    expect(instances[0]?.occurrenceAt.toISOString()).toBe(start.toISOString());
+    expect(instances[0]?.endsAt?.toISOString()).toBe(end.toISOString());
+    expect(instances[0]?.calendarKey).toBe('mac:event-1');
+  });
+
+  it('leaves a point occurrence when there is no later end', () => {
+    const due = DateTime.fromISO('2026-10-30T18:00:00', { zone }).toJSDate();
+    const instances = expandTask(shot({ dueAt: due }), [], from, to);
+    expect(instances).toHaveLength(1);
+    expect(instances[0]?.occurrenceAt.toISOString()).toBe(due.toISOString());
+    expect(instances[0]?.endsAt).toBeNull();
+  });
+
+  it('shifts each daily occurrence back by the start-to-due duration', () => {
+    const due = DateTime.fromISO('2099-10-30T11:00:00', { zone }).toJSDate();
+    const start = DateTime.fromISO('2099-10-30T09:00:00', { zone }).toJSDate();
+    const instances = expandTask(
+      shot({
+        startAt: start,
+        dueAt: due,
+        recurrenceRrule: 'FREQ=DAILY',
+        recurrenceDtstart: due,
+      }),
+      [],
+      DateTime.fromISO('2099-10-29T16:00:00.000Z').toJSDate(),
+      DateTime.fromISO('2099-11-01T16:00:00.000Z').toJSDate(),
+    );
+    const friday = instances.find((item) => item.endsAt?.toISOString() === due.toISOString());
+    expect(friday?.occurrenceAt.toISOString()).toBe(start.toISOString());
+    const saturdayDue = DateTime.fromISO('2099-10-31T11:00:00', { zone }).toJSDate();
+    const saturdayStart = DateTime.fromISO('2099-10-31T09:00:00', { zone }).toJSDate();
+    const saturday = instances.find(
+      (item) => item.endsAt?.toISOString() === saturdayDue.toISOString(),
+    );
+    expect(saturday?.occurrenceAt.toISOString()).toBe(saturdayStart.toISOString());
   });
 });

@@ -12,6 +12,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -234,6 +235,20 @@ export async function calendar(userId: string, query: CalendarQuery): Promise<Ca
           isNotNull(tasks.recurrenceKind),
           and(isNotNull(tasks.dueAt), gte(tasks.dueAt, from), lte(tasks.dueAt, to)),
           and(isNotNull(tasks.startAt), gte(tasks.startAt, from), lte(tasks.startAt, to)),
+          and(
+            isNotNull(tasks.calendarEndAt),
+            gte(tasks.calendarEndAt, from),
+            lte(tasks.calendarEndAt, to),
+          ),
+          // A block that starts before the window and ends after it still covers the window.
+          and(
+            isNotNull(tasks.startAt),
+            lt(tasks.startAt, from),
+            or(
+              and(isNotNull(tasks.dueAt), gt(tasks.dueAt, from)),
+              and(isNotNull(tasks.calendarEndAt), gt(tasks.calendarEndAt, from)),
+            ),
+          ),
         ),
       ),
     )
@@ -287,6 +302,9 @@ export async function calendar(userId: string, query: CalendarQuery): Promise<Ca
         listId: inst.listId,
         title: inst.title,
         occurrenceAt: inst.occurrenceAt.toISOString(),
+        endsAt: inst.endsAt?.toISOString() ?? null,
+        habitId: inst.habitId,
+        calendarKey: inst.calendarKey,
         isAllDay: inst.isAllDay,
         status: inst.status,
         priority: asPriority(inst.priority),
