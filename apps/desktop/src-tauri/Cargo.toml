@@ -1,6 +1,6 @@
 [package]
 name = "vital"
-version = "0.0.0"
+version = "0.34.0"
 description = "Vital desktop"
 authors = ["Vital"]
 edition = "2021"

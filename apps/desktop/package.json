@@ -1,6 +1,6 @@
 {
   "name": "@vital/desktop",
-  "version": "0.0.0",
+  "version": "0.34.0",
   "private": true,
   "type": "module",
   "description": "Tauri 2 shell that opens the Vital site. Login is the site cookie, same as the browser.",
