@@ -109,6 +109,11 @@ function Block({
 }) {
   const day = 24 * 60;
   const movable = !block.locked;
+  // 一行刻槽 min-h-6（24px / 15min ≈ 1.6px/min），caption leading-tight ≈ 15px/行，py-0.5 上下共 4px。
+  // 按纵向空间估算可放下的行数：够两行以上时把时间标签单独成行、标题多行铺开，不再一行省略。
+  const durationMin = block.endMinute - block.startMinute;
+  const lines = Math.max(1, Math.floor((durationMin * 1.6 - 4) / 15));
+  const stacked = lines >= 2;
   return (
     <div
       data-schedule-task={block.taskId}
@@ -132,15 +137,34 @@ function Block({
         data-schedule-title={block.title}
         data-schedule-span={`${block.startMinute}-${block.endMinute}`}
         aria-label={`${block.timeLabel} ${block.title}`}
-        className={`block h-full w-full truncate px-1 py-0.5 text-left ${movable ? 'cursor-grab' : ''}`}
+        className={`block h-full w-full px-1 py-0.5 text-left ${stacked ? 'overflow-hidden' : 'truncate'} ${movable ? 'cursor-grab' : ''}`}
         onClick={(event) => {
           event.stopPropagation();
           if (consumeMoved()) return;
           onOpen(block.taskId);
         }}
       >
-        <span className="mr-1 font-mono text-muted">{block.timeLabel}</span>
-        {block.title}
+        {stacked ? (
+          <>
+            <span className="block truncate font-mono text-muted">{block.timeLabel}</span>
+            <span
+              className="mt-0.5 block break-words"
+              style={{
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: lines - 1,
+                overflow: 'hidden',
+              }}
+            >
+              {block.title}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="mr-1 font-mono text-muted">{block.timeLabel}</span>
+            {block.title}
+          </>
+        )}
       </button>
       {movable && block.resizeStart ? (
         <div
