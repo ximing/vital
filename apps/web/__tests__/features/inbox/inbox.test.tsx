@@ -657,6 +657,35 @@ describe('inbox workspace', () => {
     expect(await screen.findByRole('link', { name: 'https://example.com/a' })).toBeInTheDocument();
   });
 
+  it('saves a note instead of extracting it as a link', async () => {
+    const created = makeItem({
+      id: 'i-note',
+      title: '明天去超市买牛奶',
+      originalUrl: null,
+      canonicalUrl: null,
+      extractedText: null,
+      contentJson: null,
+      excerpt: null,
+      siteName: null,
+      source: 'manual',
+    });
+    vi.mocked(client.createInbox).mockResolvedValue(created);
+    vi.mocked(client.getInbox).mockResolvedValue(created);
+    const user = userEvent.setup();
+    renderAt('/inbox');
+    await user.click((await screen.findAllByRole('button', { name: t.inbox.pasteUrl }))[0]!);
+    await screen.findByLabelText(t.inbox.pastePlaceholder);
+    await user.type(screen.getByLabelText(t.inbox.pastePlaceholder), '明天去超市买牛奶');
+    await user.click(screen.getByRole('button', { name: t.inbox.extract }));
+    await waitFor(() => {
+      expect(client.createInbox).toHaveBeenCalledWith({
+        title: '明天去超市买牛奶',
+        source: 'manual',
+      });
+    });
+    expect(client.extractInbox).not.toHaveBeenCalled();
+  });
+
   it('keeps the list mounted when opening a reader and returning', async () => {
     const item = makeItem({ id: 'i1', title: '未读文章' });
     vi.mocked(client.listInbox).mockResolvedValue({ items: [item], nextCursor: null });

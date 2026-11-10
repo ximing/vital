@@ -19,6 +19,15 @@ export type PendingSave = {
   preview: InboxPreview | null;
 };
 
+/**
+ * Bare token worth prefixing with `https://`.
+ * Zod's URL parser accepts any single label (`https://买菜`, `https://hello`),
+ * so a note must not reach that check. A host has a dotted name with a letter
+ * TLD, an IPv4 address, or `localhost`.
+ */
+const BARE_WEB_HOST =
+  /^(?:[^\s/@]+@)?(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|(?:[\p{L}\p{N}-]+\.)+\p{L}{2,}\.?)(?::\d{1,5})?(?:[/?#]\S*)?$/iu;
+
 export function normalizePasteUrl(raw: string): string | null {
   const trimmed = raw.trim();
   if (trimmed === '') return null;
@@ -26,10 +35,10 @@ export function normalizePasteUrl(raw: string): string | null {
   if (scheme) {
     const name = scheme[1]?.toLowerCase();
     if (name !== 'http' && name !== 'https') return null;
+    const direct = extractInboxInputSchema.safeParse({ url: trimmed });
+    return direct.success ? direct.data.url : null;
   }
-  const direct = extractInboxInputSchema.safeParse({ url: trimmed });
-  if (direct.success) return direct.data.url;
-  if (trimmed.includes(' ') || trimmed.includes('\n')) return null;
+  if (!BARE_WEB_HOST.test(trimmed)) return null;
   const withProto = extractInboxInputSchema.safeParse({ url: `https://${trimmed}` });
   return withProto.success ? withProto.data.url : null;
 }

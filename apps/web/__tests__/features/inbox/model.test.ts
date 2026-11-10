@@ -46,8 +46,20 @@ describe('normalizePasteUrl', () => {
   it('accepts http(s) and fills https for bare hosts', () => {
     expect(normalizePasteUrl('https://Example.com/a')).toBe('https://Example.com/a');
     expect(normalizePasteUrl('example.com/a')).toBe('https://example.com/a');
+    expect(normalizePasteUrl('example.com')).toBe('https://example.com');
+    expect(normalizePasteUrl('www.example.com/path?q=1')).toBe('https://www.example.com/path?q=1');
+    expect(normalizePasteUrl('例子.中国')).toBe('https://例子.中国');
+    expect(normalizePasteUrl('localhost')).toBe('https://localhost');
+    expect(normalizePasteUrl('192.168.1.1')).toBe('https://192.168.1.1');
     expect(normalizePasteUrl('file:///etc/passwd')).toBeNull();
     expect(normalizePasteUrl('just a note')).toBeNull();
+  });
+
+  it('keeps a note even when it has no spaces', () => {
+    expect(normalizePasteUrl('明天去超市买牛奶')).toBeNull();
+    expect(normalizePasteUrl('买菜')).toBeNull();
+    expect(normalizePasteUrl('hello')).toBeNull();
+    expect(normalizePasteUrl('明天3.14去')).toBeNull();
   });
 });
 
