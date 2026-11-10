@@ -66,6 +66,11 @@ export class S3UnifiedStorageAdapter extends BaseUnifiedStorageAdapter {
         secretAccessKey: cfg.secretAccessKey,
       };
     }
+    // SDK >= 3.729 默认 WHEN_SUPPORTED,presign UploadPart/PutObject 时会把
+    // 空 body 的 CRC32 写进预签名 URL query,RustFS 按 body 校验会直接
+    // 400 BadDigest。presign 场景必须回退为 WHEN_REQUIRED。
+    clientConfig.requestChecksumCalculation = 'WHEN_REQUIRED';
+    clientConfig.responseChecksumValidation = 'WHEN_REQUIRED';
     this.client = new S3Client(clientConfig);
     logger.info(
       `S3 adapter initialized: bucket=${this.bucket} prefix=${this.prefix} endpoint=${this.endpoint ?? 'AWS'} isPublic=${String(this.isPublic)}`,
