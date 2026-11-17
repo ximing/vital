@@ -40,6 +40,8 @@ export class TodayService extends Service {
   clock = new Date();
 
   private hasData = false;
+  /** Bumped on a local habit write so an older reload cannot roll the lane back. */
+  private habitsRevision = 0;
   private readonly runLoad = createCoalescedRunner();
   private unsubSync: (() => void) | null = null;
   private unsubTasks: (() => void) | null = null;
@@ -142,6 +144,7 @@ export class TodayService extends Service {
   async load(isRefresh = false): Promise<void> {
     const refresh = isRefresh;
     await this.runLoad(async () => {
+      const habitsRevision = this.habitsRevision;
       if (refresh) this.refreshing = true;
       else if (!this.hasData) this.loading = true;
       try {
@@ -155,7 +158,7 @@ export class TodayService extends Service {
         ]);
         this.dashboard = nextDashboard;
         if (upcoming) this.upcomingTasks = upcoming.items;
-        this.habits = nextHabits;
+        if (habitsRevision === this.habitsRevision) this.habits = nextHabits;
         this.lists = listRes.items;
         this.tags = tagRes.items;
         this.proposals = actions.filter((item) => item.feedback === 'pending');
@@ -204,20 +207,26 @@ export class TodayService extends Service {
     const open = habitTodayTask(this.dashboard?.tasks ?? [], habit.id);
     if (open !== null) {
       this.noteHabitTick(habit.id);
-      const ok = await this.completeTask(open);
-      if (!ok) this.noteHabitTick(habit.id, -1);
-      return;
+      const ok = await this.completeTask(open, { reload: false });
+      if (!ok) {
+        this.noteHabitTick(habit.id, -1);
+        return;
+      }
+    } else {
+      try {
+        const next = await client.tickHabit(habit.id);
+        this.replaceHabit(next);
+      } catch (err) {
+        toast(humanError(err));
+        return;
+      }
     }
-    try {
-      const next = await client.tickHabit(habit.id);
-      this.habits = this.habits.map((row) => (row.id === next.id ? next : row));
-      await this.refresh();
-    } catch (err) {
-      toast(humanError(err));
-    }
+    // The ring spinner awaits this method. A today reload must not keep it spinning
+    // after the check-in has already succeeded, and must not drive the pull-to-refresh indicator.
+    void this.load(false);
   }
 
-  async completeTask(task: Task): Promise<boolean> {
+  async completeTask(task: Task, opts?: { reload?: boolean }): Promise<boolean> {
     let ok = false;
     await toggleComplete(
       task,
@@ -227,15 +236,21 @@ export class TodayService extends Service {
       },
       { user: this.auth.user, refreshUser: (next) => this.auth.refreshUser(next) },
     );
-    if (ok) await this.refresh();
+    if (ok && opts?.reload !== false) await this.refresh();
     return ok;
   }
 
   /** Move the lane immediately. A later reload replaces this with the server count. */
   private noteHabitTick(id: string, delta = 1): void {
+    this.habitsRevision += 1;
     this.habits = this.habits.map((row) =>
       row.id === id ? { ...row, todayDone: Math.max(0, row.todayDone + delta) } : row,
     );
+  }
+
+  private replaceHabit(next: Habit): void {
+    this.habitsRevision += 1;
+    this.habits = this.habits.map((row) => (row.id === next.id ? next : row));
   }
 
   async postponeOverdue(): Promise<void> {

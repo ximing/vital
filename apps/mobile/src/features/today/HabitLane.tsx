@@ -50,14 +50,23 @@ function HabitRing({
 }) {
   if (complete) {
     return (
-      <View style={[ringStyles.fill, { backgroundColor: fillBg }]}>
+      <View collapsable={false} style={[ringStyles.fill, { backgroundColor: fillBg }]}>
         <Icon icon={Check} size={14} strokeWidth={3} color={fillFg} />
+      </View>
+    );
+  }
+  // Own view, not an overlay: Android can leave a native spinner up after the
+  // indicator unmounts on top of the ring.
+  if (pending) {
+    return (
+      <View collapsable={false} style={ringStyles.box}>
+        <ActivityIndicator size="small" color={color} />
       </View>
     );
   }
   const progress = total > 0 ? Math.min(done / total, 1) : 0;
   return (
-    <View style={ringStyles.box}>
+    <View collapsable={false} style={ringStyles.box}>
       <Svg width={RING} height={RING} style={ringStyles.svg}>
         <Circle
           cx={RING / 2}
@@ -81,7 +90,6 @@ function HabitRing({
           />
         ) : null}
       </Svg>
-      {pending ? <ActivityIndicator size="small" color={color} style={ringStyles.spinner} /> : null}
     </View>
   );
 }
@@ -275,13 +283,6 @@ const createStyles = (t: Theme) =>
 const ringStyles = StyleSheet.create({
   box: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
   svg: { transform: [{ rotate: '-90deg' }] },
-  spinner: {
-    position: 'absolute',
-    width: RING,
-    height: RING,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   fill: {
     width: RING,
     height: RING,
