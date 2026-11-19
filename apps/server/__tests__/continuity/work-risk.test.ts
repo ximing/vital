@@ -27,6 +27,14 @@ function shanghai(iso: string): Date {
   return DateTime.fromISO(iso, { zone: TZ }).toJSDate();
 }
 
+// List hides a candidate 7 days after the recompute instant. Keep that instant
+// on the latest local 10:00 so the same-day 18:00 due is still inside the window.
+function openRiskClock(now = DateTime.now().setZone(TZ)): { now: Date; due: Date } {
+  let morning = now.set({ hour: 10, minute: 0, second: 0, millisecond: 0 });
+  if (morning.toMillis() > now.toMillis()) morning = morning.minus({ days: 1 });
+  return { now: morning.toJSDate(), due: morning.set({ hour: 18 }).toJSDate() };
+}
+
 let app: FastifyInstance;
 
 beforeAll(async () => {
@@ -349,8 +357,7 @@ describe('continuity dependencies and work-risk', () => {
     const alice = await registerUser(app, 'alice');
     const outcomeId = await createOutcome(alice.token);
     const contract = await activate(alice.token, outcomeId);
-    const due = shanghai('2026-10-30T18:00:00');
-    const now = shanghai('2026-10-30T10:00:00');
+    const { now, due } = openRiskClock();
     const remaining = await createTask(alice.token, {
       title: '写验收说明',
       outcomeId,

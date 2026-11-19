@@ -25,9 +25,30 @@ import { injectJson } from '../helpers/http.js';
 import { registerUser } from '../helpers/session.js';
 
 const TZ = 'Asia/Shanghai';
-const MONDAY = DateTime.fromISO('2026-10-26T00:00:00', { zone: TZ }).toJSDate();
-const FRIDAY = DateTime.fromISO('2026-10-30T20:00:00', { zone: TZ }).toJSDate();
-const THURSDAY_SLOT = DateTime.fromISO('2026-10-29T20:30:00', { zone: TZ }).toJSDate();
+
+// The list route compares expiresAt to the wall clock. A candidate lives 7 days
+// from the recompute instant, so the Friday anchor has to stay inside that window.
+function deliveryAnchor(now = DateTime.now().setZone(TZ)) {
+  let friday = now.set({ hour: 20, minute: 0, second: 0, millisecond: 0 });
+  friday = friday.minus({ days: (friday.weekday + 7 - 5) % 7 });
+  if (friday.toMillis() > now.toMillis()) friday = friday.minus({ weeks: 1 });
+  if (friday.plus({ days: 7 }).toMillis() < now.plus({ days: 3 }).toMillis()) {
+    friday = friday.plus({ weeks: 1 });
+  }
+  const thursday = friday.minus({ days: 1 }).set({
+    hour: 20,
+    minute: 30,
+    second: 0,
+    millisecond: 0,
+  });
+  return {
+    monday: friday.minus({ days: 4 }).startOf('day').toJSDate(),
+    friday: friday.toJSDate(),
+    thursdaySlot: thursday.toJSDate(),
+  };
+}
+
+const { monday: MONDAY, friday: FRIDAY, thursdaySlot: THURSDAY_SLOT } = deliveryAnchor();
 
 const TIMED_ACTIVATE = {
   timezone: TZ,
