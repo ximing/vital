@@ -90,6 +90,27 @@ function AccountSectionContent() {
           </Button>
         </div>
       </form>
+      {page.oidcEnabled ? (
+        <div className="flex max-w-2xl flex-col gap-3">
+          {page.oidcError ? <Banner>{page.oidcError}</Banner> : null}
+          {page.emailSynthetic ? (
+            <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+              {t.settings.oidcSynthetic}
+            </p>
+          ) : null}
+          {page.oidcLinked ? (
+            <p className="text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+              {t.settings.oidcLinked}
+            </p>
+          ) : (
+            <div>
+              <Button type="button" variant="ghost" onClick={() => page.startOidcBind()}>
+                {t.settings.oidcBind}
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -39,6 +39,9 @@ Every error response is `{ "error": { "code": string, "message": string, "detail
 | `COMPLETION_NOT_LATEST` | 只能撤销最近一次完成 |
 | `EMAIL_ALREADY_REGISTERED` | 邮箱已注册 |
 | `INVALID_OLD_PASSWORD` | 原密码错误 |
+| `PASSWORD_NOT_SET` | 此账号没有本地密码 |
+| `OIDC_EMAIL_EXISTS` | 该邮箱已存在，请使用统一账号登录 |
+| `OIDC_PROVISION_FAILED` | 暂时无法开通统一账号，请稍后再试 |
 | `AUTH_CODE_INVALID` | 授权码无效或已过期 |
 | `QR_LOGIN_INVALID` | 二维码无效或已过期 |
 | `ATTACHMENT_NOT_FOUND` | 附件不存在 |

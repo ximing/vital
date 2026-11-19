@@ -16,6 +16,7 @@ vi.mock('@/api/client', async (importOriginal) => {
       createQrLogin: vi.fn(),
       pollQrLogin: vi.fn(),
       login: vi.fn(),
+      getOidcStatus: vi.fn(),
     },
   };
 });
@@ -60,6 +61,8 @@ describe('LoginPage QR', () => {
     }
     vi.mocked(client.createQrLogin).mockResolvedValue(ticket);
     vi.mocked(client.pollQrLogin).mockResolvedValue({ status: 'pending' });
+    vi.mocked(client.getOidcStatus).mockResolvedValue({ enabled: false });
+    delete window.__VITAL_HOST__;
   });
 
   it('shows a login QR and asks for a phone confirm after the scan', async () => {
@@ -94,5 +97,42 @@ describe('LoginPage QR', () => {
       </RabRoot>,
     );
     expect(await screen.findByText('已登录')).toBeInTheDocument();
+  });
+
+  it('shows unified login beside the password form when the server enables it', async () => {
+    vi.mocked(client.getOidcStatus).mockResolvedValue({ enabled: true });
+    render(
+      <RabRoot>
+        <MemoryRouter>
+          <LoginPage />
+        </MemoryRouter>
+      </RabRoot>,
+    );
+    expect(await screen.findByRole('button', { name: t.auth.oidcLogin })).toBeInTheDocument();
+    expect(screen.getByLabelText(t.auth.password)).toBeInTheDocument();
+    expect(screen.getByText(t.auth.oidcHint)).toBeInTheDocument();
+  });
+
+  it('hides unified login in the desktop shell', async () => {
+    vi.mocked(client.getOidcStatus).mockResolvedValue({ enabled: true });
+    window.__VITAL_HOST__ = {
+      kind: 'desktop',
+      applyChrome: () => undefined,
+      showStickyAlert: () => undefined,
+      listenStickyAlerts: () => Promise.resolve(() => undefined),
+      closeStickyAlert: () => undefined,
+      openInMain: () => undefined,
+      hideMain: () => undefined,
+    };
+    render(
+      <RabRoot>
+        <MemoryRouter>
+          <LoginPage />
+        </MemoryRouter>
+      </RabRoot>,
+    );
+    expect(await screen.findByLabelText(t.auth.password)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t.auth.oidcLogin })).not.toBeInTheDocument();
+    expect(client.getOidcStatus).not.toHaveBeenCalled();
   });
 });

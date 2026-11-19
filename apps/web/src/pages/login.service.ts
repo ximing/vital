@@ -2,7 +2,9 @@ import { loginInputSchema, type QrLoginTicket } from '@vital/dto';
 import { Service } from '@rabjs/react';
 import { client } from '@/api/client';
 import { t } from '@/copy';
+import { isDesktopHost } from '@/host';
 import { humanError } from '@/lib/errors';
+import { oidcErrorText } from '@/lib/oidc-error-text';
 import { AuthService } from '@/services/auth.service';
 import { afterAuthPath } from '@/shell/require-auth';
 
@@ -22,6 +24,8 @@ export class LoginPageService extends Service {
   ticket: QrLoginTicket | null = null;
   qrStatus: QrLoginPhase = 'loading';
   qrError: string | null = null;
+  oidcEnabled = false;
+  oidcError: string | null = null;
   private qrLock = false;
 
   get auth(): AuthService {
@@ -105,6 +109,27 @@ export class LoginPageService extends Service {
     this.errors = {};
     this.formError = null;
     return true;
+  }
+
+  async loadOidc(): Promise<void> {
+    if (isDesktopHost()) {
+      this.oidcEnabled = false;
+      return;
+    }
+    try {
+      this.oidcEnabled = (await client.getOidcStatus()).enabled;
+    } catch {
+      this.oidcEnabled = false;
+    }
+  }
+
+  noteOidcError(code: string | null): void {
+    this.oidcError = oidcErrorText(code);
+  }
+
+  startOidc(returnTo: string | undefined): void {
+    const safe = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/';
+    window.location.assign(`/api/auth/oidc/start?return=${encodeURIComponent(safe)}`);
   }
 
   async login(from: string | undefined): Promise<string | null> {

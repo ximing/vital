@@ -20,9 +20,14 @@ function qrHint(status: QrLoginPhase): string {
 function LoginPageContent() {
   const page = useService(LoginPageService);
   const navigate = useNavigate();
-  const location = useLocation() as { state?: { from?: string } };
+  const location = useLocation() as { state?: { from?: string }; search: string };
   const from = location.state?.from;
   const submitting = page.$model.login.loading;
+
+  useEffect(() => {
+    page.noteOidcError(new URLSearchParams(location.search).get('oidc_error'));
+    void page.loadOidc();
+  }, [page, location.search]);
 
   useEffect(() => {
     let stopped = false;
@@ -99,6 +104,17 @@ function LoginPageContent() {
           {submitting ? t.auth.loggingIn : t.auth.loginSubmit}
         </Button>
       </form>
+      {page.oidcEnabled ? (
+        <div className="mt-4 flex flex-col gap-3">
+          {page.oidcError ? <Banner>{page.oidcError}</Banner> : null}
+          <Button type="button" variant="ghost" className="w-full" onClick={() => page.startOidc(from)}>
+            {t.auth.oidcLogin}
+          </Button>
+          <p className="text-center text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
+            {t.auth.oidcHint}
+          </p>
+        </div>
+      ) : null}
       <p className="mt-5 text-center text-[length:var(--text-meta)] leading-[var(--text-meta-lh)] text-muted">
         {t.auth.noAccount}{' '}
         <Link

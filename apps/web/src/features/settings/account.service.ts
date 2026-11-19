@@ -1,13 +1,19 @@
 import { IMAGE_MIME_TYPES } from '@vital/dto';
 import { Service } from '@rabjs/react';
 import { client } from '@/api/client';
+import { isDesktopHost } from '@/host';
 import { humanError } from '@/lib/errors';
+import { oidcErrorText } from '@/lib/oidc-error-text';
 import { AuthService } from '@/services/auth.service';
 
 export class AccountSectionService extends Service {
   displayName = '';
   error: string | null = null;
   avatarFailed = false;
+  oidcEnabled = false;
+  oidcLinked = false;
+  emailSynthetic = false;
+  oidcError: string | null = null;
   private primed = false;
 
   get auth(): AuthService {
@@ -17,7 +23,28 @@ export class AccountSectionService extends Service {
   prime(): void {
     if (this.primed) return;
     this.displayName = this.auth.user?.displayName ?? '';
+    this.oidcError = oidcErrorText(new URLSearchParams(window.location.search).get('oidc_error'));
     this.primed = true;
+    void this.loadOidc();
+  }
+
+  async loadOidc(): Promise<void> {
+    if (isDesktopHost()) {
+      this.oidcEnabled = false;
+      return;
+    }
+    try {
+      const account = await client.getOidcAccount();
+      this.oidcEnabled = account.enabled;
+      this.oidcLinked = account.linked;
+      this.emailSynthetic = account.emailSynthetic;
+    } catch {
+      this.oidcEnabled = false;
+    }
+  }
+
+  startOidcBind(): void {
+    window.location.assign(`/api/v1/auth/oidc/bind/start?return=${encodeURIComponent('/settings')}`);
   }
 
   setDisplayName(value: string): void {

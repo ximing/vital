@@ -21,7 +21,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { isUniqueViolation } from '../db/pg.js';
-import { extensionAuthCodes, lists, users, type User } from '../db/schema.js';
+import { extensionAuthCodes, lists, oidcIdentities, refreshTokens, users, type User } from '../db/schema.js';
 import { AppError } from '../errors.js';
 import { loadLlmPublic } from '../llm/settings.service.js';
 import { inboxListValues } from '../lists/lists.service.js';
@@ -162,23 +162,17 @@ async function buildAuthResponse(
   };
 }
 
-export async function registerUser(
-  input: RegisterInput,
-  mode: AuthMode,
-  deviceInfo?: string,
-): Promise<{ response: AuthResponse; refreshToken: string }> {
-  const [existing] = await getDb()
-    .select()
-    .from(users)
-    .where(eq(users.email, input.email))
-    .limit(1);
-  if (existing) throw AppError.of(409, 'EMAIL_ALREADY_REGISTERED');
-
-  const now = new Date();
-  const user: User = {
+export function localUserRow(input: {
+  email: string;
+  displayName: string;
+  passwordHash: string | null;
+  now?: Date;
+}): User {
+  const now = input.now ?? new Date();
+  return {
     id: randomUUID(),
     email: input.email,
-    passwordHash: await hashPassword(input.password),
+    passwordHash: input.passwordHash,
     displayName: input.displayName,
     avatarAttachmentId: null,
     timezone: 'Asia/Shanghai',
@@ -208,12 +202,60 @@ export async function registerUser(
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export async function insertLocalAccount(user: User): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    await tx.insert(users).values(user);
+    await tx.insert(lists).values(inboxListValues(user.id, user.createdAt));
+  });
+}
+
+/** Removes a user created in this request. No foreign keys, so children go in the same transaction. */
+export async function deleteLocalAccount(userId: string): Promise<void> {
+  await getDb().transaction(async (tx) => {
+    await tx.delete(oidcIdentities).where(eq(oidcIdentities.userId, userId));
+    await tx.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+    await tx.delete(lists).where(eq(lists.userId, userId));
+    await tx.delete(users).where(eq(users.id, userId));
+  });
+}
+
+export async function registerUser(
+  input: RegisterInput,
+  mode: AuthMode,
+  deviceInfo?: string,
+): Promise<{ response: AuthResponse; refreshToken: string }> {
+  const [existing] = await getDb()
+    .select()
+    .from(users)
+    .where(eq(users.email, input.email))
+    .limit(1);
+  if (existing) throw AppError.of(409, 'EMAIL_ALREADY_REGISTERED');
+
+  const passwordHash = await hashPassword(input.password);
+  const { assertOidcEmailAvailable, provisionOidcRegistration } = await import('./oidc.service.js');
+  await assertOidcEmailAvailable(input.email);
+
+  const user = localUserRow({
+    email: input.email,
+    displayName: input.displayName,
+    passwordHash,
+  });
+  let inserted = false;
   try {
-    await getDb().transaction(async (tx) => {
-      await tx.insert(users).values(user);
-      await tx.insert(lists).values(inboxListValues(user.id, now));
-    });
+    await insertLocalAccount(user);
+    inserted = true;
+    await provisionOidcRegistration(user, passwordHash);
   } catch (err) {
+    if (inserted) {
+      try {
+        await deleteLocalAccount(user.id);
+      } catch (cleanup) {
+        logger.error('auth.register.rollback', cleanup instanceof Error ? cleanup.name : 'rollback');
+      }
+    }
+    if (err instanceof AppError) throw err;
     if (isUniqueViolation(err)) throw AppError.of(409, 'EMAIL_ALREADY_REGISTERED');
     throw err;
   }
@@ -226,7 +268,11 @@ export async function loginUser(
   deviceInfo?: string,
 ): Promise<{ response: AuthResponse; refreshToken: string }> {
   const [user] = await getDb().select().from(users).where(eq(users.email, input.email)).limit(1);
-  if (!user || !(await verifyPassword(input.password, user.passwordHash))) {
+  if (
+    !user ||
+    user.passwordHash == null ||
+    !(await verifyPassword(input.password, user.passwordHash))
+  ) {
     logger.info('auth.login.fail', { email: input.email });
     throw AppError.of(401, 'INVALID_CREDENTIALS');
   }
@@ -236,6 +282,7 @@ export async function loginUser(
 
 export async function changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
   const user = await getUserEntity(userId);
+  if (user.passwordHash == null) throw AppError.of(400, 'PASSWORD_NOT_SET');
   if (!(await verifyPassword(input.oldPassword, user.passwordHash))) {
     throw AppError.of(400, 'INVALID_OLD_PASSWORD');
   }

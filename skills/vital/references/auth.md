@@ -73,6 +73,22 @@ export interface QrLoginPollResponse {
 
 ## Endpoints
 
+#### `GET /api/auth/oidc/callback`
+
+- Auth: none
+
+#### `GET /api/auth/oidc/start`
+
+- Auth: none
+
+#### `GET /api/auth/oidc/status`
+
+Get Oidc Status
+
+- Auth: none
+- Client: `getOidcStatus`
+- Response: `{ enabled: boolean }`
+
 #### `POST /api/v1/auth/change-password`
 
 Change Password
@@ -161,6 +177,18 @@ Request body (`updateMeInputSchema`):
   - `quietHoursStart`: string pattern (optional, nullable)
   - `quietHoursEnd`: string pattern (optional, nullable)
   - `allDayNotifyTime`: string pattern (optional)
+
+#### `GET /api/v1/auth/oidc`
+
+Get Oidc Account
+
+- Auth: Bearer required
+- Client: `getOidcAccount`
+- Response: `{ enabled: boolean; linked: boolean; hasPassword: boolean; emailSynthetic: boolean; }`
+
+#### `GET /api/v1/auth/oidc/bind/start`
+
+- Auth: none
 
 #### `PATCH /api/v1/auth/onboarding`
 

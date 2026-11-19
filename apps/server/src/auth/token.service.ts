@@ -83,6 +83,25 @@ export async function redeemRefreshToken(
   return { userId: row.userId, refreshToken: raw };
 }
 
+/** Peek a live refresh row. Does not extend or rotate it. */
+export async function findLiveRefreshByHash(
+  tokenHash: string,
+): Promise<{ userId: string; authMode: string } | null> {
+  const now = new Date();
+  const [row] = await getDb()
+    .select({ userId: refreshTokens.userId, authMode: refreshTokens.authMode })
+    .from(refreshTokens)
+    .where(
+      and(
+        eq(refreshTokens.tokenHash, tokenHash),
+        isNull(refreshTokens.revokedAt),
+        gt(refreshTokens.expiresAt, now),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export async function revokeRefreshToken(raw: string): Promise<void> {
   await getDb()
     .update(refreshTokens)

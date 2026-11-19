@@ -33,4 +33,6 @@ export const auth = {
   extensionMissingId: '请从 Vital 扩展打开此页。',
   extensionFailed: '扩展没有响应',
   extensionNoRuntime: '当前浏览器无法连接扩展',
+  oidcLogin: '使用统一账号登录',
+  oidcHint: '使用管理员已经开通的统一账号。这里不会注册新账号。',
 } as const;

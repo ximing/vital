@@ -470,6 +470,13 @@
       "when": 1792339200000,
       "tag": "0066_exploration_verify",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792425600000,
+      "tag": "0067_oidc_identities",
+      "breakpoints": true
     }
   ]
 }

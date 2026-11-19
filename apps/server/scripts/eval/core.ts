@@ -33,6 +33,7 @@ import {
   inboxExtractJobs,
   inboxIdempotencyResponses,
   inboxItems,
+  oidcIdentities,
   todayLayouts,
   userInwitConfig,
   users,
@@ -126,6 +127,7 @@ export async function buildSnapshot(opts: { tamper?: boolean } = {}): Promise<Ag
   await db.delete(userInwitConfig).where(eq(userInwitConfig.userId, FIXTURE_USER_ID));
   await db.delete(inboxExtractJobs).where(eq(inboxExtractJobs.userId, FIXTURE_USER_ID));
   await db.delete(todayLayouts).where(eq(todayLayouts.userId, FIXTURE_USER_ID));
+  await db.delete(oidcIdentities).where(eq(oidcIdentities.userId, FIXTURE_USER_ID));
   await db.delete(users).where(eq(users.id, FIXTURE_USER_ID));
   await seedFixture(db, opts);
   const metrics = await agentAdoptionDaily(FIXTURE_USER_ID, EVAL_WINDOW_DAYS, FIXTURE_TZ);

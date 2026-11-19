@@ -50,6 +50,7 @@ import {
   inboxItemTags,
   inboxItems,
   lists,
+  oidcIdentities,
   notificationChannels,
   notificationDeliveries,
   notificationOutbox,
@@ -162,6 +163,7 @@ export async function resetDb(): Promise<void> {
     await db.delete(userLlmProviders);
     await db.delete(userInwitConfig);
     await db.delete(todayLayouts);
+    await db.delete(oidcIdentities);
     await db.delete(users);
   });
 }

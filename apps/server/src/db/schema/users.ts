@@ -22,7 +22,8 @@ export const users = pgTable(
   {
     id: char('id', { length: 36 }).primaryKey(),
     email: varchar('email', { length: 255 }).notNull().unique(),
-    passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+    /** NULL means this account cannot sign in with a local password. */
+    passwordHash: varchar('password_hash', { length: 255 }),
     displayName: varchar('display_name', { length: 50 }).notNull(),
     avatarAttachmentId: char('avatar_attachment_id', { length: 36 }),
     timezone: varchar('timezone', { length: 64 }).notNull().default('Asia/Shanghai'),

@@ -5,6 +5,8 @@ import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { registerAuthRoutes } from './auth/auth.routes.js';
+import { redactOidcUrl } from './auth/oidc-logic.js';
+import { registerOidcRoutes } from './auth/oidc.routes.js';
 import { config } from './config.js';
 import { getDb, setDb, type Database } from './db/index.js';
 import { registerAppReleaseRoutes } from './app-release/app-release.routes.js';
@@ -88,10 +90,11 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   app.addHook('onResponse', async (req, reply) => {
     const path = req.url.split('?')[0] ?? req.url;
     if (path === '/api/health') return;
-    maybePublish(req.method, req.url, reply.statusCode, req.user?.id);
+    const url = redactOidcUrl(req.url);
+    maybePublish(req.method, url, reply.statusCode, req.user?.id);
     logger.info('http_request', {
       method: req.method,
-      url: req.url,
+      url,
       status: reply.statusCode,
       reqId: req.id,
       ms: reply.elapsedTime,
@@ -119,6 +122,7 @@ export async function buildFastify(opts: BuildFastifyOptions = {}): Promise<Fast
   registerHealthRoutes(app);
   registerAppReleaseRoutes(app);
   registerAuthRoutes(app);
+  registerOidcRoutes(app);
   registerTokenRoutes(app);
   registerUploadRoutes(app);
   registerNotificationRoutes(app);

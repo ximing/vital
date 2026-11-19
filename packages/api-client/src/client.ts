@@ -218,6 +218,13 @@ export interface VitalClient {
   registerPushDevice(input: RegisterPushDeviceInput): Promise<PushDevice>;
   updateOnboarding(input: UpdateOnboardingInput): Promise<UserProfile>;
   changePassword(input: ChangePasswordInput): Promise<void>;
+  getOidcStatus(): Promise<{ enabled: boolean }>;
+  getOidcAccount(): Promise<{
+    enabled: boolean;
+    linked: boolean;
+    hasPassword: boolean;
+    emailSynthetic: boolean;
+  }>;
   abortUpload(id: string): Promise<void>;
   discardUpload(id: string): Promise<void>;
   upload(input: UploadInput): Promise<UploadCompleteResponse>;

@@ -95,6 +95,7 @@ const defaults = {
   qrDecide: isTest ? 1000 : 30,
   llm: isTest ? 1000 : 20,
   inwit: isTest ? 1000 : 20,
+  oidc: isTest ? 1000 : 10,
 };
 
 const authMax = { ...defaults };
@@ -236,6 +237,17 @@ export function limitInwit(req: FastifyRequest): Promise<void> {
   const userId = req.user?.id ?? '';
   hit('inwit', `${ipFrom(req)}:${userId}`);
   return Promise.resolve();
+}
+
+/** OIDC redirects use this instead of a JSON 429. Tests skip the cap. */
+export function allowOidc(ip: string): boolean {
+  if (isTest) return true;
+  try {
+    hit('oidc', ip);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Test seam. Do not call from product code. */

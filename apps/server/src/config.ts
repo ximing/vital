@@ -67,6 +67,15 @@ export const envSchema = z.object({
   TRUST_PROXY_EXTRA: z.string().default(''),
   WEB_ORIGIN: z.string().url().default('http://localhost:5180'),
   COOKIE_SECURE: boolEnum.default('false'),
+  // All five empty: email/password only. A partial or invalid set stays off.
+  OIDC_ISSUER: optionalNonEmpty(z.string()),
+  OIDC_CLIENT_ID: optionalNonEmpty(z.string()),
+  OIDC_CLIENT_SECRET: optionalNonEmpty(z.string()),
+  OIDC_REDIRECT_URI: optionalNonEmpty(z.string()),
+  OIDC_AUDIENCE: optionalNonEmpty(z.string()),
+  OIDC_SCOPES: optionalNonEmpty(z.string()),
+  OIDC_ADMIN_USER: optionalNonEmpty(z.string()),
+  OIDC_ADMIN_PASSWORD: optionalNonEmpty(z.string()),
   MEOW_BASE_URL: z.string().url().default('https://api.chuckfang.com'),
   // AppGallery Connect app OAuth client. Empty disables Huawei push.
   HUAWEI_PUSH_CLIENT_ID: optionalNonEmpty(z.string().min(1)),

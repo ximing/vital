@@ -28,6 +28,8 @@ export function bindAuth(
   | 'updateMe'
   | 'updateOnboarding'
   | 'changePassword'
+  | 'getOidcStatus'
+  | 'getOidcAccount'
 > {
   async function persistAuth(options: VitalClientOptions, data: unknown): Promise<AuthResponse> {
     if (!isAuthResponse(data)) {
@@ -117,5 +119,8 @@ export function bindAuth(
         // Server already revoked every session.
       }
     },
+    getOidcStatus: () =>
+      http.request('/api/auth/oidc/status', { skipAuth: true, skipAuthRefresh: true }),
+    getOidcAccount: () => http.request('/api/v1/auth/oidc'),
   };
 }
